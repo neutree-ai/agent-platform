@@ -142,6 +142,23 @@ export async function getEndpoint(sandboxId: string, port: number): Promise<stri
   }
 }
 
+// Direct (non-server-proxy) endpoint: resolves to the sandbox pod's in-cluster
+// address (e.g. http://172.16.x.x:5173) instead of routing through the
+// opensandbox-server proxy. The server proxy reserves the `Authorization`
+// header for its own API auth and strips it before forwarding to the app — so
+// any preview app relying on a Bearer token never receives it. Resolving a
+// direct address keeps request/response headers intact. sandbox-service runs
+// in-cluster, so it can reach pod IPs directly. Used by the public preview proxy.
+export async function getEndpointDirect(sandboxId: string, port: number): Promise<string> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    const ep = await sbx.sandboxes.getSandboxEndpoint(sbx.id, port, false)
+    return `http://${ep.endpoint}`
+  } finally {
+    await sbx.close()
+  }
+}
+
 // ---- File operations ----
 
 export async function readFile(sandboxId: string, path: string): Promise<string> {

@@ -165,7 +165,10 @@ httpServer.on('upgrade', async (req, socket, head) => {
 
   let endpointUrl: string
   try {
-    endpointUrl = await sandbox.getEndpoint(parsed.sandboxId, parsed.port)
+    // Direct pod address (not the opensandbox-server proxy) — the proxy path
+    // doesn't carry WS upgrades cleanly and strips Authorization. See
+    // getEndpointDirect.
+    endpointUrl = await sandbox.getEndpointDirect(parsed.sandboxId, parsed.port)
   } catch {
     socket.destroy()
     return

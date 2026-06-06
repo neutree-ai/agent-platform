@@ -43,10 +43,12 @@ export async function handleSubdomainPreview(
   // No auth for subdomain preview — sandbox ID (UUID) serves as the access token.
   // This matches Vercel Sandbox behavior: preview URLs are public.
 
-  // Resolve internal endpoint
+  // Resolve internal endpoint. Use the direct (non-server-proxy) pod address so
+  // the opensandbox-server proxy doesn't strip the `Authorization` header — see
+  // getEndpointDirect for why.
   let endpointUrl: string
   try {
-    endpointUrl = await sandbox.getEndpoint(sandboxId, port)
+    endpointUrl = await sandbox.getEndpointDirect(sandboxId, port)
   } catch {
     return c.json({ error: 'Endpoint not available' }, 502)
   }
@@ -64,10 +66,15 @@ export async function handleSubdomainPreview(
     const reqHeaders = new Headers(c.req.raw.headers)
     reqHeaders.delete('host')
 
+    const hasBody = c.req.method !== 'GET' && c.req.method !== 'HEAD'
     const proxyRes = await fetch(targetUrl, {
       method: c.req.method,
       headers: reqHeaders,
-      body: c.req.method !== 'GET' && c.req.method !== 'HEAD' ? c.req.raw.body : undefined,
+      body: hasBody ? c.req.raw.body : undefined,
+      // Node 18+ undici requires `duplex: 'half'` when body is a ReadableStream;
+      // Bun tolerated its absence. Without this, every non-GET proxied request
+      // throws `RequestInit: duplex option is required when sending a body` → 502.
+      ...(hasBody ? { duplex: 'half' as const } : {}),
       redirect: 'manual',
     })
 
