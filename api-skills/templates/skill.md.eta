@@ -1,0 +1,128 @@
+<%
+const descriptions = {
+  "nap-api": "Manage NAP workspaces, prompts, templates, credentials, service tokens, agent files, providers, tags, shares, schedules via REST. Trigger when the user wants to script or automate NAP outside the UI — e.g. \"create a workspace\", \"rotate a token\", \"bulk-upload prompts\", \"list agent files in workspace X\", CI integration with NAP.",
+};
+const description = descriptions[it.meta.name] || `${it.meta.description}. Use when working with the ${it.meta.title} or when the user needs to interact with this API.`;
+
+// Concrete base URL per skill. The OpenAPI spec only declares server `/`, which
+// leaves a fresh agent unable to find the host. Documented once here.
+const baseUrls = {
+  "nap-api": "https://nap.example.com",
+};
+const baseUrl = baseUrls[it.meta.name];
+
+// "I want to X" → which operation, for capabilities that are non-obvious from
+// the resource list (e.g. there is no exec endpoint; running commands goes
+// through the in-workspace agent via chat).
+const intents = {
+  "nap-api": [
+    ["Have the workspace agent do something — run a task, edit files, run commands, answer about its work", "Send a natural-language prompt to the in-workspace agent: `POST /api/workspaces/{id}/chat` (see operations/post-api-workspaces-id-chat.md). The agent has a full toolset (bash, file edit, etc.); this is the primary way to get work done in a workspace. There is no direct exec / command endpoint for service tokens by design — route the request through chat."],
+    ["Read / write / list files in a workspace", "Workspace filesystem → `agent-files` resource. The shared `/mnt/afs` volume → `agent-afs-files` resource (two distinct mounts)."],
+    ["Create / configure / start a workspace", "`workspaces` resource — `POST /api/workspaces`, then `PUT /api/workspaces/{id}/config`."],
+    ["Bulk-manage prompts / templates / skills", "`prompts`, `templates`, `skills` resources."],
+    ["Issue or rotate a token / credential", "`credentials` resource and the service-token operations."],
+  ],
+};
+const intentRows = intents[it.meta.name];
+-%>
+---
+name: <%= it.meta.name %>
+description: <%= description %>
+<% if (it.meta.license) { -%>
+license: <%= it.meta.license.name %><%= it.meta.license.url ? ` (${it.meta.license.url})` : "" %>
+<% } -%>
+metadata:
+  api-version: "<%= it.meta.version %>"
+  openapi-version: "<%= it.meta.openapiVersion %>"
+<% if (it.meta.contact) { -%>
+  contact: "<%= it.meta.contact %>"
+<% } -%>
+---
+
+# <%= it.meta.title %>
+<% if (it.meta.description) { -%>
+<%= it.meta.description %>
+
+<% } -%>
+## How to Use This Skill
+
+This API documentation is split into multiple files for on-demand loading.
+
+**Directory structure:**
+```
+references/
+├── resources/      # <%= it.resources.length %> resource index files
+├── operations/     # <%= it.totalOps %> operation detail files
+└── schemas/        # <%= it.schemaGroups.length %> schema groups, <%= it.totalSchemas %> schema files
+```
+
+**Navigation flow:**
+1. Find the resource you need in the list below
+2. Read `references/resources/<resource>.md` to see available operations
+3. Read `references/operations/<operation>.md` for full details
+4. If an operation references a schema, read `references/schemas/<prefix>/<schema>.md`
+<% if (baseUrl) { %>
+## Base URL
+
+`<%= baseUrl %>` — or set `$NAP_BASE_URL` to your deployment's host. Every operation path below is relative to it (e.g. `GET $NAP_BASE_URL/api/workspaces`).
+<% } else if (it.meta.servers.length > 0) { %>
+## Base URL
+
+<% it.meta.servers.forEach(server => { -%>
+- `<%= server.url %>`<%= server.description ? ` - ${server.description}` : "" %>
+<% }) -%>
+<% } -%>
+<% if (it.meta.securitySchemes.length > 0) { %>
+## Authentication
+
+Supported methods: <%= it.meta.securitySchemes.map(s => `**${s}**`).join(", ") %>. See `references/authentication.md` for details.
+<% } %>
+## Conventions
+
+- Every operation path is relative to the Base URL above; send `Authorization: Bearer <token>` on every request.
+- **URL-encode path-bearing query params** (e.g. `path`): encode the whole value — slashes inside it are literal, not separators. A raw CJK or slashed value will 400 or mis-route.
+<% if (intentRows) { %>
+## Common Intents → Operation
+
+Non-obvious capability routing (when the operation isn't where you'd first look):
+
+| I want to… | Use |
+|------------|-----|
+<% intentRows.forEach(row => { -%>
+| <%= row[0] %> | <%= row[1] %> |
+<% }) -%>
+<% } %>
+<% if (it.meta.name === "nap-api") { %>
+## Example — drive the agent (async chat + poll)
+
+The most common task, end to end. Send a prompt, poll until the turn ends, read the transcript — no other files needed:
+
+```bash
+BASE="${NAP_BASE_URL:-https://nap.example.com}"
+WS="<workspace-id>"
+
+# 1. Start the turn. mode=async returns 202 immediately with a session id.
+SID=$(curl -s -X POST "$BASE/api/workspaces/$WS/chat" \
+  -H "Authorization: Bearer $NAP_TOKEN" -H "Content-Type: application/json" \
+  -d '{"message":"List the files in the repo and summarize the README","mode":"async","source":"api"}' \
+  | jq -r .session_id)
+
+# 2. Poll the session until the agent stops running.
+#    chat_status: "agent" = still working · "idle" = finished · "human" = waiting on you (see pending_message)
+while [ "$(curl -s "$BASE/api/workspaces/$WS/sessions/$SID" \
+    -H "Authorization: Bearer $NAP_TOKEN" | jq -r .chat_status)" = "agent" ]; do
+  sleep 3
+done
+
+# 3. Read the full transcript for this turn.
+curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" \
+  -H "Authorization: Bearer $NAP_TOKEN" | jq .
+```
+
+Continue the same conversation by POSTing again with this `session_id` in the body. For token-by-token output instead of polling, omit `mode` (or use `mode: "stream"`) and read the `text/event-stream` of UniversalEvent frames.
+<% } %>
+## Resources
+
+<% it.resources.forEach(resource => { -%>
+- **<%= resource.tag %>** → `references/resources/<%= it.toFileName(resource.tag) %>.md` (<%= resource.operations.length %> ops)<%= resource.description ? ` - ${resource.description.substring(0, 50)}` : "" %>
+<% }) -%>

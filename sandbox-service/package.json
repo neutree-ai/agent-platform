@@ -1,0 +1,33 @@
+{
+  "name": "@neutree-ai/sandbox-service",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx --watch src/index.ts & cd web && npm run dev & wait",
+    "dev:server": "node --env-file=.env --import tsx --watch src/index.ts",
+    "dev:web": "cd web && npm run dev",
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node22 --outfile=dist/index.js --packages=external --sourcemap",
+    "start": "node dist/index.js",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@alibaba-group/opensandbox": "^0.1.5",
+    "@hono/node-server": "^1.19.14",
+    "@hono/zod-openapi": "^1.2.4",
+    "@scalar/hono-api-reference": "^0.10.7",
+    "hono": "^4.7.0",
+    "pg": "^8.11.3",
+    "tsx": "^4.21.0",
+    "ws": "^8.18.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.10.9",
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.2"
+  }
+}

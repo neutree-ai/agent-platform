@@ -1,0 +1,4 @@
+# A .npmrc may be injected into build contexts for Node-based images. memory-fuse
+# is a Go build, so the file is dead weight here — ignore it so nobody commits
+# one by accident.
+.npmrc

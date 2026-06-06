@@ -1,0 +1,104 @@
+# AgentFS — controller + shared storage + sidecar config.
+# CP injects the afs-fuse sidecar into workspace pods when AFS_ENABLED=true.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: afs-shared-storage
+  namespace: ${NAMESPACE}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ${NFS_STORAGE_CLASS}
+  resources:
+    requests:
+      storage: ${AFS_STORAGE_SIZE}
+---
+# controller.db (SQLite) holds the dir-id → base_path mapping. If this is lost,
+# existing mounts fail even though afs-shared-storage data is intact. Keep on
+# RWX so Recreate-strategy rollouts hand off cleanly between old and new pods.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: afs-controller-db
+  namespace: ${NAMESPACE}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ${NFS_STORAGE_CLASS}
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: afs-controller
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: SQLite + single-writer + RWX PVC means two
+  # pods writing to the same controller.db concurrently is a corruption risk.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: afs-controller
+  template:
+    metadata:
+      labels:
+        app: afs-controller
+    spec:
+      containers:
+        - name: afs-controller
+          image: ${REGISTRY}/afs:${IMAGE_TAG}
+          command: ["afs-controller"]
+          args: ["/etc/afs/controller.toml"]
+          ports:
+            - containerPort: 9100
+          volumeMounts:
+            - name: config
+              mountPath: /etc/afs
+            - name: data
+              mountPath: /var/lib/afs
+      volumes:
+        - name: config
+          configMap:
+            name: afs-controller-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: afs-controller-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: afs-controller
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: afs-controller
+  ports:
+    - port: 9100
+      targetPort: 9100
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: afs-controller-config
+  namespace: ${NAMESPACE}
+data:
+  controller.toml: |
+    [server]
+    listen = "0.0.0.0:9100"
+
+    [storage]
+    db_path = "/var/lib/afs/controller.db"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: afs-fuse-config
+  namespace: ${NAMESPACE}
+data:
+  fuse-server.toml: |
+    [server]
+    listen = "0.0.0.0:9101"
+    controller_addr = "afs-controller.${NAMESPACE}.svc:9100"

@@ -1,0 +1,19 @@
+{
+  "name": "@neutree-ai/theme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./variables.css": "./src/variables.css"
+  },
+  "peerDependencies": {
+    "lucide-react": "*",
+    "react": "^18.0.0",
+    "sonner": "^2.0.0"
+  }
+}

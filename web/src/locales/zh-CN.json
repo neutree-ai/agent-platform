@@ -1,0 +1,3769 @@
+{
+  "nativeName": "简体中文",
+  "common": {
+    "add": "添加",
+    "cancel": "取消",
+    "clear": "清除",
+    "close": "关闭",
+    "confirm": "确认",
+    "create": "创建",
+    "creating": "创建中...",
+    "delete": "删除",
+    "loading": "加载中...",
+    "rename": "重命名",
+    "on": "开启",
+    "off": "关闭",
+    "save": "保存",
+    "saving": "保存中...",
+    "update": "更新",
+    "chunkError": {
+      "title": "有新版本可用",
+      "description": "页面资源已更新，请刷新以加载最新版本。",
+      "reload": "刷新页面"
+    },
+    "errors": {
+      "authProviderRequired": "useAuth 必须在 AuthProvider 内使用",
+      "agentSessionProviderRequired": "useAgentSessionStore 必须在 AgentSessionProvider 内使用",
+      "connectionFailed": "连接失败",
+      "dialogStackProviderRequired": "useDialogStack 必须在 DialogStackProvider 内使用",
+      "noResponseBody": "未收到响应内容",
+      "requestFailed": "请求失败",
+      "sessionExpired": "登录已过期",
+      "sidebarProviderRequired": "useSidebar 必须在 SidebarProvider 内使用",
+      "themeProviderRequired": "useTheme 必须在 ThemeProvider 内使用",
+      "unknown": "未知错误",
+      "fileOverlayProviderRequired": "useFileOverlay 必须在 FileOverlayProvider 内使用"
+    }
+  },
+  "session": {
+    "status": {
+      "completed": "已完成",
+      "disconnected": "已断开连接"
+    },
+    "errors": {
+      "cpReconnectFailed": "恢复工作空间连接失败",
+      "deleteFailed": "删除会话失败",
+      "interruptFailed": "中断失败",
+      "interruptNotReady": "当前还无法终止，对话正在准备中，仍在进行，请稍后再试",
+      "loadHistoryFailed": "加载历史记录失败",
+      "reconnectFailed": "恢复连接失败",
+      "respondFailed": "提交回复失败",
+      "respondQuestionFailed": "提交问题回复失败"
+    }
+  },
+  "workspace": {
+    "errors": {
+      "deleteFailed": "删除工作空间失败"
+    },
+    "commands": {
+      "errors": {
+        "requestFailed": "请求失败"
+      }
+    },
+    "config": {
+      "errors": {
+        "loadFailed": "加载配置失败"
+      }
+    },
+    "schedules": {
+      "errors": {
+        "requestFailed": "请求失败"
+      }
+    },
+    "browser": {
+      "errors": {
+        "createFailed": "创建浏览器失败",
+        "deleteFailed": "删除浏览器失败",
+        "renewFailed": "续期浏览器失败"
+      }
+    },
+    "sandbox": {
+      "errors": {
+        "createFailed": "创建沙箱失败",
+        "deleteFailed": "删除沙箱失败"
+      }
+    }
+  },
+  "integration": {
+    "errors": {
+      "requestFailed": "请求失败",
+      "testFailed": "测试失败"
+    }
+  },
+  "docs": {
+    "inlineHelp": {
+      "agentConfig": {
+        "templateInheritanceHeader": "基于模板的工作空间会继承模板配置。已覆盖的字段会显示 **Overridden** 标记，点击后可恢复为模板值。"
+      },
+      "connector": {
+        "hint": "切换左侧连接器类型，可查看对应说明。"
+      },
+      "credential": {
+        "hint": "切换左侧预设或注入方式，可查看对应说明。"
+      },
+      "provider": {
+        "hint": "切换左侧 Provider Type，可查看对应说明。"
+      },
+      "memoryStore": {
+        "hint": "User 级别的 path-key 记忆。工作空间挂载即可消费；agent 通过文件系统读写。"
+      },
+      "oauthApp": {
+        "hint": "OAuth 2.0 客户端注册 —— 用于第三方应用集成本平台。"
+      },
+      "route": {
+        "hint": "文档会随所选连接器类型更新。"
+      },
+      "serviceToken": {
+        "hint": "用于外部系统代你调用平台 API。"
+      },
+      "skill": {
+        "hint": "切换左侧模式，可查看对应说明。"
+      }
+    }
+  },
+  "pages": {
+    "admin": {
+      "navigation": {
+        "dashboard": "仪表盘",
+        "users": "用户",
+        "infrastructure": "基础设施",
+        "system": "系统"
+      }
+    },
+    "integration": {
+      "navigation": {
+        "connectors": "连接器",
+        "serviceTokens": "服务令牌",
+        "applications": "应用"
+      }
+    },
+    "library": {
+      "navigation": {
+        "prompts": "Prompts",
+        "skills": "Skills",
+        "templates": "模板"
+      }
+    },
+    "login": {
+      "subtitle": "登录您的账户",
+      "fields": {
+        "username": {
+          "label": "用户名",
+          "placeholder": "请输入用户名"
+        },
+        "password": {
+          "label": "密码",
+          "placeholder": "请输入密码"
+        }
+      },
+      "actions": {
+        "submit": "登录",
+        "submitting": "登录中...",
+        "signInWithWeCom": "使用企业微信登录"
+      },
+      "labels": {
+        "or": "或"
+      },
+      "errors": {
+        "loginFailed": "登录失败",
+        "submitFailed": "登录失败",
+        "startWeComFailed": "发起企业微信登录失败",
+        "oauth": {
+          "missingCode": "授权失败，请稍后重试。",
+          "notBound": "该企业微信账号尚未绑定。请先使用用户名和密码登录，再到偏好设置中绑定企业微信。",
+          "userNotFound": "未找到对应用户账号。",
+          "systemAccount": "该账号不能用于登录。",
+          "authRequired": "请先登录，再绑定您的企业微信账号。",
+          "oauthFailed": "企业微信授权失败，请稍后重试。"
+        }
+      }
+    },
+    "management": {
+      "navigation": {
+        "providers": "API 供应商",
+        "credentials": "凭证"
+      }
+    },
+    "oauthAuthorize": {
+      "title": "授权应用",
+      "subtitle": "正在申请访问您的 NAP 账户",
+      "permissionNotice": "该应用将可访问您的基础资料信息（用户名、显示名、邮箱）。",
+      "actions": {
+        "deny": "拒绝",
+        "authorize": "授权",
+        "authorizing": "授权中..."
+      },
+      "errors": {
+        "invalidRequest": "无效的授权请求",
+        "authorizeFailed": "授权失败"
+      }
+    },
+    "invitePage": {
+      "title": "加入团队",
+      "invitedBy": "由 {{name}} 邀请",
+      "expiresAt": "链接 {{value}} 过期",
+      "alreadyMember": "你已经是该团队成员。",
+      "join": "加入团队",
+      "open": "打开团队",
+      "errors": {
+        "notFound": "邀请链接无效或已被撤销。",
+        "expired": "邀请链接已过期。",
+        "loadFailed": "加载邀请失败",
+        "joinFailed": "加入团队失败"
+      },
+      "toasts": {
+        "joined": "已加入团队"
+      }
+    },
+    "share": {
+      "triggers": {
+        "cron": "定时",
+        "slack": "Slack",
+        "manual": "手动"
+      },
+      "config": {
+        "systemPrompt": "系统 Prompt"
+      },
+      "sharedBy": "来自 {{name}}",
+      "notFound": {
+        "title": "未找到分享",
+        "description": "该分享链接可能已失效或被删除。"
+      },
+      "review": {
+        "title_one": "审校（{{count}}）",
+        "title_other": "审校（{{count}}）",
+        "raw": "原始",
+        "rendered": "渲染后"
+      }
+    },
+    "workspace": {
+      "tabs": {
+        "sessions": "会话历史",
+        "files": "文件",
+        "browser": "浏览器",
+        "skills": "Skills",
+        "terminal": "终端",
+        "sandboxes": "沙箱",
+        "automation": "自动化",
+        "memoryStores": "记忆库",
+        "settings": "设置",
+        "chat": "对话",
+        "file": "文件",
+        "library": "资源库",
+        "connectors": "连接器",
+        "serviceTokens": "服务令牌",
+        "oauthApps": "OAuth 应用",
+        "credentials": "凭证",
+        "models": "模型供应商",
+        "admin": "管理后台",
+        "activity": "活动",
+        "tags": "标签",
+        "teams": "团队",
+        "teamwork": "Teamwork"
+      },
+      "empty": {
+        "selectWorkspace": "请从侧边栏选择一个工作空间，以查看对话、记忆和审校内容。",
+        "notRunning": {
+          "title": "工作空间未运行",
+          "description": "启动工作空间以使用该应用。"
+        }
+      },
+      "actions": {
+        "enterFocusMode": "进入专注模式",
+        "exitFocusMode": "退出专注模式",
+        "moveChatToBottom": "将对话移动到底部",
+        "moveChatToSide": "将对话移动到侧边"
+      }
+    }
+  },
+  "components": {
+    "updateAvailable": {
+      "message": "NAP 已更新到新版本",
+      "reload": "刷新"
+    },
+    "resource": {
+      "scope": {
+        "private": "私有",
+        "team": "团队",
+        "public": "公开"
+      },
+      "ownership": {
+        "yours": "你的"
+      },
+      "filter": {
+        "all": "全部",
+        "private": "私有",
+        "team": "团队",
+        "public": "公开",
+        "empty": "该范围下没有内容"
+      },
+      "view": {
+        "card": "卡片",
+        "list": "列表"
+      },
+      "search": "搜索..."
+    },
+    "integration": {
+      "shared": {
+        "generate": "生成",
+        "keepExisting": "（留空则保留原值）",
+        "noResults": "未找到结果。",
+        "optional": "（可选）",
+        "saving": "保存中...",
+        "search": "搜索..."
+      },
+      "connector": {
+        "fields": {
+          "type": "类型",
+          "name": "名称",
+          "relayPublicUrl": "Relay 公网 URL",
+          "public": "公开连接器（对所有用户可见）"
+        },
+        "placeholders": {
+          "relayPublicUrl": "https://webhook-relay.example.com"
+        },
+        "help": {
+          "relayPublicUrl": "Relay 端点的公网 URL，会在用户创建路由时展示",
+          "public": "对该工作空间内的所有用户可见"
+        },
+        "actions": {
+          "showCredentials": "显示凭证",
+          "hideCredentials": "隐藏凭证",
+          "test": "测试",
+          "testing": "测试中..."
+        },
+        "toasts": {
+          "loadCredentialsFailed": "加载凭证失败"
+        }
+      },
+      "route": {
+        "fields": {
+          "connector": "连接器",
+          "workspace": "工作空间",
+          "displayName": "显示名称",
+          "promptTemplate": "Prompt 模板",
+          "filters": "过滤条件",
+          "secret": "密钥",
+          "header": "Header：",
+          "sessionTtl": "会话 TTL（小时）",
+          "requireMention": "每条消息都需要 @机器人",
+          "streaming": "流式回复（边生成边刷新）"
+        },
+        "labels": {
+          "allChannels": "* 所有频道（通配）"
+        },
+        "placeholders": {
+          "webhookSecret": "webhook 密钥",
+          "optional": "可选",
+          "searchChannels": "搜索频道...",
+          "searchWorkspaces": "搜索工作空间...",
+          "selectChannel": "选择频道...",
+          "selectConnector": "选择连接器...",
+          "selectWorkspace": "选择工作空间..."
+        },
+        "empty": {
+          "noChannels": "未找到频道。",
+          "noWorkspaces": "没有工作空间。",
+          "noFilters": "当前没有过滤条件，所有事件都会触发任务。"
+        },
+        "actions": {
+          "addFilter": "添加"
+        },
+        "prompt": {
+          "custom": "自定义",
+          "noContent": "没有内容。",
+          "presetsGroup": "内置模板",
+          "libraryGroup": "Prompt 库",
+          "placeholders": {
+            "slack": "处理来自 {user} 的以下消息：\n{message}",
+            "webhook": "处理这个 webhook 事件：\n{body}",
+            "wecom": "处理来自 {user} 的以下消息：\n{message}",
+            "default": "{message}"
+          },
+          "variables": {
+            "webhook": "变量：{body}（完整 body）、{body.field}（嵌套字段）、{query.key}（查询参数）、{headers.name}（请求头）、{method}、{path}。留空则直接使用原始 body。",
+            "slack": "变量：{message}（用户消息）、{user}（发送者 ID）、{thread_context}（线程上下文）、{thread_ts}（线程时间戳）、{channel}（频道 ID）。留空则直接使用原始消息。",
+            "wecom": "变量：{message}（用户消息）、{user}（发送者 UserID）、{channel}（群聊 ID）、{chat_type}（single/group）。留空则直接使用原始消息。",
+            "default": "变量：{message}（用户消息）。留空则直接使用原始消息。"
+          }
+        },
+        "help": {
+          "slackChannel": "这里只展示机器人已加入的频道。触发方式：在频道内 @ 机器人。",
+          "wecomChannel": "所有群聊共用同一条路由。将机器人加入群聊后，@机器人 即可触发。",
+          "filters": "所有规则都必须同时满足（AND）。字段语法：body.field、headers.name、query.key、method、path。",
+          "sessionTtl": "在该时间窗口内，同一线程的消息会复用同一个会话。默认 24 小时。",
+          "requireMention": "关闭后，机器人在 thread 中被 @mention 一次即可自动跟进后续消息。发送以 (aside) 开头的消息可跳过机器人。需要在 Slack App 的 Event Subscriptions 中添加 message.channels（私有频道还需 message.groups）。",
+          "streaming": "开启后，回复会按段刷新（aibot_respond_msg 流式协议），用户看到逐步生成的过程而不是等待整段。受企微 30 条/分钟、单流 10 分钟的配额约束。"
+        },
+        "filters": {
+          "fieldPlaceholder": "body.field",
+          "ops": {
+            "in": "包含于",
+            "contains": "包含",
+            "exists": "存在"
+          },
+          "valuePlaceholders": {
+            "in": "值1, 值2",
+            "default": "值"
+          },
+          "boolean": {
+            "true": "是",
+            "false": "否"
+          }
+        },
+        "secretTypes": {
+          "plain": "明文"
+        }
+      },
+      "connectorRowView": {
+        "table": {
+          "name": "名称",
+          "type": "类型",
+          "enabled": "启用"
+        }
+      },
+      "routeCardView": {
+        "fields": {
+          "target": "目标",
+          "id": "ID"
+        },
+        "channel": {
+          "resolving": "正在获取频道名称...",
+          "loadFailed": "无法获取 Slack 频道名称，已显示 Channel ID。",
+          "notFound": "未在机器人可见频道中找到该 Channel ID，可能是权限、归档或频道不可见。"
+        },
+        "secret": {
+          "loading": "...",
+          "notSet": "（未设置）",
+          "clickToReveal": "点击查看"
+        },
+        "toasts": {
+          "copied": "已复制"
+        },
+        "errors": {
+          "loadSecretFailed": "加载密钥失败"
+        }
+      },
+      "typeConfigs": {
+        "slack": {
+          "label": "Slack",
+          "credentials": {
+            "bot_token": {
+              "label": "Bot Token",
+              "placeholder": "xoxb-...",
+              "helpText": "Slack App -> OAuth & Permissions -> Bot User OAuth Token"
+            },
+            "app_token": {
+              "label": "App Token",
+              "placeholder": "xapp-...",
+              "helpText": "Slack App -> Basic Information -> App-Level Tokens（需要 connections:write 权限）"
+            }
+          },
+          "externalId": {
+            "label": "频道 ID",
+            "placeholder": "C0XXXXXXXXX",
+            "helpText": "Slack 频道 ID（以 C 开头）"
+          }
+        },
+        "wecom": {
+          "label": "企业微信",
+          "credentials": {
+            "bot_id": {
+              "label": "Bot ID",
+              "placeholder": "aibXXX...",
+              "helpText": "企业微信管理后台 -> 安全与管理 -> 管理工具 -> 智能机器人 -> Bot ID"
+            },
+            "secret": {
+              "label": "Secret",
+              "placeholder": "",
+              "helpText": "智能机器人的长连接 Secret（不是应用 corpsecret）"
+            }
+          },
+          "externalId": {
+            "label": "群聊 ID",
+            "placeholder": "wrXXX...",
+            "helpText": "企业微信群聊 ID，可从收到消息中的 chatid 字段获取"
+          }
+        },
+        "webhook": {
+          "label": "Webhook",
+          "externalId": {
+            "label": "端点路径",
+            "placeholder": "/my-hook"
+          }
+        },
+        "webhook-relay": {
+          "label": "Webhook Relay",
+          "credentials": {
+            "queue_url": {
+              "label": "Queue URL",
+              "placeholder": "https://sqs.ap-east-1.amazonaws.com/123456789/nap-webhook-relay",
+              "helpText": "SQS Queue URL"
+            },
+            "region": {
+              "label": "Region",
+              "placeholder": "ap-east-1",
+              "helpText": "SQS 队列所在的 AWS 区域"
+            },
+            "access_key_id": {
+              "label": "Access Key ID",
+              "placeholder": "",
+              "helpText": "留空则使用 IAM 角色或默认凭证链"
+            },
+            "secret_access_key": {
+              "label": "Secret Access Key",
+              "placeholder": "",
+              "helpText": "留空则使用 IAM 角色或默认凭证链"
+            }
+          },
+          "externalId": {
+            "label": "端点路径",
+            "placeholder": "/my-hook"
+          }
+        }
+      }
+    },
+    "commandPalette": {
+      "title": "命令面板",
+      "searchPlaceholder": "搜索工作空间、应用、命令…",
+      "empty": "未找到结果。",
+      "tip": {
+        "prefix": "按",
+        "suffix": "可在任意位置呼出"
+      },
+      "groups": {
+        "workspaces": "工作空间",
+        "apps": "应用",
+        "commands": "命令"
+      },
+      "items": {
+        "preferences": "偏好设置",
+        "documentation": "文档",
+        "apiDocumentation": "API 文档"
+      },
+      "appKeywords": {
+        "chat": "聊天 对话",
+        "sessions": "会话 历史",
+        "memory": "记忆",
+        "settings": "设置 配置",
+        "files": "文件",
+        "terminal": "终端",
+        "browser": "浏览器",
+        "sandboxes": "沙盒 沙箱",
+        "skills": "技能",
+        "automation": "自动化 定时",
+        "library": "资源库 资源 提示词 模板",
+        "connectors": "连接器 集成",
+        "service-tokens": "服务令牌 令牌",
+        "credentials": "凭证 密钥",
+        "models": "模型 供应商",
+        "teams": "团队",
+        "oauth-apps": "授权 应用",
+        "admin": "管理 后台",
+        "workspaces": "工作空间",
+        "tags": "标签",
+        "activity": "动态 活动",
+        "memory-stores": "记忆库",
+        "teamwork": "协作"
+      },
+      "commandKeywords": {
+        "preferences": "偏好 设置 主题 外观 声音 通知 语言 壁纸",
+        "documentation": "文档 帮助",
+        "apiDocumentation": "api 接口 文档 swagger openapi"
+      }
+    },
+    "preferences": {
+      "title": "偏好设置",
+      "navigation": {
+        "appearance": "外观",
+        "evolution": "演进",
+        "notifications": "通知",
+        "accounts": "账号",
+        "about": "关于"
+      },
+      "about": {
+        "version": "版本",
+        "releasedAt": "发布时间",
+        "outdated": "已部署新版本",
+        "reload": "刷新"
+      },
+      "autoEvolution": {
+        "title": "自动演进",
+        "description": "NAP 会分析您的 agent 会话，并自动建议 Prompt、工具和执行流程的优化。"
+      },
+      "theme": {
+        "label": "主题",
+        "options": {
+          "light": "浅色",
+          "dark": "深色",
+          "system": "跟随系统"
+        }
+      },
+      "wallpaper": {
+        "label": "桌面",
+        "options": {
+          "aurora": "极光",
+          "minimal": "简约",
+          "cool": "冷调",
+          "warm": "暖调"
+        }
+      },
+      "sound": {
+        "label": "提示音"
+      },
+      "language": {
+        "label": "语言",
+        "options": {
+          "zhCN": "中文",
+          "enUS": "English"
+        }
+      },
+      "chatSendKey": {
+        "label": "聊天发送键",
+        "options": {
+          "modEnter": "⌘/Ctrl + Enter",
+          "enter": "Enter"
+        }
+      },
+      "notifications": {
+        "label": "通知",
+        "badges": {
+          "alpha": "ALPHA"
+        },
+        "channels": {
+          "label": "通知渠道",
+          "inbox": "站内",
+          "wecom": "企业微信"
+        },
+        "events": {
+          "agentTaskDone": "Agent 任务完成",
+          "forumThreadUpdated": "论坛帖子有更新"
+        },
+        "globalDefault": "全局默认",
+        "workspaces": "工作空间",
+        "inherited": "继承",
+        "override": "覆盖"
+      },
+      "accounts": {
+        "title": "已绑定账号",
+        "wecom": "企业微信",
+        "actions": {
+          "link": "绑定",
+          "unlink": "解绑"
+        }
+      },
+      "security": {
+        "title": "账号安全",
+        "password": {
+          "label": "登录密码",
+          "description": "修改本地账号用于登录的密码。",
+          "action": "修改密码",
+          "dialog": {
+            "title": "修改密码",
+            "currentPassword": "当前密码",
+            "newPassword": "新密码",
+            "confirmPassword": "确认新密码",
+            "save": "更新密码"
+          },
+          "toast": {
+            "updated": "密码已更新"
+          },
+          "errors": {
+            "fieldsRequired": "请填写所有字段",
+            "tooShort": "新密码至少需要 6 位",
+            "mismatch": "两次输入的新密码不一致",
+            "sameAsOld": "新密码不能与当前密码相同",
+            "incorrectCurrent": "当前密码不正确",
+            "updateFailed": "密码更新失败"
+          }
+        }
+      },
+      "actions": {
+        "logout": "退出登录"
+      }
+    },
+    "tagsManage": {
+      "trigger": "管理标签",
+      "title": "管理标签",
+      "empty": {
+        "title": "还没有标签",
+        "description": "标签用于对 workspace 进行分组和筛选，先创建一个开始使用。"
+      },
+      "actions": {
+        "new": "新建标签",
+        "edit": "编辑标签",
+        "delete": "删除标签"
+      },
+      "dialog": {
+        "editTitle": "编辑标签",
+        "newTitle": "新建标签",
+        "namePlaceholder": "标签名称"
+      },
+      "toasts": {
+        "created": "标签已创建",
+        "updated": "标签已更新",
+        "deleted": "标签已删除",
+        "saveFailed": "保存标签失败",
+        "deleteFailed": "删除标签失败"
+      }
+    },
+    "promptEditor": {
+      "titles": {
+        "view": "查看 Prompt",
+        "edit": "编辑 Prompt",
+        "new": "新建 Prompt",
+        "share": "分享「{{name}}」"
+      },
+      "fields": {
+        "name": "名称",
+        "content": "内容",
+        "visibility": "可见性",
+        "teams": "分享给团队",
+        "permission": "团队成员可以"
+      },
+      "visibility": {
+        "private": "私有",
+        "team": "团队",
+        "public": "公开"
+      },
+      "permission": {
+        "viewer": "仅查看",
+        "editor": "查看与编辑"
+      },
+      "teamsEmpty": "你还不属于任何团队。请到「团队」应用中创建或加入团队。",
+      "noTeamsShared": "尚未分享给任何团队。",
+      "addTeam": "添加团队…",
+      "removeTeam": "移除",
+      "ownedBy": "由 {{name}} 拥有",
+      "placeholders": {
+        "name": "例如：编码助手",
+        "content": "系统 Prompt 内容..."
+      },
+      "actions": {
+        "close": "关闭"
+      },
+      "toasts": {
+        "created": "Prompt 已创建",
+        "updated": "Prompt 已更新",
+        "rolledBack": "已回滚到 v{{version}}"
+      },
+      "errors": {
+        "nameRequired": "名称不能为空",
+        "teamRequired": "请至少选择一个团队",
+        "saveFailed": "保存失败",
+        "rollbackFailed": "回滚失败"
+      },
+      "versionHistory": {
+        "title": "版本历史（v{{version}}）",
+        "empty": "暂无版本",
+        "rollbackTitle": "回滚到该版本"
+      }
+    },
+    "library": {
+      "prompts": {
+        "scope": {
+          "aria": "按范围筛选 Prompt",
+          "mine": "我的",
+          "shared": "共享给我的",
+          "public": "公开"
+        },
+        "labels": {
+          "byOwner": "作者：{{owner}}",
+          "public": "公开",
+          "default": "默认",
+          "currentVersion": "v{{version}}（当前）",
+          "copySuffix": "（副本）"
+        },
+        "badges": {
+          "editable": "可编辑",
+          "readOnly": "只读"
+        },
+        "placeholders": {
+          "search": "搜索..."
+        },
+        "actions": {
+          "new": "新建",
+          "edit": "编辑",
+          "share": "分享",
+          "delete": "删除",
+          "fork": "Fork",
+          "createNew": "创建新 Prompt",
+          "rollbackTo": "回滚到 v{{version}}"
+        },
+        "empty": {
+          "noPrompts": {
+            "title": "当前没有 Prompt",
+            "description": "创建一个可复用的 Prompt，并基于它启动工作空间。"
+          },
+          "selectPrompt": "选择一个 Prompt 以预览"
+        },
+        "toasts": {
+          "deleted": "Prompt 已删除",
+          "forked": "Prompt 已复制到您的资源库",
+          "defaultCleared": "已清除默认 Prompt",
+          "defaultSet": "已设为新工作空间的默认 Prompt"
+        },
+        "errors": {
+          "deleteFailed": "删除失败",
+          "copyFailed": "复制失败",
+          "tooManyCopies": "同名副本过多"
+        }
+      },
+      "skills": {
+        "badges": {
+          "yours": "您的"
+        },
+        "categories": {
+          "title": "分类",
+          "coding": "编码",
+          "writing": "写作",
+          "research": "调研",
+          "data": "数据",
+          "ops": "运维",
+          "design": "设计",
+          "review": "审阅",
+          "other": "其他",
+          "uncategorized": "未分类"
+        },
+        "labels": {
+          "byOwner": "作者：{{owner}}",
+          "lastSynced": "最近同步：{{value}}"
+        },
+        "fields": {
+          "repositoryUrl": "仓库 URL",
+          "gitRef": "分支 / 标签（选填）",
+          "accessTokenOptional": "访问令牌（选填）",
+          "name": "名称",
+          "nameOptional": "名称（选填）",
+          "description": "描述",
+          "descriptionOptional": "描述（选填）",
+          "package": "安装包（.tar.gz）",
+          "packageKeepCurrent": "安装包（.tar.gz）（留空则保留当前文件）",
+          "publicVisible": "公开（所有用户可见）",
+          "visibility": "可见性",
+          "teams": "团队",
+          "category": "分类"
+        },
+        "visibility": {
+          "private": "私有",
+          "team": "团队",
+          "public": "公开"
+        },
+        "visibilityDesc": {
+          "private": "仅自己可使用。",
+          "team": "所选团队的成员可使用；编辑者还可改名、改描述、重新导入安装包。",
+          "public": "本 NAP 实例所有用户都可使用。"
+        },
+        "permission": {
+          "viewer": "查看者",
+          "editor": "编辑者"
+        },
+        "teamsEmpty": "你还不属于任何团队。",
+        "noTeamsShared": "在下方选择要共享的团队。",
+        "addTeam": "添加团队…",
+        "removeTeam": "停止与此团队共享",
+        "placeholders": {
+          "repositoryUrl": "https://github.com/owner/repo 或 owner/repo",
+          "gitRef": "默认 main",
+          "selectCredential": "选择凭证",
+          "privateRepositoryToken": "用于私有仓库",
+          "autoDetectedName": "自动从 SKILL.md 或仓库名识别",
+          "autoDetectedDescription": "自动从 SKILL.md frontmatter 识别",
+          "name": "例如：my-skill",
+          "description": "简要说明该 Skill 的用途"
+        },
+        "help": {
+          "repositoryUrl": "支持 GitHub、GitLab 和自托管仓库。可在末尾追加 /tree/branch/subpath 以导入子目录。",
+          "category": "用于资源库的筛选 chip。选填。",
+          "dropHint": "或将 .tar.gz 拖到这里",
+          "dropActive": "松开以使用此文件"
+        },
+        "tokenSources": {
+          "none": "无",
+          "credential": "凭证",
+          "manual": "手动输入"
+        },
+        "actions": {
+          "new": "新建",
+          "edit": "编辑",
+          "share": "共享",
+          "delete": "删除 Skill",
+          "syncFromGit": "从 Git 同步",
+          "chooseFile": "选择文件",
+          "back": "返回",
+          "previewSkills": "预览"
+        },
+        "detail": {
+          "unpackingHint": "Skill 较大,服务端正在解压,稍候…",
+          "expandDescription": "展开完整描述",
+          "collapseDescription": "收起描述"
+        },
+        "editor": {
+          "gitNotEditable": "Git 来源的 Skill 不支持直接编辑,请同步源仓库",
+          "dirtyCount": "{{count}} 处未保存",
+          "actions": {
+            "edit": "编辑",
+            "saveDraft": "保存草稿",
+            "discard": "丢弃草稿",
+            "discardArmed": "再次点击确认丢弃",
+            "publish": "发布",
+            "exit": "退出"
+          },
+          "toasts": {
+            "draftSaved": "草稿已保存",
+            "draftDiscarded": "草稿已丢弃",
+            "published": "已发布新版本"
+          },
+          "binaryNotice": {
+            "title": "二进制文件无法在此编辑",
+            "hint": "通过 workspace agent 替换该文件后再回到这里发布"
+          }
+        },
+        "versions": {
+          "empty": "暂无发布版本",
+          "activeBadge": "当前",
+          "noNote": "无备注",
+          "actions": {
+            "viewVersions": "版本",
+            "setActive": "设为当前",
+            "download": "下载"
+          },
+          "toasts": {
+            "activated": "已切换当前版本"
+          }
+        },
+        "sections": {
+          "public": "公开",
+          "private": "私有"
+        },
+        "modes": {
+          "upload": "上传",
+          "git": "Git"
+        },
+        "dialogs": {
+          "edit": {
+            "title": "编辑 Skill"
+          },
+          "add": {
+            "title": "添加 Skill"
+          }
+        },
+        "empty": {
+          "noDescription": "暂无描述",
+          "noSkills": "当前还没有 Skill",
+          "noCredentials": "当前未配置凭证"
+        },
+        "toasts": {
+          "reimported": "已从 Git 重新导入 Skill",
+          "imported": "已从 Git 导入 Skill",
+          "updated": "Skill 已更新",
+          "uploaded": "Skill 已上传",
+          "synced": "Skill 已同步",
+          "alreadyUpToDate": "当前已是最新",
+          "switchedToGit": "Skill 已切换到 Git 来源",
+          "deleted": "Skill 已删除"
+        },
+        "errors": {
+          "gitUrlRequired": "Git URL 为必填项",
+          "previewRequired": "请先点「预览」并勾选要导入的子目录",
+          "importFailed": "导入失败",
+          "nameRequired": "名称为必填项",
+          "packageRequired": "安装包文件为必填项",
+          "saveFailed": "保存失败",
+          "syncFailed": "同步失败",
+          "switchFailed": "切换来源失败",
+          "deleteFailed": "删除失败",
+          "scanFailed": "扫描仓库失败",
+          "multipleCandidatesPickOne": "该仓库内有多个 skill，请在下方选择一个。",
+          "invalidFileType": "仅支持 .tar.gz / .tgz 文件。"
+        },
+        "switchHint": "把这个本地编写的 skill 切换到 Git 来源后，skill 本身和它的所有挂载都会保留，但版本历史会被删除——只留下从 Git 拉取的版本。",
+        "switchDialog": {
+          "title": "切换到 Git 来源？",
+          "body": "「{{name}}」将改为从 Git 跟踪，而不再在本地编写。skill 的身份不变，所有正在使用它的工作区 / 模版都会保持挂载。",
+          "warning": "它的版本历史（以及任何未发布的草稿）将被永久删除——只保留从 Git 拉取的版本。此操作不可恢复。",
+          "confirm": "切换来源",
+          "switching": "切换中…"
+        },
+        "scan": {
+          "foundCount_other": "找到 {{count}} 个 skill",
+          "foundCountSelected_other": "找到 {{count}} 个，已选 {{selected}}",
+          "fileCount_other": "{{count}} 个文件",
+          "empty": "该仓库内没有 SKILL.md。",
+          "clearPick": "清除选择",
+          "selectAll": "全选",
+          "clearAll": "全部取消",
+          "multiHint_other": "将一次性导入 {{count}} 个 skill,名称与描述自动从各自的 SKILL.md 提取"
+        },
+        "preview": {
+          "title": "预览",
+          "files_other": "{{count}} 个文件",
+          "noFiles": "没有可显示的文件列表。",
+          "noSkillMd": "该 skill 没有 SKILL.md 正文。",
+          "useThis": "使用此 skill",
+          "picked": "已选中"
+        },
+        "deleteDialog": {
+          "title": "删除「{{name}}」？",
+          "confirm": "删除",
+          "deleting": "删除中…",
+          "blockedOwn": "请先把此 Skill 从下列你的 workspace 中移除，再执行删除。",
+          "blockedExternal": "此 Skill 仍被其他用户的 workspace 或模板引用，需全部解除挂载后才能删除。",
+          "clear": "此操作不可撤销。"
+        }
+      },
+      "sources": {
+        "groups": {
+          "authored": "我创作的",
+          "git": "Git 来源",
+          "shared": "共享给我"
+        },
+        "emptySource": "此来源下暂无 skill。可同步以拉取，或删除整个来源。",
+        "moreActions": "更多操作",
+        "confirmDeleteArmedEmpty": "再次点击确认删除",
+        "confirmDeleteArmedWithSkills_one": "再次点击确认删除（含 {{count}} 个 skill）",
+        "confirmDeleteArmedWithSkills_other": "再次点击确认删除（含 {{count}} 个 skill）",
+        "actions": {
+          "edit": "编辑来源",
+          "delete": "删除来源"
+        },
+        "toasts": {
+          "deleted": "来源已删除"
+        },
+        "errors": {
+          "deleteFailed": "删除失败"
+        },
+        "edit": {
+          "title": "编辑 Git 来源",
+          "repoLabel": "仓库",
+          "ref": "分支 / 标签 (ref)",
+          "refPlaceholder": "例如 main、v1.0",
+          "credential": "凭据",
+          "credentialNone": "不使用凭据",
+          "saved": "已保存",
+          "refChangedHint": "ref 已更新，点击同步拉取新版本"
+        }
+      },
+      "templateConfigView": {
+        "sections": {
+          "model": "模型",
+          "prompt": "Prompt",
+          "mcpServers": "MCP Servers",
+          "agentSettings": "Agent 设置",
+          "resources": "资源",
+          "layout": "布局"
+        },
+        "appsCount": "{{count}} 个应用",
+        "labels": {
+          "custom": "自定义",
+          "resourcesSummary": "CPU：{{cpuRequest}} / {{cpuLimit}} · 内存：{{memoryRequest}} / {{memoryLimit}} · 存储：{{storage}}"
+        },
+        "empty": {
+          "value": "-"
+        }
+      },
+      "templates": {
+        "labels": {
+          "byOwner": "作者：{{owner}}",
+          "latestVersionSuffix": "（最新）",
+          "privatePrompt": "私有 Prompt"
+        },
+        "placeholders": {
+          "search": "搜索..."
+        },
+        "actions": {
+          "new": "新建",
+          "edit": "编辑",
+          "share": "共享",
+          "delete": "删除",
+          "createNew": "创建新模版",
+          "saveNewVersion": "保存新版本",
+          "rollbackTo": "回滚到 v{{version}}"
+        },
+        "empty": {
+          "noTemplates": {
+            "title": "当前没有模板",
+            "description": "将工作空间另存为模板，以复用其 Agent、模型与工具配置。"
+          },
+          "selectTemplate": "选择一个模版以预览",
+          "noVersionData": "暂无版本数据"
+        },
+        "toasts": {
+          "deleted": "模版已删除",
+          "rolledBack": "已回滚到 v{{version}}"
+        },
+        "errors": {
+          "loadFailed": "加载模版失败",
+          "nameRequired": "名称为必填项",
+          "agentTypeRequired": "Agent 类型为必填项",
+          "providerRequired": "API 提供方为必填项",
+          "modelRequired": "模型为必填项",
+          "invalidMcpConfig": "MCP 配置中的 JSON 无效",
+          "invalidAgentSettings": "Agent 设置中的 JSON 无效",
+          "saveFailed": "保存失败",
+          "deleteFailed": "删除失败",
+          "rollbackFailed": "回滚失败"
+        },
+        "resourceFields": {
+          "cpuRequest": "CPU 请求",
+          "cpuLimit": "CPU 限额",
+          "memoryRequest": "内存请求",
+          "memoryLimit": "内存限额",
+          "storage": "存储"
+        }
+      }
+    },
+    "createWorkspace": {
+      "trigger": "创建工作空间",
+      "title": "创建新工作空间",
+      "fields": {
+        "name": "名称",
+        "systemWorkspace": "系统工作空间",
+        "mode": "模式",
+        "template": "模板"
+      },
+      "placeholders": {
+        "name": "my-workspace"
+      },
+      "modes": {
+        "template": "从模板创建",
+        "blank": "空白"
+      },
+      "actions": {
+        "creating": "创建中..."
+      },
+      "template": {
+        "placeholder": "选择模板...",
+        "searchPlaceholder": "搜索模板（可按 owner 过滤）...",
+        "empty": "未找到模板。",
+        "noTemplates": "当前没有可用模板。请先在管理中创建。",
+        "ownerMine": "我的",
+        "ownerBy": "@{{name}}",
+        "visibility": {
+          "private": "私有",
+          "team": "团队",
+          "public": "公开"
+        }
+      },
+      "errors": {
+        "createFailed": "创建工作空间失败"
+      }
+    },
+    "modelFields": {
+      "labels": {
+        "agentType": "Agent 类型",
+        "provider": "API 供应商",
+        "model": "模型",
+        "smallModel": "小模型"
+      },
+      "placeholders": {
+        "provider": "选择 API 供应商",
+        "searchProviders": "搜索 API 供应商...",
+        "model": "例如：claude-sonnet-4-20250514",
+        "smallModel": "例如：claude-haiku-4-20250514"
+      },
+      "empty": {
+        "noProviders": "未找到 API 供应商。"
+      }
+    },
+    "agentConfigFieldHint": {
+      "inherited": "继承自模板",
+      "overridden": "已覆盖 · 恢复"
+    },
+    "modelSection": {
+      "warnings": {
+        "agentTypeChanged": {
+          "title": "修改 Agent 类型会重建容器",
+          "restart": "工作空间将重启，所有运行中的会话都会被中断。",
+          "sessionHistory": "过往会话记录会保留，但旧 Agent 类型创建的会话无法在新类型下继续。"
+        }
+      },
+      "actions": {
+        "revertField": "{{label}} · 恢复"
+      }
+    },
+    "promptSection": {
+      "labels": {
+        "source": "来源"
+      }
+    },
+    "modelPicker": {
+      "placeholders": {
+        "selectModel": "选择模型...",
+        "searchOrType": "搜索或输入模型名称..."
+      },
+      "states": {
+        "loading": "加载模型中..."
+      },
+      "empty": {
+        "noModels": "未找到模型"
+      },
+      "actions": {
+        "useValue": "使用“{{value}}”",
+        "test": "测试"
+      },
+      "status": {
+        "connected": "已连接",
+        "failed": "失败"
+      }
+    },
+    "promptSourceView": {
+      "empty": "暂无内容。",
+      "notAccessible": "无权访问"
+    },
+    "promptField": {
+      "options": {
+        "none": "无",
+        "noneDesc": "不使用 system prompt",
+        "custom": "自定义文本",
+        "customDesc": "仅本次填写，不保存到资源库",
+        "new": "新建资源库 Prompt",
+        "newDesc": "新建一个可复用的 Prompt 存入资源库"
+      },
+      "groups": {
+        "quick": "快速选项",
+        "presets": "预设模板",
+        "yours": "您的",
+        "shared": "共享给我的",
+        "public": "平台公共"
+      },
+      "badges": {
+        "public": "公共"
+      },
+      "placeholders": {
+        "search": "搜索 Prompt..."
+      },
+      "empty": {
+        "noContent": "暂无内容。",
+        "noResults": "未找到匹配的 Prompt。",
+        "unknownPrompt": "未知 Prompt"
+      },
+      "actions": {
+        "editInLibrary": "在资源库中编辑",
+        "detachAndEdit": "解除绑定后编辑"
+      }
+    },
+    "deleteWorkspace": {
+      "title": "删除工作空间",
+      "description": {
+        "prefix": "这将永久删除工作空间 ",
+        "suffix": " 以及相关的所有数据，包括会话、文件和配置。此操作不可撤销。"
+      },
+      "confirm": {
+        "labelPrefix": "请输入 ",
+        "labelSuffix": " 以确认"
+      },
+      "actions": {
+        "delete": "删除"
+      }
+    },
+    "popout": {
+      "actions": {
+        "closeAll": "全部关闭",
+        "closeTab": "关闭标签"
+      }
+    },
+    "scheduleConsent": {
+      "title": "定时任务",
+      "description": "该模板包含会自动运行的定时任务，请选择要启用哪些。",
+      "confirm": "继续"
+    },
+    "saveAsTemplate": {
+      "title": "另存为模板",
+      "fields": {
+        "bind": "将此工作空间绑定到新模板",
+        "includeCommands": "包含斜杠命令",
+        "includeSchedules": "包含定时任务",
+        "includeLayout": "包含当前布局"
+      },
+      "placeholders": {
+        "name": "模板名称",
+        "description": "描述（选填）"
+      },
+      "toasts": {
+        "created": "模板已创建"
+      },
+      "errors": {
+        "createFailed": "创建模板失败"
+      }
+    },
+    "shareSession": {
+      "trigger": "分享会话",
+      "title": "分享会话",
+      "untitled": "未命名",
+      "placeholders": {
+        "title": "分享标题（选填）"
+      },
+      "sections": {
+        "existingShares": "已有分享"
+      },
+      "actions": {
+        "rename": "重命名",
+        "copyLink": "复制链接",
+        "openInNewTab": "在新标签页打开",
+        "deleteShare": "删除分享"
+      },
+      "errors": {
+        "createFailed": "创建分享失败"
+      }
+    },
+    "overflowTabs": {
+      "sections": {
+        "visible": "当前显示"
+      },
+      "actions": {
+        "unpin": "取消固定",
+        "pin": "固定以保持可见"
+      }
+    },
+    "workspaceActions": {
+      "actions": {
+        "start": "启动",
+        "stop": "停止",
+        "settings": "设置",
+        "saveAsTemplate": "另存为模板",
+        "copyId": "复制 ID",
+        "delete": "删除"
+      },
+      "toasts": {
+        "idCopied": "工作空间 ID 已复制"
+      }
+    },
+    "workspaceBrowser": {
+      "remaining": "剩余 {{value}}",
+      "selectSession": "切换浏览器会话",
+      "timeoutLabel": "会话超时",
+      "timeout": {
+        "10m": {
+          "label": "10 分钟",
+          "desc": "一次性抓取"
+        },
+        "1h": {
+          "label": "1 小时",
+          "desc": "在一个会话内完成多步操作"
+        },
+        "6h": {
+          "label": "6 小时",
+          "desc": "跨多次对话复用"
+        },
+        "24h": {
+          "label": "24 小时",
+          "desc": "长时间运行的会话"
+        }
+      },
+      "dialogs": {
+        "launchTitle": "启动浏览器会话",
+        "docsHint": "了解浏览器会话的用途以及如何选择超时。"
+      },
+      "actions": {
+        "extendOneHour": "+1 小时",
+        "delete": "删除浏览器",
+        "deleteConfirm": "确认删除",
+        "launch": "启动浏览器",
+        "newBrowser": "新建"
+      },
+      "states": {
+        "waiting": "等待浏览器就绪中...",
+        "loading": "加载浏览器中...",
+        "starting": "浏览器启动中..."
+      },
+      "empty": {
+        "title": "当前没有活跃浏览器",
+        "description": "您可以手动启动浏览器实例，或让 Agent 通过 MCP 创建。"
+      }
+    },
+    "workspaceChat": {
+      "actions": {
+        "search": "搜索",
+        "rename": "重命名",
+        "smallerText": "缩小字号",
+        "largerText": "放大字号",
+        "resetSession": "重置会话",
+        "stop": "停止",
+        "attachImage": "添加图片",
+        "compactConversation": "压缩会话",
+        "send": "发送",
+        "sendShortcut": "发送（Ctrl/Cmd+Enter）",
+        "sendShortcutEnter": "发送（Enter）",
+        "queue": "加入待发"
+      },
+      "relativeTime": {
+        "justNow": "刚刚",
+        "minutesAgo": "{{count}} 分钟前",
+        "hoursAgo": "{{count}} 小时前",
+        "yesterday": "昨天",
+        "daysAgo": "{{count}} 天前"
+      },
+      "states": {
+        "resetting": "重置中..."
+      },
+      "placeholders": {
+        "searchMessages": "搜索消息...",
+        "sessionName": "会话名称",
+        "messageInput": "输入消息...（{{modifier}}+Enter）",
+        "messageInputEnter": "输入消息...（Enter 发送，Shift+Enter 换行）"
+      },
+      "empty": {
+        "noMatches": "没有匹配结果",
+        "startConversation": {
+          "title": "开始对话",
+          "description": "在下方发送一条消息，开始与 Agent 协作。"
+        }
+      },
+      "dialog": {
+        "renameTitle": "重命名会话"
+      },
+      "hints": {
+        "customCommands": "输入 / 可浏览自定义命令",
+        "sendMessage": "按 Ctrl/Cmd+Enter 发送消息",
+        "sendMessageEnter": "按 Enter 发送消息，Shift+Enter 换行",
+        "searchConversation": "按 Ctrl/Cmd+F 搜索会话",
+        "configureCommands": "可在上方工具栏配置命令",
+        "compactConversation": "可使用 /compact 压缩长会话"
+      },
+      "pending": {
+        "label": "待发送",
+        "autoSendHint": "Agent 完成后自动发送",
+        "clear": "清除",
+        "queueHint": "Agent 忙碌中，将加入待发",
+        "unsavedChanges": "有改动",
+        "composerHint": "Agent 忙碌中，发送即加入待发"
+      }
+    },
+    "workspaceSandbox": {
+      "empty": {
+        "title": "当前没有沙箱",
+        "description": "沙箱可由 Agent 自动创建，也可以手动创建。"
+      },
+      "unknownImage": "未知镜像",
+      "expiresMeta": "{{when}} 到期 · 剩余 {{remaining}}",
+      "fields": {
+        "image": "镜像",
+        "imageCustom": "自定义…",
+        "size": "规格",
+        "cpu": "CPU",
+        "memory": "内存",
+        "timeout": "超时"
+      },
+      "placeholders": {
+        "image": "registry.example.com/img:tag",
+        "cpu": "500m",
+        "memory": "512Mi"
+      },
+      "sizes": {
+        "small": {
+          "label": "小"
+        },
+        "medium": {
+          "label": "中"
+        },
+        "large": {
+          "label": "大"
+        },
+        "xlarge": {
+          "label": "超大"
+        },
+        "custom": {
+          "label": "自定义"
+        }
+      },
+      "timeouts": {
+        "10m": "10 分钟",
+        "1h": "1 小时",
+        "6h": "6 小时",
+        "24h": "24 小时"
+      },
+      "dialog": {
+        "title": "创建沙箱"
+      },
+      "actions": {
+        "create": "新建沙箱",
+        "delete": "删除沙箱"
+      },
+      "states": {
+        "loading": "加载沙箱中..."
+      }
+    },
+    "afsShares": {
+      "newShare": "新建共享",
+      "confirmDelete": "确定删除共享 \"{{name}}\"？所有成员都会被撤销访问。",
+      "confirmLeave": "确定离开共享 \"{{name}}\"？",
+      "empty": {
+        "noShares": {
+          "title": "还没有共享",
+          "description": "创建共享后，他人可将该目录挂载到 /mnt/afs 下。"
+        },
+        "noMatch": {
+          "title": "没有匹配的共享",
+          "description": "请尝试其他名称。"
+        }
+      },
+      "role": {
+        "owner": "拥有者"
+      },
+      "perm": {
+        "ro": "只读",
+        "rw": "读写"
+      },
+      "action": {
+        "manageMembers": "管理成员",
+        "delete": "删除共享",
+        "leave": "离开共享",
+        "open": "打开"
+      },
+      "newDialog": {
+        "title": "新建共享",
+        "nameLabel": "名称",
+        "namePlaceholder": "例如：testcase-2026-04",
+        "nameHint": "小写字母、数字、连字符，≤48 字符，以字母或数字开头",
+        "invalidName": "名称格式不符合要求"
+      },
+      "members": {
+        "title": "{{name}} 的成员",
+        "owner": "拥有者",
+        "you": "（你）",
+        "remove": "移除",
+        "add": "添加",
+        "selectWs": "选择 workspace",
+        "noCandidates": "没有可添加的 workspace"
+      }
+    },
+    "workspaceFiles": {
+      "drives": {
+        "workspace": "本地",
+        "afs": "网盘"
+      },
+      "columns": {
+        "name": "名称",
+        "mtime": "修改时间",
+        "size": "大小"
+      },
+      "actions": {
+        "search": "搜索",
+        "upload": "上传文件",
+        "uploadDisabled": "当前位置不可上传",
+        "newFile": "新建文件",
+        "newFileDisabled": "当前位置不可新建",
+        "newFolder": "新建文件夹",
+        "newFolderDisabled": "当前位置不可新建",
+        "managePublicLinks": "管理公开链接",
+        "refresh": "刷新"
+      },
+      "placeholders": {
+        "search": "搜索文件..."
+      },
+      "states": {
+        "dropToUpload": "拖拽文件到这里以上传",
+        "dropToMove": "移动到 {{target}}"
+      },
+      "empty": {
+        "noResults": {
+          "title": "没有匹配的文件",
+          "description": "请尝试其他搜索词。"
+        },
+        "directory": {
+          "title": "空目录",
+          "description": "保存到此处的文件会出现在列表中。"
+        }
+      },
+      "upload": {
+        "progressSingle": "正在上传 {{name}}… {{percent}}%",
+        "progressMultiple": "正在上传 {{count}} 个文件… {{percent}}%"
+      },
+      "selection": {
+        "count": "已选 {{count}} 项",
+        "download": "下载",
+        "delete": "删除",
+        "clear": "清除",
+        "dragBadge_one": "正在移动 1 项",
+        "dragBadge_other": "正在移动 {{count}} 项",
+        "deleteConfirm": "再次点击确认删除 {{count}} 项"
+      },
+      "errors": {
+        "listFailed": "列出目录失败：{{status}}",
+        "createFileFailed": "创建文件失败：{{status}}",
+        "moveFailed": "移动失败：{{name}}",
+        "deleteFailed": "删除失败：{{name}}"
+      }
+    },
+    "memoryStores": {
+      "actions": {
+        "newStore": "新建记忆库",
+        "newStoreTitle": "新建记忆库",
+        "editStore": "编辑记忆库",
+        "deleteStore": "删除记忆库",
+        "deleteStoreBlocked": "记忆库还挂载在 {{count}} 个工作空间上。请先全部卸载，再删除。",
+        "newMemory": "新建记忆",
+        "edit": "编辑",
+        "delete": "删除",
+        "cancel": "取消",
+        "save": "保存",
+        "create": "创建",
+        "attach": "挂载",
+        "attachExisting": "挂载已有",
+        "detachFromWs": "从此工作空间卸载",
+        "changeAccess": "修改权限",
+        "refresh": "刷新",
+        "rollbackTo": "回滚到 v{{version}}"
+      },
+      "empty": {
+        "stores": "还没有记忆库",
+        "noSelection": {
+          "title": "尚未选择记忆库",
+          "description": "先创建一个记忆库，再挂到工作空间上，agent 才能读取和编辑。"
+        },
+        "memories": "记忆库为空。点 + 添加一条记忆。",
+        "noMemorySelection": "选择一条记忆，或新建一条。",
+        "history": "暂无历史记录。",
+        "wsAttachments": "该工作空间还没挂载记忆库。",
+        "wsNoAttachmentsTitle": "该工作空间还没挂载记忆库",
+        "wsNoAttachmentsDescription": "新建一个记忆库自动挂载，或从已有记忆库中挑一个挂上来。"
+      },
+      "labels": {
+        "memoriesTab": "记忆",
+        "historyTab": "历史",
+        "name": "名称",
+        "description": "描述（可选）",
+        "attachedTo": "挂载到：",
+        "noAttachments": "未挂载"
+      },
+      "placeholders": {
+        "content": "记忆内容，推荐使用 Markdown 格式"
+      },
+      "dialog": {
+        "createTitle": "新建记忆库",
+        "editTitle": "编辑记忆库",
+        "description": "记忆库以 path 为 key 存放 markdown 记忆。把记忆库挂到工作空间，agent 即可读取和编辑。",
+        "deleteConfirm": "确定删除「{{name}}」及其全部记忆？此操作不可撤销。"
+      },
+      "actorKinds": {
+        "user": "你",
+        "agent": "agent",
+        "reflect": "reflect",
+        "migrate": "迁移"
+      },
+      "toasts": {
+        "storeCreated": "记忆库已创建",
+        "storeSaved": "记忆库已保存",
+        "storeDeleted": "记忆库已删除",
+        "memoryCreated": "记忆已创建",
+        "memorySaved": "记忆已保存",
+        "memoryDeleted": "记忆已删除",
+        "attached": "已挂载到工作空间",
+        "detached": "已从工作空间卸载",
+        "accessUpdated": "权限已更新",
+        "rolledBack": "已回滚到 v{{version}}"
+      },
+      "errors": {
+        "saveFailed": "保存失败",
+        "deleteFailed": "删除失败",
+        "nameRequired": "请填写名称",
+        "attachFailed": "挂载失败",
+        "detachFailed": "卸载失败",
+        "accessUpdateFailed": "权限更新失败",
+        "rollbackFailed": "回滚失败"
+      },
+      "stats": {
+        "memories_one": "{{count}} 条记忆",
+        "memories_other": "{{count}} 条记忆",
+        "attachments_one": "已挂载 {{count}} 个工作空间",
+        "attachments_other": "已挂载 {{count}} 个工作空间",
+        "updated": "更新于 {{when}}"
+      },
+      "attachPicker": {
+        "accessLabel": "权限",
+        "search": "搜索工作空间…",
+        "empty": "没有可挂载的工作空间",
+        "searchStores": "搜索记忆库…",
+        "emptyStores": "没有可挂载的记忆库"
+      },
+      "access": {
+        "readWrite": "可读写",
+        "readOnly": "只读"
+      },
+      "index": {
+        "label": "索引（MEMORY.md）",
+        "hint": "由 agent 维护，列出该记忆库中的所有条目。不需要 frontmatter。",
+        "editHint": "由 agent 维护的索引。每行一条记忆，格式：- [标题](file.md) — 一句话说明。",
+        "bodyPlaceholder": "- [标题](file.md) — 一句话说明"
+      },
+      "frontmatter": {
+        "missing": "缺少 metadata（frontmatter）",
+        "type": "类型",
+        "created": "创建时间",
+        "types": {
+          "user": "用户",
+          "feedback": "反馈",
+          "project": "项目",
+          "reference": "外部引用"
+        },
+        "name": "名称",
+        "namePlaceholder": "小写字母、数字、横线（-）",
+        "descriptionPlaceholder": "一句话说明，用于将来检索时判断相关性",
+        "description": "描述",
+        "nameInvalid": "只允许小写字母、数字和横线（-），不能以横线开头"
+      }
+    },
+    "saveButton": {
+      "states": {
+        "saving": "保存中..."
+      }
+    },
+    "timezoneSelect": {
+      "placeholders": {
+        "select": "选择时区",
+        "search": "搜索时区..."
+      },
+      "empty": {
+        "notFound": "未找到时区。"
+      },
+      "groups": {
+        "common": "常用",
+        "all": "全部"
+      }
+    },
+    "cronEditor": {
+      "periods": {
+        "minute": "每分钟",
+        "hour": "每小时",
+        "day": "每天",
+        "week": "每周",
+        "month": "每月",
+        "interval": "间隔",
+        "custom": "自定义"
+      },
+      "intervalUnits": {
+        "minute": "分钟",
+        "hour": "小时",
+        "day": "天"
+      },
+      "weekdays": {
+        "0": "周日",
+        "1": "周一",
+        "2": "周二",
+        "3": "周三",
+        "4": "周四",
+        "5": "周五",
+        "6": "周六"
+      },
+      "presets": {
+        "dailyMorning": "每天 9:00",
+        "weekdaysMorning": "周一至周五 9:00",
+        "hourly": "每小时整点",
+        "monthlyFirst": "每月 1 号 9:00",
+        "weeklyMonday": "周一 9:00"
+      },
+      "labels": {
+        "repeat": "重复",
+        "atMinute": "在 :",
+        "at": "在",
+        "on": "在",
+        "onDay": "在第几天",
+        "dayN": "{{n}} 号",
+        "intervalEvery": "每",
+        "next": "下次",
+        "timeSeparator": ":"
+      },
+      "placeholders": {
+        "expression": "0 9 * * *"
+      },
+      "hints": {
+        "standard": "标准 5 段 cron：分钟 小时 日 月 星期",
+        "invalid": "表达式无效"
+      }
+    },
+    "dialog": {
+      "actions": {
+        "close": "关闭"
+      }
+    },
+    "sidebarUi": {
+      "title": "侧边栏",
+      "mobileDescription": "显示移动端侧边栏。",
+      "actions": {
+        "toggle": "切换侧边栏"
+      }
+    },
+    "createConnector": {
+      "title": "新建连接器",
+      "toasts": {
+        "created": "连接器已创建",
+        "connected": "已连接：{{team}} / {{user}}"
+      }
+    },
+    "createCredential": {
+      "title": "新建凭证",
+      "fields": {
+        "preset": "预设",
+        "sshKeyType": "密钥类型",
+        "name": "名称",
+        "injectionMode": "注入方式",
+        "filePath": "文件路径",
+        "fileMode": "文件权限",
+        "value": "值",
+        "scope": "可见范围",
+        "workspaces": "Workspace"
+      },
+      "scope": {
+        "global": "所有 Workspace",
+        "selected": "指定 Workspace"
+      },
+      "actions": {
+        "custom": "自定义",
+        "sshKey": "SSH Key",
+        "env": "env",
+        "file": "file",
+        "showValue": "显示内容",
+        "hideValue": "隐藏内容"
+      },
+      "injectModes": {
+        "env": {
+          "label": "环境变量",
+          "desc": "在 Agent 进程中以 $NAME 暴露"
+        },
+        "file": {
+          "label": "文件",
+          "desc": "在 Agent 文件系统中按指定路径生成"
+        }
+      },
+      "fileMode": {
+        "private": {
+          "label": "私有",
+          "desc": "仅所有者可读写"
+        },
+        "readOnly": {
+          "label": "只读",
+          "desc": "仅所有者可读"
+        },
+        "shared": {
+          "label": "共享",
+          "desc": "所有人可读，所有者可写"
+        },
+        "executable": {
+          "label": "可执行",
+          "desc": "所有人可读且可执行"
+        },
+        "custom": {
+          "label": "自定义",
+          "desc": "自定义八进制权限"
+        }
+      },
+      "placeholders": {
+        "envName": "例如：GITHUB_TOKEN",
+        "fileName": "例如：id_rsa",
+        "filePath": "例如：~/.ssh/id_rsa",
+        "fileMode": "例如：0700",
+        "envValue": "Token 或密钥值",
+        "fileValue": "文件内容（例如：粘贴私钥）"
+      },
+      "errors": {
+        "nameAndValueRequired": "名称和值不能为空",
+        "nameRequired": "请输入名称",
+        "valueRequired": "请输入内容",
+        "pathRequired": "请输入文件路径",
+        "workspacesRequired": "请至少选择一个 Workspace",
+        "saveFailed": "保存失败",
+        "createFailed": "创建凭证失败"
+      },
+      "toasts": {
+        "created": "凭证已创建"
+      }
+    },
+    "createToken": {
+      "title": "新建服务令牌",
+      "createdTitle": "令牌已创建",
+      "fields": {
+        "name": "名称"
+      },
+      "placeholders": {
+        "name": "如：CI 部署机器人"
+      },
+      "warnings": {
+        "saveNow": "请立即复制此令牌 —— 关闭后将不再显示。"
+      },
+      "actions": {
+        "copy": "复制",
+        "copied": "已复制",
+        "done": "完成"
+      },
+      "errors": {
+        "nameRequired": "请输入名称",
+        "createFailed": "创建令牌失败"
+      },
+      "toasts": {
+        "created": "令牌已创建"
+      }
+    },
+    "skillShare": {
+      "title": "共享「{{name}}」",
+      "fields": {
+        "visibility": "可见性",
+        "teams": "团队"
+      },
+      "visibility": {
+        "private": "私有",
+        "team": "团队",
+        "public": "公开"
+      },
+      "visibilityDesc": {
+        "private": "仅自己可使用。",
+        "team": "所选团队的成员可使用；编辑者还可改名、改描述、重新导入安装包。",
+        "public": "本 NAP 实例所有用户都可使用。"
+      },
+      "permission": {
+        "viewer": "查看者",
+        "editor": "编辑者"
+      },
+      "teamsEmpty": "你还不属于任何团队。",
+      "noTeamsShared": "在下方选择要共享的团队。",
+      "addTeam": "添加团队…",
+      "removeTeam": "停止与此团队共享",
+      "errors": {
+        "teamRequired": "请至少选择一个团队，或更换可见性",
+        "saveFailed": "保存失败"
+      },
+      "narrowWarning": "无法收紧可见性：有 {{count}} 个其他用户的 workspace 正在使用此 Skill，请先让对方移除。"
+    },
+    "templateShare": {
+      "title": "共享「{{name}}」",
+      "fields": {
+        "visibility": "可见性",
+        "teams": "团队"
+      },
+      "visibility": {
+        "private": "私有",
+        "team": "团队",
+        "public": "公开"
+      },
+      "visibilityDesc": {
+        "private": "仅自己可使用。",
+        "team": "所选团队的成员可使用；编辑者还可改名、新增版本。",
+        "public": "本 NAP 实例所有用户都可使用。"
+      },
+      "permission": {
+        "viewer": "查看者",
+        "editor": "编辑者"
+      },
+      "teamsEmpty": "你还不属于任何团队。",
+      "noTeamsShared": "在下方选择要共享的团队。",
+      "addTeam": "添加团队…",
+      "removeTeam": "停止与此团队共享",
+      "linkMissing": {
+        "title": "引用的资源需要先共享",
+        "prompt": "Prompt",
+        "provider": "Provider",
+        "scopePublic": "设为 public",
+        "scopeTeam": "共享给团队「{{team}}」",
+        "line": "{{resource}}「{{name}}」需要 {{scope}}"
+      },
+      "errors": {
+        "teamRequired": "请至少选择一个团队，或更换可见性",
+        "saveFailed": "保存失败"
+      }
+    },
+    "createProvider": {
+      "title": "新建 API 供应商",
+      "fields": {
+        "name": "名称",
+        "description": "描述",
+        "type": "Provider Type",
+        "baseUrl": "Base URL",
+        "apiKey": "API Key",
+        "visibility": "可见性",
+        "teams": "团队",
+        "public": "公开（对所有用户可见）",
+        "publicDesc": "其他用户在配置 Agent 时可选择该供应商。"
+      },
+      "visibility": {
+        "private": "私有",
+        "team": "团队",
+        "public": "公开"
+      },
+      "visibilityDesc": {
+        "private": "仅自己可使用。",
+        "team": "所选团队的成员可使用，但看不到 API Key，也不能编辑。",
+        "public": "本 NAP 实例的所有用户都可使用，但看不到 API Key，也不能编辑。"
+      },
+      "teamsEmpty": "你还不属于任何团队。",
+      "noTeamsShared": "在下方选择要分享的团队。",
+      "addTeam": "添加团队…",
+      "removeTeam": "停止与此团队共享",
+      "placeholders": {
+        "name": "例如：My Provider",
+        "description": "可选描述",
+        "anthropicBaseUrl": "https://api.anthropic.com",
+        "openaiBaseUrl": "https://openrouter.ai/api",
+        "apiKey": "sk-..."
+      },
+      "types": {
+        "anthropic": {
+          "label": "Anthropic API",
+          "desc": "使用 Anthropic API Key 接入"
+        },
+        "anthropicOauth": {
+          "label": "Anthropic OAuth",
+          "desc": "用 Anthropic 账号登录（兼容代理）"
+        },
+        "claudeCodeOauth": {
+          "label": "Claude Code OAuth",
+          "desc": "使用 Claude Code 订阅账号"
+        },
+        "openai": {
+          "label": "OpenAI 兼容",
+          "desc": "OpenAI 协议 —— 适用于 OpenRouter 等兼容供应商"
+        }
+      },
+      "actions": {
+        "showKey": "显示 API Key",
+        "hideKey": "隐藏 API Key"
+      },
+      "toasts": {
+        "created": "API 供应商已创建"
+      },
+      "errors": {
+        "nameRequired": "名称不能为空",
+        "baseUrlRequired": "Base URL 不能为空",
+        "apiKeyRequired": "API Key 不能为空",
+        "teamRequired": "请至少选择一个团队，或更换可见性",
+        "createFailed": "创建 API 供应商失败"
+      }
+    },
+    "createRoute": {
+      "title": "新建路由",
+      "toasts": {
+        "created": "路由已创建"
+      }
+    },
+    "applicationDialog": {
+      "titleCreate": "新建应用",
+      "titleEdit": "编辑应用",
+      "titleCreated": "应用已创建",
+      "titleRotated": "密钥已轮换",
+      "fields": {
+        "name": "名称",
+        "description": "描述",
+        "homepageUrl": "主页地址",
+        "redirectUris": "回调地址",
+        "customId": "Client ID（可选）",
+        "clientId": "Client ID",
+        "clientSecret": "Client Secret"
+      },
+      "placeholders": {
+        "name": "显示名称",
+        "description": "在 OAuth 授权页展示的简短说明",
+        "homepageUrl": "https://example.com",
+        "redirectUris": "https://example.com/api/auth/callback",
+        "customId": "留空则自动生成"
+      },
+      "help": {
+        "redirectUrisHint": "每行一个 URL，必须是 http(s)",
+        "storeSecurely": "Client secret 仅显示这一次，请在关闭前妥善保存",
+        "rotateWarning": "轮换会使旧 secret 失效，已签发的 refresh token 不受影响"
+      },
+      "actions": {
+        "create": "创建",
+        "save": "保存",
+        "cancel": "取消",
+        "done": "完成",
+        "copy": "复制",
+        "copied": "已复制"
+      },
+      "errors": {
+        "nameRequired": "请填写名称",
+        "redirectUrisRequired": "至少需要一个回调地址",
+        "invalidUrl": "URL 无效，必须是 http(s)",
+        "createFailed": "创建应用失败",
+        "saveFailed": "保存失败",
+        "rotateFailed": "轮换密钥失败"
+      }
+    },
+    "createServiceToken": {
+      "title": "新建服务令牌",
+      "titleCreated": "令牌已创建",
+      "fields": {
+        "name": "名称"
+      },
+      "placeholders": {
+        "name": "例如：ci-deploy、external-api"
+      },
+      "actions": {
+        "done": "完成",
+        "copy": "复制",
+        "copied": "已复制"
+      },
+      "help": {
+        "storeSecurely": "该令牌只会展示一次，请在关闭前妥善保存。"
+      },
+      "errors": {
+        "nameRequired": "名称不能为空",
+        "createFailed": "创建令牌失败"
+      }
+    },
+    "createSkill": {
+      "title": "添加 Skill",
+      "modes": {
+        "upload": "上传",
+        "git": "Git"
+      },
+      "fields": {
+        "repositoryUrl": "仓库 URL",
+        "accessToken": "访问令牌（可选）",
+        "name": "名称",
+        "nameOptional": "名称（可选）",
+        "description": "描述",
+        "descriptionOptional": "描述（可选）",
+        "package": "安装包（.tar.gz）",
+        "public": "公开（对所有用户可见）",
+        "gitType": "服务类型"
+      },
+      "tokenSources": {
+        "none": "无",
+        "credential": "凭证",
+        "manual": "手动输入"
+      },
+      "placeholders": {
+        "repositoryUrl": "https://github.com/owner/repo 或 owner/repo",
+        "selectCredential": "选择凭证",
+        "manualToken": "用于私有仓库",
+        "gitName": "从 SKILL.md 或仓库名自动识别",
+        "gitDescription": "从 SKILL.md frontmatter 自动识别",
+        "name": "例如：my-skill",
+        "description": "简要说明这个 Skill 的用途"
+      },
+      "help": {
+        "repositoryUrl": "支持 GitHub、GitLab 和自托管仓库。追加 /tree/branch/subpath 可导入子目录。",
+        "packagePrefix": "打包 Skill 目录：",
+        "gitType": "默认按域名推断；自建 GitHub Enterprise / 自定义域名 GitLab 无法识别时，手动选择。"
+      },
+      "actions": {
+        "chooseFile": "选择文件"
+      },
+      "empty": {
+        "noCredentials": {
+          "title": "当前未配置凭证",
+          "description": "添加凭证以为 Skill 与外部集成提供身份认证。"
+        }
+      },
+      "toasts": {
+        "importedFromGit": "已从 Git 导入 Skill",
+        "importedBulk_other": "已从 Git 导入 {{count}} 个 Skill",
+        "uploaded": "Skill 已上传"
+      },
+      "errors": {
+        "gitUrlRequired": "Git URL 不能为空",
+        "previewRequired": "请先点「预览」并勾选要导入的子目录",
+        "importFailed": "导入失败",
+        "bulkPartial": "{{ok}} 个导入成功,{{fail}} 个失败:\n{{details}}",
+        "nameRequired": "名称不能为空",
+        "packageRequired": "安装包不能为空",
+        "uploadFailed": "上传失败"
+      },
+      "gitTypes": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      }
+    },
+    "createTemplate": {
+      "title": "新建模板",
+      "fields": {
+        "name": "名称",
+        "description": "描述",
+        "mcpConfig": "MCP 配置",
+        "agentSettings": "Agent 设置"
+      },
+      "placeholders": {
+        "name": "模板名称",
+        "description": "可选描述"
+      },
+      "errors": {
+        "invalidJson": "{{field}} 中的 JSON 无效",
+        "nameRequired": "名称不能为空",
+        "agentTypeRequired": "Agent 类型不能为空",
+        "providerRequired": "API 供应商不能为空",
+        "modelRequired": "模型不能为空",
+        "createFailed": "创建模板失败"
+      }
+    },
+    "teamworkSection": {
+      "empty": {
+        "title": "暂无 teamwork 任务",
+        "description": "一个 teamwork 任务由一个协调者 agent 和一组成员 agent 组成，通过共享文件夹协作。"
+      },
+      "actions": {
+        "new": "新建任务",
+        "create": "创建",
+        "cancel": "取消",
+        "delete": "删除任务",
+        "add": "添加",
+        "remove": "从成员中移除",
+        "back": "返回任务列表",
+        "saveBrief": "保存",
+        "editBrief": "编辑任务说明",
+        "setSlugAndAdd": "设置并添加",
+        "saving": "保存中…"
+      },
+      "labels": {
+        "brief": "任务说明",
+        "noBrief": "尚未填写任务说明。",
+        "coordinator": "协调者",
+        "coordinatorMeta": "协调者：{{name}}",
+        "coordinatorHint": "协调者负责与你对话，并通过 call_agent 把工作分派给成员。",
+        "members": "成员",
+        "membersCount": "成员 · {{count}}",
+        "noMembers": "暂无成员。可在下方添加。",
+        "noSlug": "(无 slug)",
+        "slugRequired": "需先设置 slug",
+        "notRunning": "需先启动工作空间",
+        "sharedFolder": "共享文件夹",
+        "sharedFolderHint": "已挂载到协调者和所有成员的下列路径。",
+        "sharedFolderPending": "尚未配置。",
+        "conversation": "对话",
+        "coordTab": "协调者 · {{name}}"
+      },
+      "dialogs": {
+        "createTitle": "新建 teamwork 任务",
+        "editBriefTitle": "编辑任务说明"
+      },
+      "fields": {
+        "name": "名称",
+        "namePlaceholder": "任务名称",
+        "brief": "任务说明（可选）",
+        "briefPlaceholder": "想让协调者做什么——目标、约束、参考资料。这段会作为上下文交给协调者。",
+        "coordinator": "协调者",
+        "coordinatorPlaceholder": "选择工作空间…",
+        "addMemberPlaceholder": "添加成员…",
+        "slugPlaceholder": "slug"
+      },
+      "toasts": {
+        "created": "任务已创建",
+        "deleted": "任务已删除",
+        "briefSaved": "任务说明已更新"
+      },
+      "errors": {
+        "createFailed": "创建任务失败",
+        "deleteFailed": "删除任务失败",
+        "addFailed": "添加成员失败",
+        "removeFailed": "移除成员失败",
+        "saveBriefFailed": "保存任务说明失败",
+        "setSlugFailed": "设置 slug 失败"
+      },
+      "timeline": {
+        "title": "协作时间线",
+        "empty": "暂无活动",
+        "popover": {
+          "user": "用户输入",
+          "userEmpty": "（空输入）",
+          "promptEmpty": "（空 prompt）",
+          "replyEmpty": "（无返回）",
+          "running": "（仍在执行）",
+          "continue": "续聊",
+          "background": "后台",
+          "error": "出错",
+          "openChat": "打开 {{lane}} 会话"
+        }
+      }
+    },
+    "teamsSection": {
+      "empty": {
+        "title": "暂无团队",
+        "description": "创建团队以与一组用户共享 prompt、模型供应商等资源。"
+      },
+      "actions": {
+        "new": "新建",
+        "newTeam": "新建团队",
+        "open": "打开",
+        "delete": "删除团队",
+        "leave": "退出团队",
+        "edit": "编辑",
+        "removeMember": "移除",
+        "promote": "提升为管理员",
+        "demote": "降为成员",
+        "newInvite": "新建链接",
+        "copyLink": "复制链接",
+        "revokeInvite": "撤销链接"
+      },
+      "labels": {
+        "members_one": "{{count}} 名成员",
+        "members_other": "{{count}} 名成员",
+        "memberCount": "{{count}} 名成员",
+        "createdAt": "创建于 {{value}}",
+        "you": "你",
+        "admin": "管理员",
+        "member": "成员",
+        "ownership": "团长",
+        "invites": "邀请链接",
+        "noInvites": "暂无有效的邀请链接，可以新建一个邀请他人加入。",
+        "inviteHelp": "任何持有该链接的用户都可以加入团队，直至链接过期。",
+        "expiresAt": "{{value}} 过期",
+        "createdBy": "由 {{name}} 创建"
+      },
+      "dialogs": {
+        "createTitle": "新建团队",
+        "editTitle": "编辑团队",
+        "deleteTitle": "删除该团队？",
+        "deleteDescription": "成员拥有的资源不会被删除，但通过该团队授予的访问权限将被撤销。",
+        "leaveTitle": "退出该团队？",
+        "leaveDescription": "退出后将无法再访问通过该团队共享的资源。",
+        "revokeInviteDescription": "撤销后已分发出去的链接将立即失效，可随时新建。"
+      },
+      "fields": {
+        "name": "名称",
+        "namePlaceholder": "团队名称",
+        "description": "描述",
+        "descriptionPlaceholder": "可选"
+      },
+      "errors": {
+        "loadFailed": "加载团队失败",
+        "createFailed": "创建团队失败",
+        "saveFailed": "保存团队失败",
+        "deleteFailed": "删除团队失败",
+        "leaveFailed": "退出团队失败",
+        "removeMemberFailed": "移除成员失败",
+        "roleChangeFailed": "修改角色失败",
+        "lastAdmin": "你是当前唯一的管理员，请先提升其他成员，或直接删除该团队。",
+        "createInviteFailed": "创建邀请链接失败",
+        "revokeInviteFailed": "撤销邀请链接失败",
+        "copyFailed": "复制失败"
+      },
+      "toasts": {
+        "created": "团队已创建",
+        "updated": "团队已更新",
+        "deleted": "团队已删除",
+        "left": "已退出团队",
+        "memberRemoved": "成员已移除",
+        "rolePromoted": "成员已提升为管理员",
+        "roleDemoted": "管理员已降为成员",
+        "inviteCreated": "邀请链接已创建",
+        "inviteCopied": "链接已复制",
+        "inviteRevoked": "邀请链接已撤销"
+      }
+    },
+    "copyButton": {
+      "copy": "复制",
+      "copied": "已复制",
+      "errors": {
+        "copyFailed": "复制失败"
+      }
+    },
+    "credentialsSection": {
+      "sections": {
+        "global": "所有 Workspace",
+        "globalDesc": "注入到你的全部 Workspace",
+        "scoped": "指定 Workspace",
+        "scopedDesc": "仅注入到选定的 Workspace"
+      },
+      "empty": {
+        "title": "当前未配置凭证",
+        "description": "添加凭证以为 Skill 与外部集成提供身份认证。"
+      },
+      "actions": {
+        "new": "新建",
+        "delete": "删除凭证"
+      },
+      "dialogs": {
+        "editTitle": "编辑凭证"
+      },
+      "placeholders": {
+        "editValue": "请重新输入值（出于安全原因不会展示原值）"
+      },
+      "errors": {
+        "loadFailed": "加载凭证失败",
+        "deleteFailed": "删除失败"
+      }
+    },
+    "connectorsSection": {
+      "badges": {
+        "public": "公开"
+      },
+      "tabs": {
+        "routes": "路由（{{count}}）",
+        "events": "事件"
+      },
+      "table": {
+        "time": "时间",
+        "event": "事件",
+        "job": "任务",
+        "status": "状态",
+        "jobId": "任务 ID",
+        "jobState": "任务状态",
+        "jobStartedOn": "开始时间",
+        "jobCompletedOn": "结束时间",
+        "eventStatus": "事件状态",
+        "retryCount": "重试 {{count}} 次",
+        "error": "错误",
+        "payload": "载荷"
+      },
+      "actions": {
+        "new": "新建",
+        "newRoute": "新建路由",
+        "createConnector": "创建连接器",
+        "testConnectivity": "测试连接",
+        "toggleEnabled": "启用 / 停用连接器",
+        "edit": "编辑",
+        "deleting": "删除中...",
+        "delete": "删除"
+      },
+      "empty": {
+        "noConnectors": {
+          "title": "当前没有连接器",
+          "description": "添加 Slack、企业微信或 Webhook 连接器，将事件接入工作空间。"
+        },
+        "noRoutes": {
+          "title": "该连接器下还没有路由",
+          "description": "添加路由，将该连接器的事件转发到对应工作空间。"
+        },
+        "noEvents": {
+          "title": "还没有事件",
+          "description": "连接器收到消息后，事件会显示在这里。"
+        },
+        "selectConnector": "请选择一个连接器查看详情"
+      },
+      "dialogs": {
+        "editConnectorTitle": "编辑连接器",
+        "deleteConnectorTitle": "删除连接器",
+        "deleteConnectorDescription": "确认删除连接器 {{name}} 吗？关联路由也会一并删除。",
+        "editRouteTitle": "编辑路由",
+        "deleteRouteTitle": "删除路由",
+        "deleteRouteDescription": "确认删除路由 {{name}} 吗？此操作不可恢复。"
+      },
+      "toasts": {
+        "connectorUpdated": "连接器已更新",
+        "connectorDeleted": "连接器已删除",
+        "routeUpdated": "路由已更新",
+        "routeDeleted": "路由已删除"
+      },
+      "timeAgo": {
+        "seconds": "{{count}} 秒前",
+        "minutes": "{{count}} 分钟前",
+        "hours": "{{count}} 小时前",
+        "days": "{{count}} 天前"
+      }
+    },
+    "sharedSession": {
+      "title": "共享会话",
+      "actions": {
+        "openFullPage": "打开完整页面"
+      }
+    },
+    "tableOfContents": {
+      "title": "目录"
+    },
+    "fileViewer": {
+      "actions": {
+        "backToList": "返回文件列表",
+        "copied": "已复制",
+        "copyContent": "复制文件内容",
+        "download": "下载文件",
+        "edit": "编辑文件",
+        "save": "保存",
+        "doneEditing": "完成",
+        "openInOverlay": "在浮层中打开",
+        "cancelEditing": "取消编辑"
+      }
+    },
+    "fileOperations": {
+      "actions": {
+        "addToChat": "添加到对话",
+        "newFile": "新建文件",
+        "newFolder": "新建文件夹",
+        "createPublicLink": "生成公开链接…",
+        "downloadZip": "下载 ZIP",
+        "download": "下载",
+        "rename": "重命名",
+        "delete": "删除",
+        "deleteConfirm": "再次点击确认删除"
+      },
+      "dialogs": {
+        "rename": {
+          "title": "重命名"
+        },
+        "newFolder": {
+          "title": "新建文件夹",
+          "placeholder": "文件夹名称"
+        },
+        "newFile": {
+          "title": "新建文件",
+          "placeholder": "文件名"
+        },
+        "publicLink": {
+          "title": "生成公开链接",
+          "description": "为此文件生成一个可访问的公开链接，方便分享给工作区外的人。",
+          "warning": "拿到链接的任何人都可在有效期内访问该文件，无需登录。请确认文件内容可以公开。",
+          "warningPermanent": "永久链接没有有效期。只要任何人拿到 URL，就能一直读到这个路径下的文件内容（包括之后被覆盖的新内容）。用完后请到「管理公开链接」中撤销。",
+          "fileLabel": "文件",
+          "ttlLabel": "有效期",
+          "ttlOptions": {
+            "5min": "5 分钟",
+            "30min": "30 分钟",
+            "1hour": "1 小时",
+            "permanent": "永不过期"
+          },
+          "generate": "生成链接",
+          "generating": "生成中…",
+          "linkLabel": "公开链接",
+          "expiresAt": "过期时间：{{value}}",
+          "expiresNever": "永久有效 —— 可在「管理公开链接」中查看或撤销。",
+          "openLink": "在新标签页打开"
+        },
+        "managePublicLinks": {
+          "title": "管理公开链接",
+          "description": "当前工作区下处于有效期内的公开链接。撤销操作立即生效，无法恢复。",
+          "loading": "加载中…",
+          "empty": "暂无有效的公开链接。",
+          "permanent": "永久有效（无过期时间）",
+          "expiresAt": "过期时间：{{value}}",
+          "revoke": "撤销",
+          "revoking": "撤销中…"
+        }
+      }
+    },
+    "filePreview": {
+      "actions": {
+        "source": "源码",
+        "preview": "预览",
+        "spreadsheet": "表格视图",
+        "officeMode": "Office 模式",
+        "toc": "目录"
+      },
+      "toc": {
+        "label": "本页目录",
+        "empty": "当前文档没有标题。"
+      }
+    },
+    "officePreview": {
+      "rendering": "正在生成预览…",
+      "unsupported": "当前环境未配置 Office 预览服务",
+      "failed": "预览生成失败",
+      "download": "下载原文件"
+    },
+    "csvPreview": {
+      "empty": "空文件",
+      "summary": "{{rows}} 行 x {{columns}} 列"
+    },
+    "excalidrawPreview": {
+      "invalidFile": ".excalidraw 文件无效：{{error}}"
+    },
+    "xlsxPreview": {
+      "empty": "空工作簿",
+      "parseError": "表格解析失败：{{error}}",
+      "openOfficeMode": "用 Office 模式打开"
+    },
+    "skillPicker": {
+      "empty": {
+        "noSkills": "当前没有可用 Skills",
+        "noResults": "未找到匹配的 Skill"
+      },
+      "placeholders": {
+        "search": "搜索 Skills..."
+      },
+      "badges": {
+        "template": "模板",
+        "yours": "您的"
+      },
+      "groups": {
+        "yours": "我的",
+        "shared": "共享给我",
+        "public": "平台公共"
+      },
+      "actions": {
+        "add": "添加 Skill",
+        "remove": "移除 {{name}}"
+      }
+    },
+    "workspaceSkillsPanel": {
+      "loading": "加载 Skills 中...",
+      "placeholders": {
+        "selectSkill": "选择 Skill"
+      },
+      "actions": {
+        "newDraft": "新建草稿",
+        "publish": "发布",
+        "remove": "移除",
+        "removeConfirm": "再点一次确认"
+      },
+      "tooltips": {
+        "publish": "将修改发布到资源库，其他工作空间即可使用更新后的版本。",
+        "publishGitSource": "将修改发布到资源库。注意：该 Skill 来自 Git 导入，下一次 Git 同步时会覆盖发布结果。",
+        "remove": "从当前工作空间移除该 Skill；资源库中的 Skill 不会被删除。"
+      },
+      "empty": {
+        "noSkills": {
+          "title": "当前未加载任何 Skill",
+          "description": "从你的资源库中添加 Skill，为 Agent 赋予新的能力。"
+        },
+        "selectSkill": "请选择一个 Skill",
+        "empty": "空目录",
+        "selectFile": "请选择要查看的文件"
+      },
+      "dialogs": {
+        "newDraft": {
+          "title": "新建 Skill 草稿",
+          "placeholder": "Skill 名称"
+        }
+      },
+      "toasts": {
+        "createdFile": "已创建 {{name}}",
+        "deletedFile": "已删除 {{name}}",
+        "createdFolder": "已创建 {{name}}/",
+        "renamed": "已重命名为 {{name}}",
+        "createdDraft": "已创建草稿“{{name}}”",
+        "published": "已发布 {{name}}",
+        "removed": "已移除 {{name}}"
+      },
+      "errors": {
+        "fetchSkillsFailed": "获取 Skills 失败：{{status}}",
+        "createFolderFailed": "创建文件夹失败：{{status}}",
+        "createDraftFailed": "创建草稿失败",
+        "packFailed": "打包 Skill 失败",
+        "uploadFailed": "上传 Skill 失败",
+        "removeFailed": "移除 Skill 失败"
+      }
+    },
+    "workspaceSettings": {
+      "title": "工作空间设置",
+      "fields": {
+        "name": "名称",
+        "slug": "Slug",
+        "visibility": "可见性",
+        "tags": "标签"
+      },
+      "placeholders": {
+        "slug": "例如：translator"
+      },
+      "visibility": {
+        "private": "私有 - 仅您可见，且不可调用",
+        "user": "用户级 - 可供您的 Agents 调用",
+        "public": "公开 - 可供所有 Agents 调用"
+      }
+    },
+    "mcpConfigEditor": {
+      "modes": {
+        "structured": "结构化",
+        "raw": "原始"
+      },
+      "transport": {
+        "http": "HTTP",
+        "stdio": "Stdio"
+      },
+      "fields": {
+        "headers": "请求头",
+        "environment": "环境变量"
+      },
+      "labels": {
+        "json": "json"
+      },
+      "placeholders": {
+        "serverName": "服务名",
+        "httpUrl": "https://example.com/mcp",
+        "headerName": "Header 名称",
+        "value": "值",
+        "command": "命令（例如：npx）",
+        "args": "参数（空格分隔，例如：-y @modelcontextprotocol/server-github）",
+        "envKey": "VAR_NAME",
+        "envValue": "值"
+      },
+      "oauth": {
+        "checking": "检查中...",
+        "unreachable": "不可达",
+        "connected": "已连接",
+        "connect": "连接"
+      },
+      "states": {
+        "loadingCatalog": "加载 MCP 目录中..."
+      },
+      "actions": {
+        "addField": "+ {{label}}",
+        "add": "添加",
+        "addServer": "添加 MCP 服务"
+      },
+      "builder": {
+        "title": "Builder 模式",
+        "none": "未启用",
+        "nSelected": "已选 {{count}} 项",
+        "empty": "无可选项",
+        "options": {
+          "workspace": {
+            "label": "本 workspace",
+            "description": "允许 agent 调整本 workspace 自身的配置：prompt、commands、settings、skills。"
+          },
+          "global": {
+            "label": "账号范围",
+            "description": "允许 agent 操作跨 workspace 的账号资源：credentials、providers、prompt 库、共享。"
+          }
+        }
+      }
+    },
+    "workspaceTerminal": {
+      "actions": {
+        "reconnect": "重新连接终端",
+        "search": "搜索（⌘/Ctrl+F）",
+        "searchHint": "搜索（⌘/Ctrl+F）"
+      },
+      "status": {
+        "connecting": "连接中",
+        "open": "已连接",
+        "closed": "已断开",
+        "error": "错误"
+      },
+      "search": {
+        "placeholder": "在终端中查找",
+        "previous": "上一个匹配（Shift+Enter）",
+        "next": "下一个匹配（Enter）",
+        "close": "关闭搜索（Esc）",
+        "noMatch": "无匹配"
+      },
+      "messages": {
+        "reconnecting": "重新连接中...",
+        "connectionClosed": "连接已关闭",
+        "connectionError": "连接异常"
+      }
+    },
+    "combobox": {
+      "placeholders": {
+        "select": "请选择...",
+        "search": "搜索..."
+      },
+      "empty": {
+        "noResults": "没有结果。"
+      },
+      "options": {
+        "none": "无"
+      }
+    },
+    "workspaceMultiSelect": {
+      "placeholder": "选择 Workspace…",
+      "search": "搜索 Workspace…",
+      "empty": "未找到 Workspace",
+      "remove": "移除 {{name}}"
+    },
+    "sidebar": {
+      "search": {
+        "placeholder": "搜索..."
+      },
+      "filters": {
+        "human_one": "{{count}} 个待您处理",
+        "human_other": "{{count}} 个待您处理",
+        "agent_one": "{{count}} 个运行中",
+        "agent_other": "{{count}} 个运行中"
+      },
+      "errors": {
+        "loadFailed": "加载失败：{{message}}"
+      },
+      "empty": {
+        "noMatches": "没有匹配结果。",
+        "noWorkspaces": "还没有工作空间。"
+      },
+      "tooltip": {
+        "agentWorking": "Agent 运行中",
+        "yourTurn": "等待您处理",
+        "activeSessions_one": "{{count}} 个活跃会话",
+        "activeSessions_other": "{{count}} 个活跃会话"
+      },
+      "sessions": {
+        "newSession": "新会话",
+        "more_one": "+{{count}} 个更多",
+        "more_other": "+{{count}} 个更多",
+        "markAllRead": "全部标为已读",
+        "count_one": "{{count}} 个会话",
+        "count_other": "{{count}} 个会话"
+      },
+      "navigation": {
+        "library": "资源库",
+        "integration": "集成",
+        "management": "管理",
+        "admin": "管理后台"
+      },
+      "actions": {
+        "quickActions": "快捷操作",
+        "quickActionsWithShortcut": "快捷操作（{{shortcut}}）"
+      },
+      "badges": {
+        "system": "系统"
+      },
+      "notifications": {
+        "agentCompletedTitle": "Agent 已完成"
+      }
+    },
+    "shell": {
+      "menubar": {
+        "commandPaletteHint": "搜索或前往…"
+      },
+      "wsSwitcher": {
+        "allWorkspaces": "全部工作空间",
+        "newWorkspace": "新建工作空间",
+        "searchPlaceholder": "搜索工作空间…",
+        "noResults": "没有匹配的工作空间",
+        "othersNeedYou_one": "另有 {{count}} 个工作空间需要你处理",
+        "othersNeedYou_other": "另有 {{count}} 个工作空间需要你处理",
+        "othersRunning_one": "另有 {{count}} 个工作空间正在运行",
+        "othersRunning_other": "另有 {{count}} 个工作空间正在运行"
+      },
+      "dock": {
+        "library": "资源库",
+        "integration": "集成",
+        "management": "管理",
+        "admin": "管理后台"
+      },
+      "slot": {
+        "openApp": "打开应用",
+        "searchPlaceholder": "搜索应用…",
+        "groups": {
+          "agent": "Agent",
+          "tool": "工具",
+          "capability": "资源",
+          "connection": "集成",
+          "extension": "扩展",
+          "system": "平台"
+        },
+        "noResults": "没有匹配的应用",
+        "emptyHint": "点击打开应用",
+        "newInstance": "新建实例",
+        "overflowLabel_one": "另有 {{count}} 个应用",
+        "overflowLabel_other": "另有 {{count}} 个应用"
+      },
+      "layout": {
+        "switcher": "布局",
+        "oneCol": "专注",
+        "twoCol": "两列",
+        "threeCol": "三列",
+        "savedLayouts": "已保存布局",
+        "builtinDefault": "默认",
+        "templateBadge": "模板",
+        "editedHint": "已修改，与此布局不同",
+        "update": "更新",
+        "saveAs": "另存为",
+        "reset": "重置",
+        "edit": "编辑",
+        "editTitle": "编辑布局",
+        "deleteTitle": "删除布局",
+        "deleteConfirm": "删除「{{name}}」？使用它的工作区将回退到默认布局。",
+        "saveDialog": {
+          "title": "保存布局",
+          "namePlaceholder": "布局名称"
+        }
+      },
+      "window": {
+        "popOut": "弹出窗口",
+        "popIn": "回到面板",
+        "fill": "充满布局",
+        "unfill": "恢复布局",
+        "fullscreen": "全屏",
+        "exitFullscreen": "退出全屏",
+        "close": "关闭"
+      },
+      "workspacesApp": {
+        "appLabel": "工作空间",
+        "searchPlaceholder": "搜索工作空间",
+        "actions": {
+          "new": "新建"
+        },
+        "empty": "还没有工作空间 —— 创建一个开始使用",
+        "noResults": "没有匹配的工作空间。",
+        "sessionCount_one": "{{count}} 个会话",
+        "sessionCount_other": "{{count}} 个会话"
+      },
+      "activityApp": {
+        "appLabel": "统计信息",
+        "sessionsToday": "新会话",
+        "interactionsToday": "今日交互",
+        "cellTooltip": "{{date}} · {{count}}",
+        "rangeAria": "时间范围",
+        "range": {
+          "7d": "7 天",
+          "30d": "30 天",
+          "90d": "90 天"
+        },
+        "punchLabel": "活跃时段",
+        "punchTooltip": "周{{day}} · {{hour}}:00 · {{count}}",
+        "dow": {
+          "0": "日",
+          "1": "一",
+          "2": "二",
+          "3": "三",
+          "4": "四",
+          "5": "五",
+          "6": "六"
+        },
+        "hourSuffix": "时",
+        "punchCaption": "横轴时段 / 纵轴星期 —— 颜色越深越活跃",
+        "token": {
+          "usageLabel": "Token 用量",
+          "cellTooltip": "{{date}} · {{value}}",
+          "compositionLabel": "Token 构成",
+          "byWorkspaceLabel": "工作空间 Token 用量分布",
+          "input": "输入",
+          "output": "输出",
+          "cache": "缓存",
+          "cacheRead": "缓存读",
+          "cacheCreation": "缓存写"
+        }
+      }
+    },
+    "admin": {
+      "dashboardSection": {
+        "sections": {
+          "overview": "概览",
+          "growth": "增长趋势",
+          "tokens": "Token 用量",
+          "powerUsersAndAgents": "高活跃用户与 Agent",
+          "skillsAndMcp": "Skill 与 MCP 使用情况"
+        },
+        "overview": {
+          "users": {
+            "title": "用户数",
+            "activeThisWeek": "本周活跃 {{count}}"
+          },
+          "agents": {
+            "title": "Agent 数",
+            "activeThisWeek": "本周活跃 {{count}}"
+          },
+          "sessions": {
+            "title": "会话数",
+            "today": "今日 +{{count}}"
+          },
+          "interactions": {
+            "title": "交互数",
+            "today": "今日 +{{count}}"
+          },
+          "tokens": {
+            "title": "Token 总量",
+            "today": "今日 {{value}}"
+          }
+        },
+        "panels": {
+          "growth": {
+            "title": "Agent 与会话"
+          },
+          "weeklyActive": {
+            "title": "每周活跃 Agent"
+          },
+          "interactionVolume": {
+            "title": "交互量"
+          },
+          "powerUsers": {
+            "title": "按总交互量排名的用户"
+          },
+          "powerAgents": {
+            "title": "按总交互量排名的 Agent"
+          },
+          "skillUsage": {
+            "title": "Skill 使用情况",
+            "description": "每个 Skill 对应的工作空间数"
+          },
+          "mcpUsage": {
+            "title": "MCP 使用情况",
+            "description": "每个 MCP 服务对应的工作空间数"
+          },
+          "tokenVolume": {
+            "title": "Token 用量 · 近 30 天"
+          },
+          "tokenTopUsers": {
+            "title": "Token 消耗 Top 用户"
+          },
+          "tokenTopAgents": {
+            "title": "Token 消耗 Top Agent"
+          }
+        },
+        "token": {
+          "input": "输入",
+          "output": "输出",
+          "cache": "缓存",
+          "cacheWrite": "缓存写",
+          "cacheRead": "缓存读"
+        },
+        "chartLabels": {
+          "daily": "当日",
+          "cumulative": "累计"
+        },
+        "labels": {
+          "agents_one": "{{count}} 个 Agent",
+          "agents_other": "{{count}} 个 Agent",
+          "sessionsByOwner_one": "{{owner}} · {{count}} 个会话",
+          "sessionsByOwner_other": "{{owner}} · {{count}} 个会话"
+        },
+        "empty": {
+          "noData": "暂无数据",
+          "noSkills": "当前没有启用的 Skill",
+          "noMcp": "当前未配置 MCP 服务"
+        },
+        "errors": {
+          "loadFailed": "加载失败"
+        }
+      },
+      "infraSection": {
+        "sections": {
+          "clusterOverview": "集群概览",
+          "capacityEstimate": "容量估算",
+          "nodeGroups": "节点分组"
+        },
+        "overview": {
+          "workerNodes": {
+            "title": "工作节点",
+            "runningPods": "{{count}} 个 Pod 运行中"
+          },
+          "workspaces": {
+            "title": "NAP 工作空间"
+          },
+          "sandboxes": {
+            "title": "沙箱数"
+          },
+          "cpuWorkers": {
+            "title": "CPU（工作节点）"
+          },
+          "memoryWorkers": {
+            "title": "内存（工作节点）"
+          }
+        },
+        "labels": {
+          "nodes_one": "{{count}} 个节点",
+          "nodes_other": "{{count}} 个节点",
+          "ofValue": "共 {{value}}",
+          "requested": "已申请",
+          "sandboxesAndPods": "{{sandboxes}} 个沙箱 / {{pods}} 个 Pod",
+          "workspacesAndPods": "{{workspaces}} 个工作空间 / {{pods}} 个 Pod"
+        },
+        "table": {
+          "node": "节点",
+          "cpu": "CPU",
+          "memory": "内存",
+          "pods": "Pod",
+          "total": "合计"
+        },
+        "capacity": {
+          "additionalHeadroom": "基于剩余 request 余量估算可承载的额外容量",
+          "bottleneck": "瓶颈：{{resource}}；剩余 {{cpu}} CPU、{{memory}} 内存"
+        },
+        "errors": {
+          "loadFailed": "加载集群数据失败"
+        }
+      },
+      "systemSettingsSection": {
+        "sections": {
+          "asr": "语音识别（ASR）"
+        },
+        "asr": {
+          "description": "配置所有客户端使用的语音转文字 provider。设置全局生效，仅 admin 可改。",
+          "noProviders": "尚未注册 ASR provider。接入第一个 provider 后，可选项会自动出现在下拉框中。",
+          "activeProvider": "当前 provider",
+          "activeProviderNone": "（无 — 功能未启用）",
+          "providersConfig": "Provider 配置",
+          "providersConfigHint": "JSON 对象，key 为 provider 名。每个 provider 自己校验配置形状，具体字段见 provider 源码。"
+        },
+        "actions": {
+          "save": "保存",
+          "saving": "保存中…",
+          "reset": "重置"
+        },
+        "errors": {
+          "loadFailed": "加载系统设置失败"
+        }
+      },
+      "usersSection": {
+        "actions": {
+          "newUser": "新建用户",
+          "resetPassword": "重置密码",
+          "deleteUser": "删除用户"
+        },
+        "empty": {
+          "noUsers": "当前没有用户"
+        },
+        "fields": {
+          "lastLogin": "最近登录：{{value}}"
+        },
+        "badges": {
+          "roleAdmin": "管理员",
+          "authSource": {
+            "password": "密码",
+            "ldap": "LDAP"
+          }
+        },
+        "toasts": {
+          "deleted": "用户已删除"
+        },
+        "errors": {
+          "loadFailed": "加载用户失败",
+          "deleteFailed": "删除用户失败"
+        }
+      },
+      "createUser": {
+        "title": "新建用户",
+        "fields": {
+          "username": "用户名",
+          "displayName": "显示名",
+          "email": "邮箱",
+          "password": "密码",
+          "role": "角色"
+        },
+        "roles": {
+          "user": "普通用户",
+          "admin": "管理员"
+        },
+        "placeholders": {
+          "username": "例如：john.doe",
+          "displayName": "例如：John Doe",
+          "email": "可选"
+        },
+        "toasts": {
+          "created": "用户已创建"
+        },
+        "errors": {
+          "required": "用户名、显示名和密码不能为空",
+          "passwordTooShort": "密码长度至少为 6 位",
+          "createFailed": "创建用户失败"
+        }
+      },
+      "resetPassword": {
+        "title": "重置密码 - {{username}}",
+        "fields": {
+          "newPassword": "新密码"
+        },
+        "toasts": {
+          "updated": "已更新 {{username}} 的密码"
+        },
+        "errors": {
+          "passwordTooShort": "密码长度至少为 6 位",
+          "resetFailed": "重置密码失败"
+        }
+      }
+    },
+    "voiceInput": {
+      "actions": {
+        "start": "语音输入",
+        "stopAndTranscribe": "停止并转写",
+        "cancel": "取消",
+        "transcribing": "转写中…"
+      },
+      "states": {
+        "listening": "聆听中…",
+        "transcribing": "转写中…"
+      },
+      "errors": {
+        "unsupported": "当前浏览器不支持语音输入。",
+        "permissionDenied": "麦克风权限被拒绝。",
+        "failed": "转写失败"
+      }
+    },
+    "chatInput": {
+      "alts": {
+        "attachment": "附件"
+      },
+      "placeholders": {
+        "message": "输入消息...（Ctrl/Cmd+Enter 发送）"
+      },
+      "actions": {
+        "stop": "停止",
+        "attachImage": "添加图片",
+        "send": "发送",
+        "sendShortcut": "发送（Ctrl/Cmd+Enter）"
+      }
+    },
+    "chat": {
+      "messageBubble": {
+        "alts": {
+          "attachment": "附件",
+          "content": "内容"
+        },
+        "states": {
+          "thinking": "思考中..."
+        },
+        "actions": {
+          "copy": "复制",
+          "copied": "已复制"
+        }
+      },
+      "toolRenderers": {
+        "labels": {
+          "unknown": "（未知）"
+        },
+        "agentRequest": {
+          "proposedBadge": "待审",
+          "approve": "批准",
+          "reject": "拒绝",
+          "confirmReject": "确认拒绝",
+          "cancel": "取消",
+          "reasonPlaceholder": "拒绝原因（可选）",
+          "reason": "原因",
+          "loading": "加载请求中…",
+          "loadFailed": "加载请求失败",
+          "invalidPayload": "请求 payload 无效",
+          "appliedAt": "已执行",
+          "status": {
+            "pending": "待审批",
+            "approved": "已批准",
+            "rejected": "已拒绝",
+            "applied": "已执行"
+          },
+          "fields": {
+            "id": "ID",
+            "name": "名称",
+            "cron": "Cron",
+            "runAt": "执行时间",
+            "timezone": "时区",
+            "prompt": "Prompt",
+            "promptId": "Prompt 引用",
+            "type": "类型",
+            "enabled": "启用",
+            "attach": "附加",
+            "detach": "移除",
+            "model": "模型",
+            "smallModel": "小模型",
+            "systemPrompt": "系统提示词",
+            "slug": "Slug",
+            "visibility": "可见性",
+            "agentType": "Agent",
+            "provider": "Provider",
+            "content": "内容"
+          },
+          "cleared": "（清空）",
+          "commandTypes": {
+            "plain": "普通",
+            "struct": "结构化"
+          },
+          "enabledStates": {
+            "on": "已启用",
+            "off": "已暂停"
+          },
+          "visibilityValues": {
+            "private": "私有",
+            "user": "用户级",
+            "public": "公开"
+          }
+        },
+        "defaults": {
+          "input": "输入：",
+          "result": "结果："
+        },
+        "browser": {
+          "timeout": "超时：{{value}} 秒",
+          "status": {
+            "created": "已创建"
+          },
+          "empty": {
+            "noBrowsers": "当前没有浏览器"
+          }
+        },
+        "codexEdit": {
+          "preview": {
+            "files_one": "{{count}} 个文件",
+            "files_other": "{{count}} 个文件"
+          }
+        },
+        "codexExec": {
+          "labels": {
+            "inPath": "位于 {{value}}",
+            "command": "命令：",
+            "cwd": "工作目录：{{value}}",
+            "stdout": "标准输出：",
+            "stderr": "标准错误：",
+            "exitCode": "退出码：{{value}}"
+          }
+        },
+        "codexWebSearch": {
+          "empty": "Codex 未暴露查询关键词与搜索结果"
+        },
+        "agent": {
+          "preview": {
+            "background": "@{{slug}}（后台）"
+          },
+          "input": {
+            "continue": "续聊 {{sid}}",
+            "newSession": "新会话"
+          }
+        },
+        "claudeBash": {
+          "labels": {
+            "command": "命令："
+          }
+        },
+        "claudeFileEdit": {
+          "labels": {
+            "old": "旧内容",
+            "new": "新内容",
+            "replaceAllOccurrences": "替换全部匹配项"
+          }
+        },
+        "claudeFileRead": {
+          "labels": {
+            "lineRange": "第 {{start}}-{{end}} 行",
+            "fromLine": "从第 {{value}} 行开始",
+            "firstLines_one": "前 {{count}} 行",
+            "firstLines_other": "前 {{count}} 行",
+            "pages": "第 {{value}} 页"
+          }
+        },
+        "claudeSearch": {
+          "preview": {
+            "patternInPath": "{{pattern}}，范围 {{path}}"
+          },
+          "labels": {
+            "inPath": "范围：{{value}}",
+            "glob": "Glob：{{value}}",
+            "type": "类型：{{value}}",
+            "mode": "模式：{{value}}"
+          }
+        },
+        "claudeTodo": {
+          "preview": {
+            "done": "已完成 {{done}}/{{total}}"
+          }
+        },
+        "claudeTask": {
+          "status": {
+            "pending": "待办",
+            "in_progress": "进行中",
+            "completed": "已完成",
+            "deleted": "已删除"
+          }
+        },
+        "sandbox": {
+          "status": {
+            "created": "已创建"
+          },
+          "labels": {
+            "cpu": "CPU：{{value}}",
+            "memory": "内存：{{value}}",
+            "timeout": "超时：{{value}} 秒",
+            "expires": "到期时间：{{value}}",
+            "command": "命令：",
+            "cwd": "工作目录：{{value}}",
+            "sandbox": "沙箱：{{value}}",
+            "exitCode": "退出码 {{value}}"
+          },
+          "preview": {
+            "files_one": "{{count}} 个文件",
+            "files_other": "{{count}} 个文件"
+          },
+          "empty": {
+            "noSandboxes": "当前没有沙箱",
+            "noUrl": "暂无 URL"
+          }
+        },
+        "skills": {
+          "labels": {
+            "path": "路径：{{value}}"
+          }
+        },
+        "afs": {
+          "labels": {
+            "readOnly": "只读",
+            "readWrite": "可读写",
+            "membersAffected_one": "已卸载 {{count}} 个挂载点",
+            "membersAffected_other": "已卸载 {{count}} 个挂载点"
+          }
+        },
+        "exportFileUrl": {
+          "labels": {
+            "ttl": "有效期：{{value}} 秒",
+            "expires": "过期时间：{{value}}"
+          }
+        }
+      },
+      "toolCallBlock": {
+        "status": {
+          "error": "错误",
+          "done": "完成"
+        }
+      },
+      "turnStatsBar": {
+        "turns_one": "{{count}} 轮",
+        "turns_other": "{{count}} 轮",
+        "context": "上下文 {{used}} / {{total}}",
+        "contextWarning": "建议执行 /compact 或开启新会话",
+        "turnWarning": "轮次较高，建议开启新会话或压缩会话"
+      }
+    },
+    "markdown": {
+      "systemMessage": "系统消息"
+    },
+    "management": {
+      "providers": {
+        "actions": {
+          "new": "新建",
+          "edit": "编辑供应商",
+          "delete": "删除 API 供应商"
+        },
+        "sections": {
+          "public": "公开",
+          "private": "私有"
+        },
+        "badges": {
+          "yours": "您的"
+        },
+        "dialogs": {
+          "editTitle": "编辑 API 供应商"
+        },
+        "fields": {
+          "apiKey": "API Key（留空则保留当前值）"
+        },
+        "empty": {
+          "noProviders": {
+            "title": "当前未配置模型供应商",
+            "description": "添加一个 LLM 供应商，以在工作空间中启用模型选择。"
+          }
+        },
+        "errors": {
+          "saveFailed": "保存失败",
+          "deleteFailed": "删除失败"
+        }
+      },
+      "serviceTokens": {
+        "actions": {
+          "new": "新建",
+          "revoke": "吊销令牌"
+        },
+        "empty": {
+          "noTokens": {
+            "title": "当前没有服务令牌",
+            "description": "签发一个令牌，用于以编程方式访问平台 API。"
+          }
+        },
+        "labels": {
+          "platformToken": "平台令牌",
+          "platformDescription": "由平台签发并托管的系统令牌。",
+          "system": "系统",
+          "user": "用户",
+          "createdAt": "创建于 {{value}}"
+        },
+        "toasts": {
+          "revoked": "令牌已吊销"
+        },
+        "errors": {
+          "loadFailed": "加载服务令牌失败",
+          "revokeFailed": "吊销令牌失败"
+        }
+      },
+      "applications": {
+        "actions": {
+          "new": "新建",
+          "edit": "编辑",
+          "rotate": "轮换密钥",
+          "delete": "删除",
+          "visitHomepage": "访问主页"
+        },
+        "empty": {
+          "noApplications": {
+            "title": "还没有已注册的应用",
+            "description": "注册应用以授予外部服务访问 API 的权限。"
+          }
+        },
+        "labels": {
+          "owner": "所有者",
+          "unknownOwner": "未知",
+          "redirectUris": "回调地址",
+          "createdAt": "创建于 {{value}}",
+          "adminOnly": "仅管理员"
+        },
+        "toasts": {
+          "deleted": "应用已删除",
+          "rotated": "密钥已轮换"
+        },
+        "errors": {
+          "loadFailed": "加载应用失败",
+          "deleteFailed": "删除应用失败",
+          "rotateFailed": "轮换密钥失败"
+        }
+      }
+    },
+    "askUserQuestion": {
+      "actions": {
+        "customReplyPlaceholder": "或者输入自定义回复...",
+        "confirm": "确认"
+      }
+    },
+    "sessions": {
+      "untitled": "未命名",
+      "rename": "重命名",
+      "share": "分享",
+      "delete": "删除",
+      "markAllRead": "全部标为已处理",
+      "markSeen": "标为已处理",
+      "star": "收藏",
+      "unstar": "取消收藏",
+      "starred": "已收藏",
+      "filterStarred": "只看收藏",
+      "unreadCount_one": "{{count}} 个待回复",
+      "unreadCount_other": "{{count}} 个待回复",
+      "search": "搜索会话",
+      "searchPlaceholder": "搜索…",
+      "empty": {
+        "title": "还没有会话",
+        "description": "开始与 Agent 对话后，会话会出现在这里。"
+      },
+      "noMatch": {
+        "title": "没有匹配的会话",
+        "description": "请尝试其他搜索词。"
+      },
+      "starredEmpty": {
+        "title": "还没有收藏的会话",
+        "description": "收藏会话后，可在这里快速找到。"
+      },
+      "toasts": {
+        "renamed": "会话已重命名",
+        "deleted": "会话已删除"
+      },
+      "groups": {
+        "today": "今天",
+        "week": "本周",
+        "month": "本月",
+        "earlier": "更早"
+      },
+      "status": {
+        "needsYou": "待你回复",
+        "running": "运行中",
+        "error": "出错"
+      }
+    },
+    "automation": {
+      "tabsLabel": "自动化分类",
+      "actions": {
+        "new": "新建",
+        "newSchedule": "新建计划",
+        "newCommand": "新建命令",
+        "runNow": "立即运行",
+        "fork": "复制为我的"
+      },
+      "dialogs": {
+        "newSchedule": "新建计划任务",
+        "newCommand": "新建命令",
+        "editSchedule": "编辑计划任务",
+        "editCommand": "编辑命令"
+      },
+      "toasts": {
+        "runEnqueued": "已加入执行队列"
+      },
+      "sections": {
+        "schedules": "计划任务",
+        "commands": "命令"
+      },
+      "empty": {
+        "schedules": {
+          "title": "暂无计划任务",
+          "description": "添加一个 cron 计划，按时间自动触发 prompt。"
+        },
+        "commands": {
+          "title": "暂无命令",
+          "description": "添加 slash 命令，在聊天中通过 /name 唤起 prompt。"
+        }
+      },
+      "editor": {
+        "empty": "选择一个定时任务或命令进行编辑，或使用上方的 + 按钮新建一个。",
+        "enabled": "已启用",
+        "disabled": "已停用"
+      },
+      "badges": {
+        "template": "模板"
+      },
+      "fields": {
+        "enabledDefault": "默认启用"
+      },
+      "lastRun": "{{value}} 前运行"
+    },
+    "settings": {
+      "unsavedChanges": "未保存",
+      "nav": {
+        "general": "常规",
+        "model": "模型",
+        "prompt": "Prompt",
+        "mcp": "MCP",
+        "skills": "Skills",
+        "resources": "资源",
+        "settings": "Agent 设置"
+      },
+      "fields": {
+        "id": "工作空间 ID"
+      },
+      "lifecycle": {
+        "label": "生命周期",
+        "restart": "重启"
+      },
+      "autoStart": {
+        "label": "自动启动",
+        "description": "工作空间处于停止状态时，收到对话或外部触发会自动启动它。关闭后需手动启动。"
+      },
+      "startupAlert": {
+        "title": "工作空间启动异常"
+      },
+      "resizeConfirm": {
+        "title": "重启工作空间以应用新规格？",
+        "description": "切换计算规格会重启工作空间的 pod，正在进行的 session 会被中断。新规格在点击保存后才会生效。",
+        "confirm": "使用该规格"
+      },
+      "saveAsTemplate": {
+        "action": "另存为模板",
+        "description": "将工作空间当前配置保存为可复用的模板。"
+      }
+    },
+    "automationDropdown": {
+      "title": "自动化",
+      "actions": {
+        "commands": "命令",
+        "schedules": "定时任务"
+      }
+    },
+    "resourceFields": {
+      "hint": "调整 CPU 或内存会重启工作空间 Pod。",
+      "labels": {
+        "cpuRequest": "CPU Request",
+        "cpuLimit": "CPU Limit",
+        "memoryRequest": "Memory Request",
+        "memoryLimit": "Memory Limit",
+        "storage": "存储"
+      }
+    },
+    "configCommands": {
+      "title": "命令",
+      "tooltip": "自定义命令",
+      "empty": "还没有命令。创建一个即可快速发送预设消息。",
+      "actions": {
+        "new": "新建",
+        "delete": "删除"
+      },
+      "states": {
+        "saving": "保存中...",
+        "deleting": "删除中..."
+      },
+      "types": {
+        "plain": "纯文本",
+        "struct": "模板"
+      },
+      "toasts": {
+        "created": "命令已创建",
+        "updated": "命令已更新",
+        "deleted": "命令已删除"
+      },
+      "dialog": {
+        "newTitle": "新建命令",
+        "editTitle": "编辑命令",
+        "deleteTitle": "删除命令",
+        "deleteConfirm": "确定要删除命令 {{name}} 吗？此操作不可撤销。"
+      },
+      "form": {
+        "name": "名称",
+        "type": "类型",
+        "content": "内容",
+        "reservedName": "\"{{name}}\" 是内置命令名",
+        "structHint": "使用 {{VARIABLE_NAME}} 作为占位符。触发时会自动弹出表单。",
+        "placeholders": {
+          "name": "release-notes",
+          "content": "要发送给 Agent 的消息...",
+          "structContent": "项目 {{PROJECT_ID}}，分支 {{BRANCH}}，文件 {{FILE_PATH}}"
+        }
+      }
+    },
+    "commandTrigger": {
+      "actions": {
+        "send": "发送"
+      },
+      "types": {
+        "plain": "纯文本",
+        "struct": "模板"
+      },
+      "fileMentionHint": "浏览工作区文件"
+    },
+    "agentSettingsEditor": {
+      "hints": {
+        "claude-code": "JSON 格式，会写入 .claude/settings.json",
+        "codex": "TOML 格式，会追加到 ~/.codex/config.toml"
+      }
+    },
+    "configFormFields": {
+      "labels": {
+        "systemPrompt": "系统 Prompt",
+        "skills": "Skills",
+        "mcpConfig": "MCP 配置",
+        "agentSettings": "Agent 设置（JSON）",
+        "computeResources": "计算资源"
+      }
+    },
+    "agentConfigDialog": {
+      "trigger": "Agent 配置",
+      "title": "Agent 配置",
+      "navigation": {
+        "model": "模型",
+        "prompt": "Prompt",
+        "settings": "设置",
+        "skills": "Skills",
+        "resources": "资源"
+      },
+      "template": {
+        "base": "基线：{{name}}（v{{version}}）",
+        "upgrading": "升级中...",
+        "available": "可升级到 v{{version}}"
+      },
+      "toasts": {
+        "saved": "Agent 配置已保存",
+        "upgraded": "已升级到 v{{version}}"
+      },
+      "errors": {
+        "saveFailed": "保存失败",
+        "syncFailed": "同步模板失败"
+      }
+    },
+    "configSchedules": {
+      "title": "定时任务",
+      "tooltip": "Cron 定时任务",
+      "empty": "还没有定时任务。创建一个即可按 cron 定时执行。",
+      "lastRun": "最近运行：{{value}}",
+      "actions": {
+        "new": "新建",
+        "delete": "删除"
+      },
+      "states": {
+        "saving": "保存中...",
+        "deleting": "删除中..."
+      },
+      "toasts": {
+        "created": "定时任务已创建",
+        "updated": "定时任务已更新",
+        "deleted": "定时任务已删除"
+      },
+      "dialog": {
+        "newTitle": "新建定时任务",
+        "editTitle": "编辑定时任务",
+        "deleteTitle": "删除定时任务",
+        "deleteConfirm": "确定要删除定时任务 {{name}} 吗？此操作不可撤销。"
+      },
+      "form": {
+        "name": "名称",
+        "mode": "类型",
+        "modeRecurring": "周期",
+        "modeOneTime": "一次性",
+        "schedule": "调度",
+        "runAt": "执行时间",
+        "willRunAt": "计划于 {{time}}",
+        "ranAt": "已于 {{time}} 执行",
+        "completed": "已完成",
+        "timezone": "时区",
+        "prompt": "Prompt",
+        "placeholders": {
+          "name": "daily-report",
+          "prompt": "每次运行时要执行的任务..."
+        }
+      }
+    },
+    "tags": {
+      "colors": {
+        "slate": "石板",
+        "rose": "玫瑰",
+        "amber": "琥珀",
+        "emerald": "祖母绿",
+        "sky": "天蓝",
+        "violet": "紫罗兰",
+        "orange": "橙色",
+        "pink": "粉色"
+      }
+    },
+    "fileOverlay": {
+      "actions": {
+        "closeAll": "全部关闭"
+      }
+    },
+    "skillDependents": {
+      "loading": "正在检查占用情况…",
+      "none": "当前没有任何 workspace 或模板在使用此 Skill。",
+      "ownTitle": "你的 workspace 正在使用此 Skill",
+      "otherCount": "另有 {{count}} 个其他用户的 workspace 在使用。",
+      "templateCount": "{{count}} 个模板版本引用了此 Skill。"
+    }
+  }
+}

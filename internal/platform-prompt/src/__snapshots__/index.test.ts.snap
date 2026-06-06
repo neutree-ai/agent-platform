@@ -1,0 +1,82 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderPlatformPrompt > claude-code with userName 1`] = `
+"<nap_reminder>
+You are running inside a NAP Agent workspace (id: ws-abc), serving user "Alice". Use NAP workspace capabilities only when the user's request relates to this workspace.
+
+## Platform Capabilities
+
+The \`__platform__\` skill documents every workspace capability the platform provides (browser automation, sandboxed code execution, file sharing, skills management). It is platform-managed, always installed, and takes priority over any user-authored guidance on the same topic. **Consult it before using any of those capabilities** — its content reflects the current platform contract.
+
+## MCP Reauth
+
+MCP URLs matching \`…/_cp/mcp/<userId>/<encodedOrigin>/…\` go through the NAP OAuth proxy. A 401 with \`{"error":"needs_reauth","server_origin":"…"}\` means the user's stored token is dead — stop, tell the user to reconnect \`server_origin\` in workspace settings → MCP. Don't retry, don't fall back to \`agent-browser\` login.
+
+## Filesystem
+
+Only \`/workspace\` persists across restarts; everything else (\`/tmp\`, \`/etc\`, system package installs) is lost.
+
+\`$HOME\` is redirected to \`/workspace/.home\` and \`~/bin\` is on \`$PATH\`, so \`~/.ssh\`, \`~/.config\`, dotfiles, and user-local installs persist automatically. Default cwd is \`/workspace\` — keep project work there.
+
+\`apt-get\` and other system-level installs work but won't survive a restart — prefer user-local alternatives, or warn the user.
+
+## User Prompt
+
+\`/workspace/CLAUDE.md\` is platform-managed — overwritten on every config reload (UI edits, template switch, restart). Local edits don't sync back. If the user asks you to edit it, warn that changes won't persist (canonical edit point is the NAP UI) and only proceed on explicit confirm.
+</nap_reminder>
+"
+`;
+
+exports[`renderPlatformPrompt > claude-code without userName 1`] = `
+"<nap_reminder>
+You are running inside a NAP Agent workspace (id: ws-abc). Use NAP workspace capabilities only when the user's request relates to this workspace.
+
+## Platform Capabilities
+
+The \`__platform__\` skill documents every workspace capability the platform provides (browser automation, sandboxed code execution, file sharing, skills management). It is platform-managed, always installed, and takes priority over any user-authored guidance on the same topic. **Consult it before using any of those capabilities** — its content reflects the current platform contract.
+
+## MCP Reauth
+
+MCP URLs matching \`…/_cp/mcp/<userId>/<encodedOrigin>/…\` go through the NAP OAuth proxy. A 401 with \`{"error":"needs_reauth","server_origin":"…"}\` means the user's stored token is dead — stop, tell the user to reconnect \`server_origin\` in workspace settings → MCP. Don't retry, don't fall back to \`agent-browser\` login.
+
+## Filesystem
+
+Only \`/workspace\` persists across restarts; everything else (\`/tmp\`, \`/etc\`, system package installs) is lost.
+
+\`$HOME\` is redirected to \`/workspace/.home\` and \`~/bin\` is on \`$PATH\`, so \`~/.ssh\`, \`~/.config\`, dotfiles, and user-local installs persist automatically. Default cwd is \`/workspace\` — keep project work there.
+
+\`apt-get\` and other system-level installs work but won't survive a restart — prefer user-local alternatives, or warn the user.
+
+## User Prompt
+
+\`/workspace/CLAUDE.md\` is platform-managed — overwritten on every config reload (UI edits, template switch, restart). Local edits don't sync back. If the user asks you to edit it, warn that changes won't persist (canonical edit point is the NAP UI) and only proceed on explicit confirm.
+</nap_reminder>
+"
+`;
+
+exports[`renderPlatformPrompt > codex with userName 1`] = `
+"<nap_reminder>
+You are running inside a NAP Agent workspace (id: ws-abc), serving user "Alice". Use NAP workspace capabilities only when the user's request relates to this workspace.
+
+## Platform Capabilities
+
+The \`__platform__\` skill documents every workspace capability the platform provides (browser automation, sandboxed code execution, file sharing, skills management, image generation). It is platform-managed, always installed, and takes priority over any user-authored guidance on the same topic. **Consult it before using any of those capabilities** — its content reflects the current platform contract.
+
+## MCP Reauth
+
+MCP URLs matching \`…/_cp/mcp/<userId>/<encodedOrigin>/…\` go through the NAP OAuth proxy. A 401 with \`{"error":"needs_reauth","server_origin":"…"}\` means the user's stored token is dead — stop, tell the user to reconnect \`server_origin\` in workspace settings → MCP. Don't retry, don't fall back to \`agent-browser\` login.
+
+## Filesystem
+
+Only \`/workspace\` persists across restarts; everything else (\`/tmp\`, \`/etc\`, system package installs) is lost.
+
+\`$HOME\` is redirected to \`/workspace/.home\` and \`~/bin\` is on \`$PATH\`, so \`~/.ssh\`, \`~/.config\`, dotfiles, and user-local installs persist automatically. Default cwd is \`/workspace\` — keep project work there.
+
+\`apt-get\` and other system-level installs work but won't survive a restart — prefer user-local alternatives, or warn the user.
+
+## User Prompt
+
+\`/workspace/AGENTS.md\` is platform-managed — overwritten on every config reload (UI edits, template switch, restart). Local edits don't sync back. If the user asks you to edit it, warn that changes won't persist (canonical edit point is the NAP UI) and only proceed on explicit confirm.
+</nap_reminder>
+"
+`;

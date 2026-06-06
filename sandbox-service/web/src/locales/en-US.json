@@ -1,0 +1,63 @@
+{
+  "loginPage": {
+    "subtitle": "Log in to use the sandbox service",
+    "loginButton": "Log in with NAP"
+  },
+  "home": {
+    "logout": "Log out",
+    "newSandbox": "New Sandbox",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "empty": "No sandbox instances",
+    "selectOrCreate": "Select or create a sandbox",
+    "expired": "Expired",
+    "createForm": {
+      "title": "New Sandbox",
+      "image": "Image",
+      "cpu": "CPU",
+      "memory": "Memory",
+      "timeout": "Timeout",
+      "timeoutHint": "Range 60s – 24h, supports s/m/h/d units",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "create": "Create"
+    },
+    "actions": {
+      "refresh": "Refresh",
+      "renew": "Renew 1 hour",
+      "delete": "Delete"
+    },
+    "alerts": {
+      "createFailed": "Create failed",
+      "confirmDelete": "Delete this sandbox?",
+      "deleteFailed": "Delete failed",
+      "renewFailed": "Renew failed"
+    }
+  },
+  "docs": {
+    "title": "Usage Guide",
+    "auth": {
+      "heading": "Authentication",
+      "description": "All API requests require a NAP Service Token. Go to",
+      "linkLabel": "NAP Platform > Integration > Service Tokens",
+      "descriptionSuffix": "to create one."
+    },
+    "sdk": {
+      "heading": "JavaScript / TypeScript SDK",
+      "install": "Install",
+      "installSuffix": ", then use the SDK to manage sandboxes."
+    },
+    "rest": {
+      "heading": "REST API",
+      "authHeader": "All requests require an",
+      "authHeaderSuffix": " header."
+    },
+    "preview": {
+      "heading": "Preview Proxy",
+      "description": "After starting an HTTP service inside the sandbox, access it directly via the preview proxy."
+    },
+    "endpoints": {
+      "heading": "Endpoints"
+    }
+  }
+}

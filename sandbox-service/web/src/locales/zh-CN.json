@@ -1,0 +1,63 @@
+{
+  "loginPage": {
+    "subtitle": "登录后使用沙箱服务",
+    "loginButton": "通过 NAP 登录"
+  },
+  "home": {
+    "logout": "退出",
+    "newSandbox": "新建沙箱",
+    "refresh": "刷新",
+    "loading": "加载中...",
+    "empty": "暂无沙箱实例",
+    "selectOrCreate": "选择或创建一个沙箱",
+    "expired": "已过期",
+    "createForm": {
+      "title": "新建沙箱",
+      "image": "镜像",
+      "cpu": "CPU",
+      "memory": "Memory",
+      "timeout": "超时时间",
+      "timeoutHint": "范围 60s – 24h，支持 s/m/h/d 单位",
+      "cancel": "取消",
+      "creating": "创建中...",
+      "create": "创建"
+    },
+    "actions": {
+      "refresh": "刷新",
+      "renew": "续期 1 小时",
+      "delete": "删除"
+    },
+    "alerts": {
+      "createFailed": "创建失败",
+      "confirmDelete": "确定删除这个沙箱？",
+      "deleteFailed": "删除失败",
+      "renewFailed": "续期失败"
+    }
+  },
+  "docs": {
+    "title": "使用指南",
+    "auth": {
+      "heading": "认证",
+      "description": "所有 API 需要 NAP Service Token 认证。前往",
+      "linkLabel": "NAP 平台 > Integration > Service Tokens",
+      "descriptionSuffix": "创建。"
+    },
+    "sdk": {
+      "heading": "JavaScript / TypeScript SDK",
+      "install": "安装",
+      "installSuffix": "，然后使用 SDK 管理沙箱。"
+    },
+    "rest": {
+      "heading": "REST API",
+      "authHeader": "所有请求需要",
+      "authHeaderSuffix": " header。"
+    },
+    "preview": {
+      "heading": "预览代理",
+      "description": "在沙箱内启动 HTTP 服务后，通过预览代理直接访问。"
+    },
+    "endpoints": {
+      "heading": "Endpoints"
+    }
+  }
+}

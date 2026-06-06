@@ -1,0 +1,68 @@
+# Office document → PDF converter (gotenberg/LibreOffice).
+# CP's /agent/(files|afs-files)/preview endpoint proxies pptx/docx
+# through here when OFFICE_CONVERTER_URL is set.
+#
+# Connected variant: pulled straight from Docker Hub's public gotenberg image
+# (no re-tag under ${REGISTRY}).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nap-office-converter
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-office-converter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nap-office-converter
+  template:
+    metadata:
+      labels:
+        app: nap-office-converter
+    spec:
+      containers:
+        - name: gotenberg
+          image: docker.io/gotenberg/gotenberg:8
+          args:
+            - "gotenberg"
+            - "--api-timeout=120s"
+          ports:
+            - containerPort: 3000
+              name: http
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nap-office-converter
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-office-converter
+spec:
+  type: ClusterIP
+  selector:
+    app: nap-office-converter
+  ports:
+    - port: 3007
+      targetPort: 3000
+      name: http

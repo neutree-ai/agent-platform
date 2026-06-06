@@ -1,0 +1,7 @@
+node_modules/
+dist/
+workspace/
+*.log
+.env
+.git
+mcp/node_modules/

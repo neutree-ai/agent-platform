@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nap-seed-admin
+  namespace: ${NAMESPACE}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: ${REGISTRY}/nap-cp:${IMAGE_TAG}
+          command: ["node", "dist/seed-admin.js"]
+          args:
+            - "--username"
+            - "${ADMIN_USERNAME}"
+            - "--password"
+            - "${ADMIN_PASSWORD}"
+            - "--display-name"
+            - "${ADMIN_DISPLAY_NAME}"
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nap-pg-user
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"

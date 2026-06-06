@@ -1,0 +1,92 @@
+# TURN server for WebRTC relay (browser sandbox live view).
+# hostNetwork=true so external browsers and internal pods reach the same address.
+# TURN_AUTH_SECRET is read from nap-browser-secret (already created by secrets.yaml).
+#
+# Connected variant: pulled straight from Docker Hub's public coturn image.
+#
+# install.sh patches nodeSelector at apply time and resolves TURN_HOST from this
+# pod's hostIP if the operator left it blank in values.env.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  namespace: ${NAMESPACE}
+  labels:
+    app: coturn
+spec:
+  replicas: 1
+  # hostNetwork + fixed port — RollingUpdate deadlocks on re-apply because
+  # the new pod can't bind until the old one releases the port.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: coturn
+          image: docker.io/coturn/coturn:4.6
+          args:
+            - "--listening-port=3478"
+            # Pin to a single IP. Without --listening-ip coturn enumerates
+            # every host interface — including kube-ipvs0 / CNI dummy
+            # interfaces carrying Service ClusterIPs that reject bind() with
+            # EADDRNOTAVAIL. We use ${TURN_HOST} (from values.env, also the
+            # address browsers dial) so a node whose kubelet registered the
+            # wrong InternalIP can still be overridden explicitly.
+            - "--listening-ip=${TURN_HOST}"
+            - "--relay-ip=${TURN_HOST}"
+            - "--external-ip=${TURN_HOST}"
+            - "--min-port=49152"
+            - "--max-port=49252"
+            - "--realm=${TOS_HOST}"
+            - "--use-auth-secret"
+            - "--static-auth-secret=$(TURN_AUTH_SECRET)"
+            - "--no-tls"
+            - "--no-dtls"
+            - "--log-file=stdout"
+            - "--fingerprint"
+            - "--lt-cred-mech"
+            - "--no-cli"
+            - "--no-multicast-peers"
+          env:
+            - name: TURN_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nap-browser-secret
+                  key: TURN_AUTH_SECRET
+          ports:
+            - name: turn-tcp
+              containerPort: 3478
+              protocol: TCP
+            - name: turn-udp
+              containerPort: 3478
+              protocol: UDP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coturn
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: coturn
+  clusterIP: None
+  ports:
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      protocol: TCP

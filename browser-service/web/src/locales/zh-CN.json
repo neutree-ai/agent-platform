@@ -1,0 +1,67 @@
+{
+  "loginPage": {
+    "tagline": "登录后使用浏览器服务",
+    "loginButton": "通过 NAP 登录"
+  },
+  "home": {
+    "logout": "退出",
+    "newBrowser": "新建浏览器",
+    "refresh": "刷新",
+    "loading": "加载中...",
+    "noBrowsers": "暂无浏览器实例",
+    "emptyHint": "选择或创建一个浏览器",
+    "createForm": {
+      "title": "新建浏览器",
+      "timeoutLabel": "超时时间",
+      "timeoutHint": "范围 60s – 24h，支持 s/m/h 单位",
+      "cancel": "取消",
+      "creating": "创建中...",
+      "create": "创建"
+    },
+    "alerts": {
+      "createFailed": "创建失败",
+      "confirmDelete": "确定删除这个浏览器？",
+      "deleteFailed": "删除失败",
+      "renewFailed": "续期失败"
+    },
+    "expiredLabel": "已过期",
+    "renewTitle": "续期 1 小时",
+    "deleteTitle": "删除",
+    "detail": {
+      "expiresLabel": "过期：",
+      "createdLabel": "创建："
+    }
+  },
+  "liveView": {
+    "connecting": "正在连接浏览器..."
+  },
+  "docs": {
+    "title": "使用指南",
+    "auth": {
+      "heading": "认证",
+      "description": "CDP 和 Recording API 需要 NAP Service Token 认证。 前往",
+      "linkLabel": "NAP 平台 > Integration > Service Tokens",
+      "descriptionSuffix": "创建。"
+    },
+    "agentBrowser": {
+      "heading": "agent-browser CLI",
+      "description": "为 AI Agent 设计的浏览器自动化 CLI。通过 WSS Debugger URL 连接远程浏览器。"
+    },
+    "playwright": {
+      "heading": "Playwright / Puppeteer",
+      "description": "通过 CDP HTTP URL 连接，Playwright 自动发现 WSS Debugger URL。"
+    },
+    "playwrightDocsLink": "Playwright connectOverCDP 文档",
+    "recording": {
+      "heading": "录屏 API",
+      "description": "录制浏览器操作过程，输出 H.264 MP4 视频。"
+    },
+    "endpoints": {
+      "heading": "Endpoints",
+      "wssHint": "点击顶栏 WSS 按钮复制"
+    },
+    "code": {
+      "serviceTokenComment": "在 NAP 平台创建的 Service Token"
+    }
+  }
+}

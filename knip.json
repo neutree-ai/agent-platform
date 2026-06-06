@@ -1,0 +1,37 @@
+{
+  "workspaces": {
+    "control-plane": {
+      "entry": ["scripts/*.ts", "src/services/db/mcp-catalog.ts"],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
+      "ignoreDependencies": ["tsx"]
+    },
+    "web": {
+      "entry": [
+        "src/components/ui/**/*.{ts,tsx}",
+        "src/**/*.test.{ts,tsx}"
+      ],
+      "project": ["src/**/*.{ts,tsx,mdx}"]
+    },
+    "browser-service": {
+      "project": ["src/**/*.ts"]
+    },
+    "channel-gateway": {
+      "project": ["src/**/*.ts"]
+    },
+    "sandbox-service": {
+      "project": ["src/**/*.ts"]
+    },
+    "scheduler": {
+      "project": ["src/**/*.ts"]
+    },
+    "skills-content-service": {
+      "project": ["src/**/*.ts"]
+    }
+  },
+  "ignore": [
+    "agents/**",
+    "internal/**",
+    "packages/**"
+  ],
+  "ignoreBinaries": ["wait"]
+}

@@ -1,0 +1,97 @@
+# ============================================================================
+# In-cluster NFS server (single-node profile only)
+# ============================================================================
+# Provides the RWX backend for the nfs-subdir-external-provisioner. The single
+# node has no external NFS, so we run one in-cluster.
+#
+# Image: ghcr.io/obeone/nfs-server (fork of erichough/nfs-server), multi-arch
+# (amd64 + arm64). Connected variant pulls it straight from GHCR — no offline
+# tarball / prep step. Requires CAP_SYS_ADMIN because the server mounts nfsd /
+# rpc_pipefs inside the container during startup — vanilla user namespace
+# can't do those mounts.
+#
+# Storage: a PVC backed by k3s's built-in local-path provisioner. Data lives
+# on the node's disk; losing the node loses AFS data — same blast radius as
+# the old host-nfs setup, intentionally so.
+#
+# install.sh applies this manifest ONLY when DEPLOY_PROFILE=single-node;
+# multi-node deployments keep using the customer's external NFS.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nap-nfs-server-data
+  namespace: ${NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: ${SINGLE_NODE_NFS_SIZE}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nap-nfs-server
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-nfs-server
+spec:
+  replicas: 1
+  # Recreate: the PVC is RWO; rolling update would deadlock waiting for the
+  # second pod to attach a volume the first pod still holds.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nap-nfs-server
+  template:
+    metadata:
+      labels:
+        app: nap-nfs-server
+    spec:
+      containers:
+        - name: nfs-server
+          image: ghcr.io/obeone/nfs-server:2.2.3
+          imagePullPolicy: IfNotPresent
+          env:
+            # One export, root-squash off so the provisioner can chown subdirs.
+            - name: NFS_EXPORT_0
+              value: "/exports                  *(rw,fsid=0,sync,no_subtree_check,no_root_squash,insecure)"
+            # NFSv4 only — keeps the port surface to just 2049/TCP.
+            - name: NFS_VERSION
+              value: "4.2"
+            - name: NFS_DISABLE_VERSION_3
+              value: "1"
+          securityContext:
+            # privileged required (not just SYS_ADMIN): mounting rpc_pipefs at
+            # container startup needs more than the cap allows on stock k3s.
+            # Tested on k3s v1.32 + Ubuntu 24.04 host.
+            privileged: true
+          ports:
+            - name: nfs
+              containerPort: 2049
+              protocol: TCP
+          volumeMounts:
+            - name: data
+              mountPath: /exports
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nap-nfs-server-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nap-nfs-server
+  namespace: ${NAMESPACE}
+spec:
+  type: ClusterIP
+  selector:
+    app: nap-nfs-server
+  ports:
+    - name: nfs
+      port: 2049
+      targetPort: 2049
+      protocol: TCP

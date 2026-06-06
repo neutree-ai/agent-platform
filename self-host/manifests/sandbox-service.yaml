@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nap-sandbox
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-sandbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nap-sandbox
+  template:
+    metadata:
+      labels:
+        app: nap-sandbox
+    spec:
+      containers:
+        - name: sandbox
+          image: ${REGISTRY}/nap-sandbox:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3006
+              name: http
+          env:
+            - name: PORT
+              value: "3006"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nap-pg-user
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nap-sandbox-secret
+                  key: JWT_SECRET
+            - name: SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nap-sandbox-secret
+                  key: SERVICE_KEY
+            - name: NAP_OAUTH_URL
+              value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
+            - name: NAP_URL
+              value: "http://nap-cp:3000"
+            - name: OAUTH_CLIENT_ID
+              value: "sandbox-service"
+            - name: SANDBOX_SERVICE_URL
+              value: "${SANDBOX_SERVICE_URL_RESOLVED}"
+            - name: SANDBOX_DOMAIN
+              value: "${SANDBOX_DOMAIN}"
+            - name: OPENSANDBOX_URL
+              value: "${OPENSANDBOX_URL}"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nap-sandbox
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-sandbox
+spec:
+  type: ${SERVICE_TYPE}
+  selector:
+    app: nap-sandbox
+  ports:
+    - port: 3006
+      targetPort: 3006
+      nodePort: ${SANDBOX_NODE_PORT}
+      name: http

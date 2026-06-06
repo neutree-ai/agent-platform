@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nap-seed-oauth-clients
+  namespace: ${NAMESPACE}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: ${REGISTRY}/nap-cp:${IMAGE_TAG}
+          command: ["node", "dist/seed-oauth-clients.js"]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nap-pg-user
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+            # Empty for disabled modules — the seed script skips those clients.
+            - name: SANDBOX_OAUTH_REDIRECT_URI
+              value: "${SANDBOX_OAUTH_REDIRECT_URI}"
+            - name: BROWSER_OAUTH_REDIRECT_URI
+              value: "${BROWSER_OAUTH_REDIRECT_URI}"

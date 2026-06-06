@@ -1,0 +1,61 @@
+# Reference Helm values for installing OpenSandbox alongside NAP.
+#
+# OpenSandbox (github.com/alibaba/OpenSandbox) is a THIRD-PARTY component that
+# powers the optional Code Sandbox capability. NAP does not install it for you.
+# Install it yourself from the upstream chart (see README "Enabling Code
+# Sandbox"), passing this file with `-f opensandbox-values.yaml`.
+#
+# These values:
+#   - pin the public Docker Hub images (the chart defaults to Alibaba ACR, which
+#     may be slow/unreachable outside CN — override to docker.io/opensandbox/*),
+#   - run the control components in the `nap` namespace and spawn sandbox
+#     workloads there too, so NAP's default OPENSANDBOX_URL
+#     (http://opensandbox-server.nap.svc:80) resolves without extra config.
+# If you install NAP into a different namespace, change every `nap` below and
+# set OPENSANDBOX_URL in values.env accordingly.
+
+opensandbox-controller:
+  namespaceOverride: "nap"
+  controller:
+    replicaCount: 1
+    logLevel: info
+    image:
+      repository: "docker.io/opensandbox/controller"
+      tag: "v0.2.0"
+
+opensandbox-server:
+  namespaceOverride: "nap"
+  server:
+    replicaCount: 1
+    image:
+      repository: "docker.io/opensandbox/server"
+      # v0.1.14 falls back to the K8s API when the informer cache is unsynced
+      # instead of serving stale pod state (avoids sandbox creates hanging at
+      # POD_READY_TIMEOUT until a server restart).
+      tag: "v0.1.14"
+    # v0.1.12+ refuses to start without server.api_key unless this is set.
+    # opensandbox-server is cluster-internal only here; this accepts that risk.
+    env:
+      - name: OPENSANDBOX_INSECURE_SERVER
+        value: "YES"
+  configToml: |
+    [server]
+    host = "0.0.0.0"
+    port = 80
+    api_key = ""
+
+    [log]
+    level = "INFO"
+
+    [runtime]
+    type = "kubernetes"
+    execd_image = "docker.io/opensandbox/execd:v1.0.16"
+
+    [kubernetes]
+    kubeconfig_path = ""
+    namespace = "nap"
+    informer_enabled = true
+    informer_resync_seconds = 300
+    informer_watch_timeout_seconds = 60
+    workload_provider = "batchsandbox"
+    batchsandbox_template_file = "/etc/opensandbox/sandbox-template.yaml"

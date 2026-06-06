@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nap-browser
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-browser
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nap-browser
+  template:
+    metadata:
+      labels:
+        app: nap-browser
+    spec:
+      containers:
+        - name: browser
+          image: ${REGISTRY}/nap-browser:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3005
+              name: http
+          env:
+            - name: PORT
+              value: "3005"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nap-browser-secret
+                  key: JWT_SECRET
+            - name: NAP_OAUTH_URL
+              value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
+            - name: NAP_INTERNAL_URL
+              value: "http://nap-cp:3000"
+            - name: OAUTH_CLIENT_ID
+              value: "browser-service"
+            - name: BROWSER_SERVICE_URL
+              value: "${BROWSER_SERVICE_URL_RESOLVED}"
+            - name: SANDBOX_SERVICE_URL
+              value: "http://nap-sandbox:3006"
+            - name: SANDBOX_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nap-sandbox-secret
+                  key: SERVICE_KEY
+            - name: BROWSER_IMAGE
+              value: "${REGISTRY}/chromium-headful:${IMAGE_TAG}"
+            - name: TURN_HOST
+              value: "${TURN_HOST}"
+            - name: TURN_PORT
+              value: "${TURN_PORT}"
+            - name: TURN_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nap-browser-secret
+                  key: TURN_AUTH_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nap-browser
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-browser
+spec:
+  type: ${SERVICE_TYPE}
+  selector:
+    app: nap-browser
+  ports:
+    - port: 3005
+      targetPort: 3005
+      nodePort: ${BROWSER_NODE_PORT}
+      name: http

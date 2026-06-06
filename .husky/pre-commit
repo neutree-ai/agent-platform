@@ -1,0 +1,31 @@
+#!/bin/sh
+# Fast local QA gate for staged files.
+# CI is responsible for the full-repo lint; this is intentionally narrow.
+
+set -e
+
+cd "$(git rev-parse --show-toplevel)"
+
+# 1. Knip — repo-wide unused-export / unused-dep check (configured in knip.json).
+# Run under node, not bun: the bun runtime resolver currently fails to follow
+# default ESM imports for some deps (e.g. `ws`, `undici`), producing false
+# positives. The node runner resolves them correctly.
+echo "[pre-commit] Running knip..."
+./node_modules/.bin/knip --no-progress
+echo "[pre-commit] knip passed."
+
+# 2. Biome — format/lint per workspace, only on staged files in that workspace.
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -z "$STAGED" ] && exit 0
+
+WORKSPACES="browser-service channel-gateway control-plane sandbox-service scheduler web agents/claude-code agents/codex"
+
+for ws in $WORKSPACES; do
+  files=$(echo "$STAGED" | grep "^$ws/" | sed "s|^$ws/||" || true)
+  [ -z "$files" ] && continue
+  count=$(echo "$files" | wc -l | tr -d ' ')
+  echo "[pre-commit] biome check in $ws ($count file(s))..."
+  (cd "$ws" && echo "$files" | xargs ./node_modules/.bin/biome check --no-errors-on-unmatched)
+done
+
+echo "[pre-commit] biome passed."

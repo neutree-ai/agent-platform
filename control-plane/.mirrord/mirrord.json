@@ -1,0 +1,22 @@
+{
+  "target": {
+    "path": "deployment/tos-cp",
+    "namespace": "default"
+  },
+  "feature": {
+    "network": {
+      "incoming": "off",
+      "outgoing": {
+        "tcp": true,
+        "udp": true,
+        "ignore_localhost": true
+      },
+      "dns": true
+    },
+    "env": {
+      "include": "*",
+      "exclude": "PORT;NODE_OPTIONS;HOME;PATH;PWD;USER;SHELL;TERM;HOSTNAME;KUBERNETES_*;HTTP_PROXY;HTTPS_PROXY;NO_PROXY;http_proxy;https_proxy;no_proxy"
+    },
+    "fs": "local"
+  }
+}

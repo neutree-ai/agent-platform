@@ -1,0 +1,12 @@
+{
+  "name": "agent-platform",
+  "private": true,
+  "scripts": {
+    "dev:sandbox": "cd sandbox-service && npm run dev",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "knip": "^6.8.0"
+  }
+}

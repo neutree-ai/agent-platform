@@ -1,0 +1,67 @@
+{
+  "loginPage": {
+    "tagline": "Log in to use the browser service",
+    "loginButton": "Log in with NAP"
+  },
+  "home": {
+    "logout": "Log out",
+    "newBrowser": "New Browser",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "noBrowsers": "No browser instances",
+    "emptyHint": "Select or create a browser",
+    "createForm": {
+      "title": "New Browser",
+      "timeoutLabel": "Timeout",
+      "timeoutHint": "Range 60s – 24h, supports s/m/h units",
+      "cancel": "Cancel",
+      "creating": "Creating...",
+      "create": "Create"
+    },
+    "alerts": {
+      "createFailed": "Create failed",
+      "confirmDelete": "Delete this browser?",
+      "deleteFailed": "Delete failed",
+      "renewFailed": "Renew failed"
+    },
+    "expiredLabel": "Expired",
+    "renewTitle": "Renew 1 hour",
+    "deleteTitle": "Delete",
+    "detail": {
+      "expiresLabel": "Expires:",
+      "createdLabel": "Created:"
+    }
+  },
+  "liveView": {
+    "connecting": "Connecting to browser..."
+  },
+  "docs": {
+    "title": "Usage Guide",
+    "auth": {
+      "heading": "Authentication",
+      "description": "CDP and Recording API require a NAP Service Token. Go to",
+      "linkLabel": "NAP Platform > Integration > Service Tokens",
+      "descriptionSuffix": "to create one."
+    },
+    "agentBrowser": {
+      "heading": "agent-browser CLI",
+      "description": "Browser automation CLI designed for AI agents. Connect to remote browsers via WSS Debugger URL."
+    },
+    "playwright": {
+      "heading": "Playwright / Puppeteer",
+      "description": "Connect via CDP HTTP URL — Playwright discovers the WSS Debugger URL automatically."
+    },
+    "playwrightDocsLink": "Playwright connectOverCDP docs",
+    "recording": {
+      "heading": "Recording API",
+      "description": "Record browser sessions and export H.264 MP4 video."
+    },
+    "endpoints": {
+      "heading": "Endpoints",
+      "wssHint": "Click the WSS button in the top bar to copy"
+    },
+    "code": {
+      "serviceTokenComment": "Service Token created on NAP Platform"
+    }
+  }
+}

@@ -1,0 +1,120 @@
+/* ── Light theme (default) ── */
+:root {
+  --radius: 0.5rem;
+  --background: 1 0 180;
+  --foreground: 0.126 0.026 268.939;
+  --card: 0.992 0 161.565;
+  --card-foreground: 0.114 0.022 268.251;
+  --popover: 0.992 0 161.565;
+  --popover-foreground: 0.114 0.022 268.251;
+  --primary: 0.567 0.237 267.896;
+  --primary-foreground: 1 0 180;
+  --secondary: 0.915 0.011 276;
+  --secondary-foreground: 0.388 0.043 274.435;
+  --muted: 0.885 0.01 276.021;
+  --muted-foreground: 0.464 0.025 275.387;
+  --accent: 0.866 0.024 275.781;
+  --accent-foreground: 0.335 0.052 273.604;
+  --destructive: 0.63 0.256 29.629;
+  --destructive-foreground: 1 0 180;
+  --border: 0.928 0.006 264.531;
+  --input: 0.928 0.006 264.531;
+  --ring: 0.567 0.237 267.896;
+
+  --success: 0.586 0.166 142.495;
+  --success-foreground: 1 0 180;
+  --warning: 0.75 0.183 55.934;
+  --warning-foreground: 1 0 180;
+  --info: 0.55 0.22 255;
+  --info-foreground: 1 0 180;
+
+  --sidebar-background: 0.985 0.001 276.148;
+  --sidebar-foreground: 0.335 0.052 273.604;
+  --sidebar-primary: 0.567 0.237 267.896;
+  --sidebar-primary-foreground: 1 0 180;
+  --sidebar-accent: 0.915 0.011 276;
+  --sidebar-accent-foreground: 0.335 0.052 273.604;
+  --sidebar-border: 0.928 0.006 264.531;
+  --sidebar-ring: 0.567 0.237 267.896;
+
+  /* Categorical chart series — Tableau-ordered 6 hues for light backgrounds */
+  --chart-1: 0.60 0.18 260;  /* blue */
+  --chart-2: 0.70 0.16 60;   /* amber */
+  --chart-3: 0.65 0.16 158;  /* emerald */
+  --chart-4: 0.60 0.20 20;   /* red */
+  --chart-5: 0.55 0.20 305;  /* violet */
+  --chart-6: 0.65 0.13 210;  /* cyan */
+  --chart-7: 0.62 0.22 340;  /* fuchsia */
+  --chart-8: 0.72 0.17 130;  /* lime */
+  --chart-9: 0.65 0.12 195;  /* teal */
+
+  /* Tag palette — 8 distinct hues for user-selectable tag colors */
+  --tag-slate: 0.55 0.02 260;
+  --tag-rose: 0.60 0.20 15;
+  --tag-amber: 0.68 0.16 75;
+  --tag-emerald: 0.62 0.15 158;
+  --tag-sky: 0.62 0.13 230;
+  --tag-violet: 0.55 0.22 290;
+  --tag-orange: 0.65 0.18 50;
+  --tag-pink: 0.65 0.17 350;
+}
+
+/* ── Dark theme ── */
+.dark {
+  --background: 0.134 0.016 272.261;
+  --foreground: 0.991 0.001 276.148;
+  --card: 0.144 0.019 273.129;
+  --card-foreground: 1 0 180;
+  --popover: 0.144 0.019 273.129;
+  --popover-foreground: 1 0 180;
+  --primary: 0.567 0.237 267.896;
+  --primary-foreground: 1 0 180;
+  --secondary: 0.186 0.01 275.429;
+  --secondary-foreground: 0.728 0.027 275.646;
+  --muted: 0.249 0.013 275.396;
+  --muted-foreground: 0.691 0.023 275.711;
+  --accent: 0.269 0.031 274.373;
+  --accent-foreground: 0.798 0.032 275.616;
+  --destructive: 0.62 0.232 29.041;
+  --destructive-foreground: 1 0 180;
+  --border: 0.278 0.03 256.848;
+  --input: 0.278 0.03 256.848;
+  --ring: 0.567 0.237 267.896;
+
+  --success: 0.648 0.2 142.495;
+  --success-foreground: 1 0 180;
+  --warning: 0.75 0.183 55.934;
+  --warning-foreground: 1 0 180;
+  --info: 0.68 0.19 255;
+  --info-foreground: 1 0 180;
+
+  --sidebar-background: 0.17 0.015 272.261;
+  --sidebar-foreground: 0.991 0.001 276.148;
+  --sidebar-primary: 0.567 0.237 267.896;
+  --sidebar-primary-foreground: 1 0 180;
+  --sidebar-accent: 0.249 0.013 275.396;
+  --sidebar-accent-foreground: 0.798 0.032 275.616;
+  --sidebar-border: 0.249 0.013 275.396;
+  --sidebar-ring: 0.567 0.237 267.896;
+
+  /* Categorical chart series — same hues, raised L for dark backgrounds */
+  --chart-1: 0.70 0.17 260;
+  --chart-2: 0.80 0.15 60;
+  --chart-3: 0.75 0.15 158;
+  --chart-4: 0.70 0.20 20;
+  --chart-5: 0.68 0.18 305;
+  --chart-6: 0.75 0.13 210;
+  --chart-7: 0.72 0.20 340;  /* fuchsia */
+  --chart-8: 0.82 0.16 130;  /* lime */
+  --chart-9: 0.75 0.12 195;  /* teal */
+
+  /* Tag palette — dark mode (raised L for contrast on dark bg) */
+  --tag-slate: 0.70 0.02 260;
+  --tag-rose: 0.72 0.20 15;
+  --tag-amber: 0.78 0.15 75;
+  --tag-emerald: 0.72 0.15 158;
+  --tag-sky: 0.72 0.13 230;
+  --tag-violet: 0.68 0.20 290;
+  --tag-orange: 0.76 0.17 50;
+  --tag-pink: 0.75 0.17 350;
+}

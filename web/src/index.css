@@ -1,0 +1,367 @@
+@import "@neutree-ai/theme/variables.css";
+
+/* Cascade layer order — declared up-front so host utilities always outrank
+ * plugin-injected utilities. Plugins inject their own @tailwind utilities
+ * inside `plugin-utilities`; that layer ranks below host's `utilities`,
+ * so a plugin's `.max-w-lg` can never override host's `sm:max-w-6xl`
+ * (a real bug we hit when plugin CSS injection landed). */
+@layer plugin-utilities, base, components, utilities;
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .field-sizing-content {
+    field-sizing: content;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Desktop wallpaper — workbench surface. The base class supplies paper
+ * grain, topographic contours, vignette, and horizon recession that every
+ * preset shares. Each `.desktop-wallpaper--<name>` modifier layers its own
+ * color washes on top via additional background-images.
+ *
+ * All colors go through theme tokens (--warning / --info / --accent /
+ * --success / --foreground / --background), so presets adapt to light/dark
+ * automatically. Presets differ only in which layers they include and in
+ * alpha — never in raw oklch values.
+ */
+.desktop-wallpaper {
+  --desktop-wallpaper-vignette: oklch(var(--foreground) / 0.2);
+  --desktop-wallpaper-horizon-top: oklch(var(--foreground) / 0.05);
+  --desktop-wallpaper-horizon-bottom: oklch(var(--background) / 0);
+  /* Slightly stronger paper grain so the surface always reads as material */
+  --desktop-wallpaper-noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='280' height='280'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.14 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  /* Contour lines — extended to the upper portion so top-left isn't bare */
+  --desktop-wallpaper-contours: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900' fill='none' stroke='white' stroke-opacity='0.05' stroke-width='1'><path d='M0 720 Q 300 660 620 700 T 1200 670 T 1600 700'/><path d='M0 760 Q 320 700 640 740 T 1240 710 T 1600 740'/><path d='M0 800 Q 340 740 660 780 T 1280 750 T 1600 780'/><path d='M0 840 Q 360 780 680 820 T 1320 790 T 1600 820'/><path d='M0 120 Q 240 70 540 110 T 1100 80 T 1600 110' stroke-opacity='0.04'/><path d='M0 160 Q 260 110 560 150 T 1120 120 T 1600 150' stroke-opacity='0.04'/><path d='M0 200 Q 280 140 600 180 T 1180 150 T 1600 180' stroke-opacity='0.035'/><path d='M0 240 Q 300 180 620 220 T 1200 190 T 1600 220' stroke-opacity='0.03'/><path d='M0 440 Q 320 380 660 420 T 1260 390 T 1600 420' stroke-opacity='0.025'/><path d='M0 480 Q 340 420 680 460 T 1280 430 T 1600 460' stroke-opacity='0.025'/></svg>");
+  /* Color-wash layer — overridden by each preset modifier. Painted via
+   * the ::before pseudo-element so each preset's wash can stack any number
+   * of gradients without colliding with the base layer's background-size
+   * list (cycling would otherwise tile some radials at the noise's 280px). */
+  --desktop-wallpaper-color-wash: linear-gradient(transparent, transparent);
+  position: relative;
+  isolation: isolate;
+  background-color: oklch(var(--background));
+  background-image: var(--desktop-wallpaper-noise), var(--desktop-wallpaper-contours),
+    radial-gradient(ellipse 130% 90% at 50% 50%, transparent 55%, var(--desktop-wallpaper-vignette)),
+    linear-gradient(
+      to bottom,
+      var(--desktop-wallpaper-horizon-top) 0%,
+      transparent 50%,
+      var(--desktop-wallpaper-horizon-bottom) 100%
+    );
+  background-attachment: fixed;
+  background-size: 280px 280px, 100% 100%, 100% 100%, 100% 100%;
+}
+.desktop-wallpaper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--desktop-wallpaper-color-wash);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Aurora — the original "warm-top, cool-bottom" workbench. Full hotspot
+ * stack plus negative-space fillers and a 135° base wash. */
+.desktop-wallpaper--aurora {
+  --desktop-wallpaper-warm: oklch(var(--warning) / 0.32);
+  --desktop-wallpaper-cool: oklch(var(--info) / 0.28);
+  --desktop-wallpaper-tint: oklch(var(--accent) / 0.2);
+  --desktop-wallpaper-fill-tl: oklch(var(--accent) / 0.16);
+  --desktop-wallpaper-fill-tr-cool: oklch(var(--info) / 0.1);
+  --desktop-wallpaper-fill-center: oklch(var(--success) / 0.1);
+  --desktop-wallpaper-fill-mid-warm: oklch(var(--warning) / 0.1);
+  --desktop-wallpaper-base-warm: oklch(var(--warning) / 0.07);
+  --desktop-wallpaper-base-cool: oklch(var(--info) / 0.05);
+  --desktop-wallpaper-color-wash: radial-gradient(
+      ellipse 55% 50% at 88% 6%,
+      var(--desktop-wallpaper-warm),
+      transparent 65%
+    ), radial-gradient(ellipse 60% 55% at 12% 96%, var(--desktop-wallpaper-cool), transparent 65%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, var(--desktop-wallpaper-tint), transparent 70%),
+    radial-gradient(ellipse 50% 45% at 8% 4%, var(--desktop-wallpaper-fill-tl), transparent 70%),
+    radial-gradient(
+      ellipse 45% 40% at 50% 45%,
+      var(--desktop-wallpaper-fill-center),
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 45% 50% at 92% 55%,
+      var(--desktop-wallpaper-fill-mid-warm),
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 40% 45% at 4% 45%,
+      var(--desktop-wallpaper-fill-tr-cool),
+      transparent 72%
+    ),
+    linear-gradient(
+      135deg,
+      var(--desktop-wallpaper-base-warm) 0%,
+      transparent 50%,
+      var(--desktop-wallpaper-base-cool) 100%
+    );
+}
+
+/* Minimal — paper-only. No hotspots, no diagonal wash. The base class
+ * already provides grain + contours + vignette. */
+.desktop-wallpaper--minimal {
+  --desktop-wallpaper-color-wash: linear-gradient(transparent, transparent);
+}
+
+/* Cool — info/accent-only hotspots and a cool base wash. */
+.desktop-wallpaper--cool {
+  --desktop-wallpaper-cool-strong: oklch(var(--info) / 0.3);
+  --desktop-wallpaper-cool-soft: oklch(var(--info) / 0.14);
+  --desktop-wallpaper-tint: oklch(var(--accent) / 0.18);
+  --desktop-wallpaper-base-cool: oklch(var(--info) / 0.08);
+  --desktop-wallpaper-color-wash: radial-gradient(
+      ellipse 60% 55% at 12% 96%,
+      var(--desktop-wallpaper-cool-strong),
+      transparent 65%
+    ),
+    radial-gradient(ellipse 55% 50% at 88% 6%, var(--desktop-wallpaper-cool-soft), transparent 65%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, var(--desktop-wallpaper-tint), transparent 70%),
+    linear-gradient(135deg, transparent 0%, var(--desktop-wallpaper-base-cool) 100%);
+}
+
+/* Warm — symmetric warm variant. */
+.desktop-wallpaper--warm {
+  --desktop-wallpaper-warm-strong: oklch(var(--warning) / 0.34);
+  --desktop-wallpaper-warm-soft: oklch(var(--warning) / 0.16);
+  --desktop-wallpaper-tint: oklch(var(--accent) / 0.18);
+  --desktop-wallpaper-base-warm: oklch(var(--warning) / 0.08);
+  --desktop-wallpaper-color-wash: radial-gradient(
+      ellipse 55% 50% at 88% 6%,
+      var(--desktop-wallpaper-warm-strong),
+      transparent 65%
+    ),
+    radial-gradient(ellipse 60% 55% at 12% 96%, var(--desktop-wallpaper-warm-soft), transparent 65%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, var(--desktop-wallpaper-tint), transparent 70%),
+    linear-gradient(135deg, var(--desktop-wallpaper-base-warm) 0%, transparent 100%);
+}
+
+/*
+ * Wallpaper swatches — small circular previews used by the picker. They
+ * intentionally do NOT reuse `.desktop-wallpaper--*`: at 28px the full
+ * stack gets cropped to the dark vignette center and every preset looks
+ * identical. Each swatch instead picks a single high-contrast composition
+ * that captures the preset's character. Tokens still drive the colors so
+ * dark/light remain in sync; alphas are pushed higher than the wallpaper
+ * versions so the wash reads at thumbnail size.
+ */
+.wallpaper-swatch {
+  background-color: oklch(var(--background));
+}
+.wallpaper-swatch--aurora {
+  background-image: radial-gradient(
+      circle at 80% 15%,
+      oklch(var(--warning) / 0.85),
+      transparent 60%
+    ), radial-gradient(circle at 20% 85%, oklch(var(--info) / 0.8), transparent 60%),
+    linear-gradient(135deg, oklch(var(--warning) / 0.35) 0%, oklch(var(--info) / 0.35) 100%);
+}
+.wallpaper-swatch--minimal {
+  background-image: radial-gradient(
+    circle at 50% 50%,
+    oklch(var(--muted) / 0.6),
+    oklch(var(--background)) 75%
+  );
+}
+.wallpaper-swatch--cool {
+  background-image: radial-gradient(circle at 30% 70%, oklch(var(--info) / 0.9), transparent 65%),
+    linear-gradient(135deg, oklch(var(--accent) / 0.35) 0%, oklch(var(--info) / 0.55) 100%);
+}
+.wallpaper-swatch--warm {
+  background-image: radial-gradient(circle at 70% 30%, oklch(var(--warning) / 0.9), transparent 65%),
+    linear-gradient(135deg, oklch(var(--warning) / 0.55) 0%, oklch(var(--accent) / 0.35) 100%);
+}
+
+/* Streamdown inline code */
+[data-streamdown="inline-code"] {
+  background: oklch(var(--muted));
+  color: oklch(var(--foreground));
+  border: 1px solid oklch(var(--border));
+  @apply rounded px-[0.35em] py-[0.1em] text-[0.85em] font-normal break-all;
+}
+.dark [data-streamdown="inline-code"] {
+  background: oklch(var(--muted));
+  color: oklch(var(--foreground));
+  border-color: oklch(var(--border));
+}
+
+/* Streamdown code block */
+[data-streamdown="code-block"] {
+  background: oklch(0.97 0 0);
+  max-height: 80vh;
+  overflow: auto;
+  @apply rounded-md border border-border;
+}
+.dark [data-streamdown="code-block"] {
+  background: oklch(0.22 0.01 270);
+}
+
+/* Streamdown uses Tailwind v4 syntax for shiki dark mode which doesn't work with v3 */
+.dark [data-streamdown="code-block-body"] {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+.dark [data-streamdown="code-block-body"] span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+
+/* Remove prose default backtick decorations */
+.prose code::before,
+.prose code::after {
+  content: none;
+}
+
+/* Compact prose headings for chat bubbles */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin-top: 0.4em !important;
+  margin-bottom: 0.15em !important;
+}
+.prose h1 {
+  font-size: 1.1em !important;
+}
+.prose h2 {
+  font-size: 1em !important;
+}
+.prose h3,
+.prose h4 {
+  font-size: 0.95em !important;
+}
+
+/* Compact prose tables */
+.prose table:not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
+}
+.prose th:not(:where([class~="not-prose"], [class~="not-prose"] *)),
+.prose td:not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+  font-size: 0.75rem !important;
+  line-height: 1.4 !important;
+  padding: 0.15em 0.35em !important;
+}
+
+/* Compact hr */
+.prose hr {
+  margin-top: 0.3em !important;
+  margin-bottom: 0.3em !important;
+}
+
+/* Chat search highlights (CSS Custom Highlight API) */
+::highlight(chat-search) {
+  background-color: oklch(var(--warning) / 0.5);
+  color: inherit;
+}
+::highlight(chat-search-active) {
+  background-color: oklch(var(--warning) / 0.7);
+  outline: 2px solid oklch(var(--primary));
+  border-radius: 2px;
+}
+
+/* Blockquote border color */
+.prose blockquote {
+  border-inline-start-color: oklch(var(--border));
+}
+
+/* List marker color */
+.prose :where(ul, ol) > li::marker {
+  color: oklch(var(--muted-foreground));
+}
+
+/* Print styles — dashboard PDF export */
+@media print {
+  /* Remove viewport height constraints */
+  html,
+  body,
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide sidebar (including its gap placeholder) */
+  .group\/sidebar-wrapper > .group.peer {
+    display: none !important;
+  }
+  [data-sidebar="trigger"] {
+    display: none !important;
+  }
+
+  /* Hide mobile header and sub-page nav tabs */
+  header.md\:hidden,
+  nav.border-b {
+    display: none !important;
+  }
+
+  /* Let content flow naturally */
+  .h-svh,
+  .h-screen {
+    height: auto !important;
+  }
+  .overflow-hidden,
+  .overflow-y-auto {
+    overflow: visible !important;
+  }
+  .min-h-0 {
+    min-height: auto !important;
+  }
+
+  /* Hide print button itself */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* White background for readability */
+  body,
+  .bg-background,
+  .bg-card,
+  .\!bg-card {
+    background: white !important;
+    color: black !important;
+  }
+  .text-foreground {
+    color: black !important;
+  }
+  .text-muted-foreground {
+    color: #666 !important;
+  }
+  .text-success {
+    color: #059669 !important;
+  }
+  .border-border,
+  .\!ring-border {
+    border-color: #ddd !important;
+  }
+  .bg-border {
+    background-color: #ddd !important;
+  }
+}

@@ -1,0 +1,50 @@
+# Pre-pull sandbox images on nodes so sandbox creation is fast.
+# DaemonSet ensures new nodes also get warmed automatically.
+#
+# Connected variant: chromium-headful is an app image under ${REGISTRY}; the
+# language runtimes + pause come straight from their public upstreams.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sandbox-image-warmer
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    matchLabels:
+      app: sandbox-image-warmer
+  template:
+    metadata:
+      labels:
+        app: sandbox-image-warmer
+    spec:
+      tolerations:
+        - operator: "Exists"
+      initContainers:
+        - name: pull-chromium-headful
+          image: ${REGISTRY}/chromium-headful:${IMAGE_TAG}
+          command: ["true"]
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi
+        - name: pull-node-22
+          image: docker.io/library/node:22-bookworm
+          command: ["true"]
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi
+        - name: pull-python-3-12
+          image: docker.io/library/python:3.12-bookworm
+          command: ["true"]
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.9
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi

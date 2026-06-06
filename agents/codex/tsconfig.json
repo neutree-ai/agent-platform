@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "../..",
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*",
+    "../../internal/types/**/*",
+    "../../internal/acp-adapter/**/*",
+    "../../internal/agent-skills/src/**/*",
+    "../../internal/agent-usage/src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "../../internal/agent-skills/src/*.test.ts",
+    "../../internal/agent-usage/src/*.test.ts"
+  ]
+}

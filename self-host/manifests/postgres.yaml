@@ -1,0 +1,76 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: nap-pg
+  namespace: ${NAMESPACE}
+spec:
+  instances: ${PG_INSTANCES}
+  # Connected variant: pulled straight from CNPG's public GHCR image.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+
+  minSyncReplicas: ${PG_SYNC_REPLICAS}
+  maxSyncReplicas: ${PG_SYNC_REPLICAS}
+  failoverDelay: 30
+
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+
+  # Evict pods from unreachable/NotReady nodes after 30s instead of CNPG's
+  # 300s default. Without this, a node flap can keep cnpg waiting ~14 minutes
+  # before failover (incident 2026-04-15). 30s + sync replication = ~1 min
+  # convergence with no data loss.
+  affinity:
+    tolerations:
+      - key: node.kubernetes.io/not-ready
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
+      - key: node.kubernetes.io/unreachable
+        operator: Exists
+        effect: NoExecute
+        tolerationSeconds: 30
+
+  bootstrap:
+    initdb:
+      database: nap
+      owner: ${PG_USERNAME}
+      secret:
+        name: nap-pg-user
+
+  storage:
+    size: ${PG_STORAGE_SIZE}
+    storageClass: ${PG_STORAGE_CLASS}
+
+  managed:
+    roles:
+      - name: ${PG_USERNAME}
+        ensure: present
+        login: true
+        createdb: true
+        passwordSecret:
+          name: nap-pg-user
+
+  postgresql:
+    shared_preload_libraries:
+      - pg_stat_statements
+    parameters:
+      # WAL stream timeouts: short enough to detect a dead primary independent
+      # of kubelet probes, long enough to ride through inter-node jitter.
+      wal_sender_timeout: 30s
+      wal_receiver_timeout: 30s
+
+      # Larger WAL budget so write bursts don't push checkpoints into
+      # back-to-back wal-triggered mode (incident 2026-04-14: tool_result write
+      # amplification produced ~360 MB/min of WAL).
+      max_wal_size: 8GB
+
+      pg_stat_statements.track: top
+      pg_stat_statements.max: "5000"
+
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 250m
+    limits:
+      memory: 4Gi
+      cpu: "2"

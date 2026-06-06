@@ -1,0 +1,37 @@
+<%
+// Per-resource orientation. The cp OpenAPI tags carry no description, so the
+// resource index pages read cold — worst for the look-alike resources
+// (agent-files vs agent-afs-files vs afs). Keyed by tag; falls back to the
+// spec tag description for any resource (or other skill) not listed here.
+const preambles = {
+  "workspaces": "A workspace is an isolated agent environment — its own filesystem, config, and a running agent. Most other resources hang off a workspace `{id}`. Create with POST, change model/prompt/compute via PUT `.../config`, and give the agent work via the `chat` resource.",
+  "chat": "Drive a workspace's agent with a natural-language prompt — the primary way to get work done inside a workspace (the agent has bash + file tools). Supports synchronous and async (`mode: async`) modes; for async, poll the session for completion.",
+  "agent-files": "File operations on the **workspace's own filesystem** (the agent's working dir). The `path` query param is relative to the FS root — no leading slash, inner slashes are nested dirs; URL-encode the value. Also mints short-lived public file URLs (export-url). For the cross-workspace shared volume use `agent-afs-files` instead.",
+  "agent-afs-files": "File operations on the **shared AFS volume mounted at `/mnt/afs`**, visible to every workspace granted access. Use this (not `agent-files`) when data must be shared across workspaces or outlive one workspace. Same path rules as `agent-files`. To manage who can access a shared folder, use the `afs` resource.",
+  "afs": "Manage shared **folders** (AFS shares) and their membership — create/revoke a share, grant/remove member workspaces. This governs *access*; the files inside a share are read/written via `agent-afs-files`.",
+  "shares": "Public **session** shares — snapshot a chat session's messages/config into a publicly viewable link. Unrelated to `afs` (which shares folders).",
+  "skills": "Reusable agent Skills — import (git or upload), version, share by visibility / team grant, and attach to workspaces.",
+  "prompts": "Reusable prompt templates owned by the user, attachable to a workspace's config.",
+  "templates": "Workspace templates — snapshot a workspace's commands / schedules / layout into a distributable template and instantiate new workspaces from one.",
+  "providers": "Model / inference providers (endpoint + credentials), selectable per workspace; supports test-probe, model listing, and team grants.",
+  "credentials": "Named secrets stored for the user (values never returned), injected into workspaces — e.g. as env vars or git tokens for skill import.",
+  "memory-stores": "User-owned persistent memory stores (with versions / memories), attachable to workspaces.",
+  "workspace-memory": "The memory stores currently attached to a specific workspace (attach / detach / update).",
+  "tags": "User-defined tags for organizing resources.",
+  "teams": "Teams and membership — the basis for team-scoped sharing / grants on skills, prompts, and providers.",
+};
+const preamble = preambles[it.tag] || it.description;
+-%>
+# <%= it.tag %>
+
+<% if (preamble) { -%>
+<%= preamble %>
+
+<% } -%>
+## Operations
+
+| Method | Path | Summary | Details |
+|--------|------|---------|----------|
+<% it.operations.forEach(op => { -%>
+| <%= op.method %> | `<%= op.path %>` | <%= op.summary ?? "" %> | [View](../operations/<%= it.toFileName(op.operationId) %>.md) |
+<% }) -%>

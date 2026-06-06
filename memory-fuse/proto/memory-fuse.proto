@@ -1,0 +1,56 @@
+syntax = "proto3";
+package memoryfuse;
+
+option go_package = "github.com/neutree-ai/agent-platform/memory-fuse/internal/proto/memoryfuse;memoryfuse";
+
+// Keep in sync with control-plane/proto/memory-fuse.proto.
+// In-pod gRPC service exposed by the memory-fuse sidecar at :9102.
+// cp pushes Mount/Unmount on live attachment changes; on pod boot the daemon
+// pulls the initial attachment set from cp HTTP (no push needed for cold start).
+//
+// Mount path is /mnt/memory/<store_id>/ — using the store id directly keeps
+// agent-visible paths stable across rename/re-attach and removes any
+// slug-derivation logic.
+service MemoryFuseService {
+  rpc Mount(MountRequest) returns (MountResponse);
+  rpc Unmount(UnmountRequest) returns (UnmountResponse);
+  rpc ListMounts(ListMountsRequest) returns (ListMountsResponse);
+  // Invalidate the daemon's in-memory snapshot + buf cache for a store.
+  // cp pushes this fire-and-forget after every memory write/delete so each
+  // attached workspace sees fresh data on the next read without waiting
+  // for the 30s polling tick.
+  rpc Invalidate(InvalidateRequest) returns (InvalidateResponse);
+}
+
+message MountRequest {
+  string store_id = 1;
+  bool read_only = 2;
+}
+
+message MountResponse {
+  string mountpoint = 1;
+}
+
+message UnmountRequest {
+  string store_id = 1;
+}
+
+message UnmountResponse {}
+
+message ListMountsRequest {}
+
+message ListMountsResponse {
+  repeated MountInfo mounts = 1;
+}
+
+message MountInfo {
+  string store_id = 1;
+  string mountpoint = 2;
+  bool read_only = 3;
+}
+
+message InvalidateRequest {
+  string store_id = 1;
+}
+
+message InvalidateResponse {}

@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nap-skills
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-skills
+spec:
+  # Must stay at 1: dufs caches unpacked skill content on local disk; multiple
+  # replicas would each maintain an independent cache with no coherency.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nap-skills
+  template:
+    metadata:
+      labels:
+        app: nap-skills
+    spec:
+      containers:
+        - name: skills-content-service
+          image: ${REGISTRY}/nap-skills-content-service:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3008
+              name: http
+          env:
+            - name: PORT
+              value: "3008"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nap-pg-user
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+            - name: CACHE_DIR
+              value: /var/cache/skills-content
+          volumeMounts:
+            - name: dufs-cache
+              mountPath: /var/cache/skills-content
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3008
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3008
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        # emptyDir: cache survives container restarts within the pod, lost on
+        # pod reschedule. The DB is the source of truth; cache rebuilds on demand.
+        - name: dufs-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nap-skills
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-skills
+spec:
+  type: ClusterIP
+  selector:
+    app: nap-skills
+  ports:
+    - port: 3008
+      targetPort: 3008
+      name: http

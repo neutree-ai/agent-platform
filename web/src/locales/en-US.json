@@ -1,0 +1,3745 @@
+{
+  "nativeName": "English",
+  "common": {
+    "add": "Add",
+    "cancel": "Cancel",
+    "clear": "Clear",
+    "close": "Close",
+    "confirm": "Confirm",
+    "create": "Create",
+    "creating": "Creating...",
+    "delete": "Delete",
+    "loading": "Loading...",
+    "rename": "Rename",
+    "on": "On",
+    "off": "Off",
+    "save": "Save",
+    "saving": "Saving...",
+    "update": "Update",
+    "chunkError": {
+      "title": "A new version is available",
+      "description": "The page assets have been updated. Reload to load the latest version.",
+      "reload": "Reload page"
+    },
+    "errors": {
+      "authProviderRequired": "useAuth must be used within an AuthProvider",
+      "agentSessionProviderRequired": "useAgentSessionStore must be used within AgentSessionProvider",
+      "connectionFailed": "Connection failed",
+      "dialogStackProviderRequired": "useDialogStack must be used within DialogStackProvider",
+      "fileOverlayProviderRequired": "useFileOverlay must be used within FileOverlayProvider",
+      "noResponseBody": "No response body",
+      "requestFailed": "Request failed",
+      "sessionExpired": "Session expired",
+      "sidebarProviderRequired": "useSidebar must be used within a SidebarProvider",
+      "themeProviderRequired": "useTheme must be used within ThemeProvider",
+      "unknown": "Unknown error"
+    }
+  },
+  "session": {
+    "status": {
+      "completed": "completed",
+      "disconnected": "disconnected"
+    },
+    "errors": {
+      "cpReconnectFailed": "CP reconnect failed",
+      "deleteFailed": "Failed to delete session",
+      "interruptFailed": "Failed to interrupt",
+      "interruptNotReady": "Can't stop yet — the turn is still starting up. It's still running; try again in a moment.",
+      "loadHistoryFailed": "Failed to load history",
+      "reconnectFailed": "Reconnect failed",
+      "respondFailed": "Failed to respond",
+      "respondQuestionFailed": "Failed to respond to question"
+    }
+  },
+  "workspace": {
+    "errors": {
+      "deleteFailed": "Failed to delete workspace"
+    },
+    "commands": {
+      "errors": {
+        "requestFailed": "Request failed"
+      }
+    },
+    "config": {
+      "errors": {
+        "loadFailed": "Failed to load config"
+      }
+    },
+    "schedules": {
+      "errors": {
+        "requestFailed": "Request failed"
+      }
+    },
+    "browser": {
+      "errors": {
+        "createFailed": "Failed to create browser",
+        "deleteFailed": "Failed to delete browser",
+        "renewFailed": "Failed to renew browser"
+      }
+    },
+    "sandbox": {
+      "errors": {
+        "createFailed": "Failed to create sandbox",
+        "deleteFailed": "Failed to delete sandbox"
+      }
+    }
+  },
+  "integration": {
+    "errors": {
+      "requestFailed": "Request failed",
+      "testFailed": "Test failed"
+    }
+  },
+  "docs": {
+    "inlineHelp": {
+      "agentConfig": {
+        "templateInheritanceHeader": "Template-based workspaces inherit template configuration. Overridden fields show an **Overridden** badge, and you can click to restore the template value."
+      },
+      "connector": {
+        "hint": "Switch connector type on the left to see the corresponding guide."
+      },
+      "credential": {
+        "hint": "Switch preset or injection mode on the left to see the corresponding guide."
+      },
+      "provider": {
+        "hint": "Switch Provider Type on the left to see the corresponding guide."
+      },
+      "memoryStore": {
+        "hint": "User-level path-keyed memory. Workspaces attach to consume; agent reads/writes via the filesystem."
+      },
+      "oauthApp": {
+        "hint": "OAuth 2.0 client registration — for third-party apps integrating with the platform."
+      },
+      "route": {
+        "hint": "Docs update based on the selected connector type."
+      },
+      "serviceToken": {
+        "hint": "Used by external systems to call the platform API on your behalf."
+      },
+      "skill": {
+        "hint": "Switch mode on the left to see the corresponding guide."
+      }
+    }
+  },
+  "pages": {
+    "admin": {
+      "navigation": {
+        "dashboard": "Dashboard",
+        "users": "Users",
+        "infrastructure": "Infrastructure",
+        "system": "System"
+      }
+    },
+    "integration": {
+      "navigation": {
+        "connectors": "Connectors",
+        "serviceTokens": "Service Tokens",
+        "applications": "Applications"
+      }
+    },
+    "library": {
+      "navigation": {
+        "prompts": "Prompts",
+        "skills": "Skills",
+        "templates": "Templates"
+      }
+    },
+    "login": {
+      "subtitle": "Sign in to your account",
+      "fields": {
+        "username": {
+          "label": "Username",
+          "placeholder": "Enter your username"
+        },
+        "password": {
+          "label": "Password",
+          "placeholder": "Enter your password"
+        }
+      },
+      "actions": {
+        "submit": "Sign in",
+        "submitting": "Signing in...",
+        "signInWithWeCom": "Sign in with WeChat Work"
+      },
+      "labels": {
+        "or": "or"
+      },
+      "errors": {
+        "loginFailed": "Login failed",
+        "submitFailed": "Sign-in failed",
+        "startWeComFailed": "Failed to start WeChat Work sign-in",
+        "oauth": {
+          "missingCode": "Authorization failed. Please try again.",
+          "notBound": "This WeChat Work account is not linked. Please sign in with username and password first, then link WeChat Work in Preferences.",
+          "userNotFound": "User account not found.",
+          "systemAccount": "This account cannot be used to sign in.",
+          "authRequired": "Please sign in first to link your WeChat Work account.",
+          "oauthFailed": "WeChat Work authorization failed. Please try again."
+        }
+      }
+    },
+    "management": {
+      "navigation": {
+        "providers": "API Providers",
+        "credentials": "Credentials"
+      }
+    },
+    "oauthAuthorize": {
+      "title": "Authorize Application",
+      "subtitle": "is requesting access to your NAP account",
+      "permissionNotice": "This application will be able to access your basic profile information (username, display name, email).",
+      "actions": {
+        "deny": "Deny",
+        "authorize": "Authorize",
+        "authorizing": "Authorizing..."
+      },
+      "errors": {
+        "invalidRequest": "Invalid authorization request",
+        "authorizeFailed": "Authorization failed"
+      }
+    },
+    "invitePage": {
+      "title": "Join team",
+      "invitedBy": "Invited by {{name}}",
+      "expiresAt": "Link expires {{value}}",
+      "alreadyMember": "You're already a member of this team.",
+      "join": "Join team",
+      "open": "Open team",
+      "errors": {
+        "notFound": "This invite link is invalid or has been revoked.",
+        "expired": "This invite link has expired.",
+        "loadFailed": "Failed to load invite",
+        "joinFailed": "Failed to join team"
+      },
+      "toasts": {
+        "joined": "Joined team"
+      }
+    },
+    "share": {
+      "triggers": {
+        "cron": "Scheduled",
+        "slack": "Slack",
+        "manual": "Manual"
+      },
+      "config": {
+        "systemPrompt": "System prompt"
+      },
+      "sharedBy": "Shared by {{name}}",
+      "notFound": {
+        "title": "Share not found",
+        "description": "This share link may have been deleted or is invalid."
+      },
+      "review": {
+        "title_one": "Review ({{count}})",
+        "title_other": "Review ({{count}})",
+        "raw": "Raw",
+        "rendered": "Rendered"
+      }
+    },
+    "workspace": {
+      "tabs": {
+        "sessions": "Session History",
+        "files": "Files",
+        "browser": "Browser",
+        "skills": "Skill Studio",
+        "terminal": "Terminal",
+        "sandboxes": "Sandboxes",
+        "automation": "Automation",
+        "memoryStores": "Memory",
+        "settings": "Settings",
+        "chat": "Chat",
+        "file": "File",
+        "library": "Library",
+        "connectors": "Connectors",
+        "serviceTokens": "Service Tokens",
+        "oauthApps": "OAuth Apps",
+        "credentials": "Credentials",
+        "models": "Model Providers",
+        "admin": "Admin",
+        "activity": "Activity",
+        "tags": "Tags",
+        "teams": "Teams",
+        "teamwork": "Teamwork"
+      },
+      "empty": {
+        "selectWorkspace": "Select a workspace from the sidebar to view chat, memory, and review.",
+        "notRunning": {
+          "title": "Workspace is not running",
+          "description": "Start the workspace to access this app."
+        }
+      },
+      "actions": {
+        "enterFocusMode": "Enter focus mode",
+        "exitFocusMode": "Exit focus mode",
+        "moveChatToBottom": "Move chat to bottom",
+        "moveChatToSide": "Move chat to side"
+      }
+    }
+  },
+  "components": {
+    "updateAvailable": {
+      "message": "A new version of NAP is available",
+      "reload": "Reload"
+    },
+    "resource": {
+      "scope": {
+        "private": "Private",
+        "team": "Team",
+        "public": "Public"
+      },
+      "ownership": {
+        "yours": "Yours"
+      },
+      "filter": {
+        "all": "All",
+        "private": "Private",
+        "team": "Team",
+        "public": "Public",
+        "empty": "Nothing in this scope"
+      },
+      "view": {
+        "card": "Card",
+        "list": "List"
+      },
+      "search": "Search..."
+    },
+    "integration": {
+      "shared": {
+        "generate": "Generate",
+        "keepExisting": " (leave empty to keep)",
+        "noResults": "No results.",
+        "optional": " (optional)",
+        "saving": "Saving...",
+        "search": "Search..."
+      },
+      "connector": {
+        "fields": {
+          "type": "Type",
+          "name": "Name",
+          "relayPublicUrl": "Relay Public URL",
+          "public": "Public"
+        },
+        "placeholders": {
+          "relayPublicUrl": "https://webhook-relay.example.com"
+        },
+        "help": {
+          "relayPublicUrl": "Public URL of the relay endpoint, displayed when users create routes",
+          "public": "Visible to every user in this workspace"
+        },
+        "actions": {
+          "showCredentials": "Show Credentials",
+          "hideCredentials": "Hide Credentials",
+          "test": "Test",
+          "testing": "Testing..."
+        },
+        "toasts": {
+          "loadCredentialsFailed": "Failed to load credentials"
+        }
+      },
+      "route": {
+        "fields": {
+          "connector": "Connector",
+          "workspace": "Workspace",
+          "displayName": "Display Name",
+          "promptTemplate": "Prompt Template",
+          "filters": "Filters",
+          "secret": "Secret",
+          "header": "Header:",
+          "sessionTtl": "Session TTL (hours)",
+          "requireMention": "Require @mention for every message",
+          "streaming": "Stream the reply (refresh as it generates)"
+        },
+        "labels": {
+          "allChannels": "* All channels (wildcard)"
+        },
+        "placeholders": {
+          "webhookSecret": "webhook secret",
+          "optional": "optional",
+          "searchChannels": "Search channels...",
+          "searchWorkspaces": "Search workspaces...",
+          "selectChannel": "Select a channel...",
+          "selectConnector": "Select a connector...",
+          "selectWorkspace": "Select a workspace..."
+        },
+        "empty": {
+          "noChannels": "No channels found.",
+          "noWorkspaces": "No workspaces.",
+          "noFilters": "No filters — all events will trigger a job."
+        },
+        "actions": {
+          "addFilter": "Add"
+        },
+        "prompt": {
+          "custom": "Custom",
+          "noContent": "No content.",
+          "presetsGroup": "Built-in templates",
+          "libraryGroup": "Prompt library",
+          "placeholders": {
+            "slack": "Handle the following message from {user}:\n{message}",
+            "webhook": "Handle this webhook event:\n{body}",
+            "wecom": "Handle the following message from {user}:\n{message}",
+            "default": "{message}"
+          },
+          "variables": {
+            "webhook": "Variables: {body} (full body), {body.field} (nested field), {query.key} (query param), {headers.name} (header), {method}, {path}. Leave empty to use the raw body.",
+            "slack": "Variables: {message} (user message), {user} (sender ID), {thread_context} (thread history), {thread_ts} (thread timestamp), {channel} (channel ID). Leave empty to use the raw message.",
+            "wecom": "Variables: {message} (user message), {user} (sender UserID), {channel} (group chat ID), {chat_type} (single/group). Leave empty to use the raw message.",
+            "default": "Variables: {message} (user message). Leave empty to use the raw message."
+          }
+        },
+        "help": {
+          "slackChannel": "Only bot-joined channels are shown. Trigger: @mention bot in channel.",
+          "wecomChannel": "All group chats share one route. After the bot is added to a group, mentioning the bot will trigger it.",
+          "filters": "All rules must match (AND). Field syntax: body.field, headers.name, query.key, method, path.",
+          "sessionTtl": "Messages in the same thread within this window share one session. Default: 24h.",
+          "requireMention": "When unchecked, the bot auto-follows a thread after being @mentioned once. Prefix a message with (aside) to skip the bot. Requires message.channels (and message.groups for private channels) in the Slack App's event subscriptions.",
+          "streaming": "When enabled, replies refresh in segments via the aibot_respond_msg streaming protocol so users see incremental output. Subject to WeCom's 30/min and 10-minute-per-stream quotas."
+        },
+        "filters": {
+          "fieldPlaceholder": "body.field",
+          "ops": {
+            "in": "in",
+            "contains": "contains",
+            "exists": "exists"
+          },
+          "valuePlaceholders": {
+            "in": "val1, val2",
+            "default": "value"
+          },
+          "boolean": {
+            "true": "true",
+            "false": "false"
+          }
+        },
+        "secretTypes": {
+          "plain": "Plain"
+        }
+      },
+      "connectorRowView": {
+        "table": {
+          "name": "Name",
+          "type": "Type",
+          "enabled": "Enabled"
+        }
+      },
+      "routeCardView": {
+        "fields": {
+          "target": "Target",
+          "id": "ID"
+        },
+        "channel": {
+          "resolving": "Resolving channel...",
+          "loadFailed": "Unable to load the Slack channel name. Showing the Channel ID.",
+          "notFound": "This Channel ID was not found in bot-visible channels. It may be inaccessible, archived, or hidden by permissions."
+        },
+        "secret": {
+          "loading": "...",
+          "notSet": "(not set)",
+          "clickToReveal": "click to reveal"
+        },
+        "toasts": {
+          "copied": "Copied"
+        },
+        "errors": {
+          "loadSecretFailed": "Failed to load secret"
+        }
+      },
+      "typeConfigs": {
+        "slack": {
+          "label": "Slack",
+          "credentials": {
+            "bot_token": {
+              "label": "Bot Token",
+              "placeholder": "xoxb-...",
+              "helpText": "Slack App -> OAuth & Permissions -> Bot User OAuth Token"
+            },
+            "app_token": {
+              "label": "App Token",
+              "placeholder": "xapp-...",
+              "helpText": "Slack App -> Basic Information -> App-Level Tokens (connections:write scope)"
+            }
+          },
+          "externalId": {
+            "label": "Channel ID",
+            "placeholder": "C0XXXXXXXXX",
+            "helpText": "Slack channel ID (starts with C)"
+          }
+        },
+        "wecom": {
+          "label": "WeCom",
+          "credentials": {
+            "bot_id": {
+              "label": "Bot ID",
+              "placeholder": "aibXXX...",
+              "helpText": "WeCom admin console -> Security and Management -> Management Tools -> Intelligent Robot -> Bot ID"
+            },
+            "secret": {
+              "label": "Secret",
+              "placeholder": "",
+              "helpText": "Long-connection secret of the intelligent robot (not app corpsecret)"
+            }
+          },
+          "externalId": {
+            "label": "Group Chat ID",
+            "placeholder": "wrXXX...",
+            "helpText": "WeCom group chat ID, available from the chatid field in incoming messages"
+          }
+        },
+        "webhook": {
+          "label": "Webhook",
+          "externalId": {
+            "label": "Endpoint Path",
+            "placeholder": "/my-hook"
+          }
+        },
+        "webhook-relay": {
+          "label": "Webhook Relay",
+          "credentials": {
+            "queue_url": {
+              "label": "Queue URL",
+              "placeholder": "https://sqs.ap-east-1.amazonaws.com/123456789/nap-webhook-relay",
+              "helpText": "SQS Queue URL"
+            },
+            "region": {
+              "label": "Region",
+              "placeholder": "ap-east-1",
+              "helpText": "AWS region of the SQS queue"
+            },
+            "access_key_id": {
+              "label": "Access Key ID",
+              "placeholder": "",
+              "helpText": "Leave empty to use IAM role or default credential chain"
+            },
+            "secret_access_key": {
+              "label": "Secret Access Key",
+              "placeholder": "",
+              "helpText": "Leave empty to use IAM role or default credential chain"
+            }
+          },
+          "externalId": {
+            "label": "Endpoint Path",
+            "placeholder": "/my-hook"
+          }
+        }
+      }
+    },
+    "commandPalette": {
+      "title": "Command palette",
+      "searchPlaceholder": "Search workspaces, apps, commands…",
+      "empty": "No results found.",
+      "tip": {
+        "prefix": "Press",
+        "suffix": "to open from anywhere"
+      },
+      "groups": {
+        "workspaces": "Workspaces",
+        "apps": "Apps",
+        "commands": "Commands"
+      },
+      "items": {
+        "preferences": "Preferences",
+        "documentation": "Documentation",
+        "apiDocumentation": "API Docs"
+      }
+    },
+    "preferences": {
+      "title": "Preferences",
+      "navigation": {
+        "appearance": "Appearance",
+        "evolution": "Evolution",
+        "notifications": "Notifications",
+        "accounts": "Accounts",
+        "about": "About"
+      },
+      "about": {
+        "version": "Version",
+        "releasedAt": "Released at",
+        "outdated": "A new version has been deployed",
+        "reload": "Reload"
+      },
+      "autoEvolution": {
+        "title": "Auto Evolution",
+        "description": "NAP will analyze your agent sessions and suggest prompt, tool, and workflow improvements automatically."
+      },
+      "theme": {
+        "label": "Theme",
+        "options": {
+          "light": "Light",
+          "dark": "Dark",
+          "system": "System"
+        }
+      },
+      "wallpaper": {
+        "label": "Wallpaper",
+        "options": {
+          "aurora": "Aurora",
+          "minimal": "Minimal",
+          "cool": "Cool",
+          "warm": "Warm"
+        }
+      },
+      "sound": {
+        "label": "Sound"
+      },
+      "language": {
+        "label": "Language",
+        "options": {
+          "zhCN": "中文",
+          "enUS": "English"
+        }
+      },
+      "chatSendKey": {
+        "label": "Chat send key",
+        "options": {
+          "modEnter": "⌘/Ctrl + Enter",
+          "enter": "Enter"
+        }
+      },
+      "notifications": {
+        "label": "Notifications",
+        "badges": {
+          "alpha": "ALPHA"
+        },
+        "channels": {
+          "label": "Notification Channels",
+          "inbox": "Inbox",
+          "wecom": "WeCom"
+        },
+        "events": {
+          "agentTaskDone": "Agent Task Done",
+          "forumThreadUpdated": "Forum thread updated"
+        },
+        "globalDefault": "Global default",
+        "workspaces": "Workspaces",
+        "inherited": "Inherited",
+        "override": "Override"
+      },
+      "accounts": {
+        "title": "Linked Accounts",
+        "wecom": "WeChat Work",
+        "actions": {
+          "link": "Link",
+          "unlink": "Unlink"
+        }
+      },
+      "security": {
+        "title": "Security",
+        "password": {
+          "label": "Password",
+          "description": "Update the password used to sign in to your local account.",
+          "action": "Change password",
+          "dialog": {
+            "title": "Change password",
+            "currentPassword": "Current password",
+            "newPassword": "New password",
+            "confirmPassword": "Confirm new password",
+            "save": "Update password"
+          },
+          "toast": {
+            "updated": "Password updated"
+          },
+          "errors": {
+            "fieldsRequired": "Please fill in all fields",
+            "tooShort": "New password must be at least 6 characters",
+            "mismatch": "New password and confirmation do not match",
+            "sameAsOld": "New password must be different from current password",
+            "incorrectCurrent": "Current password is incorrect",
+            "updateFailed": "Failed to update password"
+          }
+        }
+      },
+      "actions": {
+        "logout": "Log out"
+      }
+    },
+    "tagsManage": {
+      "trigger": "Manage tags",
+      "title": "Manage Tags",
+      "empty": {
+        "title": "No tags yet",
+        "description": "Tags help you group and filter workspaces. Create one to get started."
+      },
+      "actions": {
+        "new": "New Tag",
+        "edit": "Edit tag",
+        "delete": "Delete tag"
+      },
+      "dialog": {
+        "editTitle": "Edit Tag",
+        "newTitle": "New Tag",
+        "namePlaceholder": "Tag name"
+      },
+      "toasts": {
+        "created": "Tag created",
+        "updated": "Tag updated",
+        "deleted": "Tag deleted",
+        "saveFailed": "Failed to save tag",
+        "deleteFailed": "Failed to delete"
+      }
+    },
+    "promptEditor": {
+      "titles": {
+        "view": "View Prompt",
+        "edit": "Edit Prompt",
+        "new": "New Prompt",
+        "share": "Share \"{{name}}\""
+      },
+      "fields": {
+        "name": "Name",
+        "content": "Content",
+        "visibility": "Visibility",
+        "teams": "Share with teams",
+        "permission": "Team members can"
+      },
+      "visibility": {
+        "private": "Private",
+        "team": "Teams",
+        "public": "Public"
+      },
+      "permission": {
+        "viewer": "View only",
+        "editor": "View and edit"
+      },
+      "teamsEmpty": "You're not a member of any team yet. Create or join a team in the Teams app.",
+      "noTeamsShared": "Not shared with any team yet.",
+      "addTeam": "Add team…",
+      "removeTeam": "Remove",
+      "ownedBy": "owned by {{name}}",
+      "placeholders": {
+        "name": "e.g. Coding Assistant",
+        "content": "System prompt content..."
+      },
+      "actions": {
+        "close": "Close"
+      },
+      "toasts": {
+        "created": "Prompt created",
+        "updated": "Prompt updated",
+        "rolledBack": "Rolled back to v{{version}}"
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "teamRequired": "Select at least one team to share with",
+        "saveFailed": "Failed to save",
+        "rollbackFailed": "Rollback failed"
+      },
+      "versionHistory": {
+        "title": "Version History (v{{version}})",
+        "empty": "No versions",
+        "rollbackTitle": "Rollback to this version"
+      }
+    },
+    "library": {
+      "prompts": {
+        "scope": {
+          "aria": "Filter prompts by scope",
+          "mine": "Mine",
+          "shared": "Shared with me",
+          "public": "Public"
+        },
+        "labels": {
+          "byOwner": "by {{owner}}",
+          "public": "Public",
+          "default": "Default",
+          "currentVersion": "v{{version}} (current)",
+          "copySuffix": "(copy)"
+        },
+        "badges": {
+          "editable": "Editable",
+          "readOnly": "Read-only"
+        },
+        "placeholders": {
+          "search": "Search..."
+        },
+        "actions": {
+          "new": "New",
+          "edit": "Edit",
+          "share": "Share",
+          "delete": "Delete",
+          "fork": "Fork",
+          "createNew": "Create new prompt",
+          "rollbackTo": "Rollback to v{{version}}"
+        },
+        "empty": {
+          "noPrompts": {
+            "title": "No prompts yet",
+            "description": "Create a reusable prompt to start a workspace from."
+          },
+          "selectPrompt": "Select a prompt to preview"
+        },
+        "toasts": {
+          "deleted": "Prompt deleted",
+          "forked": "Prompt copied to your library",
+          "defaultCleared": "Default prompt cleared",
+          "defaultSet": "Set as default for new workspaces"
+        },
+        "errors": {
+          "deleteFailed": "Failed to delete",
+          "copyFailed": "Failed to copy",
+          "tooManyCopies": "Too many copies with the same name"
+        }
+      },
+      "skills": {
+        "badges": {
+          "yours": "Yours"
+        },
+        "categories": {
+          "title": "Categories",
+          "coding": "Coding",
+          "writing": "Writing",
+          "research": "Research",
+          "data": "Data",
+          "ops": "Ops",
+          "design": "Design",
+          "review": "Review",
+          "other": "Other",
+          "uncategorized": "Uncategorized"
+        },
+        "labels": {
+          "byOwner": "by {{owner}}",
+          "lastSynced": "Last synced: {{value}}"
+        },
+        "fields": {
+          "repositoryUrl": "Repository URL",
+          "gitRef": "Branch / tag (optional)",
+          "accessTokenOptional": "Access Token (optional)",
+          "name": "Name",
+          "nameOptional": "Name (optional)",
+          "description": "Description",
+          "descriptionOptional": "Description (optional)",
+          "package": "Package (.tar.gz)",
+          "packageKeepCurrent": "Package (.tar.gz) (leave empty to keep current)",
+          "publicVisible": "Public (visible to all users)",
+          "visibility": "Visibility",
+          "teams": "Teams",
+          "category": "Category"
+        },
+        "visibility": {
+          "private": "Private",
+          "team": "Team",
+          "public": "Public"
+        },
+        "visibilityDesc": {
+          "private": "Only you can use this skill.",
+          "team": "Members of selected teams can use this skill; editors can also rename, edit description, and re-import the package.",
+          "public": "Everyone on this NAP instance can use this skill."
+        },
+        "permission": {
+          "viewer": "Viewer",
+          "editor": "Editor"
+        },
+        "teamsEmpty": "You aren't a member of any team yet.",
+        "noTeamsShared": "Pick a team below to share with.",
+        "addTeam": "Add a team…",
+        "removeTeam": "Stop sharing with this team",
+        "placeholders": {
+          "repositoryUrl": "https://github.com/owner/repo or owner/repo",
+          "gitRef": "Defaults to main",
+          "selectCredential": "Select a credential",
+          "privateRepositoryToken": "For private repositories",
+          "autoDetectedName": "Auto-detected from SKILL.md or repo name",
+          "autoDetectedDescription": "Auto-detected from SKILL.md frontmatter",
+          "name": "e.g. my-skill",
+          "description": "Brief description of what this Skill does"
+        },
+        "help": {
+          "repositoryUrl": "Supports GitHub, GitLab, and self-hosted. Append /tree/branch/subpath to import a subdirectory.",
+          "category": "Used as a filter chip in the library. Optional.",
+          "dropHint": "or drop a .tar.gz here",
+          "dropActive": "Release to use this file"
+        },
+        "tokenSources": {
+          "none": "None",
+          "credential": "Credential",
+          "manual": "Manual"
+        },
+        "actions": {
+          "new": "New",
+          "edit": "Edit",
+          "share": "Share",
+          "delete": "Delete Skill",
+          "syncFromGit": "Sync from Git",
+          "previewSkills": "Preview",
+          "chooseFile": "Choose file",
+          "back": "Back"
+        },
+        "detail": {
+          "unpackingHint": "Skill is large — unpacking on the server, please wait…",
+          "expandDescription": "Show full description",
+          "collapseDescription": "Collapse description"
+        },
+        "editor": {
+          "gitNotEditable": "Skills from a git source cannot be edited here; sync the source instead.",
+          "dirtyCount": "{{count}} unsaved",
+          "actions": {
+            "edit": "Edit",
+            "saveDraft": "Save Draft",
+            "discard": "Discard",
+            "discardArmed": "Click again to discard",
+            "publish": "Publish",
+            "exit": "Exit"
+          },
+          "toasts": {
+            "draftSaved": "Draft saved",
+            "draftDiscarded": "Draft discarded",
+            "published": "New version published"
+          },
+          "binaryNotice": {
+            "title": "Binary file — cannot be edited here",
+            "hint": "Replace it from the workspace agent, then come back to publish"
+          }
+        },
+        "versions": {
+          "empty": "No published versions yet",
+          "activeBadge": "Active",
+          "noNote": "No note",
+          "actions": {
+            "viewVersions": "Versions",
+            "setActive": "Set Active",
+            "download": "Download"
+          },
+          "toasts": {
+            "activated": "Active version updated"
+          }
+        },
+        "sections": {
+          "public": "Public",
+          "private": "Private"
+        },
+        "modes": {
+          "upload": "Upload",
+          "git": "Git"
+        },
+        "dialogs": {
+          "edit": {
+            "title": "Edit Skill"
+          },
+          "add": {
+            "title": "Add Skill"
+          }
+        },
+        "empty": {
+          "noDescription": "No description",
+          "noSkills": "No Skills yet",
+          "noCredentials": "No credentials configured"
+        },
+        "toasts": {
+          "reimported": "Skill re-imported from Git",
+          "imported": "Skill imported from Git",
+          "updated": "Skill updated",
+          "uploaded": "Skill uploaded",
+          "synced": "Skill synced",
+          "alreadyUpToDate": "Already up to date",
+          "switchedToGit": "Skill switched to Git source",
+          "deleted": "Skill deleted"
+        },
+        "errors": {
+          "gitUrlRequired": "Git URL is required",
+          "previewRequired": "Click Preview and pick the subpath(s) to import first",
+          "importFailed": "Failed to import",
+          "nameRequired": "Name is required",
+          "packageRequired": "Package file is required",
+          "saveFailed": "Failed to save",
+          "syncFailed": "Failed to sync",
+          "switchFailed": "Failed to switch source",
+          "deleteFailed": "Failed to delete",
+          "scanFailed": "Failed to scan repo",
+          "multipleCandidatesPickOne": "Multiple skills found in this repo — pick one below.",
+          "invalidFileType": "Only .tar.gz / .tgz files are accepted."
+        },
+        "switchHint": "Switching this native skill to a Git source keeps the skill and all its mounts, but its version history will be deleted — only the version fetched from Git remains.",
+        "switchDialog": {
+          "title": "Switch to a Git source?",
+          "body": "\"{{name}}\" will be tracked from Git instead of being authored here. The skill keeps its identity and every workspace / template using it stays attached.",
+          "warning": "Its version history (and any unpublished draft) will be permanently deleted — only the version fetched from Git remains. This can't be undone.",
+          "confirm": "Switch source",
+          "switching": "Switching…"
+        },
+        "scan": {
+          "foundCount_one": "Found {{count}} skill",
+          "foundCount_other": "Found {{count}} skills",
+          "foundCountSelected_one": "Found {{count}} skill · {{selected}} selected",
+          "foundCountSelected_other": "Found {{count}} skills · {{selected}} selected",
+          "fileCount_one": "{{count}} file",
+          "fileCount_other": "{{count}} files",
+          "empty": "No SKILL.md found in this repo.",
+          "clearPick": "Clear selection",
+          "selectAll": "Select all",
+          "clearAll": "Clear all",
+          "multiHint_one": "Importing {{count}} skill in one go — name and description will be auto-detected from each SKILL.md.",
+          "multiHint_other": "Importing {{count}} skills in one go — name and description will be auto-detected from each SKILL.md."
+        },
+        "preview": {
+          "title": "Preview",
+          "files_one": "{{count}} file",
+          "files_other": "{{count}} files",
+          "noFiles": "No file list available.",
+          "noSkillMd": "This skill has no SKILL.md body.",
+          "useThis": "Use this skill",
+          "picked": "Picked"
+        },
+        "deleteDialog": {
+          "title": "Delete \"{{name}}\"?",
+          "confirm": "Delete",
+          "deleting": "Deleting…",
+          "blockedOwn": "Detach this skill from your workspaces below before deleting it.",
+          "blockedExternal": "This skill is still used by other users' workspaces or templates; it can't be deleted until they're all detached.",
+          "clear": "This can't be undone."
+        }
+      },
+      "sources": {
+        "groups": {
+          "authored": "Authored",
+          "git": "Git source",
+          "shared": "Shared with me"
+        },
+        "emptySource": "No skills in this source. Sync to import, or delete the source.",
+        "moreActions": "More actions",
+        "confirmDeleteArmedEmpty": "Click again to delete",
+        "confirmDeleteArmedWithSkills_one": "Click again to delete ({{count}} skill)",
+        "confirmDeleteArmedWithSkills_other": "Click again to delete ({{count}} skills)",
+        "actions": {
+          "edit": "Edit source",
+          "delete": "Delete source"
+        },
+        "toasts": {
+          "deleted": "Source deleted"
+        },
+        "errors": {
+          "deleteFailed": "Delete failed"
+        },
+        "edit": {
+          "title": "Edit Git Source",
+          "repoLabel": "Repository",
+          "ref": "Branch / tag (ref)",
+          "refPlaceholder": "e.g. main, v1.0",
+          "credential": "Credential",
+          "credentialNone": "No credential",
+          "saved": "Saved",
+          "refChangedHint": "Ref updated — click Sync to pull from the new ref."
+        }
+      },
+      "templateConfigView": {
+        "sections": {
+          "model": "Model",
+          "prompt": "Prompt",
+          "mcpServers": "MCP Servers",
+          "agentSettings": "Agent Settings",
+          "resources": "Resources",
+          "layout": "Layout"
+        },
+        "appsCount": "{{count}} apps",
+        "labels": {
+          "custom": "Custom",
+          "resourcesSummary": "CPU: {{cpuRequest}} / {{cpuLimit}} · Memory: {{memoryRequest}} / {{memoryLimit}} · Storage: {{storage}}"
+        },
+        "empty": {
+          "value": "-"
+        }
+      },
+      "templates": {
+        "labels": {
+          "byOwner": "by {{owner}}",
+          "latestVersionSuffix": " (latest)",
+          "privatePrompt": "Private prompt"
+        },
+        "placeholders": {
+          "search": "Search..."
+        },
+        "actions": {
+          "new": "New",
+          "edit": "Edit",
+          "share": "Share",
+          "delete": "Delete",
+          "createNew": "Create new template",
+          "saveNewVersion": "Save New Version",
+          "rollbackTo": "Rollback to v{{version}}"
+        },
+        "empty": {
+          "noTemplates": {
+            "title": "No templates yet",
+            "description": "Save a workspace as a template to reuse its agent, model, and tools."
+          },
+          "selectTemplate": "Select a template to preview",
+          "noVersionData": "No version data"
+        },
+        "toasts": {
+          "deleted": "Template deleted",
+          "rolledBack": "Rolled back to v{{version}}"
+        },
+        "errors": {
+          "loadFailed": "Failed to load templates",
+          "nameRequired": "Name is required",
+          "agentTypeRequired": "Agent Type is required",
+          "providerRequired": "Provider is required",
+          "modelRequired": "Model is required",
+          "invalidMcpConfig": "Invalid JSON in MCP Config",
+          "invalidAgentSettings": "Invalid JSON in Agent Settings",
+          "saveFailed": "Failed to save",
+          "deleteFailed": "Failed to delete",
+          "rollbackFailed": "Failed to rollback"
+        },
+        "resourceFields": {
+          "cpuRequest": "CPU Request",
+          "cpuLimit": "CPU Limit",
+          "memoryRequest": "Memory Request",
+          "memoryLimit": "Memory Limit",
+          "storage": "Storage"
+        }
+      }
+    },
+    "createWorkspace": {
+      "trigger": "Create Workspace",
+      "title": "Create New Workspace",
+      "fields": {
+        "name": "Name",
+        "systemWorkspace": "System workspace",
+        "mode": "Mode",
+        "template": "Template"
+      },
+      "placeholders": {
+        "name": "my-workspace"
+      },
+      "modes": {
+        "template": "From Template",
+        "blank": "Blank"
+      },
+      "actions": {
+        "creating": "Creating..."
+      },
+      "template": {
+        "placeholder": "Select a template...",
+        "searchPlaceholder": "Search templates (by name or owner)...",
+        "empty": "No templates found.",
+        "noTemplates": "No templates available. Create one in Management first.",
+        "ownerMine": "Mine",
+        "ownerBy": "@{{name}}",
+        "visibility": {
+          "private": "Private",
+          "team": "Team",
+          "public": "Public"
+        }
+      },
+      "errors": {
+        "createFailed": "Failed to create workspace"
+      }
+    },
+    "modelFields": {
+      "labels": {
+        "agentType": "Agent Type",
+        "provider": "Provider",
+        "model": "Model",
+        "smallModel": "Small Model"
+      },
+      "placeholders": {
+        "provider": "Select provider",
+        "searchProviders": "Search providers...",
+        "model": "e.g. claude-sonnet-4-20250514",
+        "smallModel": "e.g. claude-haiku-4-20250514"
+      },
+      "empty": {
+        "noProviders": "No providers found."
+      }
+    },
+    "agentConfigFieldHint": {
+      "inherited": "Inherited",
+      "overridden": "Overridden · Revert"
+    },
+    "modelSection": {
+      "warnings": {
+        "agentTypeChanged": {
+          "title": "Changing agent type will rebuild the container",
+          "restart": "The workspace will restart and all running sessions will be interrupted.",
+          "sessionHistory": "Past session history is kept, but sessions created under the old agent type can't be continued under the new one."
+        }
+      },
+      "actions": {
+        "revertField": "{{label}} · Revert"
+      }
+    },
+    "promptSection": {
+      "labels": {
+        "source": "Source"
+      }
+    },
+    "modelPicker": {
+      "placeholders": {
+        "selectModel": "Select model...",
+        "searchOrType": "Search or type model name..."
+      },
+      "states": {
+        "loading": "Loading models..."
+      },
+      "empty": {
+        "noModels": "No models found"
+      },
+      "actions": {
+        "useValue": "Use \"{{value}}\"",
+        "test": "Test"
+      },
+      "status": {
+        "connected": "Connected",
+        "failed": "Failed"
+      }
+    },
+    "promptSourceView": {
+      "empty": "No content.",
+      "notAccessible": "Not accessible"
+    },
+    "promptField": {
+      "options": {
+        "none": "None",
+        "noneDesc": "No system prompt",
+        "custom": "Custom text",
+        "customDesc": "Inline text, not saved to the library",
+        "new": "New library prompt",
+        "newDesc": "Save a reusable prompt to the library"
+      },
+      "groups": {
+        "quick": "Quick options",
+        "presets": "Presets",
+        "yours": "Yours",
+        "shared": "Shared with me",
+        "public": "Public"
+      },
+      "badges": {
+        "public": "Public"
+      },
+      "placeholders": {
+        "search": "Search prompts..."
+      },
+      "empty": {
+        "noContent": "No content.",
+        "noResults": "No matching prompts.",
+        "unknownPrompt": "Unknown prompt"
+      },
+      "actions": {
+        "editInLibrary": "Edit in Library",
+        "detachAndEdit": "Detach & Edit"
+      }
+    },
+    "deleteWorkspace": {
+      "title": "Delete workspace",
+      "description": {
+        "prefix": "This will permanently delete workspace ",
+        "suffix": " and all associated data including sessions, files, and configurations. This action cannot be undone."
+      },
+      "confirm": {
+        "labelPrefix": "Type ",
+        "labelSuffix": " to confirm"
+      },
+      "actions": {
+        "delete": "Delete"
+      }
+    },
+    "popout": {
+      "actions": {
+        "closeAll": "Close all",
+        "closeTab": "Close tab"
+      }
+    },
+    "scheduleConsent": {
+      "title": "Scheduled tasks",
+      "description": "This template includes scheduled tasks that run automatically. Choose which to enable.",
+      "confirm": "Continue"
+    },
+    "saveAsTemplate": {
+      "title": "Save as Template",
+      "fields": {
+        "bind": "Bind this workspace to the new template",
+        "includeCommands": "Include slash commands",
+        "includeSchedules": "Include schedules",
+        "includeLayout": "Include the current layout"
+      },
+      "placeholders": {
+        "name": "Template name",
+        "description": "Description (optional)"
+      },
+      "toasts": {
+        "created": "Template created"
+      },
+      "errors": {
+        "createFailed": "Failed to create template"
+      }
+    },
+    "shareSession": {
+      "trigger": "Share",
+      "title": "Share Session",
+      "untitled": "Untitled",
+      "placeholders": {
+        "title": "Share title (optional)"
+      },
+      "sections": {
+        "existingShares": "Existing shares"
+      },
+      "actions": {
+        "rename": "Rename",
+        "copyLink": "Copy link",
+        "openInNewTab": "Open in new tab",
+        "deleteShare": "Delete share"
+      },
+      "errors": {
+        "createFailed": "Failed to create share"
+      }
+    },
+    "overflowTabs": {
+      "sections": {
+        "visible": "Visible"
+      },
+      "actions": {
+        "unpin": "Unpin",
+        "pin": "Pin to keep visible"
+      }
+    },
+    "workspaceActions": {
+      "actions": {
+        "start": "Start",
+        "stop": "Stop",
+        "settings": "Settings",
+        "saveAsTemplate": "Save as Template",
+        "copyId": "Copy ID",
+        "delete": "Delete"
+      },
+      "toasts": {
+        "idCopied": "Workspace ID copied"
+      }
+    },
+    "workspaceBrowser": {
+      "remaining": "{{value}} remaining",
+      "selectSession": "Switch browser session",
+      "timeoutLabel": "Session timeout",
+      "timeout": {
+        "10m": {
+          "label": "10 min",
+          "desc": "One-shot scrape"
+        },
+        "1h": {
+          "label": "1 hour",
+          "desc": "Multi-step work inside one session"
+        },
+        "6h": {
+          "label": "6 hours",
+          "desc": "Reused across chats"
+        },
+        "24h": {
+          "label": "24 hours",
+          "desc": "Long-running session"
+        }
+      },
+      "dialogs": {
+        "launchTitle": "Launch browser session",
+        "docsHint": "What browser sessions are for and how to pick a timeout."
+      },
+      "actions": {
+        "extendOneHour": "+1h",
+        "delete": "Delete",
+        "deleteConfirm": "Confirm delete",
+        "launch": "Launch browser",
+        "newBrowser": "New"
+      },
+      "states": {
+        "waiting": "Waiting for browser to be ready...",
+        "loading": "Loading browsers...",
+        "starting": "Starting browser..."
+      },
+      "empty": {
+        "title": "No active browser",
+        "description": "Launch a browser instance or let the agent create one via MCP"
+      }
+    },
+    "workspaceChat": {
+      "actions": {
+        "search": "Search",
+        "rename": "Rename",
+        "smallerText": "Smaller text",
+        "largerText": "Larger text",
+        "resetSession": "Reset session",
+        "stop": "Stop",
+        "attachImage": "Attach image",
+        "compactConversation": "Compact conversation",
+        "send": "Send",
+        "sendShortcut": "Send (Ctrl/Cmd+Enter)",
+        "sendShortcutEnter": "Send (Enter)",
+        "queue": "Queue"
+      },
+      "relativeTime": {
+        "justNow": "just now",
+        "minutesAgo": "{{count}}m ago",
+        "hoursAgo": "{{count}}h ago",
+        "yesterday": "yesterday",
+        "daysAgo": "{{count}}d ago"
+      },
+      "states": {
+        "resetting": "Resetting..."
+      },
+      "placeholders": {
+        "searchMessages": "Search messages...",
+        "sessionName": "Session name",
+        "messageInput": "Message... ({{modifier}}+Enter)",
+        "messageInputEnter": "Message... (Enter to send, Shift+Enter for newline)"
+      },
+      "empty": {
+        "noMatches": "No matches",
+        "startConversation": {
+          "title": "Start a conversation",
+          "description": "Send a message below to begin working with the agent."
+        }
+      },
+      "dialog": {
+        "renameTitle": "Rename Session"
+      },
+      "hints": {
+        "customCommands": "Type / to browse custom commands",
+        "sendMessage": "Ctrl/Cmd+Enter to send a message",
+        "sendMessageEnter": "Enter to send a message, Shift+Enter for newline",
+        "searchConversation": "Ctrl/Cmd+F to search conversation",
+        "configureCommands": "Configure commands in the toolbar above",
+        "compactConversation": "Use /compact to compress long conversations"
+      },
+      "pending": {
+        "label": "Queued",
+        "autoSendHint": "Sends when the agent finishes",
+        "clear": "Discard",
+        "queueHint": "Agent is busy — will be queued",
+        "unsavedChanges": "Unsaved changes",
+        "composerHint": "Agent is busy — send to queue"
+      }
+    },
+    "workspaceSandbox": {
+      "empty": {
+        "title": "No sandboxes",
+        "description": "Sandboxes are created by agents or manually."
+      },
+      "unknownImage": "unknown image",
+      "expiresMeta": "expires {{when}} · {{remaining}} left",
+      "fields": {
+        "image": "Image",
+        "imageCustom": "Custom…",
+        "size": "Size",
+        "cpu": "CPU",
+        "memory": "Memory",
+        "timeout": "Timeout"
+      },
+      "placeholders": {
+        "image": "registry.example.com/img:tag",
+        "cpu": "500m",
+        "memory": "512Mi"
+      },
+      "sizes": {
+        "small": {
+          "label": "Small"
+        },
+        "medium": {
+          "label": "Medium"
+        },
+        "large": {
+          "label": "Large"
+        },
+        "xlarge": {
+          "label": "X-Large"
+        },
+        "custom": {
+          "label": "Custom"
+        }
+      },
+      "timeouts": {
+        "10m": "10 min",
+        "1h": "1 hour",
+        "6h": "6 hours",
+        "24h": "24 hours"
+      },
+      "dialog": {
+        "title": "Create sandbox"
+      },
+      "actions": {
+        "create": "New sandbox",
+        "delete": "Delete sandbox"
+      },
+      "states": {
+        "loading": "Loading sandboxes..."
+      }
+    },
+    "afsShares": {
+      "newShare": "New share",
+      "confirmDelete": "Delete share \"{{name}}\"? All members will lose access.",
+      "confirmLeave": "Leave share \"{{name}}\"?",
+      "empty": {
+        "noShares": {
+          "title": "No shares yet",
+          "description": "Create a share so others can mount this folder under /mnt/afs."
+        },
+        "noMatch": {
+          "title": "No matching shares",
+          "description": "Try a different name."
+        }
+      },
+      "role": {
+        "owner": "Owner"
+      },
+      "perm": {
+        "ro": "Read-only",
+        "rw": "Read-write"
+      },
+      "action": {
+        "manageMembers": "Manage members",
+        "delete": "Delete share",
+        "leave": "Leave share",
+        "open": "Open"
+      },
+      "newDialog": {
+        "title": "New share",
+        "nameLabel": "Name",
+        "namePlaceholder": "e.g. testcase-2026-04",
+        "nameHint": "Lowercase letters, digits, hyphens; ≤48 chars; must start with a letter or digit",
+        "invalidName": "Invalid name"
+      },
+      "members": {
+        "title": "Members of {{name}}",
+        "owner": "Owner",
+        "you": " (you)",
+        "remove": "Remove",
+        "add": "Add",
+        "selectWs": "Select workspace",
+        "noCandidates": "No eligible workspaces"
+      }
+    },
+    "workspaceFiles": {
+      "drives": {
+        "workspace": "Local",
+        "afs": "Cloud Drive"
+      },
+      "columns": {
+        "name": "Name",
+        "mtime": "Modified",
+        "size": "Size"
+      },
+      "actions": {
+        "search": "Search",
+        "upload": "Upload files",
+        "uploadDisabled": "Upload not allowed here",
+        "newFile": "New file",
+        "newFileDisabled": "Create not allowed here",
+        "newFolder": "New folder",
+        "newFolderDisabled": "Create not allowed here",
+        "managePublicLinks": "Manage public links",
+        "refresh": "Refresh"
+      },
+      "placeholders": {
+        "search": "Search files..."
+      },
+      "states": {
+        "dropToUpload": "Drop files to upload",
+        "dropToMove": "Move into {{target}}"
+      },
+      "empty": {
+        "noResults": {
+          "title": "No matching files",
+          "description": "Try a different search term."
+        },
+        "directory": {
+          "title": "Empty directory",
+          "description": "Files saved here will appear in this list."
+        }
+      },
+      "upload": {
+        "progressSingle": "Uploading {{name}}… {{percent}}%",
+        "progressMultiple": "Uploading {{count}} files… {{percent}}%"
+      },
+      "selection": {
+        "count": "{{count}} selected",
+        "download": "Download",
+        "delete": "Delete",
+        "clear": "Clear",
+        "dragBadge_one": "Moving 1 item",
+        "dragBadge_other": "Moving {{count}} items",
+        "deleteConfirm": "Click again to delete {{count}}"
+      },
+      "errors": {
+        "listFailed": "Failed to list directory: {{status}}",
+        "createFileFailed": "Failed to create file: {{status}}",
+        "moveFailed": "Move failed: {{name}}",
+        "deleteFailed": "Delete failed: {{name}}"
+      }
+    },
+    "memoryStores": {
+      "actions": {
+        "newStore": "New store",
+        "newStoreTitle": "New memory store",
+        "editStore": "Edit store",
+        "deleteStore": "Delete store",
+        "deleteStoreBlocked": "Store is attached to {{count}} workspace(s). Detach from all of them first.",
+        "newMemory": "New memory",
+        "edit": "Edit",
+        "delete": "Delete",
+        "cancel": "Cancel",
+        "save": "Save",
+        "create": "Create",
+        "attach": "Attach",
+        "attachExisting": "Attach existing",
+        "detachFromWs": "Detach from this workspace",
+        "changeAccess": "Change access",
+        "refresh": "Refresh",
+        "rollbackTo": "Rollback to v{{version}}"
+      },
+      "empty": {
+        "stores": "No memory stores yet.",
+        "noSelection": {
+          "title": "No store selected",
+          "description": "Create a store, then attach it to a workspace so the agent can read and edit it."
+        },
+        "memories": "Empty store. Click + to add a memory.",
+        "noMemorySelection": "Select a memory or create one.",
+        "history": "No history yet.",
+        "wsAttachments": "No memory stores attached to this workspace yet.",
+        "wsNoAttachmentsTitle": "No memory stores attached to this workspace",
+        "wsNoAttachmentsDescription": "Create a new store (auto-attached) or pick one of your existing stores to attach."
+      },
+      "labels": {
+        "memoriesTab": "Memories",
+        "historyTab": "History",
+        "name": "Name",
+        "description": "Description (optional)",
+        "attachedTo": "Attached to:",
+        "noAttachments": "not attached"
+      },
+      "placeholders": {
+        "content": "Memory content (Markdown recommended)"
+      },
+      "dialog": {
+        "createTitle": "New memory store",
+        "editTitle": "Edit memory store",
+        "description": "Stores hold path-keyed markdown memories. Attach a store to a workspace so the agent can read and edit it.",
+        "deleteConfirm": "Delete \"{{name}}\" and all of its memories? This cannot be undone."
+      },
+      "actorKinds": {
+        "user": "you",
+        "agent": "agent",
+        "reflect": "reflect",
+        "migrate": "migration"
+      },
+      "toasts": {
+        "storeCreated": "Store created",
+        "storeSaved": "Store saved",
+        "storeDeleted": "Memory store deleted",
+        "memoryCreated": "Memory created",
+        "memorySaved": "Memory saved",
+        "memoryDeleted": "Memory deleted",
+        "attached": "Attached to workspace",
+        "detached": "Detached from workspace",
+        "accessUpdated": "Access updated",
+        "rolledBack": "Rolled back to v{{version}}"
+      },
+      "errors": {
+        "saveFailed": "Save failed",
+        "deleteFailed": "Delete failed",
+        "nameRequired": "Name is required",
+        "attachFailed": "Attach failed",
+        "detachFailed": "Detach failed",
+        "accessUpdateFailed": "Access update failed",
+        "rollbackFailed": "Rollback failed"
+      },
+      "stats": {
+        "memories_one": "{{count}} memory",
+        "memories_other": "{{count}} memories",
+        "attachments_one": "attached to {{count}} workspace",
+        "attachments_other": "attached to {{count}} workspaces",
+        "updated": "updated {{when}}"
+      },
+      "attachPicker": {
+        "accessLabel": "Access",
+        "search": "Search workspaces…",
+        "empty": "No workspaces to attach",
+        "searchStores": "Search memory stores…",
+        "emptyStores": "No more stores to attach"
+      },
+      "access": {
+        "readWrite": "Read & write",
+        "readOnly": "Read-only"
+      },
+      "index": {
+        "label": "Index (MEMORY.md)",
+        "hint": "Agent-maintained index of every memory in this store. No frontmatter needed.",
+        "editHint": "Agent-maintained index. One line per memory: - [Title](file.md) — one-line hook.",
+        "bodyPlaceholder": "- [Title](file.md) — one-line hook"
+      },
+      "frontmatter": {
+        "missing": "Missing metadata (frontmatter)",
+        "type": "Type",
+        "created": "Created",
+        "types": {
+          "user": "user",
+          "feedback": "feedback",
+          "project": "project",
+          "reference": "reference"
+        },
+        "name": "Name",
+        "namePlaceholder": "lowercase letters, numbers, hyphens",
+        "descriptionPlaceholder": "One-line summary used to judge relevance during recall",
+        "description": "Description",
+        "nameInvalid": "Only lowercase letters, numbers, and hyphens; cannot start with a hyphen"
+      }
+    },
+    "saveButton": {
+      "states": {
+        "saving": "Saving..."
+      }
+    },
+    "timezoneSelect": {
+      "placeholders": {
+        "select": "Select timezone",
+        "search": "Search timezone..."
+      },
+      "empty": {
+        "notFound": "No timezone found."
+      },
+      "groups": {
+        "common": "Common",
+        "all": "All"
+      }
+    },
+    "cronEditor": {
+      "periods": {
+        "minute": "Every minute",
+        "hour": "Every hour",
+        "day": "Every day",
+        "week": "Every week",
+        "month": "Every month",
+        "interval": "Interval",
+        "custom": "Custom"
+      },
+      "intervalUnits": {
+        "minute": "minutes",
+        "hour": "hours",
+        "day": "days"
+      },
+      "weekdays": {
+        "0": "Sun",
+        "1": "Mon",
+        "2": "Tue",
+        "3": "Wed",
+        "4": "Thu",
+        "5": "Fri",
+        "6": "Sat"
+      },
+      "presets": {
+        "dailyMorning": "Daily 9:00",
+        "weekdaysMorning": "Mon–Fri 9:00",
+        "hourly": "Every hour",
+        "monthlyFirst": "Monthly 1st 9:00",
+        "weeklyMonday": "Monday 9:00"
+      },
+      "labels": {
+        "repeat": "Repeat",
+        "atMinute": "at :",
+        "at": "at",
+        "on": "on",
+        "onDay": "on day",
+        "dayN": "Day {{n}}",
+        "intervalEvery": "Every",
+        "next": "Next",
+        "timeSeparator": ":"
+      },
+      "placeholders": {
+        "expression": "0 9 * * *"
+      },
+      "hints": {
+        "standard": "Standard 5-field cron: minute hour day month weekday",
+        "invalid": "Invalid expression"
+      }
+    },
+    "dialog": {
+      "actions": {
+        "close": "Close"
+      }
+    },
+    "sidebarUi": {
+      "title": "Sidebar",
+      "mobileDescription": "Displays the mobile sidebar.",
+      "actions": {
+        "toggle": "Toggle Sidebar"
+      }
+    },
+    "createConnector": {
+      "title": "New Connector",
+      "toasts": {
+        "created": "Connector created",
+        "connected": "Connected: {{team}} / {{user}}"
+      }
+    },
+    "createCredential": {
+      "title": "New Credential",
+      "fields": {
+        "preset": "Preset",
+        "sshKeyType": "Key type",
+        "name": "Name",
+        "injectionMode": "Injection mode",
+        "filePath": "File path",
+        "fileMode": "File mode",
+        "value": "Value",
+        "scope": "Scope",
+        "workspaces": "Workspaces"
+      },
+      "scope": {
+        "global": "All workspaces",
+        "selected": "Selected workspaces"
+      },
+      "actions": {
+        "custom": "Custom",
+        "sshKey": "SSH Key",
+        "env": "env",
+        "file": "file",
+        "showValue": "Show value",
+        "hideValue": "Hide value"
+      },
+      "injectModes": {
+        "env": {
+          "label": "Environment variable",
+          "desc": "Exposed as $NAME inside the agent process"
+        },
+        "file": {
+          "label": "File",
+          "desc": "Materialized at a path inside the agent filesystem"
+        }
+      },
+      "fileMode": {
+        "private": {
+          "label": "Private",
+          "desc": "Only owner can read & write"
+        },
+        "readOnly": {
+          "label": "Read-only",
+          "desc": "Only owner can read"
+        },
+        "shared": {
+          "label": "Shared",
+          "desc": "Anyone can read, owner can write"
+        },
+        "executable": {
+          "label": "Executable",
+          "desc": "Anyone can read & run"
+        },
+        "custom": {
+          "label": "Custom",
+          "desc": "Set a custom octal mode"
+        }
+      },
+      "placeholders": {
+        "envName": "e.g. GITHUB_TOKEN",
+        "fileName": "e.g. id_rsa",
+        "filePath": "e.g. ~/.ssh/id_rsa",
+        "fileMode": "e.g. 0700",
+        "envValue": "Token or secret value",
+        "fileValue": "File contents (e.g. paste private key)"
+      },
+      "errors": {
+        "nameAndValueRequired": "Name and value are required",
+        "nameRequired": "Name is required",
+        "valueRequired": "Value is required",
+        "pathRequired": "File path is required",
+        "workspacesRequired": "Select at least one workspace",
+        "saveFailed": "Failed to save",
+        "createFailed": "Failed to create credential"
+      },
+      "toasts": {
+        "created": "Credential created"
+      }
+    },
+    "createToken": {
+      "title": "New Service Token",
+      "createdTitle": "Token created",
+      "fields": {
+        "name": "Name"
+      },
+      "placeholders": {
+        "name": "e.g. CI deploy bot"
+      },
+      "warnings": {
+        "saveNow": "Copy this token now — it won't be shown again."
+      },
+      "actions": {
+        "copy": "Copy",
+        "copied": "Copied",
+        "done": "Done"
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "createFailed": "Failed to create token"
+      },
+      "toasts": {
+        "created": "Token created"
+      }
+    },
+    "skillShare": {
+      "title": "Share \"{{name}}\"",
+      "fields": {
+        "visibility": "Visibility",
+        "teams": "Teams"
+      },
+      "visibility": {
+        "private": "Private",
+        "team": "Team",
+        "public": "Public"
+      },
+      "visibilityDesc": {
+        "private": "Only you can use this skill.",
+        "team": "Members of selected teams can use this skill; editors can also rename, edit description, and re-import the package.",
+        "public": "Everyone on this NAP instance can use this skill."
+      },
+      "permission": {
+        "viewer": "Viewer",
+        "editor": "Editor"
+      },
+      "teamsEmpty": "You aren't a member of any team yet.",
+      "noTeamsShared": "Pick a team below to share with.",
+      "addTeam": "Add a team…",
+      "removeTeam": "Stop sharing with this team",
+      "errors": {
+        "teamRequired": "Pick at least one team or change visibility",
+        "saveFailed": "Failed to save"
+      },
+      "narrowWarning": "Reducing visibility is blocked: {{count}} workspace(s) owned by other users are using this skill. Ask them to detach it first."
+    },
+    "templateShare": {
+      "title": "Share \"{{name}}\"",
+      "fields": {
+        "visibility": "Visibility",
+        "teams": "Teams"
+      },
+      "visibility": {
+        "private": "Private",
+        "team": "Team",
+        "public": "Public"
+      },
+      "visibilityDesc": {
+        "private": "Only you can use this template.",
+        "team": "Members of selected teams can use this template; editors can also rename it and add new versions.",
+        "public": "Everyone on this NAP instance can use this template."
+      },
+      "permission": {
+        "viewer": "Viewer",
+        "editor": "Editor"
+      },
+      "teamsEmpty": "You aren't a member of any team yet.",
+      "noTeamsShared": "Pick a team below to share with.",
+      "addTeam": "Add a team…",
+      "removeTeam": "Stop sharing with this team",
+      "linkMissing": {
+        "title": "Some referenced resources need to be shared first",
+        "prompt": "prompt",
+        "provider": "provider",
+        "scopePublic": "set to public",
+        "scopeTeam": "shared with team \"{{team}}\"",
+        "line": "{{resource}} \"{{name}}\" — must be {{scope}}"
+      },
+      "errors": {
+        "teamRequired": "Pick at least one team or change visibility",
+        "saveFailed": "Failed to save"
+      }
+    },
+    "createProvider": {
+      "title": "New Provider",
+      "fields": {
+        "name": "Name",
+        "description": "Description",
+        "type": "Provider Type",
+        "baseUrl": "Base URL",
+        "apiKey": "API Key",
+        "visibility": "Visibility",
+        "teams": "Teams",
+        "public": "Make public",
+        "publicDesc": "Other users can pick this provider when configuring agents."
+      },
+      "visibility": {
+        "private": "Private",
+        "team": "Team",
+        "public": "Public"
+      },
+      "visibilityDesc": {
+        "private": "Only you can use this provider.",
+        "team": "Members of selected teams can use this provider but cannot see the API key or edit it.",
+        "public": "Everyone on this NAP instance can use this provider but cannot see the API key or edit it."
+      },
+      "teamsEmpty": "You aren't a member of any team yet.",
+      "noTeamsShared": "Pick a team below to share with.",
+      "addTeam": "Add a team…",
+      "removeTeam": "Stop sharing with this team",
+      "placeholders": {
+        "name": "e.g. My Provider",
+        "description": "Optional description",
+        "anthropicBaseUrl": "https://api.anthropic.com",
+        "openaiBaseUrl": "https://openrouter.ai/api",
+        "apiKey": "sk-..."
+      },
+      "types": {
+        "anthropic": {
+          "label": "Anthropic API",
+          "desc": "Connect with an Anthropic API key"
+        },
+        "anthropicOauth": {
+          "label": "Anthropic OAuth",
+          "desc": "Sign in with an Anthropic account (works with proxies)"
+        },
+        "claudeCodeOauth": {
+          "label": "Claude Code OAuth",
+          "desc": "Use a Claude Code subscription account"
+        },
+        "openai": {
+          "label": "OpenAI compatible",
+          "desc": "OpenAI protocol — OpenRouter and other compatible providers"
+        }
+      },
+      "actions": {
+        "showKey": "Show API key",
+        "hideKey": "Hide API key"
+      },
+      "toasts": {
+        "created": "Provider created"
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "baseUrlRequired": "Base URL is required",
+        "apiKeyRequired": "API Key is required",
+        "teamRequired": "Pick at least one team or change visibility",
+        "createFailed": "Failed to create provider"
+      }
+    },
+    "createRoute": {
+      "title": "New Route",
+      "toasts": {
+        "created": "Route created"
+      }
+    },
+    "applicationDialog": {
+      "titleCreate": "New Application",
+      "titleEdit": "Edit Application",
+      "titleCreated": "Application Created",
+      "titleRotated": "Secret Rotated",
+      "fields": {
+        "name": "Name",
+        "description": "Description",
+        "homepageUrl": "Homepage URL",
+        "redirectUris": "Redirect URIs",
+        "customId": "Client ID (optional)",
+        "clientId": "Client ID",
+        "clientSecret": "Client Secret"
+      },
+      "placeholders": {
+        "name": "Display name",
+        "description": "Short description shown on the OAuth consent page",
+        "homepageUrl": "https://example.com",
+        "redirectUris": "https://example.com/api/auth/callback",
+        "customId": "Leave empty to auto-generate"
+      },
+      "help": {
+        "redirectUrisHint": "One URL per line. Must be http(s).",
+        "storeSecurely": "The client secret will only be shown once. Store it securely before closing.",
+        "rotateWarning": "Rotating invalidates the existing secret. Existing refresh tokens remain valid."
+      },
+      "actions": {
+        "create": "Create",
+        "save": "Save",
+        "cancel": "Cancel",
+        "done": "Done",
+        "copy": "Copy",
+        "copied": "Copied!"
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "redirectUrisRequired": "At least one redirect URI is required",
+        "invalidUrl": "Invalid URL — must be http(s)",
+        "createFailed": "Failed to create application",
+        "saveFailed": "Failed to save",
+        "rotateFailed": "Failed to rotate secret"
+      }
+    },
+    "createServiceToken": {
+      "title": "New Service Token",
+      "titleCreated": "Token Created",
+      "fields": {
+        "name": "Name"
+      },
+      "placeholders": {
+        "name": "e.g. ci-deploy, external-api"
+      },
+      "actions": {
+        "done": "Done",
+        "copy": "Copy",
+        "copied": "Copied!"
+      },
+      "help": {
+        "storeSecurely": "This token will only be shown once. Store it securely before closing."
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "createFailed": "Failed to create token"
+      }
+    },
+    "createSkill": {
+      "title": "Add Skill",
+      "modes": {
+        "upload": "Upload",
+        "git": "Git"
+      },
+      "fields": {
+        "repositoryUrl": "Repository URL",
+        "accessToken": "Access Token (optional)",
+        "name": "Name",
+        "nameOptional": "Name (optional)",
+        "description": "Description",
+        "descriptionOptional": "Description (optional)",
+        "package": "Package (.tar.gz)",
+        "public": "Public (visible to all users)",
+        "gitType": "Provider Type"
+      },
+      "tokenSources": {
+        "none": "None",
+        "credential": "Credential",
+        "manual": "Manual"
+      },
+      "placeholders": {
+        "repositoryUrl": "https://github.com/owner/repo or owner/repo",
+        "selectCredential": "Select a credential",
+        "manualToken": "For private repositories",
+        "gitName": "Auto-detected from SKILL.md or repo name",
+        "gitDescription": "Auto-detected from SKILL.md frontmatter",
+        "name": "e.g. my-skill",
+        "description": "Brief description of what this skill does"
+      },
+      "help": {
+        "repositoryUrl": "Supports GitHub, GitLab, and self-hosted. Append /tree/branch/subpath to import a subdirectory.",
+        "packagePrefix": "Pack a skill directory:",
+        "gitType": "Inferred from the host. Pick manually for self-hosted GitHub Enterprise or GitLab on a custom domain."
+      },
+      "actions": {
+        "chooseFile": "Choose file"
+      },
+      "empty": {
+        "noCredentials": {
+          "title": "No credentials yet",
+          "description": "Add credentials to authenticate skills and external integrations."
+        }
+      },
+      "toasts": {
+        "importedFromGit": "Skill imported from Git",
+        "importedBulk_one": "{{count}} skill imported from Git",
+        "importedBulk_other": "{{count}} skills imported from Git",
+        "uploaded": "Skill uploaded"
+      },
+      "errors": {
+        "gitUrlRequired": "Git URL is required",
+        "previewRequired": "Click Preview and pick the subpath(s) to import first",
+        "importFailed": "Failed to import",
+        "bulkPartial": "{{ok}} imported, {{fail}} failed:\n{{details}}",
+        "nameRequired": "Name is required",
+        "packageRequired": "Package file is required",
+        "uploadFailed": "Failed to upload"
+      },
+      "gitTypes": {
+        "github": "GitHub",
+        "gitlab": "GitLab"
+      }
+    },
+    "createTemplate": {
+      "title": "New Template",
+      "fields": {
+        "name": "Name",
+        "description": "Description",
+        "mcpConfig": "MCP Config",
+        "agentSettings": "Agent Settings"
+      },
+      "placeholders": {
+        "name": "Template name",
+        "description": "Optional description"
+      },
+      "errors": {
+        "invalidJson": "Invalid JSON in {{field}}",
+        "nameRequired": "Name is required",
+        "agentTypeRequired": "Agent Type is required",
+        "providerRequired": "Provider is required",
+        "modelRequired": "Model is required",
+        "createFailed": "Failed to create template"
+      }
+    },
+    "teamworkSection": {
+      "empty": {
+        "title": "No teamwork tasks yet",
+        "description": "A teamwork task pairs a coordinator agent with a team of agents collaborating through a shared folder."
+      },
+      "actions": {
+        "new": "New task",
+        "create": "Create",
+        "cancel": "Cancel",
+        "delete": "Delete task",
+        "add": "Add",
+        "remove": "Remove from team",
+        "back": "Back to tasks",
+        "saveBrief": "Save",
+        "editBrief": "Edit task description",
+        "setSlugAndAdd": "Set & add",
+        "saving": "Saving…"
+      },
+      "labels": {
+        "brief": "Description",
+        "noBrief": "No description yet.",
+        "coordinator": "Coordinator",
+        "coordinatorMeta": "Coordinator: {{name}}",
+        "coordinatorHint": "The coordinator chats with you and dispatches work to team members via call_agent.",
+        "members": "Members",
+        "membersCount": "Members · {{count}}",
+        "noMembers": "No members yet. Add one below.",
+        "noSlug": "(no slug)",
+        "slugRequired": "set a slug first",
+        "notRunning": "start the workspace first",
+        "sharedFolder": "Shared folder",
+        "sharedFolderHint": "Mounted on the coordinator and every member at the path below.",
+        "sharedFolderPending": "Not provisioned yet.",
+        "conversation": "Conversation",
+        "coordTab": "Coordinator · {{name}}"
+      },
+      "dialogs": {
+        "createTitle": "New teamwork task",
+        "editBriefTitle": "Edit task description"
+      },
+      "fields": {
+        "name": "Name",
+        "namePlaceholder": "Task name",
+        "brief": "Description (optional)",
+        "briefPlaceholder": "What you want the coordinator to do — goals, constraints, references. Passed as context to the coordinator.",
+        "coordinator": "Coordinator",
+        "coordinatorPlaceholder": "Select a workspace…",
+        "addMemberPlaceholder": "Add a member…",
+        "slugPlaceholder": "slug"
+      },
+      "toasts": {
+        "created": "Task created",
+        "deleted": "Task deleted",
+        "briefSaved": "Task description updated"
+      },
+      "errors": {
+        "createFailed": "Failed to create task",
+        "deleteFailed": "Failed to delete task",
+        "addFailed": "Failed to add member",
+        "removeFailed": "Failed to remove member",
+        "saveBriefFailed": "Failed to save task description",
+        "setSlugFailed": "Failed to set slug"
+      },
+      "timeline": {
+        "title": "Orchestration",
+        "empty": "Waiting for activity…",
+        "popover": {
+          "user": "User input",
+          "userEmpty": "(empty input)",
+          "promptEmpty": "(empty prompt)",
+          "replyEmpty": "(no reply)",
+          "running": "(still running)",
+          "continue": "continue",
+          "background": "background",
+          "error": "error",
+          "openChat": "Open {{lane}} chat"
+        }
+      }
+    },
+    "teamsSection": {
+      "empty": {
+        "title": "No teams yet",
+        "description": "Create a team to share prompts, providers, and other resources with a group."
+      },
+      "actions": {
+        "new": "New",
+        "newTeam": "New team",
+        "open": "Open",
+        "delete": "Delete team",
+        "leave": "Leave team",
+        "edit": "Edit",
+        "removeMember": "Remove",
+        "promote": "Promote to admin",
+        "demote": "Demote to member",
+        "newInvite": "New link",
+        "copyLink": "Copy link",
+        "revokeInvite": "Revoke link"
+      },
+      "labels": {
+        "members_one": "{{count}} member",
+        "members_other": "{{count}} members",
+        "memberCount": "{{count}} members",
+        "createdAt": "Created {{value}}",
+        "you": "you",
+        "admin": "Admin",
+        "member": "Member",
+        "ownership": "Owner",
+        "invites": "Invite links",
+        "noInvites": "No active invite links. Generate one to invite people.",
+        "inviteHelp": "Anyone with the link can join the team until it expires.",
+        "expiresAt": "expires {{value}}",
+        "createdBy": "by {{name}}"
+      },
+      "dialogs": {
+        "createTitle": "New team",
+        "editTitle": "Edit team",
+        "deleteTitle": "Delete this team?",
+        "deleteDescription": "Resources owned by team members are not deleted, but any access this team granted will be revoked.",
+        "leaveTitle": "Leave this team?",
+        "leaveDescription": "You'll lose access to resources shared with this team.",
+        "revokeInviteDescription": "Existing copies of the link will stop working. You can generate a new one any time."
+      },
+      "fields": {
+        "name": "Name",
+        "namePlaceholder": "Team name",
+        "description": "Description",
+        "descriptionPlaceholder": "Optional"
+      },
+      "errors": {
+        "loadFailed": "Failed to load teams",
+        "createFailed": "Failed to create team",
+        "saveFailed": "Failed to save team",
+        "deleteFailed": "Failed to delete team",
+        "leaveFailed": "Failed to leave team",
+        "removeMemberFailed": "Failed to remove member",
+        "roleChangeFailed": "Failed to change role",
+        "lastAdmin": "You're the only admin. Promote another member first or delete the team.",
+        "createInviteFailed": "Failed to create invite link",
+        "revokeInviteFailed": "Failed to revoke invite",
+        "copyFailed": "Failed to copy"
+      },
+      "toasts": {
+        "created": "Team created",
+        "updated": "Team updated",
+        "deleted": "Team deleted",
+        "left": "Left team",
+        "memberRemoved": "Member removed",
+        "rolePromoted": "Member promoted to admin",
+        "roleDemoted": "Admin demoted to member",
+        "inviteCreated": "Invite link created",
+        "inviteCopied": "Link copied",
+        "inviteRevoked": "Invite revoked"
+      }
+    },
+    "copyButton": {
+      "copy": "Copy",
+      "copied": "Copied",
+      "errors": {
+        "copyFailed": "Failed to copy"
+      }
+    },
+    "credentialsSection": {
+      "sections": {
+        "global": "All workspaces",
+        "globalDesc": "Injected into all your workspaces",
+        "scoped": "Selected workspaces",
+        "scopedDesc": "Injected only into specific workspaces"
+      },
+      "empty": {
+        "title": "No credentials yet",
+        "description": "Add credentials to authenticate skills and external integrations."
+      },
+      "actions": {
+        "new": "New",
+        "delete": "Delete credential"
+      },
+      "dialogs": {
+        "editTitle": "Edit Credential"
+      },
+      "placeholders": {
+        "editValue": "Re-enter value (not shown for security)"
+      },
+      "errors": {
+        "loadFailed": "Failed to load credentials",
+        "deleteFailed": "Failed to delete"
+      }
+    },
+    "connectorsSection": {
+      "badges": {
+        "public": "public"
+      },
+      "tabs": {
+        "routes": "Routes ({{count}})",
+        "events": "Events"
+      },
+      "table": {
+        "time": "Time",
+        "event": "Event",
+        "job": "Job",
+        "status": "Status",
+        "jobId": "Job ID",
+        "jobState": "Job state",
+        "jobStartedOn": "Started",
+        "jobCompletedOn": "Completed",
+        "eventStatus": "Event status",
+        "retryCount": "{{count}} retries",
+        "error": "Error",
+        "payload": "Payload"
+      },
+      "actions": {
+        "new": "New",
+        "newRoute": "New Route",
+        "createConnector": "Create new connector",
+        "testConnectivity": "Test connectivity",
+        "toggleEnabled": "Toggle connector",
+        "edit": "Edit",
+        "deleting": "Deleting...",
+        "delete": "Delete"
+      },
+      "empty": {
+        "noConnectors": {
+          "title": "No connectors yet",
+          "description": "Add a Slack, WeCom, or webhook connector to channel events into your workspaces."
+        },
+        "noRoutes": {
+          "title": "No routes yet",
+          "description": "Add a route to forward events from this connector to a workspace."
+        },
+        "noEvents": {
+          "title": "No events yet",
+          "description": "Events will appear here once the connector receives messages."
+        },
+        "selectConnector": "Select a connector to view details"
+      },
+      "dialogs": {
+        "editConnectorTitle": "Edit Connector",
+        "deleteConnectorTitle": "Delete Connector",
+        "deleteConnectorDescription": "Delete connector {{name}}? All associated routes will also be removed.",
+        "editRouteTitle": "Edit Route",
+        "deleteRouteTitle": "Delete Route",
+        "deleteRouteDescription": "Delete route {{name}}? This cannot be undone."
+      },
+      "toasts": {
+        "connectorUpdated": "Connector updated",
+        "connectorDeleted": "Connector deleted",
+        "routeUpdated": "Route updated",
+        "routeDeleted": "Route deleted"
+      },
+      "timeAgo": {
+        "seconds": "{{count}}s ago",
+        "minutes": "{{count}}m ago",
+        "hours": "{{count}}h ago",
+        "days": "{{count}}d ago"
+      }
+    },
+    "sharedSession": {
+      "title": "Shared Session",
+      "actions": {
+        "openFullPage": "Open full page"
+      }
+    },
+    "tableOfContents": {
+      "title": "Contents"
+    },
+    "fileViewer": {
+      "actions": {
+        "backToList": "Back to file list",
+        "copied": "Copied!",
+        "copyContent": "Copy file content",
+        "download": "Download file",
+        "edit": "Edit file",
+        "save": "Save",
+        "doneEditing": "Done",
+        "openInOverlay": "Open in overlay",
+        "cancelEditing": "Cancel editing"
+      }
+    },
+    "fileOperations": {
+      "actions": {
+        "addToChat": "Add to chat",
+        "newFile": "New file",
+        "newFolder": "New folder",
+        "createPublicLink": "Create public link…",
+        "downloadZip": "Download ZIP",
+        "download": "Download",
+        "rename": "Rename",
+        "delete": "Delete",
+        "deleteConfirm": "Click again to delete"
+      },
+      "dialogs": {
+        "rename": {
+          "title": "Rename"
+        },
+        "newFolder": {
+          "title": "New folder",
+          "placeholder": "Folder name"
+        },
+        "newFile": {
+          "title": "New file",
+          "placeholder": "File name"
+        },
+        "publicLink": {
+          "title": "Create public link",
+          "description": "Generate a public URL for this file so you can share it with people outside the workspace.",
+          "warning": "Anyone with this link can read the file until it expires — no login required. Make sure the contents are safe to share.",
+          "warningPermanent": "This link never expires. Anyone who ever sees the URL can read whatever lives at this path — including future overwrites. Revoke it from \"Manage public links\" once you're done.",
+          "fileLabel": "File",
+          "ttlLabel": "Expires after",
+          "ttlOptions": {
+            "5min": "5 minutes",
+            "30min": "30 minutes",
+            "1hour": "1 hour",
+            "permanent": "Never (permanent)"
+          },
+          "generate": "Generate link",
+          "generating": "Generating…",
+          "linkLabel": "Public link",
+          "expiresAt": "Expires at {{value}}",
+          "expiresNever": "Never expires — manage from \"Manage public links\".",
+          "openLink": "Open in new tab"
+        },
+        "managePublicLinks": {
+          "title": "Manage public links",
+          "description": "Active public URLs minted for files in this workspace. Revoking a link is immediate and cannot be undone.",
+          "loading": "Loading…",
+          "empty": "No active public links.",
+          "permanent": "Permanent — never expires",
+          "expiresAt": "Expires at {{value}}",
+          "revoke": "Revoke",
+          "revoking": "Revoking…"
+        }
+      }
+    },
+    "filePreview": {
+      "actions": {
+        "source": "Source",
+        "preview": "Preview",
+        "spreadsheet": "Spreadsheet view",
+        "officeMode": "Office mode",
+        "toc": "Outline"
+      },
+      "toc": {
+        "label": "On this page",
+        "empty": "No headings in this document."
+      }
+    },
+    "officePreview": {
+      "rendering": "Rendering preview…",
+      "unsupported": "Office preview is not configured in this environment",
+      "failed": "Preview failed to render",
+      "download": "Download file"
+    },
+    "csvPreview": {
+      "empty": "Empty file",
+      "summary": "{{rows}} rows x {{columns}} columns"
+    },
+    "excalidrawPreview": {
+      "invalidFile": "Invalid .excalidraw file: {{error}}"
+    },
+    "xlsxPreview": {
+      "empty": "Empty workbook",
+      "parseError": "Failed to parse spreadsheet: {{error}}",
+      "openOfficeMode": "Open in Office mode"
+    },
+    "skillPicker": {
+      "empty": {
+        "noSkills": "No skills available",
+        "noResults": "No matching skill"
+      },
+      "placeholders": {
+        "search": "Search skills..."
+      },
+      "badges": {
+        "template": "template",
+        "yours": "yours"
+      },
+      "groups": {
+        "yours": "Yours",
+        "shared": "Shared with me",
+        "public": "Public"
+      },
+      "actions": {
+        "add": "Add skill",
+        "remove": "Remove {{name}}"
+      }
+    },
+    "workspaceSkillsPanel": {
+      "loading": "Loading Skills...",
+      "placeholders": {
+        "selectSkill": "Select Skill"
+      },
+      "actions": {
+        "newDraft": "New draft",
+        "publish": "Publish",
+        "remove": "Remove",
+        "removeConfirm": "Click again to confirm"
+      },
+      "tooltips": {
+        "publish": "Publish changes to the library so other workspaces can use the updated version.",
+        "publishGitSource": "Publish changes to the library. Warning: this Skill was imported from Git, and publishing will be overwritten on the next Git sync.",
+        "remove": "Remove this Skill from the workspace. The Skill stays in your library."
+      },
+      "empty": {
+        "noSkills": {
+          "title": "No skills loaded",
+          "description": "Add skills from your library to grant the agent new capabilities."
+        },
+        "selectSkill": "Select a skill",
+        "empty": "Empty",
+        "selectFile": "Select a file to view"
+      },
+      "dialogs": {
+        "newDraft": {
+          "title": "New Skill Draft",
+          "placeholder": "Skill name"
+        }
+      },
+      "toasts": {
+        "createdFile": "Created {{name}}",
+        "deletedFile": "Deleted {{name}}",
+        "createdFolder": "Created {{name}}/",
+        "renamed": "Renamed to {{name}}",
+        "createdDraft": "Draft \"{{name}}\" created",
+        "published": "Published {{name}}",
+        "removed": "Removed {{name}}"
+      },
+      "errors": {
+        "fetchSkillsFailed": "Failed to fetch Skills: {{status}}",
+        "createFolderFailed": "Failed to create folder: {{status}}",
+        "createDraftFailed": "Failed to create draft",
+        "packFailed": "Failed to pack Skill",
+        "uploadFailed": "Failed to upload Skill",
+        "removeFailed": "Failed to remove Skill"
+      }
+    },
+    "workspaceSettings": {
+      "title": "Workspace settings",
+      "fields": {
+        "name": "Name",
+        "slug": "Slug",
+        "visibility": "Visibility",
+        "tags": "Tags"
+      },
+      "placeholders": {
+        "slug": "e.g. translator"
+      },
+      "visibility": {
+        "private": "Private - only you, not callable",
+        "user": "User - callable by your agents",
+        "public": "Public - callable by all agents"
+      }
+    },
+    "mcpConfigEditor": {
+      "modes": {
+        "structured": "Structured",
+        "raw": "Raw"
+      },
+      "transport": {
+        "http": "HTTP",
+        "stdio": "Stdio"
+      },
+      "fields": {
+        "headers": "Headers",
+        "environment": "Environment"
+      },
+      "labels": {
+        "json": "json"
+      },
+      "placeholders": {
+        "serverName": "Server name",
+        "httpUrl": "https://example.com/mcp",
+        "headerName": "Header name",
+        "value": "Value",
+        "command": "Command (e.g. npx)",
+        "args": "Args (space-separated, e.g. -y @modelcontextprotocol/server-github)",
+        "envKey": "VAR_NAME",
+        "envValue": "value"
+      },
+      "oauth": {
+        "checking": "Checking...",
+        "unreachable": "Unreachable",
+        "connected": "Connected",
+        "connect": "Connect"
+      },
+      "states": {
+        "loadingCatalog": "Loading MCP catalog..."
+      },
+      "actions": {
+        "addField": "+ {{label}}",
+        "add": "Add",
+        "addServer": "Add MCP Server"
+      },
+      "builder": {
+        "title": "Builder Mode",
+        "none": "None",
+        "nSelected": "{{count}} selected",
+        "empty": "No options",
+        "options": {
+          "workspace": {
+            "label": "This workspace",
+            "description": "Let the agent shape its own workspace — prompt, commands, settings, skills."
+          },
+          "global": {
+            "label": "Account-wide",
+            "description": "Let the agent reach beyond this workspace — credentials, providers, prompt library, shares."
+          }
+        }
+      }
+    },
+    "workspaceTerminal": {
+      "actions": {
+        "reconnect": "Reconnect",
+        "search": "Search",
+        "searchHint": "Search (⌘/Ctrl+F)"
+      },
+      "status": {
+        "connecting": "Connecting",
+        "open": "Connected",
+        "closed": "Disconnected",
+        "error": "Error"
+      },
+      "search": {
+        "placeholder": "Find in terminal",
+        "previous": "Previous match (Shift+Enter)",
+        "next": "Next match (Enter)",
+        "close": "Close search (Esc)",
+        "noMatch": "No match"
+      },
+      "messages": {
+        "reconnecting": "Reconnecting...",
+        "connectionClosed": "Connection closed",
+        "connectionError": "Connection error"
+      }
+    },
+    "combobox": {
+      "placeholders": {
+        "select": "Select...",
+        "search": "Search..."
+      },
+      "empty": {
+        "noResults": "No results."
+      },
+      "options": {
+        "none": "None"
+      }
+    },
+    "workspaceMultiSelect": {
+      "placeholder": "Select workspaces…",
+      "search": "Search workspaces…",
+      "empty": "No workspaces found",
+      "remove": "Remove {{name}}"
+    },
+    "sidebar": {
+      "search": {
+        "placeholder": "Search..."
+      },
+      "filters": {
+        "human_one": "{{count}} needs you",
+        "human_other": "{{count}} need you",
+        "agent_one": "{{count}} running",
+        "agent_other": "{{count}} running"
+      },
+      "errors": {
+        "loadFailed": "Failed to load: {{message}}"
+      },
+      "empty": {
+        "noMatches": "No matches.",
+        "noWorkspaces": "No workspaces yet."
+      },
+      "tooltip": {
+        "agentWorking": "Agent running",
+        "yourTurn": "Needs your attention",
+        "activeSessions_one": "{{count}} active session",
+        "activeSessions_other": "{{count}} active sessions"
+      },
+      "sessions": {
+        "newSession": "New session",
+        "more_one": "+{{count}} more",
+        "more_other": "+{{count}} more",
+        "markAllRead": "Mark all read",
+        "count_one": "{{count}} session",
+        "count_other": "{{count}} sessions"
+      },
+      "navigation": {
+        "library": "Library",
+        "integration": "Integration",
+        "management": "Management",
+        "admin": "Admin"
+      },
+      "actions": {
+        "quickActions": "Quick Actions",
+        "quickActionsWithShortcut": "Quick Actions ({{shortcut}})"
+      },
+      "badges": {
+        "system": "SYS"
+      },
+      "notifications": {
+        "agentCompletedTitle": "Agent completed"
+      }
+    },
+    "shell": {
+      "menubar": {
+        "commandPaletteHint": "Search or go to…"
+      },
+      "wsSwitcher": {
+        "allWorkspaces": "All workspaces",
+        "newWorkspace": "New workspace",
+        "searchPlaceholder": "Search workspaces…",
+        "noResults": "No workspaces match",
+        "othersNeedYou_one": "{{count}} other workspace needs you",
+        "othersNeedYou_other": "{{count}} other workspaces need you",
+        "othersRunning_one": "{{count}} other workspace running",
+        "othersRunning_other": "{{count}} other workspaces running"
+      },
+      "dock": {
+        "library": "Library",
+        "integration": "Integration",
+        "management": "Management",
+        "admin": "Admin"
+      },
+      "slot": {
+        "openApp": "Open app",
+        "searchPlaceholder": "Search apps…",
+        "groups": {
+          "agent": "Agent",
+          "tool": "Tools",
+          "capability": "Resources",
+          "connection": "Integrations",
+          "extension": "Extensions",
+          "system": "Platform"
+        },
+        "noResults": "No matching apps",
+        "emptyHint": "Click to open an app",
+        "newInstance": "New instance",
+        "overflowLabel_one": "{{count}} more app",
+        "overflowLabel_other": "{{count}} more apps"
+      },
+      "layout": {
+        "switcher": "Layout",
+        "oneCol": "Focus",
+        "twoCol": "Two columns",
+        "threeCol": "Three columns",
+        "savedLayouts": "Saved layouts",
+        "builtinDefault": "Default",
+        "templateBadge": "Template",
+        "editedHint": "Modified — differs from this layout",
+        "update": "Update",
+        "saveAs": "Save as new",
+        "reset": "Reset",
+        "edit": "Edit",
+        "editTitle": "Edit layout",
+        "deleteTitle": "Delete layout",
+        "deleteConfirm": "Delete “{{name}}”? Workspaces using it fall back to the default layout.",
+        "saveDialog": {
+          "title": "Save layout",
+          "namePlaceholder": "Layout name"
+        }
+      },
+      "window": {
+        "popOut": "Pop out",
+        "popIn": "Return to panel",
+        "fill": "Fill layout",
+        "unfill": "Restore layout",
+        "fullscreen": "Fullscreen",
+        "exitFullscreen": "Exit fullscreen",
+        "close": "Close"
+      },
+      "workspacesApp": {
+        "appLabel": "Workspaces",
+        "searchPlaceholder": "Search workspaces",
+        "actions": {
+          "new": "New"
+        },
+        "empty": "No workspaces yet — create one to get started.",
+        "noResults": "No workspaces match.",
+        "sessionCount_one": "{{count}} active",
+        "sessionCount_other": "{{count}} active"
+      },
+      "activityApp": {
+        "appLabel": "Stats",
+        "sessionsToday": "New sessions",
+        "interactionsToday": "Interactions today",
+        "cellTooltip": "{{date}} · {{count}}",
+        "rangeAria": "Time range",
+        "range": {
+          "7d": "7d",
+          "30d": "30d",
+          "90d": "90d"
+        },
+        "punchLabel": "When you work",
+        "punchTooltip": "{{day}} · {{hour}}:00 · {{count}}",
+        "dow": {
+          "0": "Sun",
+          "1": "Mon",
+          "2": "Tue",
+          "3": "Wed",
+          "4": "Thu",
+          "5": "Fri",
+          "6": "Sat"
+        },
+        "hourSuffix": "h",
+        "punchCaption": "Hour of day × weekday — darker means more active.",
+        "token": {
+          "usageLabel": "Token usage",
+          "cellTooltip": "{{date}} · {{value}}",
+          "compositionLabel": "Composition",
+          "byWorkspaceLabel": "Workspace token usage",
+          "input": "Input",
+          "output": "Output",
+          "cache": "Cached",
+          "cacheRead": "Cache read",
+          "cacheCreation": "Cache write"
+        }
+      }
+    },
+    "admin": {
+      "dashboardSection": {
+        "sections": {
+          "overview": "Overview",
+          "growth": "Growth",
+          "tokens": "Token Usage",
+          "powerUsersAndAgents": "Power Users & Agents",
+          "skillsAndMcp": "Skills & MCP Usage"
+        },
+        "overview": {
+          "users": {
+            "title": "Users",
+            "activeThisWeek": "{{count}} active this week"
+          },
+          "agents": {
+            "title": "Agents",
+            "activeThisWeek": "{{count}} active this week"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "today": "+{{count}} today"
+          },
+          "interactions": {
+            "title": "Interactions",
+            "today": "+{{count}} today"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "today": "{{value}} today"
+          }
+        },
+        "panels": {
+          "growth": {
+            "title": "Agents & Sessions"
+          },
+          "weeklyActive": {
+            "title": "Weekly Active Agents"
+          },
+          "interactionVolume": {
+            "title": "Interaction Volume"
+          },
+          "powerUsers": {
+            "title": "Top users by total interactions"
+          },
+          "powerAgents": {
+            "title": "Top agents by total interactions"
+          },
+          "skillUsage": {
+            "title": "Skill Usage",
+            "description": "Workspaces per Skill"
+          },
+          "mcpUsage": {
+            "title": "MCP Usage",
+            "description": "Workspaces per MCP server"
+          },
+          "tokenVolume": {
+            "title": "Token usage · last 30 days"
+          },
+          "tokenTopUsers": {
+            "title": "Top users by tokens"
+          },
+          "tokenTopAgents": {
+            "title": "Top agents by tokens"
+          }
+        },
+        "token": {
+          "input": "Input",
+          "output": "Output",
+          "cache": "Cached",
+          "cacheWrite": "Cache write",
+          "cacheRead": "Cache read"
+        },
+        "chartLabels": {
+          "daily": "daily",
+          "cumulative": "cumulative"
+        },
+        "labels": {
+          "agents_one": "{{count}} agent",
+          "agents_other": "{{count}} agents",
+          "sessionsByOwner_one": "{{count}} session · {{owner}}",
+          "sessionsByOwner_other": "{{count}} sessions · {{owner}}"
+        },
+        "empty": {
+          "noData": "No data",
+          "noSkills": "No Skills enabled",
+          "noMcp": "No MCP servers configured"
+        },
+        "errors": {
+          "loadFailed": "Failed to load"
+        }
+      },
+      "infraSection": {
+        "sections": {
+          "clusterOverview": "Cluster Overview",
+          "capacityEstimate": "Capacity Estimate",
+          "nodeGroups": "Node Groups"
+        },
+        "overview": {
+          "workerNodes": {
+            "title": "Worker Nodes",
+            "runningPods": "{{count}} pods running"
+          },
+          "workspaces": {
+            "title": "NAP Workspaces"
+          },
+          "sandboxes": {
+            "title": "Sandboxes"
+          },
+          "cpuWorkers": {
+            "title": "CPU (Workers)"
+          },
+          "memoryWorkers": {
+            "title": "Memory (Workers)"
+          }
+        },
+        "labels": {
+          "nodes_one": "{{count}} node",
+          "nodes_other": "{{count}} nodes",
+          "ofValue": "of {{value}}",
+          "requested": "Requested",
+          "sandboxesAndPods": "{{sandboxes}} sandboxes / {{pods}} pods",
+          "workspacesAndPods": "{{workspaces}} workspaces / {{pods}} pods"
+        },
+        "table": {
+          "node": "Node",
+          "cpu": "CPU",
+          "memory": "Memory",
+          "pods": "Pods",
+          "total": "Total"
+        },
+        "capacity": {
+          "additionalHeadroom": "Additional capacity based on remaining requests headroom",
+          "bottleneck": "Bottleneck: {{resource}} - Free: {{cpu}} CPU, {{memory}} Memory"
+        },
+        "errors": {
+          "loadFailed": "Failed to load cluster data"
+        }
+      },
+      "systemSettingsSection": {
+        "sections": {
+          "asr": "Speech Recognition (ASR)"
+        },
+        "asr": {
+          "description": "Configure the speech-to-text provider used by all clients. Settings are global and admin-only.",
+          "noProviders": "No ASR providers are registered yet. The active provider dropdown will populate once a provider is wired in.",
+          "activeProvider": "Active provider",
+          "activeProviderNone": "(none — feature disabled)",
+          "providersConfig": "Provider configuration",
+          "providersConfigHint": "JSON keyed by provider name. Each provider validates its own config — see the provider's source for the expected schema."
+        },
+        "actions": {
+          "save": "Save",
+          "saving": "Saving…",
+          "reset": "Reset"
+        },
+        "errors": {
+          "loadFailed": "Failed to load system settings"
+        }
+      },
+      "usersSection": {
+        "actions": {
+          "newUser": "New User",
+          "resetPassword": "Reset password",
+          "deleteUser": "Delete user"
+        },
+        "empty": {
+          "noUsers": "No users"
+        },
+        "fields": {
+          "lastLogin": "Last login: {{value}}"
+        },
+        "badges": {
+          "roleAdmin": "admin",
+          "authSource": {
+            "password": "password",
+            "ldap": "LDAP"
+          }
+        },
+        "toasts": {
+          "deleted": "User deleted"
+        },
+        "errors": {
+          "loadFailed": "Failed to load users",
+          "deleteFailed": "Failed to delete user"
+        }
+      },
+      "createUser": {
+        "title": "New User",
+        "fields": {
+          "username": "Username",
+          "displayName": "Display Name",
+          "email": "Email",
+          "password": "Password",
+          "role": "Role"
+        },
+        "roles": {
+          "user": "user",
+          "admin": "admin"
+        },
+        "placeholders": {
+          "username": "e.g. john.doe",
+          "displayName": "e.g. John Doe",
+          "email": "Optional"
+        },
+        "toasts": {
+          "created": "User created"
+        },
+        "errors": {
+          "required": "Username, display name, and password are required",
+          "passwordTooShort": "Password must be at least 6 characters",
+          "createFailed": "Failed to create user"
+        }
+      },
+      "resetPassword": {
+        "title": "Reset Password - {{username}}",
+        "fields": {
+          "newPassword": "New Password"
+        },
+        "toasts": {
+          "updated": "Password updated for {{username}}"
+        },
+        "errors": {
+          "passwordTooShort": "Password must be at least 6 characters",
+          "resetFailed": "Failed to reset password"
+        }
+      }
+    },
+    "voiceInput": {
+      "actions": {
+        "start": "Voice input ({{modifier}}+Shift+M)",
+        "stopAndTranscribe": "Stop and transcribe",
+        "cancel": "Cancel",
+        "transcribing": "Transcribing…"
+      },
+      "states": {
+        "listening": "Listening…",
+        "transcribing": "Transcribing…"
+      },
+      "errors": {
+        "unsupported": "Voice input is not supported in this browser.",
+        "permissionDenied": "Microphone access was denied.",
+        "failed": "Transcription failed"
+      }
+    },
+    "chatInput": {
+      "alts": {
+        "attachment": "attachment"
+      },
+      "placeholders": {
+        "message": "Type a message... (Ctrl/Cmd+Enter to send)"
+      },
+      "actions": {
+        "stop": "Stop",
+        "attachImage": "Attach image",
+        "send": "Send",
+        "sendShortcut": "Send (Ctrl/Cmd+Enter)"
+      }
+    },
+    "chat": {
+      "messageBubble": {
+        "alts": {
+          "attachment": "attachment",
+          "content": "content"
+        },
+        "states": {
+          "thinking": "Thinking..."
+        },
+        "actions": {
+          "copy": "Copy",
+          "copied": "Copied!"
+        }
+      },
+      "toolRenderers": {
+        "labels": {
+          "unknown": "(unknown)"
+        },
+        "agentRequest": {
+          "proposedBadge": "Proposed",
+          "approve": "Approve",
+          "reject": "Reject",
+          "confirmReject": "Confirm reject",
+          "cancel": "Cancel",
+          "reasonPlaceholder": "Reason (optional)",
+          "reason": "Reason",
+          "loading": "Loading request…",
+          "loadFailed": "Failed to load request",
+          "invalidPayload": "Invalid payload",
+          "appliedAt": "Applied",
+          "status": {
+            "pending": "Pending",
+            "approved": "Approved",
+            "rejected": "Rejected",
+            "applied": "Applied"
+          },
+          "fields": {
+            "id": "ID",
+            "name": "Name",
+            "cron": "Cron",
+            "runAt": "Run at",
+            "timezone": "Timezone",
+            "prompt": "Prompt",
+            "promptId": "Prompt id",
+            "type": "Type",
+            "enabled": "Enabled",
+            "attach": "Attach",
+            "detach": "Detach",
+            "model": "Model",
+            "smallModel": "Small model",
+            "systemPrompt": "System prompt",
+            "slug": "Slug",
+            "visibility": "Visibility",
+            "agentType": "Agent",
+            "provider": "Provider",
+            "content": "Content"
+          },
+          "cleared": "(cleared)",
+          "commandTypes": {
+            "plain": "Plain",
+            "struct": "Structured"
+          },
+          "enabledStates": {
+            "on": "On",
+            "off": "Paused"
+          },
+          "visibilityValues": {
+            "private": "Private",
+            "user": "User",
+            "public": "Public"
+          }
+        },
+        "defaults": {
+          "input": "Input:",
+          "result": "Result:"
+        },
+        "browser": {
+          "timeout": "timeout: {{value}}s",
+          "status": {
+            "created": "created"
+          },
+          "empty": {
+            "noBrowsers": "No browsers"
+          }
+        },
+        "codexEdit": {
+          "preview": {
+            "files_one": "{{count}} file",
+            "files_other": "{{count}} files"
+          }
+        },
+        "codexExec": {
+          "labels": {
+            "inPath": "in {{value}}",
+            "command": "Command:",
+            "cwd": "cwd: {{value}}",
+            "stdout": "stdout:",
+            "stderr": "stderr:",
+            "exitCode": "exit code: {{value}}"
+          }
+        },
+        "codexWebSearch": {
+          "empty": "No query or results exposed by Codex."
+        },
+        "agent": {
+          "preview": {
+            "background": "@{{slug}} (background)"
+          },
+          "input": {
+            "continue": "continue {{sid}}",
+            "newSession": "new session"
+          }
+        },
+        "claudeBash": {
+          "labels": {
+            "command": "Command:"
+          }
+        },
+        "claudeFileEdit": {
+          "labels": {
+            "old": "old",
+            "new": "new",
+            "replaceAllOccurrences": "replace all occurrences"
+          }
+        },
+        "claudeFileRead": {
+          "labels": {
+            "lineRange": "Lines {{start}}-{{end}}",
+            "fromLine": "From line {{value}}",
+            "firstLines_one": "First {{count}} line",
+            "firstLines_other": "First {{count}} lines",
+            "pages": "Pages {{value}}"
+          }
+        },
+        "claudeSearch": {
+          "preview": {
+            "patternInPath": "{{pattern}} in {{path}}"
+          },
+          "labels": {
+            "inPath": "in {{value}}",
+            "glob": "glob: {{value}}",
+            "type": "type: {{value}}",
+            "mode": "mode: {{value}}"
+          }
+        },
+        "claudeTodo": {
+          "preview": {
+            "done": "{{done}}/{{total}} done"
+          }
+        },
+        "claudeTask": {
+          "status": {
+            "pending": "pending",
+            "in_progress": "in progress",
+            "completed": "completed",
+            "deleted": "deleted"
+          }
+        },
+        "sandbox": {
+          "status": {
+            "created": "created"
+          },
+          "labels": {
+            "cpu": "cpu: {{value}}",
+            "memory": "mem: {{value}}",
+            "timeout": "timeout: {{value}}s",
+            "expires": "expires: {{value}}",
+            "command": "Command:",
+            "cwd": "cwd: {{value}}",
+            "sandbox": "sandbox: {{value}}",
+            "exitCode": "exit {{value}}"
+          },
+          "preview": {
+            "files_one": "{{count}} file",
+            "files_other": "{{count}} files"
+          },
+          "empty": {
+            "noSandboxes": "No sandboxes",
+            "noUrl": "No URL"
+          }
+        },
+        "skills": {
+          "labels": {
+            "path": "path: {{value}}"
+          }
+        },
+        "afs": {
+          "labels": {
+            "readOnly": "read-only",
+            "readWrite": "read-write",
+            "membersAffected_one": "{{count}} member unmounted",
+            "membersAffected_other": "{{count}} members unmounted"
+          }
+        },
+        "exportFileUrl": {
+          "labels": {
+            "ttl": "ttl: {{value}}s",
+            "expires": "expires: {{value}}"
+          }
+        }
+      },
+      "toolCallBlock": {
+        "status": {
+          "error": "error",
+          "done": "done"
+        }
+      },
+      "turnStatsBar": {
+        "turns_one": "{{count}} turn",
+        "turns_other": "{{count}} turns",
+        "context": "Context {{used}} / {{total}}",
+        "contextWarning": "consider /compact or starting a new session",
+        "turnWarning": "High turn count - consider starting a new session or compacting"
+      }
+    },
+    "markdown": {
+      "systemMessage": "System message"
+    },
+    "management": {
+      "providers": {
+        "actions": {
+          "new": "New",
+          "edit": "Edit provider",
+          "delete": "Delete provider"
+        },
+        "sections": {
+          "public": "Public",
+          "private": "Private"
+        },
+        "badges": {
+          "yours": "Yours"
+        },
+        "dialogs": {
+          "editTitle": "Edit Provider"
+        },
+        "fields": {
+          "apiKey": "API Key (leave empty to keep current)"
+        },
+        "empty": {
+          "noProviders": {
+            "title": "No model providers yet",
+            "description": "Add an LLM provider to enable model selection across workspaces."
+          }
+        },
+        "errors": {
+          "saveFailed": "Failed to save",
+          "deleteFailed": "Failed to delete"
+        }
+      },
+      "serviceTokens": {
+        "actions": {
+          "new": "New",
+          "revoke": "Revoke token"
+        },
+        "empty": {
+          "noTokens": {
+            "title": "No service tokens",
+            "description": "Issue a token for programmatic access to platform APIs."
+          }
+        },
+        "labels": {
+          "platformToken": "Platform Token",
+          "platformDescription": "System-managed token issued by the platform.",
+          "system": "system",
+          "user": "user",
+          "createdAt": "Created {{value}}"
+        },
+        "toasts": {
+          "revoked": "Token revoked"
+        },
+        "errors": {
+          "loadFailed": "Failed to load service tokens",
+          "revokeFailed": "Failed to revoke token"
+        }
+      },
+      "applications": {
+        "actions": {
+          "new": "New",
+          "edit": "Edit",
+          "rotate": "Rotate secret",
+          "delete": "Delete",
+          "visitHomepage": "Visit homepage"
+        },
+        "empty": {
+          "noApplications": {
+            "title": "No applications yet",
+            "description": "Register an application to grant API access to external services."
+          }
+        },
+        "labels": {
+          "owner": "Owner",
+          "unknownOwner": "Unknown",
+          "redirectUris": "Redirect URIs",
+          "createdAt": "Created {{value}}",
+          "adminOnly": "Admin only"
+        },
+        "toasts": {
+          "deleted": "Application deleted",
+          "rotated": "Secret rotated"
+        },
+        "errors": {
+          "loadFailed": "Failed to load applications",
+          "deleteFailed": "Failed to delete application",
+          "rotateFailed": "Failed to rotate secret"
+        }
+      }
+    },
+    "askUserQuestion": {
+      "actions": {
+        "customReplyPlaceholder": "Or type a custom reply...",
+        "confirm": "Confirm"
+      }
+    },
+    "sessions": {
+      "untitled": "Untitled",
+      "rename": "Rename",
+      "share": "Share",
+      "delete": "Delete",
+      "markAllRead": "Mark all read",
+      "markSeen": "Mark as read",
+      "star": "Star",
+      "unstar": "Unstar",
+      "starred": "Starred",
+      "filterStarred": "Show starred only",
+      "unreadCount_one": "{{count}} needs you",
+      "unreadCount_other": "{{count}} need you",
+      "search": "Search sessions",
+      "searchPlaceholder": "Search…",
+      "empty": {
+        "title": "No sessions yet",
+        "description": "Sessions appear here when you start chatting with the agent."
+      },
+      "noMatch": {
+        "title": "No matching sessions",
+        "description": "Try a different search term."
+      },
+      "starredEmpty": {
+        "title": "No starred sessions",
+        "description": "Star a session to keep it within easy reach."
+      },
+      "toasts": {
+        "renamed": "Session renamed",
+        "deleted": "Session deleted"
+      },
+      "groups": {
+        "today": "Today",
+        "week": "This week",
+        "month": "This month",
+        "earlier": "Earlier"
+      },
+      "status": {
+        "needsYou": "Needs you",
+        "running": "Running",
+        "error": "Error"
+      }
+    },
+    "automation": {
+      "tabsLabel": "Automation category",
+      "actions": {
+        "new": "New",
+        "newSchedule": "New schedule",
+        "newCommand": "New command",
+        "runNow": "Run now",
+        "fork": "Duplicate to my own"
+      },
+      "dialogs": {
+        "newSchedule": "New schedule",
+        "newCommand": "New command",
+        "editSchedule": "Edit schedule",
+        "editCommand": "Edit command"
+      },
+      "toasts": {
+        "runEnqueued": "Run enqueued"
+      },
+      "sections": {
+        "schedules": "Schedules",
+        "commands": "Commands"
+      },
+      "empty": {
+        "schedules": {
+          "title": "No schedules",
+          "description": "Add one to run prompts on a cron."
+        },
+        "commands": {
+          "title": "No commands",
+          "description": "Add one to invoke prompts via slash."
+        }
+      },
+      "editor": {
+        "empty": "Select a schedule or command to edit, or use the + buttons above to create one.",
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "badges": {
+        "template": "Template"
+      },
+      "fields": {
+        "enabledDefault": "Enabled by default"
+      },
+      "lastRun": "Ran {{value}} ago"
+    },
+    "settings": {
+      "unsavedChanges": "Unsaved",
+      "nav": {
+        "general": "General",
+        "model": "Model",
+        "prompt": "Prompt",
+        "mcp": "MCP",
+        "skills": "Skills",
+        "resources": "Resources",
+        "settings": "Agent settings"
+      },
+      "fields": {
+        "id": "Workspace ID"
+      },
+      "lifecycle": {
+        "label": "Lifecycle",
+        "restart": "Restart"
+      },
+      "autoStart": {
+        "label": "Auto-start",
+        "description": "When the workspace is stopped, automatically start it on an incoming chat or trigger. Turn off to require a manual start."
+      },
+      "startupAlert": {
+        "title": "Workspace is having trouble starting"
+      },
+      "resizeConfirm": {
+        "title": "Restart workspace to apply new size?",
+        "description": "Changing the compute size restarts the workspace pod. Any in-progress session will be interrupted. The new size takes effect after you click Save.",
+        "confirm": "Use this size"
+      },
+      "saveAsTemplate": {
+        "action": "Save as template",
+        "description": "Save this workspace's current config as a reusable template."
+      }
+    },
+    "automationDropdown": {
+      "title": "Automation",
+      "actions": {
+        "commands": "Commands",
+        "schedules": "Schedules"
+      }
+    },
+    "resourceFields": {
+      "hint": "Changing CPU or memory will restart the workspace pod.",
+      "labels": {
+        "cpuRequest": "CPU Request",
+        "cpuLimit": "CPU Limit",
+        "memoryRequest": "Memory Request",
+        "memoryLimit": "Memory Limit",
+        "storage": "Storage"
+      }
+    },
+    "configCommands": {
+      "title": "Commands",
+      "tooltip": "Custom commands",
+      "empty": "No commands. Create one to quickly send predefined messages.",
+      "actions": {
+        "new": "New",
+        "delete": "Delete"
+      },
+      "states": {
+        "saving": "Saving...",
+        "deleting": "Deleting..."
+      },
+      "types": {
+        "plain": "Plain",
+        "struct": "Struct"
+      },
+      "toasts": {
+        "created": "Command created",
+        "updated": "Command updated",
+        "deleted": "Command deleted"
+      },
+      "dialog": {
+        "newTitle": "New Command",
+        "editTitle": "Edit Command",
+        "deleteTitle": "Delete Command",
+        "deleteConfirm": "Delete command {{name}}? This cannot be undone."
+      },
+      "form": {
+        "name": "Name",
+        "type": "Type",
+        "content": "Content",
+        "reservedName": "\"{{name}}\" is a built-in command name",
+        "structHint": "Use {{VARIABLE_NAME}} for placeholders. A form will appear when triggered.",
+        "placeholders": {
+          "name": "release-notes",
+          "content": "The message to send to the agent...",
+          "structContent": "Project {{PROJECT_ID}}, branch {{BRANCH}}, file {{FILE_PATH}}"
+        }
+      }
+    },
+    "commandTrigger": {
+      "actions": {
+        "send": "Send"
+      },
+      "types": {
+        "plain": "Plain",
+        "struct": "Struct"
+      },
+      "fileMentionHint": "Browse workspace files"
+    },
+    "agentSettingsEditor": {
+      "hints": {
+        "claude-code": "JSON format - written to .claude/settings.json",
+        "codex": "TOML format - appended to ~/.codex/config.toml"
+      }
+    },
+    "configFormFields": {
+      "labels": {
+        "systemPrompt": "System Prompt",
+        "skills": "Skills",
+        "mcpConfig": "MCP Config",
+        "agentSettings": "Agent Settings (JSON)",
+        "computeResources": "Compute Resources"
+      }
+    },
+    "agentConfigDialog": {
+      "trigger": "Agent Config",
+      "title": "Agent Config",
+      "navigation": {
+        "model": "Model",
+        "prompt": "Prompt",
+        "settings": "Settings",
+        "skills": "Skills",
+        "resources": "Resources"
+      },
+      "template": {
+        "base": "base: {{name}} (v{{version}})",
+        "upgrading": "Upgrading...",
+        "available": "v{{version}} available"
+      },
+      "toasts": {
+        "saved": "Agent config saved",
+        "upgraded": "Upgraded to v{{version}}"
+      },
+      "errors": {
+        "saveFailed": "Failed to save",
+        "syncFailed": "Failed to sync template"
+      }
+    },
+    "configSchedules": {
+      "title": "Schedules",
+      "tooltip": "Cron schedules",
+      "empty": "No schedules. Create one to run tasks on a cron.",
+      "lastRun": "Last run: {{value}}",
+      "actions": {
+        "new": "New",
+        "delete": "Delete"
+      },
+      "states": {
+        "saving": "Saving...",
+        "deleting": "Deleting..."
+      },
+      "toasts": {
+        "created": "Schedule created",
+        "updated": "Schedule updated",
+        "deleted": "Schedule deleted"
+      },
+      "dialog": {
+        "newTitle": "New Schedule",
+        "editTitle": "Edit Schedule",
+        "deleteTitle": "Delete Schedule",
+        "deleteConfirm": "Delete schedule {{name}}? This cannot be undone."
+      },
+      "form": {
+        "name": "Name",
+        "mode": "Type",
+        "modeRecurring": "Recurring",
+        "modeOneTime": "One-time",
+        "schedule": "Schedule",
+        "runAt": "Run at",
+        "willRunAt": "Runs at {{time}}",
+        "ranAt": "Ran at {{time}}",
+        "completed": "Completed",
+        "timezone": "Timezone",
+        "prompt": "Prompt",
+        "placeholders": {
+          "name": "daily-report",
+          "prompt": "The task to execute on each run..."
+        }
+      }
+    },
+    "tags": {
+      "colors": {
+        "slate": "Slate",
+        "rose": "Rose",
+        "amber": "Amber",
+        "emerald": "Emerald",
+        "sky": "Sky",
+        "violet": "Violet",
+        "orange": "Orange",
+        "pink": "Pink"
+      }
+    },
+    "fileOverlay": {
+      "actions": {
+        "closeAll": "Close all"
+      }
+    },
+    "skillDependents": {
+      "loading": "Checking usage…",
+      "none": "No workspaces or templates are using this skill.",
+      "ownTitle": "Your workspaces using this skill",
+      "otherCount": "Plus {{count}} workspace(s) owned by other users.",
+      "templateCount": "{{count}} template version(s) reference this skill."
+    }
+  }
+}
