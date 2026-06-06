@@ -87,7 +87,7 @@ talks to scs directly today.
 ## Local dev
 
 ```bash
-cd ~/workspace/fictors/skills-content-service
+cd skills-content-service   # from the repo root
 npm install
 cp .env.example .env
 npm run dev
