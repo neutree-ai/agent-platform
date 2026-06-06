@@ -1,0 +1,105 @@
+name: Build & push images
+
+# Builds first-party platform images and pushes them to GHCR. Auth uses the
+# workflow's GITHUB_TOKEN (packages: write) — no PAT needed.
+#
+# Explicit, per-service builds only (no auto-build on every main push, no
+# lockstep all-at-once release — services version independently):
+#   - workflow_dispatch: `service` builds one image (e.g. nap-scheduler);
+#     empty builds all.
+#   - push of a per-service tag `<image>-v<x.y.z>` (e.g. nap-cp-v1.2.0):
+#     builds only that image and also tags it with the version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Image to build (e.g. nap-scheduler). Empty = all."
+        required: false
+        default: ""
+  push:
+    tags:
+      - "*-v*"
+
+env:
+  IMAGE_PREFIX: ghcr.io/neutree-ai/agent-platform
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: nap-cp, dockerfile: control-plane/Dockerfile, context: . }
+          - { image: nap-cg, dockerfile: channel-gateway/Dockerfile, context: . }
+          - { image: nap-scheduler, dockerfile: scheduler/Dockerfile, context: . }
+          - { image: nap-skills-content-service, dockerfile: skills-content-service/Dockerfile, context: . }
+          - { image: nap-sandbox, dockerfile: sandbox-service/Dockerfile, context: . }
+          - { image: nap-browser, dockerfile: browser-service/Dockerfile, context: . }
+          - { image: nap-memory-fuse, dockerfile: memory-fuse/Dockerfile, context: memory-fuse }
+          - { image: nap-agent-claude-code, dockerfile: agents/claude-code/Dockerfile, context: . }
+          - { image: nap-agent-codex, dockerfile: agents/codex/Dockerfile, context: . }
+    steps:
+      - uses: actions/checkout@v4
+
+      # Decide whether this leg builds, and with which tags.
+      #   dispatch: `service` input (empty = all)
+      #   tag push: tag `<image>-v<ver>` selects one image + adds the :<ver> tag
+      - name: Gate & tags
+        id: g
+        run: |
+          img="${{ matrix.image }}"
+          tags="$(printf '%s\n%s' \
+            "${IMAGE_PREFIX}/${img}:latest" \
+            "${IMAGE_PREFIX}/${img}:${GITHUB_SHA::12}")"
+          build=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            want="${{ github.event.inputs.service }}"
+            if [ -z "$want" ] || [ "$want" = "$img" ]; then build=true; fi
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            ref="${GITHUB_REF_NAME}"     # e.g. nap-cp-v1.2.0
+            tagimg="${ref%-v*}"          # nap-cp
+            ver="v${ref##*-v}"           # v1.2.0
+            if [ "$tagimg" = "$img" ]; then
+              build=true
+              tags="$(printf '%s\n%s' "$tags" "${IMAGE_PREFIX}/${img}:${ver}")"
+            fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          { echo "tags<<EOF"; echo "$tags"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          echo "$img -> build=$build"
+
+      - name: Set up Buildx
+        if: steps.g.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.g.outputs.build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Sub-context builds (memory-fuse) COPY .npmrc relative to their own dir.
+      - name: Stage .npmrc into sub-context
+        if: steps.g.outputs.build == 'true' && matrix.context != '.'
+        run: cp .npmrc "${{ matrix.context }}/.npmrc"
+
+      - name: Build & push
+        if: steps.g.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.g.outputs.tags }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
