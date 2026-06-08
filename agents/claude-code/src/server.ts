@@ -223,8 +223,24 @@ app.post('/chat', async (c) => {
           await sink.write('message', JSON.stringify(evt))
         },
         onError: async (error) => {
-          const evt = translator.error(error.message)
-          await sink.write('message', JSON.stringify(evt))
+          await sink.write('message', JSON.stringify(translator.error(error.message)))
+          // Emit a terminal session.ended so the control-plane stops treating
+          // the session as running, then perform the same teardown as
+          // onComplete. Without the terminal event + keepalive clear the agent
+          // SSE stream stays open with no end marker, and the session leaks in
+          // the running state until the 24h timeout or a CP restart.
+          await sink.write('message', JSON.stringify(translator.sessionEnded('error')))
+          if (currentSessionId) {
+            if (sink.disconnected) {
+              console.log(
+                `[agent] Turn errored but CP disconnected, keeping sink for reconnect session=${currentSessionId}`,
+              )
+            } else {
+              activeSinks.delete(currentSessionId)
+            }
+          }
+          doneResolve()
+          clearInterval(keepaliveTimer)
         },
         onComplete: async (stats) => {
           const reason = stats ? 'completed' : 'interrupted'

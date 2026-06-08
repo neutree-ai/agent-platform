@@ -437,7 +437,18 @@ export async function chat(
     console.log(`[chat] Query completed, total=${Date.now() - chatStartedAt}ms`)
     await callbacks.onComplete(stats)
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    // A user interrupt (interruptSession → controller.abort()) can surface in
+    // two shapes: a DOMException-style `AbortError`, or — when the SDK's native
+    // child process is killed mid-turn — a plain `Error` whose message is
+    // "Claude Code process aborted by user" (minified class, name === 'Error').
+    // The latter must NOT be treated as a failure: route both through
+    // onComplete (reason 'interrupted') so server.ts emits session.ended and
+    // the control-plane transitions the session out of the running state.
+    if (
+      abortController.signal.aborted ||
+      (error instanceof Error &&
+        (error.name === 'AbortError' || /aborted by user/i.test(error.message)))
+    ) {
       console.log('[chat] Aborted')
       await callbacks.onComplete()
     } else {
