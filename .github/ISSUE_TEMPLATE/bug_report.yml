@@ -1,0 +1,67 @@
+name: Bug report
+description: Report something that isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please fill out the sections
+        below so we can reproduce and fix it quickly.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected instead.
+      placeholder: When I do X, Y happens; I expected Z.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps for us to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Run '...'
+        3. See error
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      description: Which part of the platform is involved? (best guess is fine)
+      options:
+        - control-plane
+        - web
+        - channel-gateway
+        - scheduler
+        - browser-service
+        - sandbox-service
+        - skills-content-service
+        - memory-fuse
+        - agents (claude-code / codex)
+        - sandbox SDK (@neutree-ai/sandbox)
+        - self-host / deployment
+        - other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Version / commit, deployment profile (multi-node / single-node), OS, browser if relevant.
+      placeholder: |
+        - Version/commit:
+        - Deployment: self-host single-node
+        - OS / browser:
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / screenshots
+      description: Paste any relevant log output or attach screenshots. Redact secrets.
+      render: shell
+    validations:
+      required: false
