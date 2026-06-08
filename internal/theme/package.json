@@ -1,19 +1,35 @@
 {
   "name": "@neutree-ai/theme",
   "version": "0.1.0",
-  "private": true,
+  "description": "Neutree Agent Platform shared theme — React theme provider, toggle, and toaster with design-token CSS variables.",
   "type": "module",
-  "types": "./index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "default": "./src/index.ts"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     },
-    "./variables.css": "./src/variables.css"
+    "./variables.css": "./dist/variables.css"
   },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && cp src/variables.css dist/variables.css",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "Apache-2.0",
   "peerDependencies": {
     "lucide-react": "*",
     "react": "^18.0.0",
     "sonner": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "lucide-react": "*",
+    "react": "^18.0.0",
+    "sonner": "^2.0.0",
+    "typescript": "~5.6.2"
   }
 }
