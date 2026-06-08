@@ -1302,10 +1302,20 @@ class ApiClient {
     return res.models ?? []
   }
 
-  async testProvider(id: string, model?: string): Promise<{ ok: boolean; detail?: string }> {
+  async testProvider(
+    id: string,
+    opts?: {
+      model?: string
+      /** Optional draft config to probe instead of the stored values (blank
+       * api_key keeps the stored key). */
+      provider_type?: string
+      base_url?: string
+      api_key?: string
+    },
+  ): Promise<{ ok: boolean; detail?: string }> {
     return this.request<{ ok: boolean; detail?: string }>(`/providers/${id}/test`, {
       method: 'POST',
-      body: JSON.stringify({ model }),
+      body: JSON.stringify(opts ?? {}),
     })
   }
 

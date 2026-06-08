@@ -349,16 +349,24 @@ providers.openapi(testRoute, async (c) => {
   const body = c.req.valid('json')
   const model = body.model || ''
 
+  // Merge optional draft config over the stored provider so the Edit Provider
+  // dialog can probe unsaved values. A blank api_key keeps the stored key.
+  const effective = {
+    provider_type: body.provider_type ?? provider.provider_type,
+    base_url: body.base_url ?? provider.base_url,
+    api_key: body.api_key ? body.api_key : provider.api_key,
+  }
+
   try {
     let res: Response
 
-    if (isAnthropicType(provider.provider_type)) {
-      const baseUrl = resolveAnthropicUrl(provider)
+    if (isAnthropicType(effective.provider_type)) {
+      const baseUrl = resolveAnthropicUrl(effective)
       res = await fetch(`${baseUrl}/v1/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': provider.api_key,
+          'x-api-key': effective.api_key,
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
@@ -367,11 +375,11 @@ providers.openapi(testRoute, async (c) => {
           messages: [{ role: 'user', content: 'hi' }],
         }),
       })
-    } else if (provider.provider_type === 'openai') {
-      const baseUrl = (provider.base_url || 'https://api.openai.com').replace(/\/+$/, '')
+    } else if (effective.provider_type === 'openai') {
+      const baseUrl = (effective.base_url || 'https://api.openai.com').replace(/\/+$/, '')
       const headers = {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${provider.api_key}`,
+        Authorization: `Bearer ${effective.api_key}`,
       }
       const testModel = model || 'gpt-4o-mini'
 
@@ -401,7 +409,7 @@ providers.openapi(testRoute, async (c) => {
       }
     } else {
       return c.json(
-        { ok: false, detail: `Unsupported provider type: ${provider.provider_type}` },
+        { ok: false, detail: `Unsupported provider type: ${effective.provider_type}` },
         200,
       )
     }

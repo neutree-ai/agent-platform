@@ -16,6 +16,7 @@ import { DocumentedDialog } from '@/components/ui/documented-dialog'
 import { EmptyHero } from '@/components/ui/empty-hero'
 import { EmptyIllustration } from '@/components/ui/empty-illustration'
 import { SaveButton } from '@/components/ui/save-button'
+import { TestButton, TestResult } from '@/components/workspace/agent-config/ModelPicker'
 import { useDialogStack } from '@/contexts/DialogStackContext'
 import { getProviderDoc, getProviderDocsHint } from '@/docs/inline-help/provider-docs'
 import { useDeleteProvider, useProviders, useUpdateProvider } from '@/hooks/useProviders'
@@ -76,6 +77,8 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<ProviderForm>(INITIAL_FORM)
+  const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+  const [testDetail, setTestDetail] = useState('')
 
   // Pre-load existing grants when opening edit dialog for a team-shared provider
   useEffect(() => {
@@ -107,7 +110,29 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
     setEditingId(p.id)
     setErrors({})
     setGeneralError(null)
+    setTestState('idle')
+    setTestDetail('')
     setDialogOpen(true)
+  }
+
+  // Probe the currently-edited (unsaved) config in place. A blank api_key keeps
+  // the stored key (mirrors the save-time "blank = unchanged" convention).
+  async function handleTest() {
+    if (!editingId) return
+    setTestState('testing')
+    setTestDetail('')
+    try {
+      const res = await api.testProvider(editingId, {
+        provider_type: form.provider_type,
+        base_url: form.base_url,
+        api_key: form.api_key,
+      })
+      setTestState(res.ok ? 'ok' : 'fail')
+      setTestDetail(res.detail || '')
+    } catch (err) {
+      setTestState('fail')
+      setTestDetail(err instanceof Error ? err.message : t('common.errors.requestFailed'))
+    }
   }
 
   async function handleSave() {
@@ -229,6 +254,12 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
         docsHint={getProviderDocsHint()}
         footer={
           <>
+            <TestButton
+              providerId={editingId ?? ''}
+              state={testState}
+              onRun={handleTest}
+              className="mr-auto"
+            />
             <Button type="button" size="sm" variant="ghost" onClick={() => setDialogOpen(false)}>
               {t('common.cancel')}
             </Button>
@@ -240,7 +271,22 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
           </>
         }
       >
-        <ProviderFormFields form={form} setForm={setForm} errors={localizedErrors} isEditing />
+        <ProviderFormFields
+          form={form}
+          setForm={(next) => {
+            // A config edit invalidates the previous probe result.
+            setTestState('idle')
+            setTestDetail('')
+            setForm(next)
+          }}
+          errors={localizedErrors}
+          isEditing
+        />
+        {testState !== 'idle' && (
+          <div className="mt-3">
+            <TestResult state={testState} detail={testDetail} />
+          </div>
+        )}
         {generalError && <div className="mt-3 text-xs text-destructive">{generalError}</div>}
       </DocumentedDialog>
     </>
