@@ -1053,7 +1053,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
 
       <div className="flex flex-1 min-h-0">
         {/* Left nav — single flat list */}
-        <div className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border/60 px-2 py-3">
+        <div className="flex w-36 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-border/60 px-2 py-3">
           {navItems.map((item) => {
             const Icon = item.icon
             const active = activeSection === item.key
@@ -1108,7 +1108,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
         </ScrollArea>
 
         {/* Right docs */}
-        <ScrollArea className="hidden w-80 shrink-0 border-l border-border/60 lg:block">
+        <ScrollArea className="hidden w-64 shrink-0 border-l border-border/60 lg:block">
           <div className="px-4 py-5">
             <Markdown
               key={activeSection}
