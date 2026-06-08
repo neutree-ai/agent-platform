@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Describing the problem behind the request
+        helps us find the best solution — which may differ from the one you
+        have in mind.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The use case or pain point motivating this request.
+      placeholder: I'm always frustrated when …
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches or workarounds you've thought about.
+    validations:
+      required: false
+  - type: dropdown
+    id: component
+    attributes:
+      label: Related component
+      options:
+        - control-plane
+        - web
+        - channel-gateway
+        - scheduler
+        - browser-service
+        - sandbox-service
+        - skills-content-service
+        - memory-fuse
+        - agents (claude-code / codex)
+        - sandbox SDK (@neutree-ai/sandbox)
+        - self-host / deployment
+        - other / not sure
+    validations:
+      required: false
