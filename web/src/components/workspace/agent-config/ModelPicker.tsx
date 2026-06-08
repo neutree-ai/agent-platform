@@ -189,7 +189,7 @@ export function useProviderTest(providerId: string, model: string) {
     setState('testing')
     setDetail('')
     try {
-      const res = await api.testProvider(providerId, model || undefined)
+      const res = await api.testProvider(providerId, { model: model || undefined })
       setState(res.ok ? 'ok' : 'fail')
       setDetail(res.detail || '')
     } catch (e: any) {
@@ -232,9 +232,7 @@ export function TestButton({
 export function TestResult({ state, detail }: { state: TestState; detail: string }) {
   const { t } = useTranslation()
   if (state === 'ok') {
-    return (
-      <p className="text-xs text-success">{t('components.modelPicker.status.connected')}</p>
-    )
+    return <p className="text-xs text-success">{t('components.modelPicker.status.connected')}</p>
   }
   if (state === 'fail') {
     return (

@@ -738,6 +738,13 @@ export const ModelProviderUpdateBodySchema = z
 
 export const ModelProviderTestBodySchema = z.object({
   model: z.string().optional(),
+  // Optional draft config: when present, probe these values instead of the
+  // stored ones (lets the Edit Provider dialog test before saving). Omitted
+  // fields fall back to the stored provider. A blank api_key keeps the stored
+  // key (mirrors the edit-mode "blank = unchanged" convention).
+  provider_type: z.string().optional(),
+  base_url: z.string().optional(),
+  api_key: z.string().optional(),
 })
 
 export const ModelListSchema = z.object({
