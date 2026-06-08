@@ -10,7 +10,8 @@
         "src/components/ui/**/*.{ts,tsx}",
         "src/**/*.test.{ts,tsx}"
       ],
-      "project": ["src/**/*.{ts,tsx,mdx}"]
+      "project": ["src/**/*.{ts,tsx,mdx}"],
+      "ignoreDependencies": ["@neutree-ai/theme"]
     },
     "browser-service": {
       "project": ["src/**/*.ts"]

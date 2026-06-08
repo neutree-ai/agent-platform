@@ -1,15 +1,29 @@
 {
   "name": "@neutree-ai/oauth-client",
   "version": "0.1.0",
-  "private": true,
+  "description": "Neutree Agent Platform OAuth client — shared scaffolding for services acting as OAuth consumers of the control plane.",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "Apache-2.0",
   "dependencies": {
     "hono": "^4.7.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "typescript": "~5.6.2"
   }
 }
