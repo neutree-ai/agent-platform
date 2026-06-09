@@ -648,11 +648,22 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
   // a generated HTML report in a new tab). Workspace drive only — the
   // public-exports app forwards to the workspace dufs at /files, AFS
   // mounts aren't reachable through that pipeline.
+  // Public URL for an export token. A folder points at its root (trailing
+  // slash) so sub-paths under it are addressable; a file ends with the
+  // filename so clients that infer names from the URL tail get it right.
+  const exportPublicUrl = (publicUrl: string, token: string, path: string, kind: 'file' | 'dir') =>
+    kind === 'dir'
+      ? `${publicUrl}/${token}/`
+      : `${publicUrl}/${token}/${encodeURIComponent(path.split('/').pop() || 'file')}`
+
   const ExportUrlBodySchema = z.object({
     path: z.string().min(1),
     ttl_seconds: z.number().int().min(1).max(3600).optional(),
     // When true, mint a never-expiring URL. ttl_seconds is ignored.
     permanent: z.boolean().optional(),
+    // When true, the path is a directory: the public URL serves a zip archive.
+    // The UI knows the entry kind, so it tells us rather than us re-probing dufs.
+    is_dir: z.boolean().optional(),
   })
   const ExportUrlResponseSchema = z.object({
     url: z.string(),
@@ -697,14 +708,18 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
     }
     const publicUrl = process.env.FILES_PUBLIC_URL
     if (!publicUrl) return c.json({ error: 'FILES_PUBLIC_URL is not configured' }, 400)
-    const { path, ttl_seconds, permanent } = c.req.valid('json')
+    const { path, ttl_seconds, permanent, is_dir } = c.req.valid('json')
     const normalized = path.replace(/^\/+/, '')
     if (!normalized) return c.json({ error: 'Path is empty' }, 400)
     if (normalized.includes('..')) return c.json({ error: 'Path must not contain ".."' }, 400)
     const ttl = permanent ? null : (ttl_seconds ?? 3600)
-    const record = await createExportToken(resolved.workspace.id, normalized, ttl)
-    const basename = normalized.split('/').pop() || 'file'
-    const url = `${publicUrl}/${record.token}/${encodeURIComponent(basename)}`
+    const record = await createExportToken(
+      resolved.workspace.id,
+      normalized,
+      ttl,
+      is_dir ? 'dir' : 'file',
+    )
+    const url = exportPublicUrl(publicUrl, record.token, normalized, record.kind)
     return c.json(
       { url, expires_at: record.expires_at ? record.expires_at.toISOString() : null },
       200,
@@ -753,11 +768,10 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
     const publicUrl = process.env.FILES_PUBLIC_URL ?? ''
     const records = await listExportTokens(workspace.id)
     const tokens = records.map((r) => {
-      const basename = r.path.split('/').pop() || 'file'
       return {
         token: r.token,
         path: r.path,
-        url: publicUrl ? `${publicUrl}/${r.token}/${encodeURIComponent(basename)}` : '',
+        url: publicUrl ? exportPublicUrl(publicUrl, r.token, r.path, r.kind) : '',
         created_at: r.created_at.toISOString(),
         expires_at: r.expires_at ? r.expires_at.toISOString() : null,
       }

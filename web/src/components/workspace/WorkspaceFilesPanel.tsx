@@ -649,7 +649,7 @@ export function WorkspaceFilesPanel({
   const mintPublicLink = useCallback(
     async (entry: DufsEntry, opts: { ttlSeconds?: number; permanent?: boolean }) => {
       const path = `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${entry.name}`
-      return createFileExportUrl(workspaceId, path, opts)
+      return createFileExportUrl(workspaceId, path, { ...opts, isDir: isDir(entry) })
     },
     [currentPath, workspaceId],
   )
@@ -1531,9 +1531,7 @@ export function WorkspaceFilesPanel({
                         }
                         onDelete={writeAllowed ? () => handleDelete(entry) : undefined}
                         onCreatePublicLink={
-                          drive === 'workspace' && !isDir(entry)
-                            ? () => requestPublicLink(entry)
-                            : undefined
+                          drive === 'workspace' ? () => requestPublicLink(entry) : undefined
                         }
                         onAddToChat={
                           drive === 'workspace' && !isDir(entry)
@@ -1588,6 +1586,7 @@ export function WorkspaceFilesPanel({
               ? `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${publicLinkTarget.name}`
               : null
           }
+          isDir={publicLinkTarget ? isDir(publicLinkTarget) : false}
           onGenerate={(opts) => {
             if (!publicLinkTarget) return Promise.reject(new Error('no target'))
             return mintPublicLink(publicLinkTarget, opts)

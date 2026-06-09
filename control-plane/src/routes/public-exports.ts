@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
+import { classifyDufsPath } from '../lib/dufs'
 import { getWorkspaceAddress } from '../lib/workspace-address'
 import { getActiveExportToken } from '../services/db/export-tokens'
+import type { ExportToken } from '../services/db/export-tokens'
 import { pool } from '../services/db/pool'
 import { getActiveSessionExportToken } from '../services/db/session-export-tokens'
 import { getWorkspace } from '../services/db/workspaces'
@@ -146,52 +148,168 @@ publicExportsApp.get('/session/:token', async (c) => {
   })
 })
 
-publicExportsApp.get('/:token/:filename{.*}', async (c) => {
-  const token = c.req.param('token')
-  const record = await getActiveExportToken(token)
-  if (!record) return c.text('Not found or expired', 404)
+function contentDisposition(disposition: 'inline' | 'attachment', name: string): string {
+  const asciiFallback = name.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')
+  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(name)}`
+}
 
+/** Resolve a token's workspace address, or a Response to short-circuit on. */
+async function resolveAddress(c: any, record: ExportToken): Promise<string | Response> {
   const workspace = await getWorkspace(record.workspace_id)
   if (!workspace) return c.text('Workspace not found', 404)
   if (workspace.status !== 'running') return c.text('Workspace not running', 503)
-  const address = getWorkspaceAddress(workspace.id)
+  return getWorkspaceAddress(workspace.id)
+}
 
-  const trimmed = record.path.replace(/^\//, '')
-  const encoded = trimmed
-    .split('/')
-    .map((seg) => encodeURIComponent(seg))
-    .join('/')
-  const dufsUrl = `${address}/files/${encoded}`
-
+/** Proxy a single dufs file. Inline by default; `?dl=1` forces a download. */
+async function proxyFile(c: any, fileUrl: string, name: string): Promise<Response> {
   let upstream: Response
   try {
-    upstream = await fetch(dufsUrl, { signal: c.req.raw.signal })
+    upstream = await fetch(fileUrl, { signal: c.req.raw.signal })
   } catch (e: any) {
     if (c.req.raw.signal.aborted) return c.text('Client disconnected', 408)
-    console.error(`[public-exports] fetch failed ${dufsUrl}:`, e.message)
+    console.error(`[public-exports] fetch failed ${fileUrl}:`, e.message)
     return c.text('Agent unavailable', 502)
   }
   if (!upstream.ok) {
     return c.text(`Upstream ${upstream.status}`, upstream.status === 404 ? 404 : 502)
   }
-
-  const basename = trimmed.split('/').pop() || 'file'
-  const asciiFallback = basename.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_')
   const disposition = c.req.query('dl') === '1' ? 'attachment' : 'inline'
   const headers: Record<string, string> = {
     'Content-Type': upstream.headers.get('Content-Type') || 'application/octet-stream',
-    'Content-Disposition': `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(basename)}`,
+    'Content-Disposition': contentDisposition(disposition, name),
     'Cache-Control': 'private, no-store',
     'X-Robots-Tag': 'noindex',
   }
   const cl = upstream.headers.get('Content-Length')
   if (cl) headers['Content-Length'] = cl
-
-  console.log(
-    `[public-exports] serve token=${token} ws=${record.workspace_id} path=${record.path} ` +
-      `ip=${c.req.header('x-forwarded-for') || 'unknown'} ua=${c.req.header('user-agent') || '-'}`,
-  )
   return new Response(upstream.body, { status: 200, headers })
+}
+
+/** Proxy a dufs directory as a streamed zip archive (`?zip`). */
+async function proxyZip(c: any, dirUrl: string, name: string): Promise<Response> {
+  let upstream: Response
+  try {
+    upstream = await fetch(`${dirUrl}?zip`, { signal: c.req.raw.signal })
+  } catch (e: any) {
+    if (c.req.raw.signal.aborted) return c.text('Client disconnected', 408)
+    console.error(`[public-exports] zip fetch failed ${dirUrl}:`, e.message)
+    return c.text('Agent unavailable', 502)
+  }
+  if (!upstream.ok) {
+    return c.text(`Upstream ${upstream.status}`, upstream.status === 404 ? 404 : 502)
+  }
+  // A zip is streamed (chunked) — no Content-Length — and can't preview inline.
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': contentDisposition('attachment', `${name}.zip`),
+      'Cache-Control': 'private, no-store',
+      'X-Robots-Tag': 'noindex',
+    },
+  })
+}
+
+function encodePath(segments: string[]): string {
+  return segments.map((s) => encodeURIComponent(s)).join('/')
+}
+
+function logServe(c: any, token: string, record: ExportToken, served: string) {
+  console.log(
+    `[public-exports] serve token=${token} ws=${record.workspace_id} kind=${record.kind} ` +
+      `served=${served} ip=${c.req.header('x-forwarded-for') || 'unknown'} ` +
+      `ua=${c.req.header('user-agent') || '-'}`,
+  )
+}
+
+/** File token: the URL tail is cosmetic — always serve the token's own path. */
+async function serveFileToken(c: any, token: string, record: ExportToken): Promise<Response> {
+  const address = await resolveAddress(c, record)
+  if (typeof address !== 'string') return address
+  const segs = record.path.replace(/^\/+/, '').split('/').filter(Boolean)
+  logServe(c, token, record, record.path)
+  return proxyFile(c, `${address}/files/${encodePath(segs)}`, segs[segs.length - 1] || 'file')
+}
+
+/**
+ * Directory token: the URL tail after the token is a sub-path *within* the
+ * exported folder, forwarded to dufs relative to the token's root.
+ *   - a file sub-path → that file (inline; `?dl=1` to download)
+ *   - a directory (incl. the root) → its `index.html` if present, else a zip
+ *   - any directory with `?zip` → a zip download of that directory
+ * `..` segments are rejected so a crafted URL can't escape the exported root.
+ */
+async function serveDirToken(
+  c: any,
+  token: string,
+  record: ExportToken,
+  restRaw: string,
+): Promise<Response> {
+  const address = await resolveAddress(c, record)
+  if (typeof address !== 'string') return address
+
+  const baseSegs = record.path.replace(/^\/+/, '').split('/').filter(Boolean)
+  const subSegs: string[] = []
+  for (const seg of restRaw.split('/')) {
+    if (seg === '' || seg === '.') continue
+    if (seg === '..') return c.text('Forbidden path', 400)
+    subSegs.push(seg)
+  }
+  const fullSegs = [...baseSegs, ...subSegs]
+  const fullUrl = `${address}/files/${encodePath(fullSegs)}`
+  const tailName = fullSegs[fullSegs.length - 1] || 'archive'
+  logServe(c, token, record, fullSegs.join('/'))
+
+  // Explicit zip download of whatever directory the URL addresses.
+  if (c.req.query('zip') !== undefined) return proxyZip(c, fullUrl, tailName)
+
+  let kind: 'file' | 'dir' | null
+  try {
+    kind = await classifyDufsPath(fullUrl, c.req.raw.signal)
+  } catch {
+    if (c.req.raw.signal.aborted) return c.text('Client disconnected', 408)
+    return c.text('Agent unavailable', 502)
+  }
+  if (kind === null) return c.text('Not found', 404)
+  if (kind === 'file') return proxyFile(c, fullUrl, tailName)
+
+  // Directory: prefer index.html, else fall back to a zip download.
+  let hasIndex = false
+  try {
+    const head = await fetch(`${fullUrl}/index.html`, {
+      method: 'HEAD',
+      signal: c.req.raw.signal,
+    })
+    hasIndex = head.ok
+  } catch {
+    if (c.req.raw.signal.aborted) return c.text('Client disconnected', 408)
+  }
+  if (hasIndex) {
+    // Relative links in the served HTML must resolve against the directory, so
+    // ensure a trailing slash before serving its index (mirrors nginx/Apache).
+    if (!c.req.path.endsWith('/')) return c.redirect(`${c.req.path}/`, 302)
+    return proxyFile(c, `${fullUrl}/index.html`, 'index.html')
+  }
+  return proxyZip(c, fullUrl, tailName)
+}
+
+// Bare token (no sub-path). A folder redirects to its trailing-slash root so
+// relative links resolve; a file is served directly.
+publicExportsApp.get('/:token', async (c) => {
+  const token = c.req.param('token')
+  const record = await getActiveExportToken(token)
+  if (!record) return c.text('Not found or expired', 404)
+  if (record.kind === 'dir') return c.redirect(`/${token}/`, 302)
+  return serveFileToken(c, token, record)
+})
+
+publicExportsApp.get('/:token/:filename{.*}', async (c) => {
+  const token = c.req.param('token')
+  const record = await getActiveExportToken(token)
+  if (!record) return c.text('Not found or expired', 404)
+  if (record.kind === 'dir') return serveDirToken(c, token, record, c.req.param('filename') ?? '')
+  return serveFileToken(c, token, record)
 })
 
 publicExportsApp.all('*', (c) => c.text('Not found', 404))

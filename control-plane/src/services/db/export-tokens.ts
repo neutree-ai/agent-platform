@@ -1,10 +1,14 @@
 import { randomBytes } from 'node:crypto'
 import { pool } from './pool'
 
-interface ExportToken {
+type ExportKind = 'file' | 'dir'
+
+export interface ExportToken {
   token: string
   workspace_id: string
   path: string
+  /** 'dir' tokens are served as a zip archive; 'file' as a single-file proxy. */
+  kind: ExportKind
   expires_at: Date | null
   created_at: Date
 }
@@ -22,22 +26,23 @@ export async function createExportToken(
   workspaceId: string,
   path: string,
   ttlSeconds: number | null,
+  kind: ExportKind = 'file',
 ): Promise<ExportToken> {
   const token = generateToken()
   if (ttlSeconds == null) {
     const { rows } = await pool.query(
-      `INSERT INTO export_tokens (token, workspace_id, path, expires_at)
-       VALUES ($1, $2, $3, NULL)
+      `INSERT INTO export_tokens (token, workspace_id, path, kind, expires_at)
+       VALUES ($1, $2, $3, $4, NULL)
        RETURNING *`,
-      [token, workspaceId, path],
+      [token, workspaceId, path, kind],
     )
     return rows[0] as ExportToken
   }
   const { rows } = await pool.query(
-    `INSERT INTO export_tokens (token, workspace_id, path, expires_at)
-     VALUES ($1, $2, $3, now() + ($4 || ' seconds')::interval)
+    `INSERT INTO export_tokens (token, workspace_id, path, kind, expires_at)
+     VALUES ($1, $2, $3, $4, now() + ($5 || ' seconds')::interval)
      RETURNING *`,
-    [token, workspaceId, path, String(ttlSeconds)],
+    [token, workspaceId, path, kind, String(ttlSeconds)],
   )
   return rows[0] as ExportToken
 }

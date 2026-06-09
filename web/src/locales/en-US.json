@@ -2467,6 +2467,8 @@
           "warning": "Anyone with this link can read the file until it expires — no login required. Make sure the contents are safe to share.",
           "warningPermanent": "This link never expires. Anyone who ever sees the URL can read whatever lives at this path — including future overwrites. Revoke it from \"Manage public links\" once you're done.",
           "fileLabel": "File",
+          "folderLabel": "Folder",
+          "folderNote": "The link points at the folder; sub-paths under it are reachable too (e.g. …/sub/img.png). Opening the folder itself serves its index.html if present, otherwise a .zip download.",
           "ttlLabel": "Expires after",
           "ttlOptions": {
             "5min": "5 minutes",
