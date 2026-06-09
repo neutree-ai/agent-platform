@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-skills
+  name: ${APP_PREFIX}-skills
   namespace: ${NAMESPACE}
   labels:
-    app: nap-skills
+    app: ${APP_PREFIX}-skills
 spec:
   # Must stay at 1: dufs caches unpacked skill content on local disk; multiple
   # replicas would each maintain an independent cache with no coherency.
@@ -13,15 +13,15 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: nap-skills
+      app: ${APP_PREFIX}-skills
   template:
     metadata:
       labels:
-        app: nap-skills
+        app: ${APP_PREFIX}-skills
     spec:
       containers:
         - name: skills-content-service
-          image: ${REGISTRY}/nap-skills-content-service:${IMAGE_TAG}
+          image: ${REGISTRY}/${APP_PREFIX}-skills-content-service:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3008
@@ -32,10 +32,10 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nap-pg-user
+                  name: ${APP_PREFIX}-pg-user
                   key: password
             - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
             - name: CACHE_DIR
               value: /var/cache/skills-content
           volumeMounts:
@@ -69,14 +69,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nap-skills
+  name: ${APP_PREFIX}-skills
   namespace: ${NAMESPACE}
   labels:
-    app: nap-skills
+    app: ${APP_PREFIX}-skills
 spec:
   type: ClusterIP
   selector:
-    app: nap-skills
+    app: ${APP_PREFIX}-skills
   ports:
     - port: 3008
       targetPort: 3008

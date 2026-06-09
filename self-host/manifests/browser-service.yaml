@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-browser
+  name: ${APP_PREFIX}-browser
   namespace: ${NAMESPACE}
   labels:
-    app: nap-browser
+    app: ${APP_PREFIX}-browser
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nap-browser
+      app: ${APP_PREFIX}-browser
   template:
     metadata:
       labels:
-        app: nap-browser
+        app: ${APP_PREFIX}-browser
     spec:
       containers:
         - name: browser
-          image: ${REGISTRY}/nap-browser:${IMAGE_TAG}
+          image: ${REGISTRY}/${APP_PREFIX}-browser:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3005
@@ -28,22 +28,22 @@ spec:
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: nap-browser-secret
+                  name: ${APP_PREFIX}-browser-secret
                   key: JWT_SECRET
             - name: NAP_OAUTH_URL
               value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
             - name: NAP_INTERNAL_URL
-              value: "http://nap-cp:3000"
+              value: "http://${APP_PREFIX}-cp:3000"
             - name: OAUTH_CLIENT_ID
               value: "browser-service"
             - name: BROWSER_SERVICE_URL
               value: "${BROWSER_SERVICE_URL_RESOLVED}"
             - name: SANDBOX_SERVICE_URL
-              value: "http://nap-sandbox:3006"
+              value: "http://${APP_PREFIX}-sandbox:3006"
             - name: SANDBOX_SERVICE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: nap-sandbox-secret
+                  name: ${APP_PREFIX}-sandbox-secret
                   key: SERVICE_KEY
             - name: BROWSER_IMAGE
               value: "${REGISTRY}/chromium-headful:${IMAGE_TAG}"
@@ -54,7 +54,7 @@ spec:
             - name: TURN_AUTH_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: nap-browser-secret
+                  name: ${APP_PREFIX}-browser-secret
                   key: TURN_AUTH_SECRET
           resources:
             requests:
@@ -79,14 +79,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nap-browser
+  name: ${APP_PREFIX}-browser
   namespace: ${NAMESPACE}
   labels:
-    app: nap-browser
+    app: ${APP_PREFIX}-browser
 spec:
   type: ${SERVICE_TYPE}
   selector:
-    app: nap-browser
+    app: ${APP_PREFIX}-browser
   ports:
     - port: 3005
       targetPort: 3005

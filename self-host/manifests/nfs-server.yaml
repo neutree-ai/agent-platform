@@ -20,7 +20,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: nap-nfs-server-data
+  name: ${APP_PREFIX}-nfs-server-data
   namespace: ${NAMESPACE}
 spec:
   accessModes:
@@ -33,10 +33,10 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-nfs-server
+  name: ${APP_PREFIX}-nfs-server
   namespace: ${NAMESPACE}
   labels:
-    app: nap-nfs-server
+    app: ${APP_PREFIX}-nfs-server
 spec:
   replicas: 1
   # Recreate: the PVC is RWO; rolling update would deadlock waiting for the
@@ -45,15 +45,15 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: nap-nfs-server
+      app: ${APP_PREFIX}-nfs-server
   template:
     metadata:
       labels:
-        app: nap-nfs-server
+        app: ${APP_PREFIX}-nfs-server
     spec:
       containers:
         - name: nfs-server
-          image: ghcr.io/obeone/nfs-server:2.2.3
+          image: ${NFS_SERVER_IMAGE}
           imagePullPolicy: IfNotPresent
           env:
             # One export, root-squash off so the provisioner can chown subdirs.
@@ -79,17 +79,17 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: nap-nfs-server-data
+            claimName: ${APP_PREFIX}-nfs-server-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: nap-nfs-server
+  name: ${APP_PREFIX}-nfs-server
   namespace: ${NAMESPACE}
 spec:
   type: ClusterIP
   selector:
-    app: nap-nfs-server
+    app: ${APP_PREFIX}-nfs-server
   ports:
     - name: nfs
       port: 2049

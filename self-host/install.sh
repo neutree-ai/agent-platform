@@ -50,17 +50,38 @@ set +a
 
 # --- Image registry --------------------------------------------------------
 # Every first-party service image lives as a sub-path under one public registry
-# path, e.g. ghcr.io/neutree-ai/agent-platform/nap-cp:<tag>. Third-party images
-# (postgres, coturn, gotenberg, language runtimes, …) are pulled from their own
-# upstream public locations and are hardcoded in the manifests, not under
-# ${REGISTRY}.
+# path, e.g. ghcr.io/neutree-ai/agent-platform/${APP_PREFIX}-cp:<tag>. Third-party
+# images (coturn, gotenberg, language runtimes, …) default to their public
+# upstreams (see "Third-party images" below) — an offline/mirrored install
+# overrides each to a path under ${REGISTRY}.
 export REGISTRY="${REGISTRY:-ghcr.io/neutree-ai/agent-platform}"
 # Tag applied to every first-party image. Default :latest; pin to a release tag
 # for reproducible installs.
 export IMAGE_TAG="${IMAGE_TAG:-latest}"
 
+# --- Naming -----------------------------------------------------------------
+# Prefix on every first-party k8s object name (${APP_PREFIX}-cp, ${APP_PREFIX}-pg,
+# …) and on the first-party image sub-paths (${REGISTRY}/${APP_PREFIX}-cp). A
+# redistribution can rebrand by overriding this; existing installs keep their
+# names by pinning it. DB_NAME is the application database created in postgres.
+export APP_PREFIX="${APP_PREFIX:-nap}"
+export DB_NAME="${DB_NAME:-nap}"
+
+# --- Third-party images -----------------------------------------------------
+# Non-first-party images (language runtimes, pause, gotenberg, coturn, nfs).
+# Default to their public upstreams; an offline/mirrored install overrides each
+# to a ${REGISTRY}/... path that resolves inside an air-gapped registry.
+export POSTGRES_IMAGE="${POSTGRES_IMAGE:-ghcr.io/cloudnative-pg/postgresql:16}"
+export GOTENBERG_IMAGE="${GOTENBERG_IMAGE:-docker.io/gotenberg/gotenberg:8}"
+export COTURN_IMAGE="${COTURN_IMAGE:-docker.io/coturn/coturn:4.6}"
+export NFS_SERVER_IMAGE="${NFS_SERVER_IMAGE:-ghcr.io/obeone/nfs-server:2.2.3}"
+export RUNTIME_NODE_IMAGE="${RUNTIME_NODE_IMAGE:-docker.io/library/node:22-bookworm}"
+export RUNTIME_PYTHON_IMAGE="${RUNTIME_PYTHON_IMAGE:-docker.io/library/python:3.12-bookworm}"
+export RUNTIME_GOLANG_IMAGE="${RUNTIME_GOLANG_IMAGE:-docker.io/library/golang:1.23}"
+export PAUSE_IMAGE="${PAUSE_IMAGE:-registry.k8s.io/pause:3.9}"
+
 # Resolve AGENT_IMAGE_PREFIX if it references REGISTRY
-AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${REGISTRY}/nap-agent}"
+AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}-agent}"
 export AGENT_IMAGE_PREFIX
 
 export KUBECONFIG="${KUBECONFIG:-./kubeconfig.yaml}"
@@ -219,7 +240,9 @@ render_manifests() {
 
   # Explicit variable list — prevents envsubst from replacing k8s $(VAR)
   # references like $(POSTGRES_PASSWORD)
-  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${TOS_HOST}${TOS_NODE_PORT}'
+  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${DB_NAME}${TOS_HOST}${TOS_NODE_PORT}'
+  VARS+='${POSTGRES_IMAGE}${GOTENBERG_IMAGE}${COTURN_IMAGE}${NFS_SERVER_IMAGE}'
+  VARS+='${RUNTIME_NODE_IMAGE}${RUNTIME_PYTHON_IMAGE}${RUNTIME_GOLANG_IMAGE}${PAUSE_IMAGE}'
   VARS+='${PG_USERNAME}${PG_PASSWORD}${PG_INSTANCES}${PG_STORAGE_SIZE}${PG_STORAGE_CLASS}'
   VARS+='${NFS_SERVER}${NFS_PATH}${NFS_STORAGE_CLASS}'
   VARS+='${JWT_SECRET}${CREDENTIAL_ENCRYPTION_KEY}'

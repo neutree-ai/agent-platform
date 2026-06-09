@@ -1,36 +1,36 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-scheduler
+  name: ${APP_PREFIX}-scheduler
   namespace: ${NAMESPACE}
   labels:
-    app: nap-scheduler
+    app: ${APP_PREFIX}-scheduler
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nap-scheduler
+      app: ${APP_PREFIX}-scheduler
   template:
     metadata:
       labels:
-        app: nap-scheduler
+        app: ${APP_PREFIX}-scheduler
     spec:
       containers:
         - name: scheduler
-          image: ${REGISTRY}/nap-scheduler:${IMAGE_TAG}
+          image: ${REGISTRY}/${APP_PREFIX}-scheduler:${IMAGE_TAG}
           imagePullPolicy: Always
           env:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nap-pg-user
+                  name: ${APP_PREFIX}-pg-user
                   key: password
             - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
             - name: NAP_API_URL
-              value: "http://nap-cp:3000"
+              value: "http://${APP_PREFIX}-cp:3000"
             - name: CG_API_URL
-              value: "http://nap-cg:3002"
+              value: "http://${APP_PREFIX}-cg:3002"
           resources:
             requests:
               memory: "128Mi"

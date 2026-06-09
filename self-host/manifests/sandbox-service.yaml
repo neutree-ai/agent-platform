@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-sandbox
+  name: ${APP_PREFIX}-sandbox
   namespace: ${NAMESPACE}
   labels:
-    app: nap-sandbox
+    app: ${APP_PREFIX}-sandbox
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nap-sandbox
+      app: ${APP_PREFIX}-sandbox
   template:
     metadata:
       labels:
-        app: nap-sandbox
+        app: ${APP_PREFIX}-sandbox
     spec:
       containers:
         - name: sandbox
-          image: ${REGISTRY}/nap-sandbox:${IMAGE_TAG}
+          image: ${REGISTRY}/${APP_PREFIX}-sandbox:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3006
@@ -28,24 +28,24 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nap-pg-user
+                  name: ${APP_PREFIX}-pg-user
                   key: password
             - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: nap-sandbox-secret
+                  name: ${APP_PREFIX}-sandbox-secret
                   key: JWT_SECRET
             - name: SERVICE_KEY
               valueFrom:
                 secretKeyRef:
-                  name: nap-sandbox-secret
+                  name: ${APP_PREFIX}-sandbox-secret
                   key: SERVICE_KEY
             - name: NAP_OAUTH_URL
               value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
             - name: NAP_URL
-              value: "http://nap-cp:3000"
+              value: "http://${APP_PREFIX}-cp:3000"
             - name: OAUTH_CLIENT_ID
               value: "sandbox-service"
             - name: SANDBOX_SERVICE_URL
@@ -77,14 +77,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nap-sandbox
+  name: ${APP_PREFIX}-sandbox
   namespace: ${NAMESPACE}
   labels:
-    app: nap-sandbox
+    app: ${APP_PREFIX}-sandbox
 spec:
   type: ${SERVICE_TYPE}
   selector:
-    app: nap-sandbox
+    app: ${APP_PREFIX}-sandbox
   ports:
     - port: 3006
       targetPort: 3006

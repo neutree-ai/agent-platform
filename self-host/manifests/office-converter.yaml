@@ -8,23 +8,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-office-converter
+  name: ${APP_PREFIX}-office-converter
   namespace: ${NAMESPACE}
   labels:
-    app: nap-office-converter
+    app: ${APP_PREFIX}-office-converter
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nap-office-converter
+      app: ${APP_PREFIX}-office-converter
   template:
     metadata:
       labels:
-        app: nap-office-converter
+        app: ${APP_PREFIX}-office-converter
     spec:
       containers:
         - name: gotenberg
-          image: docker.io/gotenberg/gotenberg:8
+          image: ${GOTENBERG_IMAGE}
           args:
             - "gotenberg"
             - "--api-timeout=120s"
@@ -54,14 +54,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nap-office-converter
+  name: ${APP_PREFIX}-office-converter
   namespace: ${NAMESPACE}
   labels:
-    app: nap-office-converter
+    app: ${APP_PREFIX}-office-converter
 spec:
   type: ClusterIP
   selector:
-    app: nap-office-converter
+    app: ${APP_PREFIX}-office-converter
   ports:
     - port: 3007
       targetPort: 3000
