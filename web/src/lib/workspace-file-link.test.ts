@@ -68,4 +68,49 @@ describe('parseWorkspaceFileHref', () => {
   it('keeps the afs drive distinct from a workspace path that happens to contain "mnt/afs"', () => {
     expect(parseWorkspaceFileHref('/workspace/mnt/afs/x.md')?.drive).toBe('workspace')
   })
+
+  it('rewrites a skill /tmp extraction path onto the workspace drive', () => {
+    // Agents report the symlink target (`/tmp/skill-<name>/...`); it must
+    // resolve to the workspace-drive skills path the file viewer can serve.
+    expect(parseWorkspaceFileHref('/tmp/skill-nightly-build-monitor/SKILL.md')).toEqual({
+      drive: 'workspace',
+      filePath: '/.claude/skills/nightly-build-monitor/SKILL.md',
+      viewingLine: undefined,
+      viewingColumn: undefined,
+    })
+  })
+
+  it('rewrites a bare skill /tmp dir and preserves trailing slash', () => {
+    expect(parseWorkspaceFileHref('/tmp/skill-my-skill/')?.filePath).toBe(
+      '/.claude/skills/my-skill/',
+    )
+  })
+
+  it('keeps :line anchors when rewriting a skill /tmp path', () => {
+    expect(parseWorkspaceFileHref('/tmp/skill-my-skill/script.ts:12:3')).toMatchObject({
+      drive: 'workspace',
+      filePath: '/.claude/skills/my-skill/script.ts',
+      viewingLine: 12,
+      viewingColumn: 3,
+    })
+  })
+
+  it('rewrites against a codex skills root when supplied', () => {
+    expect(parseWorkspaceFileHref('/tmp/skill-my-skill/SKILL.md', '/.home/.codex/skills')).toEqual({
+      drive: 'workspace',
+      filePath: '/.home/.codex/skills/my-skill/SKILL.md',
+      viewingLine: undefined,
+      viewingColumn: undefined,
+    })
+  })
+
+  it('tolerates a trailing slash on the supplied skills root', () => {
+    expect(
+      parseWorkspaceFileHref('/tmp/skill-my-skill/SKILL.md', '/.claude/skills/')?.filePath,
+    ).toBe('/.claude/skills/my-skill/SKILL.md')
+  })
+
+  it('does not rewrite unrelated /tmp paths', () => {
+    expect(parseWorkspaceFileHref('/tmp/scratch/note.md')).toBeNull()
+  })
 })

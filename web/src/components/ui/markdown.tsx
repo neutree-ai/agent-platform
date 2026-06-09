@@ -1,7 +1,9 @@
 import { PlatformCmd } from "@/components/ui/platform-cmd";
+import { useSkillsBasePath } from "@/hooks/useSkillsBasePath";
 import { useWorkspaceFileLink } from "@/hooks/useWorkspaceFileLink";
 import { type DriveKind, fileUrl } from "@/lib/api/agent-files";
 import { cn } from "@/lib/utils";
+import { canonicalizeAgentPath, isSkillTmpPath } from "@/lib/workspace-file-link";
 import { ChevronDown, ExternalLink, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode, memo, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -74,15 +76,20 @@ function WorkspaceFileLink({ href, children, ...props }: ComponentPropsWithoutRe
 // agent-files endpoint so the image actually loads.
 function WorkspaceFileImg({ src, alt, ...props }: ComponentPropsWithoutRef<"img">) {
   const { workspaceId } = useParams<{ workspaceId?: string }>();
+  // Resolve the agent's skills root only when this src is a skill `/tmp` path.
+  const skillsBasePath = useSkillsBasePath(workspaceId, isSkillTmpPath(src));
   if (workspaceId && src) {
+    // Rewrite skill `/tmp` extraction paths onto the workspace drive first, in
+    // lockstep with the link parser (see `lib/workspace-file-link.ts`).
+    const canonical = canonicalizeAgentPath(src, skillsBasePath);
     let drive: DriveKind | null = null;
     let rawPath: string | null = null;
-    if (src.startsWith("/workspace/")) {
+    if (canonical.startsWith("/workspace/")) {
       drive = "workspace";
-      rawPath = src.slice("/workspace".length);
-    } else if (src.startsWith("/mnt/afs/")) {
+      rawPath = canonical.slice("/workspace".length);
+    } else if (canonical.startsWith("/mnt/afs/")) {
       drive = "afs";
-      rawPath = src.slice("/mnt/afs".length);
+      rawPath = canonical.slice("/mnt/afs".length);
     }
     if (drive && rawPath) {
       let path: string;
