@@ -1,12 +1,12 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: nap-pg
+  name: ${APP_PREFIX}-pg
   namespace: ${NAMESPACE}
 spec:
   instances: ${PG_INSTANCES}
-  # Connected variant: pulled straight from CNPG's public GHCR image.
-  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  # Defaults to CNPG's public GHCR image; override POSTGRES_IMAGE for a mirror.
+  imageName: ${POSTGRES_IMAGE}
 
   minSyncReplicas: ${PG_SYNC_REPLICAS}
   maxSyncReplicas: ${PG_SYNC_REPLICAS}
@@ -32,10 +32,10 @@ spec:
 
   bootstrap:
     initdb:
-      database: nap
+      database: ${DB_NAME}
       owner: ${PG_USERNAME}
       secret:
-        name: nap-pg-user
+        name: ${APP_PREFIX}-pg-user
 
   storage:
     size: ${PG_STORAGE_SIZE}
@@ -48,7 +48,7 @@ spec:
         login: true
         createdb: true
         passwordSecret:
-          name: nap-pg-user
+          name: ${APP_PREFIX}-pg-user
 
   postgresql:
     shared_preload_libraries:

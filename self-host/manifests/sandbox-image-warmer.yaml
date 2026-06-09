@@ -28,14 +28,21 @@ spec:
               cpu: 1m
               memory: 1Mi
         - name: pull-node-22
-          image: docker.io/library/node:22-bookworm
+          image: ${RUNTIME_NODE_IMAGE}
           command: ["true"]
           resources:
             requests:
               cpu: 1m
               memory: 1Mi
         - name: pull-python-3-12
-          image: docker.io/library/python:3.12-bookworm
+          image: ${RUNTIME_PYTHON_IMAGE}
+          command: ["true"]
+          resources:
+            requests:
+              cpu: 1m
+              memory: 1Mi
+        - name: pull-golang-1-23
+          image: ${RUNTIME_GOLANG_IMAGE}
           command: ["true"]
           resources:
             requests:
@@ -43,7 +50,7 @@ spec:
               memory: 1Mi
       containers:
         - name: pause
-          image: registry.k8s.io/pause:3.9
+          image: ${PAUSE_IMAGE}
           resources:
             requests:
               cpu: 1m

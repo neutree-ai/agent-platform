@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: nap-cp
+  name: ${APP_PREFIX}-cp
   namespace: ${NAMESPACE}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: nap-cp
+  name: ${APP_PREFIX}-cp
   namespace: ${NAMESPACE}
 rules:
   - apiGroups: [""]
@@ -20,21 +20,21 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: nap-cp
+  name: ${APP_PREFIX}-cp
   namespace: ${NAMESPACE}
 subjects:
   - kind: ServiceAccount
-    name: nap-cp
+    name: ${APP_PREFIX}-cp
     namespace: ${NAMESPACE}
 roleRef:
   kind: Role
-  name: nap-cp
+  name: ${APP_PREFIX}-cp
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: nap-cp-node-reader
+  name: ${APP_PREFIX}-cp-node-reader
 rules:
   - apiGroups: [""]
     resources: ["nodes"]
@@ -43,38 +43,38 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: nap-cp-node-reader
+  name: ${APP_PREFIX}-cp-node-reader
 subjects:
   - kind: ServiceAccount
-    name: nap-cp
+    name: ${APP_PREFIX}-cp
     namespace: ${NAMESPACE}
 roleRef:
   kind: ClusterRole
-  name: nap-cp-node-reader
+  name: ${APP_PREFIX}-cp-node-reader
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-cp
+  name: ${APP_PREFIX}-cp
   namespace: ${NAMESPACE}
   labels:
-    app: nap-cp
+    app: ${APP_PREFIX}-cp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nap-cp
+      app: ${APP_PREFIX}-cp
   template:
     metadata:
       labels:
-        app: nap-cp
+        app: ${APP_PREFIX}-cp
     spec:
-      serviceAccountName: nap-cp
+      serviceAccountName: ${APP_PREFIX}-cp
       terminationGracePeriodSeconds: 150
       containers:
         - name: control-plane
-          image: ${REGISTRY}/nap-cp:${IMAGE_TAG}
+          image: ${REGISTRY}/${APP_PREFIX}-cp:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
@@ -99,18 +99,18 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nap-pg-user
+                  name: ${APP_PREFIX}-pg-user
                   key: password
             - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
             - name: CONTROL_PLANE_URL
-              value: "http://nap-cp.${NAMESPACE}.svc.cluster.local:3000"
+              value: "http://${APP_PREFIX}-cp.${NAMESPACE}.svc.cluster.local:3000"
             - name: BROWSER_SERVICE_URL
-              value: "http://nap-browser:3005"
+              value: "http://${APP_PREFIX}-browser:3005"
             - name: BROWSER_PUBLIC_URL
               value: "http://${TOS_HOST}:${BROWSER_NODE_PORT}"
             - name: SANDBOX_SERVICE_URL
-              value: "http://nap-sandbox:3006"
+              value: "http://${APP_PREFIX}-sandbox:3006"
             - name: SANDBOX_PUBLIC_URL
               value: "http://${TOS_HOST}:${SANDBOX_NODE_PORT}"
             - name: AFS_ENABLED
@@ -120,9 +120,9 @@ spec:
             - name: AFS_CONTROLLER_ADDR
               value: "afs-controller.${NAMESPACE}.svc:9100"
             - name: MEMORY_FUSE_IMAGE
-              value: "${REGISTRY}/nap-memory-fuse:${IMAGE_TAG}"
+              value: "${REGISTRY}/${APP_PREFIX}-memory-fuse:${IMAGE_TAG}"
             - name: OFFICE_CONVERTER_URL
-              value: "http://nap-office-converter:3007"
+              value: "http://${APP_PREFIX}-office-converter:3007"
             - name: WEB_PUBLIC_URL
               value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
             - name: FILES_PUBLIC_URL
@@ -130,59 +130,59 @@ spec:
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: JWT_SECRET
             - name: CREDENTIAL_ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: CREDENTIAL_ENCRYPTION_KEY
             - name: LDAP_URL
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_URL
                   optional: true
             - name: LDAP_BIND_DN
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_BIND_DN
                   optional: true
             - name: LDAP_BIND_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_BIND_PASSWORD
                   optional: true
             - name: LDAP_SEARCH_BASE
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_SEARCH_BASE
                   optional: true
             - name: LDAP_SEARCH_FILTER
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_SEARCH_FILTER
                   optional: true
             - name: LDAP_ATTR_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_ATTR_USERNAME
                   optional: true
             - name: LDAP_ATTR_NAME
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_ATTR_NAME
                   optional: true
             - name: LDAP_ATTR_EMAIL
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: LDAP_ATTR_EMAIL
                   optional: true
           resources:
@@ -208,14 +208,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nap-cp
+  name: ${APP_PREFIX}-cp
   namespace: ${NAMESPACE}
   labels:
-    app: nap-cp
+    app: ${APP_PREFIX}-cp
 spec:
   type: ${SERVICE_TYPE}
   selector:
-    app: nap-cp
+    app: ${APP_PREFIX}-cp
   ports:
     - port: 3000
       targetPort: 3000

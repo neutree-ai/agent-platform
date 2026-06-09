@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nap-cg
+  name: ${APP_PREFIX}-cg
   namespace: ${NAMESPACE}
   labels:
-    app: nap-cg
+    app: ${APP_PREFIX}-cg
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nap-cg
+      app: ${APP_PREFIX}-cg
   template:
     metadata:
       labels:
-        app: nap-cg
+        app: ${APP_PREFIX}-cg
     spec:
       containers:
         - name: channel-gateway
-          image: ${REGISTRY}/nap-cg:${IMAGE_TAG}
+          image: ${REGISTRY}/${APP_PREFIX}-cg:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3002
@@ -28,17 +28,17 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: nap-pg-user
+                  name: ${APP_PREFIX}-pg-user
                   key: password
             - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@nap-pg-rw:5432/nap"
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: nap-cp-secret
+                  name: ${APP_PREFIX}-cp-secret
                   key: JWT_SECRET
             - name: NAP_API_URL
-              value: "http://nap-cp:3000"
+              value: "http://${APP_PREFIX}-cp:3000"
           resources:
             requests:
               memory: "128Mi"
@@ -62,14 +62,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nap-cg
+  name: ${APP_PREFIX}-cg
   namespace: ${NAMESPACE}
   labels:
-    app: nap-cg
+    app: ${APP_PREFIX}-cg
 spec:
   type: ClusterIP
   selector:
-    app: nap-cg
+    app: ${APP_PREFIX}-cg
   ports:
     - port: 3002
       targetPort: 3002
