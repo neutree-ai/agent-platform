@@ -35,7 +35,7 @@ const getSessionRoute = createRoute({
   tags: ['workspaces'],
   summary: 'Get a single session (lightweight, sidebar shape)',
   description:
-    'Returns a lite shape with id, name, chat_status, status, and a 40-char preview of the first user message. Use GET /workspaces/:id/sessions for the full ApiSession list.',
+    'Returns a lite shape with id, name, chat_status, status, last_active_at, and a 40-char preview of the first user message. Use GET /workspaces/:id/sessions for the full ApiSession list.',
   security: [{ bearerAuth: [] }],
   request: { params: SessionScopedParam },
   responses: {
@@ -77,6 +77,7 @@ sessions.openapi(getSessionRoute, async (c) => {
       name: session.name,
       chat_status: session.chat_status,
       status: session.status,
+      last_active_at: session.last_active_at,
       preview: rows[0]?.preview ?? '',
       pending_message: session.pending_message ?? null,
     },

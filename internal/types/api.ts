@@ -228,6 +228,10 @@ export const ApiSessionLiteSchema = z.object({
   name: z.string(),
   chat_status: z.string(),
   status: z.string(),
+  /** Last time the session produced or received any message. Advances on every
+   * persisted turn event, so consumers can detect liveness mid-turn rather than
+   * only at turn boundaries. */
+  last_active_at: z.string(),
   preview: z.string(),
   /** Queued follow-up draft, or null when there is none. */
   pending_message: ApiPendingMessageSchema.nullable(),
