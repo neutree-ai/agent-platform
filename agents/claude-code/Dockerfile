@@ -102,6 +102,10 @@ COPY --from=ttyd /usr/bin/ttyd /usr/local/bin/ttyd
 # Shared tmux config (enables mouse scrolling in web terminal)
 COPY agents/tmux.conf /etc/tmux.conf
 
+# System vimrc — vim-tiny launched as `vi` runs vi-compatible by default,
+# which breaks arrow keys in insert mode (inserts A/B/C/D). nocompatible fixes it.
+COPY agents/vimrc /etc/vim/vimrc
+
 # Create workspace directory (home lives inside workspace for single-PV persistence)
 # usermod -d updates /etc/passwd so openssh resolves ~ to the new home (ssh ignores $HOME)
 RUN mkdir -p /workspace/.home && chown -R node:node /workspace \

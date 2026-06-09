@@ -1,0 +1,8 @@
+" System vimrc for the web terminal's vim-tiny.
+" vim-tiny launched as `vi` defaults to vi-compatible mode, where cursor
+" keys aren't recognized in insert mode — pressing the arrows leaves insert
+" mode and inserts A/B/C/D instead of moving the cursor. nocompatible
+" restores normal arrow-key behavior; backspace makes <BS> delete across
+" indent/eol/insert-start as users expect.
+set nocompatible
+set backspace=indent,eol,start
