@@ -10,6 +10,7 @@ import {
   RenewBrowserBodySchema,
   RenewBrowserResponseSchema,
 } from '../schemas'
+import * as pool from '../services/pool'
 import * as sandbox from '../services/sandbox'
 
 const BROWSER_SERVICE_URL = process.env.BROWSER_SERVICE_URL || 'http://localhost:3005'
@@ -64,11 +65,18 @@ browsers.openapi(
     const body = c.req.valid('json')
     const timeoutSeconds = Math.max(60, Math.min(86400, body.timeout_seconds ?? 3600))
 
-    const sbx = await sandbox.createBrowser(user.sub, {
-      timeoutSeconds,
-      resource: body.resource,
-      metadata: body.metadata,
-    })
+    // Try the warm pool first. Only a custom `resource` bypasses it (that
+    // changes the instance build); `metadata` is just tags we record on the
+    // claim and merge virtually, so it's pool-compatible.
+    const canUsePool = pool.isPoolEnabled() && !body.resource
+    let sbx = canUsePool ? await pool.claim(user.sub, timeoutSeconds, body.metadata) : null
+    if (!sbx) {
+      sbx = await sandbox.createBrowser(user.sub, {
+        timeoutSeconds,
+        resource: body.resource,
+        metadata: body.metadata,
+      })
+    }
 
     return c.json(
       {
@@ -109,10 +117,34 @@ browsers.openapi(
         metadata[k.slice('metadata.'.length)] = v
       }
     }
-    const result = await sandbox.listBrowsers(
-      user.sub,
-      Object.keys(metadata).length > 0 ? metadata : undefined,
-    )
+    const metadataFilter = Object.keys(metadata).length > 0 ? metadata : undefined
+    const result = await sandbox.listBrowsers(user.sub, metadataFilter)
+
+    // Claimed pool instances carry no browser.user_id metadata, so the
+    // server-side filter above never returns them — add them from the claim map.
+    const known = new Set(result.items.map((s) => s.id))
+    for (const { id, metadata: claimMeta } of pool.ownedClaims(user.sub)) {
+      if (known.has(id)) continue
+      // Only a provable 404 releases the claim; a transient error keeps it so a
+      // routine list poll can never orphan a live browser.
+      let s: Awaited<ReturnType<typeof sandbox.getBrowserOrNull>>
+      try {
+        s = await sandbox.getBrowserOrNull(id)
+      } catch {
+        continue
+      }
+      if (s === null) {
+        pool.releaseClaim(id)
+        continue
+      }
+      // Pooled instances can't carry the caller's tags in sandbox metadata;
+      // merge the claim-time metadata so workspace-scoped filters still match.
+      const merged = { ...s.metadata, ...claimMeta }
+      if (metadataFilter && !Object.entries(metadataFilter).every(([k, v]) => merged[k] === v)) {
+        continue
+      }
+      result.items.push(s)
+    }
 
     return c.json(
       {
@@ -149,7 +181,7 @@ browsers.openapi(
     const user = c.get('user')
     const sbx = await sandbox.getBrowser(c.req.param('id'))
 
-    if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+    if (!pool.isOwnedBy(sbx, user.sub)) {
       return c.json({ error: 'Not found' }, 404)
     }
 
@@ -192,7 +224,7 @@ browsers.openapi(
     const user = c.get('user')
     const sbx = await sandbox.getBrowser(c.req.param('id'))
 
-    if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+    if (!pool.isOwnedBy(sbx, user.sub)) {
       return c.json({ error: 'Not found' }, 404)
     }
 
@@ -226,7 +258,7 @@ browsers.openapi(
 
     try {
       const sbx = await sandbox.getBrowser(c.req.param('id'))
-      if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+      if (!pool.isOwnedBy(sbx, user.sub)) {
         return c.json({ error: 'Not found' }, 404)
       }
     } catch {
@@ -238,6 +270,7 @@ browsers.openapi(
     } catch {
       // already gone
     }
+    pool.releaseClaim(c.req.param('id'))
 
     return c.json({ success: true as const }, 200)
   },
@@ -274,7 +307,7 @@ browsers.openapi(
   async (c) => {
     const user = c.get('user')
     const sbx = await sandbox.getBrowser(c.req.param('id'))
-    if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+    if (!pool.isOwnedBy(sbx, user.sub)) {
       return c.json({ error: 'Not found' }, 404)
     }
     const { path, pattern } = c.req.valid('query')
@@ -324,7 +357,7 @@ browsers.openapi(
   async (c) => {
     const user = c.get('user')
     const sbx = await sandbox.getBrowser(c.req.param('id'))
-    if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+    if (!pool.isOwnedBy(sbx, user.sub)) {
       return c.json({ error: 'Not found' }, 404)
     }
     const { path } = c.req.valid('query')
