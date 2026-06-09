@@ -406,8 +406,25 @@ Indexes are 1-based and match the attached images order.
     // Chat API requires non-empty message; substitute a placeholder when the user sent only images.
     if (!cleanText && allImages.length) cleanText = '[image]'
 
+    // Create the job as the route owner (route.user_id), not the connector
+    // owner. The job targets route.workspace_id; with a shared connector whose
+    // route points at another user's workspace, calling cp as the connector
+    // owner gets scoped out → 404 "Workspace not found". Reuse the connector
+    // client when owners match to avoid an extra token lookup per message.
+    let jobClient = tosClient
+    if (route.user_id !== connector.user_id) {
+      const routeToken = await db.getPlatformToken(route.user_id)
+      if (!routeToken) {
+        console.error(
+          `[Slack] ${connector.name}: no platform token for route owner=${route.user_id}`,
+        )
+        return
+      }
+      jobClient = new TosClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
+    }
+
     try {
-      const result = await tosClient.jobs.create(route.workspace_id, {
+      const result = await jobClient.jobs.create(route.workspace_id, {
         prompt: cleanText,
         trigger: {
           type: 'slack',

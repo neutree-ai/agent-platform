@@ -194,9 +194,13 @@ export async function handleWebhookPayload(opts: {
     : typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body, null, 2)
 
   // --- Get platform token and create job ---
-  const platformToken = await db.getPlatformToken(connector.user_id)
+  // Use the route owner's token (route.user_id), not the connector owner's.
+  // The job is created against route.workspace_id, so the caller identity must
+  // be the workspace owner — otherwise cp scopes by connector owner and 404s
+  // ("Workspace not found") when the connector is shared across users.
+  const platformToken = await db.getPlatformToken(route.user_id)
   if (!platformToken) {
-    console.error(`[Webhook] ${connector.name}: no platform token for user=${connector.user_id}`)
+    console.error(`[Webhook] ${connector.name}: no platform token for user=${route.user_id}`)
     return { ok: false, error: 'connector not configured (missing platform token)' }
   }
 
