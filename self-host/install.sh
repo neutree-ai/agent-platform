@@ -84,6 +84,10 @@ export PAUSE_IMAGE="${PAUSE_IMAGE:-registry.k8s.io/pause:3.9}"
 AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}-agent}"
 export AGENT_IMAGE_PREFIX
 
+# imagePullSecret name cp injects into spawned workspace pods. Empty on a
+# connected install (public agent images); a mirror/offline install sets it.
+export IMAGE_PULL_SECRET="${IMAGE_PULL_SECRET:-}"
+
 export KUBECONFIG="${KUBECONFIG:-./kubeconfig.yaml}"
 
 export ADMIN_DISPLAY_NAME="${ADMIN_DISPLAY_NAME:-Admin}"
@@ -241,6 +245,7 @@ render_manifests() {
   # Explicit variable list — prevents envsubst from replacing k8s $(VAR)
   # references like $(POSTGRES_PASSWORD)
   local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${DB_NAME}${TOS_HOST}${TOS_NODE_PORT}'
+  VARS+='${IMAGE_PULL_SECRET}'
   VARS+='${POSTGRES_IMAGE}${GOTENBERG_IMAGE}${COTURN_IMAGE}${NFS_SERVER_IMAGE}'
   VARS+='${RUNTIME_NODE_IMAGE}${RUNTIME_PYTHON_IMAGE}${RUNTIME_GOLANG_IMAGE}${PAUSE_IMAGE}'
   VARS+='${PG_USERNAME}${PG_PASSWORD}${PG_INSTANCES}${PG_STORAGE_SIZE}${PG_STORAGE_CLASS}'
