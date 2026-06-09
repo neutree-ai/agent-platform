@@ -1,9 +1,10 @@
 import { useSlotContext } from '@/contexts/SlotContext'
 import { type DriveKind, dirListUrl } from '@/lib/api/agent-files'
-import { parseWorkspaceFileHref } from '@/lib/workspace-file-link'
+import { isSkillTmpPath, parseWorkspaceFileHref } from '@/lib/workspace-file-link'
 import { setPersistentInstanceStateMany } from '@/stores/instance-state-store'
 import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
+import { useSkillsBasePath } from './useSkillsBasePath'
 
 interface WorkspaceFileLinkHandlers {
   /** Inline click → swap the slotted Files panel to this file/dir. */
@@ -57,7 +58,10 @@ function probeIsDir(
 export function useWorkspaceFileLink(href: string | undefined): WorkspaceFileLinkHandlers | null {
   const slotCtx = useSlotContext()
   const { workspaceId } = useParams<{ workspaceId?: string }>()
-  const parsed = useMemo(() => parseWorkspaceFileHref(href), [href])
+  // Only the workspace-drive skills root differs per agent; fetch it lazily,
+  // and only when this href is actually a skill `/tmp` path to resolve.
+  const skillsBasePath = useSkillsBasePath(workspaceId, isSkillTmpPath(href))
+  const parsed = useMemo(() => parseWorkspaceFileHref(href, skillsBasePath), [href, skillsBasePath])
 
   return useMemo(() => {
     // Bail out entirely when there's no slot context or workspace to route
