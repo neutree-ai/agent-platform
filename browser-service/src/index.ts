@@ -12,6 +12,7 @@ import browserRoutes from './routes/browsers'
 import cdpRoutes from './routes/cdp'
 import liveRoutes from './routes/live'
 import recRoutes from './routes/rec'
+import * as pool from './services/pool'
 import * as sandbox from './services/sandbox'
 
 process.on('uncaughtException', (err) => {
@@ -148,6 +149,8 @@ const port = Number.parseInt(process.env.PORT || '3005')
 
 const httpServer = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Browser service started on port ${info.port}`)
+  // Warm pool: no-op unless BROWSER_WARM_POOL_SIZE > 0.
+  pool.startPool().catch((e) => console.error('[pool] startup failed', e))
 })
 
 // ─── WebSocket upgrade dispatch ─────────────────────────────────────────────
@@ -253,7 +256,7 @@ httpServer.on('upgrade', async (req, socket, head) => {
       socket.destroy()
       return
     }
-    if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+    if (!pool.isOwnedBy(sbx, user.sub)) {
       socket.destroy()
       return
     }

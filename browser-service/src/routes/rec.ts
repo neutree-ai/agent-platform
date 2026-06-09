@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { httpProxy } from '../lib/proxy'
 import { verifyServiceToken } from '../lib/token'
+import * as pool from '../services/pool'
 import * as sandbox from '../services/sandbox'
 
 const rec = new Hono()
@@ -25,7 +26,7 @@ async function getEndpointWithAuth(c: any, port: number) {
     return { error: 'Browser not found', status: 404 }
   }
 
-  if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+  if (!pool.isOwnedBy(sbx, user.sub)) {
     return { error: 'Not found', status: 404 }
   }
 

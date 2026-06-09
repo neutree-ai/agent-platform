@@ -33,14 +33,7 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   return res.json() as T
 }
 
-export async function createBrowser(
-  userId: string,
-  opts?: {
-    timeoutSeconds?: number
-    resource?: Record<string, string>
-    metadata?: Record<string, string>
-  },
-): Promise<SandboxInfo> {
+function browserEnv(): Record<string, string> {
   const iceservers = buildIceServers()
 
   const env: Record<string, string> = {
@@ -56,6 +49,17 @@ export async function createBrowser(
     env.NEKO_WEBRTC_IP_RETRIEVAL_URL = 'http://0.0.0.0/none'
   }
 
+  return env
+}
+
+export async function createBrowser(
+  userId: string,
+  opts?: {
+    timeoutSeconds?: number
+    resource?: Record<string, string>
+    metadata?: Record<string, string>
+  },
+): Promise<SandboxInfo> {
   return api<SandboxInfo>('/api/sandboxes', {
     method: 'POST',
     body: JSON.stringify({
@@ -63,7 +67,7 @@ export async function createBrowser(
       timeoutSeconds: opts?.timeoutSeconds ?? 3600,
       entrypoint: ['/wrapper.sh'],
       resource: opts?.resource ?? { cpu: '2', memory: '2Gi' },
-      env,
+      env: browserEnv(),
       ownerId: userId,
       metadata: {
         'browser.user_id': userId,
@@ -72,6 +76,54 @@ export async function createBrowser(
       },
     }),
   })
+}
+
+// Create an unclaimed warm instance for the pool: no owner, no browser.user_id,
+// tagged browser.pool=warm. Ownership is assigned in-memory on claim (see
+// services/pool.ts) — sandbox metadata cannot be mutated after creation.
+export async function createWarmBrowser(opts?: {
+  timeoutSeconds?: number
+  resource?: Record<string, string>
+}): Promise<SandboxInfo> {
+  return api<SandboxInfo>('/api/sandboxes', {
+    method: 'POST',
+    body: JSON.stringify({
+      image: BROWSER_IMAGE,
+      timeoutSeconds: opts?.timeoutSeconds ?? 1800,
+      entrypoint: ['/wrapper.sh'],
+      resource: opts?.resource ?? { cpu: '2', memory: '2Gi' },
+      env: browserEnv(),
+      metadata: {
+        'browser.pool': 'warm',
+        'browser.service': 'tos',
+      },
+    }),
+  })
+}
+
+// List warm-pool instances (service-scoped; sandbox-service returns all warm
+// instances when called with the service key).
+export async function listPool(): Promise<{ items: SandboxInfo[] }> {
+  const params = new URLSearchParams({
+    'metadata.browser.pool': 'warm',
+    'metadata.browser.service': 'tos',
+  })
+  return api<{ items: SandboxInfo[] }>(`/api/sandboxes?${params.toString()}`)
+}
+
+// Readiness probe: the browser is claimable once Chrome DevTools (port 9222)
+// answers — i.e. Chromium is up and CDP-controllable. This is what pays down
+// the ~30s neko/Chromium boot before a user ever connects.
+export async function probeReady(sandboxId: string): Promise<boolean> {
+  try {
+    const { endpoint } = await getEndpoint(sandboxId, 9222)
+    const res = await fetch(`http://${endpoint}/json/version`, {
+      signal: AbortSignal.timeout(3000),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
 }
 
 export async function listBrowsers(
@@ -93,6 +145,18 @@ export async function listBrowsers(
 
 export async function getBrowser(sandboxId: string): Promise<SandboxInfo> {
   return api<SandboxInfo>(`/api/sandboxes/${sandboxId}`)
+}
+
+// Like getBrowser but returns null when the instance is *provably* gone (404),
+// and throws on any other (transient) error. Used to decide whether a pooled
+// claim may be safely dropped — a generic error must never drop a live claim.
+export async function getBrowserOrNull(sandboxId: string): Promise<SandboxInfo | null> {
+  const res = await fetch(`${SANDBOX_SERVICE_URL}/api/sandboxes/${sandboxId}`, {
+    headers: headers(),
+  })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Sandbox service ${res.status}: ${await res.text()}`)
+  return (await res.json()) as SandboxInfo
 }
 
 export async function deleteBrowser(sandboxId: string): Promise<void> {

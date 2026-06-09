@@ -1,4 +1,5 @@
 import { getCookie } from 'hono/cookie'
+import * as pool from '../services/pool'
 import * as sandbox from '../services/sandbox'
 import { COOKIE_NAME, type SessionPayload, verifySessionToken } from './session'
 import { verifyServiceToken } from './token'
@@ -39,7 +40,7 @@ export async function resolveEndpoint(
     return c.json({ error: 'Browser not found' }, 404)
   }
 
-  if (sbx.metadata?.['browser.user_id'] !== user.sub) {
+  if (!pool.isOwnedBy(sbx, user.sub)) {
     return c.json({ error: 'Not found' }, 404)
   }
 
