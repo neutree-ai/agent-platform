@@ -90,10 +90,12 @@ spec:
               value: "${AGENT_IMAGE_TAG}"
             - name: AGENT_STORAGE_CLASS
               value: "${AGENT_STORAGE_CLASS}"
-            # Public registry: agent pods need no pull secret. cp injects this
-            # into spawned workspace PodSpecs — empty means "no imagePullSecrets".
+            # imagePullSecret name that cp injects into spawned workspace
+            # PodSpecs. Empty (the connected default) means "no imagePullSecrets"
+            # — agent images come from the public registry. A mirrored/offline
+            # install sets IMAGE_PULL_SECRET so workspace pods can pull too.
             - name: IMAGE_PULL_SECRET
-              value: ""
+              value: "${IMAGE_PULL_SECRET}"
             - name: AGENT_NODE_SELECTOR
               value: "${AGENT_NODE_SELECTOR}"
             - name: POSTGRES_PASSWORD
