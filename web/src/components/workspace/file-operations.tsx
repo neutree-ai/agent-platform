@@ -330,6 +330,8 @@ interface PublicLinkDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   filePath: string | null
+  /** When the target is a folder, the link downloads it as a zip archive. */
+  isDir?: boolean
   onGenerate: (opts: {
     ttlSeconds?: number
     permanent?: boolean
@@ -349,6 +351,7 @@ export function PublicLinkDialog({
   open,
   onOpenChange,
   filePath,
+  isDir = false,
   onGenerate,
 }: PublicLinkDialogProps) {
   const { t, i18n } = useTranslation()
@@ -408,11 +411,18 @@ export function PublicLinkDialog({
 
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">
-            {t('components.fileOperations.dialogs.publicLink.fileLabel')}
+            {isDir
+              ? t('components.fileOperations.dialogs.publicLink.folderLabel')
+              : t('components.fileOperations.dialogs.publicLink.fileLabel')}
           </Label>
           <div className="font-mono text-xs break-all rounded bg-muted/40 px-2 py-1.5">
             {filePath}
           </div>
+          {isDir && (
+            <p className="text-xs text-muted-foreground">
+              {t('components.fileOperations.dialogs.publicLink.folderNote')}
+            </p>
+          )}
         </div>
 
         {!result && (

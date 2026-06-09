@@ -117,9 +117,12 @@ interface FileExportTokenRecord {
 export async function createFileExportUrl(
   workspaceId: string,
   path: string,
-  options: { ttlSeconds?: number; permanent?: boolean } = {},
+  options: { ttlSeconds?: number; permanent?: boolean; isDir?: boolean } = {},
 ): Promise<{ url: string; expires_at: string | null }> {
   const body: Record<string, unknown> = { path: stripLeading(path) }
+  if (options.isDir) {
+    body.is_dir = true
+  }
   if (options.permanent) {
     body.permanent = true
   } else if (options.ttlSeconds != null) {

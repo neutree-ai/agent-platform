@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { classifyDufsPath } from '../../lib/dufs'
 import { getWorkspaceAddress } from '../../lib/workspace-address'
 import { createExportToken } from '../../services/db/export-tokens'
 import { textResult } from './shared'
@@ -13,8 +14,8 @@ export function registerExportFileUrlTool(server: McpServer, workspaceId: string
   server.registerTool(
     'export_file_url',
     {
-      title: 'Create a public URL for a workspace file',
-      description: `Mint a public HTTPS URL for a file in /workspace. The URL is reachable from outside the cluster and is intended for upstream MCPs / external services that need to fetch a local file by URL (e.g. SSRF-protected services that reject cluster-internal addresses).
+      title: 'Create a public URL for a workspace file or folder',
+      description: `Mint a public HTTPS URL for a file **or folder** in /workspace. The URL is reachable from outside the cluster and is intended for upstream MCPs / external services that need to fetch a local file by URL (e.g. SSRF-protected services that reject cluster-internal addresses). When the path is a folder, the URL points at the folder root (ends with \`/\`) and sub-paths under it are addressable — \`<url>sub/img.png\` fetches that file, so a folder of HTML/assets is served like a mini static site. Hitting a folder itself returns its \`index.html\` if present, otherwise a zip of the folder; append \`?zip\` to any folder URL to force a zip download.
 
 **Security model**: the URL itself is the bearer token. Anyone who sees the URL can GET the file until it expires (or forever, if \`permanent: true\`). Keep TTL as short as plausibly covers the use case.
 
@@ -35,7 +36,7 @@ Returns { url, expires_at }. \`expires_at\` is \`null\` for permanent URLs. The 
         path: z
           .string()
           .describe(
-            'Path to a file **relative to /workspace**, e.g. "report.docx" or "out/2026-04/summary.pdf". Do NOT include the "/workspace" prefix — pass "exports/foo.md", not "/workspace/exports/foo.md".',
+            'Path to a file or folder **relative to /workspace**, e.g. "report.docx", "out/2026-04/summary.pdf", or a directory like "out/2026-04". Do NOT include the "/workspace" prefix — pass "exports/foo.md", not "/workspace/exports/foo.md".',
           ),
         ttl_seconds: z
           .number()
@@ -72,41 +73,43 @@ Returns { url, expires_at }. \`expires_at\` is \`null\` for permanent URLs. The 
         }
         const address = getWorkspaceAddress(workspaceId)
         let resolved: string | null = null
-        let lastStatus = 0
+        let resolvedKind: 'file' | 'dir' = 'file'
         for (const c of candidates) {
           const encoded = c
             .split('/')
             .map((seg) => encodeURIComponent(seg))
             .join('/')
-          let head: Response
+          let kind: 'file' | 'dir' | null
           try {
-            head = await fetch(`${address}/files/${encoded}`, { method: 'HEAD' })
+            kind = await classifyDufsPath(`${address}/files/${encoded}`)
           } catch (e) {
             return textResult(
               `Error: cannot reach workspace file service (${(e as Error).message})`,
             )
           }
-          if (head.ok) {
+          if (kind) {
             resolved = c
+            resolvedKind = kind
             break
           }
-          lastStatus = head.status
         }
         if (!resolved) {
-          if (lastStatus === 404) {
-            const tried = candidates.map((c) => `/workspace/${c}`).join(' or ')
-            return textResult(`Error: file not found at ${tried}`)
-          }
-          return textResult(`Error: workspace file service returned ${lastStatus}`)
+          const tried = candidates.map((c) => `/workspace/${c}`).join(' or ')
+          return textResult(`Error: file or folder not found at ${tried}`)
         }
 
         const record = await createExportToken(
           workspaceId,
           resolved,
           permanent ? null : ttl_seconds,
+          resolvedKind,
         )
-        const basename = resolved.split('/').pop() || 'file'
-        const url = `${FILES_PUBLIC_URL}/${record.token}/${encodeURIComponent(basename)}`
+        // A folder URL points at the folder root (trailing slash) so callers can
+        // address sub-paths under it; a file URL ends with the filename.
+        const url =
+          resolvedKind === 'dir'
+            ? `${FILES_PUBLIC_URL}/${record.token}/`
+            : `${FILES_PUBLIC_URL}/${record.token}/${encodeURIComponent(resolved.split('/').pop() || 'file')}`
         return textResult(
           JSON.stringify({
             url,
