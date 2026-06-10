@@ -2501,7 +2501,8 @@
         "preview": "Preview",
         "spreadsheet": "Spreadsheet view",
         "officeMode": "Office mode",
-        "toc": "Outline"
+        "toc": "Outline",
+        "wrap": "Wrap"
       },
       "toc": {
         "label": "On this page",
