@@ -39,6 +39,7 @@ COPY browser-service/package.json browser-service/package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY --from=backend /app/browser-service/dist ./dist
+COPY browser-service/migrations ./migrations
 COPY --from=frontend /app/web/dist ./web/dist
 
 EXPOSE 3005
