@@ -1296,6 +1296,16 @@ app.openapi(zipDirRoute, async (c) => {
   return new Response(resp.body, { status: resp.status, headers: out })
 })
 
+// Build an `attachment` Content-Disposition whose filename carries the skill
+// name so downloads are recognizable (the URL's last segment is the generic
+// "package"). RFC 5987 `filename*` preserves non-ASCII skill names; the ASCII
+// `filename` is a fallback for older clients.
+function packageDisposition(skillName: string, suffix = ''): string {
+  const base = `${skillName}${suffix}.tar.gz`
+  const ascii = base.replace(/[^\x20-\x7E]/g, '_').replace(/["\\/]/g, '_')
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(base)}`
+}
+
 // ── GET /skills/:id/package ───────────────────────────────────────────────
 //
 // Shortcut: stream the skill's currently-active version. The legacy
@@ -1338,6 +1348,7 @@ app.openapi(skillPackageRoute, async (c) => {
     headers: {
       'Content-Type': 'application/gzip',
       'Content-Length': String(row.package.byteLength),
+      'Content-Disposition': packageDisposition(row.name),
       ETag: etag,
     },
   })
@@ -1368,6 +1379,9 @@ app.openapi(versionPackageRoute, async (c) => {
     headers: {
       'Content-Type': 'application/gzip',
       'Content-Length': String(row.package.byteLength),
+      // Tag historical downloads with a short content hash so multiple
+      // versions of the same skill don't collide in the downloads folder.
+      'Content-Disposition': packageDisposition(row.name, `-${row.content_hash.slice(0, 8)}`),
     },
   })
 })
