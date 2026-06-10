@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Spinner } from '@/components/ui/spinner'
 import { isComposing } from '@/lib/keyboard'
+import { colLabel } from '@/lib/spreadsheet'
 import { cn } from '@/lib/utils'
 import type { Cell, CellValue, Color, Workbook } from 'hucre'
 import type { RoundtripWorkbook } from 'hucre/xlsx'
@@ -251,18 +252,6 @@ function buildParsedSheets(wb: Workbook): ParsedSheet[] {
     }
     return { name: sheet.name, rows, columnWidths, rowHeights }
   })
-}
-
-// Column letter for the column-header row (A, B, ..., Z, AA, AB, ...).
-function colLabel(idx: number): string {
-  let n = idx + 1
-  let s = ''
-  while (n > 0) {
-    const r = (n - 1) % 26
-    s = String.fromCharCode(65 + r) + s
-    n = Math.floor((n - 1) / 26)
-  }
-  return s
 }
 
 // User input goes through a tiny coercion ladder so numeric strings round-trip
