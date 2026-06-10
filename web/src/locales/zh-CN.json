@@ -3485,6 +3485,7 @@
       "filterStarred": "只看收藏",
       "unreadCount_one": "{{count}} 个待回复",
       "unreadCount_other": "{{count}} 个待回复",
+      "locateUnread": "跳转到下一个待回复会话",
       "search": "搜索会话",
       "searchPlaceholder": "搜索…",
       "empty": {

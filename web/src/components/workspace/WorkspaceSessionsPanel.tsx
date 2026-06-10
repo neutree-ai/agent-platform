@@ -214,6 +214,7 @@ function SessionRow({
     <div
       role="button"
       tabIndex={0}
+      data-session-id={session.id}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -497,6 +498,21 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
     }
   }, [workspaceId, markSeen])
 
+  // Locate the first session waiting on the user, select it, and scroll it
+  // into view. Wired to the "N needs you" label so clicking it no longer
+  // dismisses everything — that's now the separate Mark-all-read button.
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const handleLocateUnread = useCallback(() => {
+    const target = filteredSessions.find((s) => s.chat_status === 'human')
+    if (!target) return
+    handleSelect(target.id)
+    requestAnimationFrame(() => {
+      scrollContainerRef.current
+        ?.querySelector(`[data-session-id="${target.id}"]`)
+        ?.scrollIntoView({ block: 'nearest' })
+    })
+  }, [filteredSessions, handleSelect])
+
   const handleMarkSeen = useCallback(
     async (sessionId: string) => {
       try {
@@ -600,22 +616,30 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
           />
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           {unreadCount > 0 && !query && (
-            <button
-              type="button"
-              onClick={handleMarkAllRead}
-              className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-xs text-muted-foreground/80 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-flex h-1.5 w-1.5 rounded-full bg-warning/80" />
-                {t('components.sessions.unreadCount', { count: unreadCount })}
-              </span>
-              <span className="inline-flex items-center gap-1 text-mini">
+            <div className="flex w-full items-center justify-between gap-2 py-1 pr-1.5 pl-3">
+              <button
+                type="button"
+                onClick={handleLocateUnread}
+                title={t('components.sessions.locateUnread')}
+                className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-xs text-muted-foreground/80 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+              >
+                <span className="inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-warning/80" />
+                <span className="truncate">
+                  {t('components.sessions.unreadCount', { count: unreadCount })}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                title={t('components.sessions.markAllRead')}
+                className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-mini text-muted-foreground/70 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+              >
                 <CheckCheck className="h-3 w-3" strokeWidth={2} />
                 {t('components.sessions.markAllRead')}
-              </span>
-            </button>
+              </button>
+            </div>
           )}
           {grouped.map((group) => (
             <div key={group.bucket}>

@@ -3461,6 +3461,7 @@
       "filterStarred": "Show starred only",
       "unreadCount_one": "{{count}} needs you",
       "unreadCount_other": "{{count}} need you",
+      "locateUnread": "Jump to next session that needs you",
       "search": "Search sessions",
       "searchPlaceholder": "Search…",
       "empty": {
