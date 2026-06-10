@@ -55,6 +55,8 @@ export interface Session {
   last_active_at: string
   last_turn_stats: SessionTurnStats | null
   caller_user_id: string | null
+  /** Calling agent's workspace id when `source = 'agent'`; null otherwise. */
+  caller_workspace_id: string | null
   pending_message: SessionPendingMessage | null
   /** When the session was starred, or null when it is not starred. */
   starred_at: string | null
@@ -157,6 +159,10 @@ export interface WorkspaceWithSessionCounts extends Workspace {
 export interface SessionWithPreview extends Session {
   message_count: number
   preview: string
+  /** Calling agent's display name, joined from its workspace; null when not agent-invoked. */
+  caller_agent_name: string | null
+  /** Calling agent's slug, joined from its workspace; null when not agent-invoked. */
+  caller_agent_slug: string | null
 }
 
 export interface PaginatedSessions {

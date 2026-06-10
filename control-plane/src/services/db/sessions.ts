@@ -13,12 +13,13 @@ export async function createSession(
   name = '',
   callerUserId?: string,
   source = 'web',
+  callerWorkspaceId?: string | null,
 ): Promise<Session> {
   await pool.query(
-    `INSERT INTO sessions (id, workspace_id, name, caller_user_id, source)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO sessions (id, workspace_id, name, caller_user_id, source, caller_workspace_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (id) DO UPDATE SET last_active_at = NOW()`,
-    [sessionId, workspaceId, name, callerUserId ?? null, source],
+    [sessionId, workspaceId, name, callerUserId ?? null, source, callerWorkspaceId ?? null],
   )
   return (await getSession(sessionId))!
 }
@@ -43,7 +44,9 @@ export async function listSessions(
     pool.query(
       `SELECT s.*,
          COALESCE(mc.cnt, 0)::int AS message_count,
-         COALESCE(fm.content, '') AS preview
+         COALESCE(fm.content, '') AS preview,
+         cw.name AS caller_agent_name,
+         cw.slug AS caller_agent_slug
        FROM sessions s
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS cnt FROM messages m WHERE m.session_id = s.id
@@ -53,6 +56,7 @@ export async function listSessions(
          WHERE m.session_id = s.id AND m.role = 'user'
          ORDER BY m.created_at ASC LIMIT 1
        ) fm ON true
+       LEFT JOIN workspaces cw ON cw.id = s.caller_workspace_id
        WHERE s.workspace_id = $1 AND s.status = 'active'${starredClause}
        ORDER BY s.last_active_at DESC
        LIMIT $2 OFFSET $3`,
@@ -78,7 +82,9 @@ export async function listSessionsByCaller(
   const { rows } = await pool.query(
     `SELECT s.*,
        COALESCE(mc.cnt, 0)::int AS message_count,
-       COALESCE(fm.content, '') AS preview
+       COALESCE(fm.content, '') AS preview,
+       cw.name AS caller_agent_name,
+       cw.slug AS caller_agent_slug
      FROM sessions s
      LEFT JOIN LATERAL (
        SELECT COUNT(*)::int AS cnt FROM messages m WHERE m.session_id = s.id
@@ -88,6 +94,7 @@ export async function listSessionsByCaller(
        WHERE m.session_id = s.id AND m.role = 'user'
        ORDER BY m.created_at ASC LIMIT 1
      ) fm ON true
+     LEFT JOIN workspaces cw ON cw.id = s.caller_workspace_id
      WHERE s.workspace_id = $1 AND s.caller_user_id = $2 AND s.status = 'active'
      ORDER BY s.last_active_at DESC`,
     [workspaceId, callerUserId],

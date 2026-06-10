@@ -196,6 +196,17 @@ export const ApiSessionSchema = z.object({
   last_turn_stats: ContextGaugeSchema.nullable(),
   /** When the session was starred, or null when it is not starred. */
   starred_at: z.string().nullable(),
+  /**
+   * The agent that invoked this session via agent-to-agent (`call_agent`).
+   * Null for user/web/channel-initiated sessions. Lets the session view show
+   * which agent the session originated from.
+   */
+  caller_agent: z
+    .object({
+      name: z.string(),
+      slug: z.string().nullable(),
+    })
+    .nullable(),
 })
 
 export type ApiSession = z.infer<typeof ApiSessionSchema>

@@ -212,6 +212,9 @@ function toApiSession(s: any): ApiSession {
     preview: s.preview ?? '',
     last_turn_stats: s.last_turn_stats,
     starred_at: s.starred_at ?? null,
+    caller_agent: s.caller_agent_name
+      ? { name: s.caller_agent_name, slug: s.caller_agent_slug ?? null }
+      : null,
   }
 }
 
