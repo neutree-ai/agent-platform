@@ -34,5 +34,5 @@
     "internal/**",
     "packages/**"
   ],
-  "ignoreBinaries": ["wait"]
+  "ignoreBinaries": ["wait", "tsc"]
 }

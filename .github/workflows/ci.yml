@@ -1,0 +1,107 @@
+name: CI
+
+# Pull-request and main-branch quality gate. Complements the husky pre-commit
+# hook (which only sees staged files on the committer's machine) by enforcing
+# the same checks in the cloud, where --no-verify and un-installed hooks can't
+# bypass them.
+#
+#   - typecheck (tsc --noEmit) + unit tests: per workspace, in parallel
+#   - lint (biome): PR-diff only — the tree isn't biome-clean repo-wide yet, so
+#     we gate the files a PR actually touches (mirrors the pre-commit hook)
+#   - knip: repo-wide unused-export / unused-dependency check (one job)
+#
+# Each workspace installs independently (no npm workspaces at the root); internal/*
+# is consumed via tsconfig path aliases, not as installed packages, so it needs
+# no install and is checked transitively by its consumers.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check (${{ matrix.ws }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { ws: control-plane, test: npm run test:unit }
+          - { ws: web, test: npm test }
+          - { ws: channel-gateway }
+          - { ws: scheduler }
+          - { ws: sandbox-service }
+          - { ws: browser-service }
+          - { ws: skills-content-service, test: npm test }
+          - { ws: agents/claude-code }
+          - { ws: agents/codex }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the diff-based lint step can reach the PR base.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.ws }}/package-lock.json
+
+      - name: Install
+        working-directory: ${{ matrix.ws }}
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: ${{ matrix.ws }}
+        run: npx tsc --noEmit
+
+      # Lint only the files this PR touches in this workspace. The repo is not
+      # biome-clean tree-wide, so a full `biome check .` would fail everywhere;
+      # diff-scoping keeps the gate green on day one while still catching new
+      # violations that slipped past the local hook. Skipped on push (no base).
+      - name: Lint changed files
+        if: github.event_name == 'pull_request'
+        working-directory: ${{ matrix.ws }}
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          changed=$(git diff --name-only --relative --diff-filter=ACMR FETCH_HEAD...HEAD \
+            | grep -E '\.(ts|tsx|js|jsx|json|jsonc|css)$' || true)
+          if [ -z "$changed" ]; then
+            echo "No lintable changes in ${{ matrix.ws }}."
+            exit 0
+          fi
+          echo "$changed" | tr '\n' '\0' | xargs -0 npx biome check --no-errors-on-unmatched
+
+      - name: Unit tests
+        if: matrix.test != ''
+        working-directory: ${{ matrix.ws }}
+        run: ${{ matrix.test }}
+
+  knip:
+    name: knip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+
+      # knip resolves imports across each analyzed workspace, so those need
+      # their dependencies installed. The list mirrors knip.json's `workspaces`.
+      - name: Install
+        run: |
+          npm ci
+          for ws in control-plane web browser-service channel-gateway sandbox-service scheduler skills-content-service; do
+            (cd "$ws" && npm ci)
+          done
+
+      - name: knip
+        run: npx knip --no-progress
