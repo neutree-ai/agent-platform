@@ -1,8 +1,7 @@
 import { DEFAULT_SKILLS_BASE_PATH } from '@/lib/workspace-file-link'
 import { useQuery } from '@tanstack/react-query'
 
-export const skillsBasePathQueryKey = (workspaceId: string) =>
-  ['skills-base-path', workspaceId] as const
+const skillsBasePathQueryKey = (workspaceId: string) => ['skills-base-path', workspaceId] as const
 
 /**
  * Resolve the workspace-relative skills root the agent reports as
