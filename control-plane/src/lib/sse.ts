@@ -1147,17 +1147,30 @@ export function createBroadcastPlugin(ctx: BroadcastPluginCtx): TurnPlugin {
 
       if (!state.sessionEndedSeen) {
         const durationSec = ((Date.now() - streamStartedAt) / 1000).toFixed(1)
-        console.error(
-          `[SSE] ${result.reason === 'timeout' ? 'Timeout' : 'Error'} ${tag} session=${state.sessionId} duration=${durationSec}s: ${result.error?.message ?? 'unknown'}`,
-        )
-        const errorPayload = JSON.stringify({
-          type: 'error',
-          message:
-            result.reason === 'timeout'
-              ? 'Agent stream timed out (model inference took too long)'
-              : 'Agent stream ended unexpectedly',
-        })
-        emitSSE(activeStream, `data: ${errorPayload}\n\n`)
+        if (isDraining()) {
+          // This CP is shutting down (rolling deploy). The turn is still
+          // alive on the agent — the next pod's `recoverOrphanedSessions`
+          // will pick it up and the client's `runTurn` reconnects to the
+          // recovered stream transparently. Emitting an `error` here would
+          // misreport a successful handoff as a failure (the red "Agent
+          // stream ended unexpectedly" toast). Close cleanly instead and let
+          // reconnect/recovery own continuation.
+          console.log(
+            `[SSE] Handoff ${tag} session=${state.sessionId} duration=${durationSec}s — CP draining, skipping error emit, recovery will resume`,
+          )
+        } else {
+          console.error(
+            `[SSE] ${result.reason === 'timeout' ? 'Timeout' : 'Error'} ${tag} session=${state.sessionId} duration=${durationSec}s: ${result.error?.message ?? 'unknown'}`,
+          )
+          const errorPayload = JSON.stringify({
+            type: 'error',
+            message:
+              result.reason === 'timeout'
+                ? 'Agent stream timed out (model inference took too long)'
+                : 'Agent stream ended unexpectedly',
+          })
+          emitSSE(activeStream, `data: ${errorPayload}\n\n`)
+        }
       }
 
       // Mark done so the derived gauges stop counting this stream. Skipped
