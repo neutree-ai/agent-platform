@@ -56,6 +56,16 @@ jobs:
         working-directory: ${{ matrix.ws }}
         run: npm ci
 
+      # internal/* is consumed through tsconfig path aliases that resolve to its
+      # *source* (e.g. @neutree-ai/types → internal/types/api.ts). Typecheck
+      # therefore compiles that source, which needs the internal package's own
+      # deps (zod, mustache) installed even though it isn't a published package.
+      - name: Install shared internal deps
+        run: |
+          for d in internal/*/; do
+            [ -f "${d}package-lock.json" ] && (cd "$d" && npm ci)
+          done
+
       - name: Typecheck
         working-directory: ${{ matrix.ws }}
         run: npx tsc --noEmit
