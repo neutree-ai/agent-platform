@@ -128,9 +128,9 @@ export async function getSkillById(id: string): Promise<SkillMeta | null> {
  * version exists (transient state right after create) or skill missing. */
 export async function getActiveVersionPackage(
   skillId: string,
-): Promise<{ content_hash: string; package: Buffer } | null> {
-  const { rows } = await pool.query<{ content_hash: string; package: Buffer }>(
-    `SELECT v.content_hash, v.package
+): Promise<{ content_hash: string; package: Buffer; name: string } | null> {
+  const { rows } = await pool.query<{ content_hash: string; package: Buffer; name: string }>(
+    `SELECT v.content_hash, v.package, s.name
        FROM skills s
        JOIN skill_versions v ON v.id = s.active_version_id
       WHERE s.id = $1`,
@@ -155,9 +155,17 @@ export async function getActiveVersionHash(
 
 export async function getVersionPackage(
   versionId: string,
-): Promise<{ content_hash: string; package: Buffer; skill_id: string } | null> {
-  const { rows } = await pool.query<{ content_hash: string; package: Buffer; skill_id: string }>(
-    'SELECT content_hash, package, skill_id FROM skill_versions WHERE id = $1',
+): Promise<{ content_hash: string; package: Buffer; skill_id: string; name: string } | null> {
+  const { rows } = await pool.query<{
+    content_hash: string
+    package: Buffer
+    skill_id: string
+    name: string
+  }>(
+    `SELECT v.content_hash, v.package, v.skill_id, s.name
+       FROM skill_versions v
+       JOIN skills s ON s.id = v.skill_id
+      WHERE v.id = $1`,
     [versionId],
   )
   return rows[0] ?? null
