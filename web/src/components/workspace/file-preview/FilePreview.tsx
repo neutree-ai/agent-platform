@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { useMarkdownPreferencesStore } from '@/stores/markdown-preferences-store'
-import { Code, Eye, FileText, Table } from 'lucide-react'
+import { Code, Eye, FileText, Table, WrapText } from 'lucide-react'
 import { Suspense, lazy, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { isImageFile } from './file-types'
@@ -109,6 +109,9 @@ export function FilePreview({
   // the plumbing in place so we can revisit when we have a better converter
   // (or the spreadsheet view hits a limitation that's worth the tradeoff).
   const [xlsxOfficeMode, setXlsxOfficeMode] = useState(false)
+  // Soft-wrap long lines in the CodeMirror surface. Off by default so the
+  // default reading experience stays faithful to the file's real line breaks.
+  const [wrap, setWrap] = useState(false)
 
   // Which surface to render:
   //   - image / office: always rendered (no source view exists)
@@ -123,6 +126,9 @@ export function FilePreview({
     (showRendered && (isCanvasEditor || !isEditing))
   const showSourceToggle = hasSourceToggle && (isCanvasEditor || !isEditing)
   const showTocToggle = previewType === 'markdown' && useRendered
+  // The wrap toggle only makes sense for the CodeMirror surface, which renders
+  // whenever no rendered preview is active (code files + any "source" view).
+  const showWrapToggle = !useRendered
   const tocVisible = useMarkdownPreferencesStore((s) => s.tocVisible)
   const setTocVisible = useMarkdownPreferencesStore((s) => s.setTocVisible)
   // Office-mode toggle is intentionally suppressed — see xlsxOfficeMode comment.
@@ -130,7 +136,7 @@ export function FilePreview({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {(showSourceToggle || showTocToggle) && (
+      {(showSourceToggle || showTocToggle || showWrapToggle) && (
         <div className="flex shrink-0 items-center gap-2 border-b border-border/50 px-3 py-0.5">
           {showSourceToggle && (
             <Button
@@ -148,6 +154,17 @@ export function FilePreview({
                   <Eye className="h-3 w-3" /> {t('components.filePreview.actions.preview')}
                 </>
               )}
+            </Button>
+          )}
+          {showWrapToggle && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-pressed={wrap}
+              className={`h-6 gap-1 px-2 text-xs ${wrap ? 'text-foreground' : 'text-muted-foreground'}`}
+              onClick={() => setWrap((v) => !v)}
+            >
+              <WrapText className="h-3 w-3" /> {t('components.filePreview.actions.wrap')}
             </Button>
           )}
           {showTocToggle && (
@@ -215,6 +232,7 @@ export function FilePreview({
             content={content}
             isEditing={isEditing}
             onChange={onChange}
+            wrap={wrap}
             viewingLine={viewingLine}
             viewingColumn={viewingColumn}
           />

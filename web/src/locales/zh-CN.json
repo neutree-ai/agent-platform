@@ -2525,7 +2525,8 @@
         "preview": "预览",
         "spreadsheet": "表格视图",
         "officeMode": "Office 模式",
-        "toc": "目录"
+        "toc": "目录",
+        "wrap": "自动换行"
       },
       "toc": {
         "label": "本页目录",

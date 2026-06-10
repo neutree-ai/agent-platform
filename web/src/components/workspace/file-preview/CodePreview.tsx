@@ -99,6 +99,8 @@ interface CodePreviewProps {
   content: string
   isEditing: boolean
   onChange?: (value: string) => void
+  /** When true, long lines soft-wrap to the viewport width instead of scrolling. */
+  wrap?: boolean
   /** 1-based; scrolls and briefly highlights when set. */
   viewingLine?: number
   /** 1-based; positions cursor within the highlighted line. */
@@ -110,6 +112,7 @@ export function CodePreview({
   content,
   isEditing,
   onChange,
+  wrap = false,
   viewingLine,
   viewingColumn,
 }: CodePreviewProps) {
@@ -122,9 +125,10 @@ export function CodePreview({
   const langExt = useMemo(() => getLanguageExtension(filename), [filename])
   const extensions = useMemo(() => {
     const exts = [cmThemeOverride, jumpHighlightField]
+    if (wrap) exts.push(EditorView.lineWrapping)
     if (langExt) exts.push(langExt)
     return exts
-  }, [langExt])
+  }, [langExt, wrap])
 
   const viewRef = useRef<EditorView | null>(null)
   const fadeTimerRef = useRef<number | null>(null)
