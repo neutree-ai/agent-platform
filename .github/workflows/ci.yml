@@ -59,11 +59,18 @@ jobs:
       # internal/* is consumed through tsconfig path aliases that resolve to its
       # *source* (e.g. @neutree-ai/types → internal/types/api.ts). Typecheck
       # therefore compiles that source, which needs the internal package's own
-      # deps (zod, mustache) installed even though it isn't a published package.
+      # deps (zod, mustache, hono) installed even though it isn't a published
+      # package. Some internal dirs carry a package-lock (use npm ci); others
+      # don't (fall back to npm install).
       - name: Install shared internal deps
         run: |
           for d in internal/*/; do
-            [ -f "${d}package-lock.json" ] && (cd "$d" && npm ci)
+            [ -f "${d}package.json" ] || continue
+            if [ -f "${d}package-lock.json" ]; then
+              (cd "$d" && npm ci)
+            else
+              (cd "$d" && npm install --no-save)
+            fi
           done
 
       - name: Typecheck
