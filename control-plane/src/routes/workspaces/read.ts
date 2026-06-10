@@ -29,6 +29,9 @@ function toApiSession(s: SessionWithPreview) {
     preview: s.preview,
     last_turn_stats: s.last_turn_stats as any,
     starred_at: s.starred_at,
+    caller_agent: s.caller_agent_name
+      ? { name: s.caller_agent_name, slug: s.caller_agent_slug }
+      : null,
   }
 }
 

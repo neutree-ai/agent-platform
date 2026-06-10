@@ -56,6 +56,7 @@ import { useComposerInsertRequests } from '@/stores/composer-store'
 import { useDraft } from '@/stores/draft-store'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
+  Bot,
   ChevronDown,
   ChevronUp,
   ExternalLink,
@@ -338,6 +339,12 @@ export function WorkspaceChatPanel({
 
   // Session source (channel origin)
   const { data: sessionSource } = useSessionSource(activeSessionId)
+
+  // Agent-to-agent origin: the agent that invoked this session via `call_agent`.
+  const callerAgent = useMemo(
+    () => sessions.find((s) => s.id === activeSessionId)?.caller_agent ?? null,
+    [sessions, activeSessionId],
+  )
 
   // Session rename
   const [renameOpen, setRenameOpen] = useState(false)
@@ -657,6 +664,15 @@ export function WorkspaceChatPanel({
                   via {sessionSource.connector_name}
                 </span>
               ))}
+            {callerAgent && (
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-mini font-medium text-primary"
+                title={t('components.workspaceChat.states.invokedBy', { agent: callerAgent.name })}
+              >
+                <Bot className="h-2.5 w-2.5" />
+                {t('components.workspaceChat.states.invokedBy', { agent: callerAgent.name })}
+              </span>
+            )}
             {isDeleting && (
               <span className="inline-flex shrink-0 items-center gap-1 text-mini text-muted-foreground">
                 <Spinner size="sm" className="h-3 w-3" />

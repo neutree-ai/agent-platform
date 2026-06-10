@@ -1395,7 +1395,8 @@
         "daysAgo": "{{count}} 天前"
       },
       "states": {
-        "resetting": "重置中..."
+        "resetting": "重置中...",
+        "invokedBy": "由 {{agent}} 调用"
       },
       "placeholders": {
         "searchMessages": "搜索消息...",

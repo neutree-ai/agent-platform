@@ -61,6 +61,12 @@ interface SubAgentHandle {
  */
 interface SubAgentPersistCtx {
   targetWorkspaceId: string
+  /**
+   * Workspace id of the calling agent (the `call_agent` invoker). Persisted on
+   * the new sub-session so the session view can show "invoked by <agent>".
+   * Null only if the caller workspace couldn't be resolved.
+   */
+  callerWorkspaceId?: string | null
   userPrompt: string
   state: MainTurnSharedState
   queue: SerialQueue
@@ -237,7 +243,14 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
           const token = ctx.sessionToken
           queue.run(async () => {
             if (isNew) {
-              await createSession(targetWorkspaceId, newSid, '', undefined, 'agent')
+              await createSession(
+                targetWorkspaceId,
+                newSid,
+                '',
+                undefined,
+                'agent',
+                ctx.callerWorkspaceId,
+              )
             } else {
               await updateSessionActivity(newSid)
             }
@@ -381,6 +394,7 @@ function runSubAgentTurn(
   existingSessionId: string | null,
   onSessionPersisted?: (sessionId: string) => Promise<void>,
   sessionToken?: string | null,
+  callerWorkspaceId?: string | null,
 ): SubAgentHandle {
   // Shared state + queue coordinate the persist and broadcast plugins.
   // Broadcast reads `state.sessionId` (for re-keying) and `sessionEndedSeen`
@@ -420,6 +434,7 @@ function runSubAgentTurn(
 
   const persistPlugin = createSubAgentPersistPlugin({
     targetWorkspaceId,
+    callerWorkspaceId,
     userPrompt,
     state,
     queue,
@@ -647,6 +662,7 @@ Examples:
           session_id ?? null,
           onSessionPersisted,
           subSessionToken,
+          callerWorkspace.id,
         )
 
         if (mode === 'background') {
