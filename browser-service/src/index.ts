@@ -5,6 +5,7 @@ import { Scalar } from '@scalar/hono-api-reference'
 import { getCookie } from 'hono/cookie'
 import { logger } from 'hono/logger'
 import { WebSocket, WebSocketServer } from 'ws'
+import { initDb } from './lib/db'
 import { COOKIE_NAME, verifySessionToken } from './lib/session'
 import { verifyServiceToken } from './lib/token'
 import authRoutes from './routes/auth'
@@ -146,6 +147,13 @@ app.use('/favicon.svg', serveStatic({ root: './web/dist', path: '/favicon.svg' }
 app.get('*', serveStatic({ root: './web/dist', path: 'index.html' }))
 
 const port = Number.parseInt(process.env.PORT || '3005')
+
+// Claims are persisted in Postgres so a restart can keep already-claimed warm
+// instances alive instead of reaping them (see services/pool.ts). Skip when the
+// pool is disabled — no claims to persist, no DB needed.
+if (pool.isPoolEnabled()) {
+  await initDb()
+}
 
 const httpServer = serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Browser service started on port ${info.port}`)

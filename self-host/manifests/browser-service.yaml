@@ -25,6 +25,13 @@ spec:
           env:
             - name: PORT
               value: "3005"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_PREFIX}-pg-user
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

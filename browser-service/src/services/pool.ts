@@ -2,15 +2,21 @@
 //
 // Why in-memory: browser-service is single-replica, and a warm instance only
 // matters until it is claimed. The pool (the unclaimed set) is fully
-// reconcilable from sandbox-service on boot. The claim map (claimed → owner) is
-// NOT durable: a restart loses it. Sandbox metadata is immutable (the
+// reconcilable from sandbox-service on boot.
+//
+// The claim map (claimed → owner) is the hot path for ownership, but it is also
+// mirrored to Postgres (browser.claims). Sandbox metadata is immutable (the
 // OpenSandbox API exposes no metadata update), so a claimed instance keeps its
-// `browser.pool=warm` tag forever and we cannot stamp an owner onto it. If we
-// kept such instances around across a restart, reconcile would see them as
-// available warm again and could hand one to a different user. To stay safe we
-// reap every pre-existing warm instance on startup (see startPool): active
-// sessions die on deploy, but there is never a cross-user leak (fail closed).
+// `browser.pool=warm` tag forever and we cannot stamp an owner onto it. Without
+// a durable record, a restart would lose every claim and reconcile could hand a
+// claimed instance to a different user — so the pool used to reap ALL warm
+// instances on startup, killing live sessions on every deploy. Now reconcile-
+// Existing() restores claims from browser.claims and keeps those instances
+// alive, reaping only warm instances with no claim record. Cross-user leak is
+// still impossible (claimed instances are never re-handed-out; an instance with
+// no claim row is reaped — fail closed), but owned sessions survive a restart.
 
+import { pool as db } from '../lib/db'
 import * as sandbox from './sandbox'
 
 interface SandboxInfo {
@@ -51,6 +57,36 @@ export function isPoolEnabled(): boolean {
   return POOL_SIZE > 0
 }
 
+// Durable claim record (browser.claims). The in-memory `claims` map stays the
+// hot path for ownership; these mirror it to Postgres so startup can keep
+// already-claimed warm instances alive across a restart instead of reaping
+// them. All writes are best-effort: if a persist fails the worst case is the
+// old behaviour (instance reaped on next restart), so we never fail a claim or
+// a delete on a DB error — fail closed, never fail open.
+async function persistClaim(
+  sandboxId: string,
+  userId: string,
+  metadata: Record<string, string>,
+): Promise<void> {
+  try {
+    await db.query(
+      `INSERT INTO browser.claims (sandbox_id, user_id, metadata)
+       VALUES ($1, $2, $3::jsonb)
+       ON CONFLICT (sandbox_id) DO UPDATE
+         SET user_id = EXCLUDED.user_id, metadata = EXCLUDED.metadata`,
+      [sandboxId, userId, JSON.stringify(metadata)],
+    )
+  } catch (e) {
+    console.error('[pool] persistClaim failed for', sandboxId, e)
+  }
+}
+
+function unpersistClaim(sandboxId: string): void {
+  db.query('DELETE FROM browser.claims WHERE sandbox_id = $1', [sandboxId]).catch((e) =>
+    console.error('[pool] unpersistClaim failed for', sandboxId, e),
+  )
+}
+
 function parseExpiry(iso: string): number {
   const t = new Date(iso).getTime()
   return Number.isNaN(t) ? Date.now() + WARM_TIMEOUT_SECONDS * 1000 : t
@@ -82,6 +118,7 @@ export function ownedClaims(
 
 export function releaseClaim(sandboxId: string): void {
   claims.delete(sandboxId)
+  unpersistClaim(sandboxId)
 }
 
 // Claim a ready warm instance for userId. The pick + reserve is synchronous (no
@@ -113,6 +150,9 @@ export async function claim(
   try {
     await sandbox.renewBrowser(picked, timeoutSeconds)
     const info = await sandbox.getBrowser(picked)
+    // Persist before returning so the claim survives a restart. Best-effort:
+    // a DB failure here only degrades to the pre-durability behaviour.
+    await persistClaim(picked, userId, metadata ?? {})
     console.log(`[pool] claim hit ${picked} for ${userId}`)
     void reconcile() // refill in the background
     return info as SandboxInfo
@@ -152,6 +192,7 @@ async function reconcile(): Promise<void> {
       try {
         if ((await sandbox.getBrowserOrNull(id)) === null) {
           claims.delete(id)
+          unpersistClaim(id)
           console.log(`[pool] released claim ${id} (instance gone)`)
         }
       } catch {
@@ -230,17 +271,49 @@ async function reconcile(): Promise<void> {
   }
 }
 
-// Kill every pre-existing warm instance. See the file header for why this is
-// required for correctness, not just cleanup.
-async function reapExisting(): Promise<void> {
+// Reconcile pre-existing warm instances against the durable claim table on
+// startup. Restores in-memory claims for instances a user still owns (kept
+// alive across the restart), and reaps only the genuinely unclaimed ones.
+//
+// Why reaping unclaimed warm is still correct: a warm instance with no claim row
+// was either never handed out, or its claim persist failed — in the latter case
+// we cannot tell who owns it, so we fail closed and reap it (the same guarantee
+// the old unconditional reap gave, now scoped to instances we have no record
+// for). A claimed instance never gets re-handed-out because reconcile() skips
+// anything in the `claims` map.
+async function reconcileExisting(): Promise<void> {
   try {
+    const { rows } = await db.query<{
+      sandbox_id: string
+      user_id: string
+      metadata: Record<string, string>
+    }>('SELECT sandbox_id, user_id, metadata FROM browser.claims')
+    const claimBy: Map<string, { userId: string; metadata: Record<string, string> }> = new Map(
+      rows.map((r) => [r.sandbox_id, { userId: r.user_id, metadata: r.metadata ?? {} }]),
+    )
+
     const { items } = await sandbox.listPool()
-    if (items.length) {
-      console.log(`[pool] reaping ${items.length} stale warm instance(s) on startup`)
+    const live = new Set(items.map((s) => s.id))
+
+    // Restore claims for instances that survived the restart; prune rows whose
+    // instance is already gone (expired / killed while we were down).
+    for (const [id, claim] of claimBy) {
+      if (live.has(id)) claims.set(id, claim)
+      else unpersistClaim(id)
     }
-    await Promise.all(items.map((s) => sandbox.deleteBrowser(s.id).catch(() => {})))
+
+    // Reap warm instances we have no claim record for (orphans / failed persist).
+    const orphans = items.filter((s) => !claims.has(s.id))
+    if (orphans.length) {
+      console.log(`[pool] reaping ${orphans.length} unclaimed warm instance(s) on startup`)
+    }
+    await Promise.all(orphans.map((s) => sandbox.deleteBrowser(s.id).catch(() => {})))
+
+    if (claims.size) {
+      console.log(`[pool] restored ${claims.size} claimed warm instance(s) across restart`)
+    }
   } catch (e) {
-    console.error('[pool] reap on startup failed', e)
+    console.error('[pool] reconcile on startup failed', e)
   }
 }
 
@@ -250,7 +323,7 @@ export async function startPool(): Promise<void> {
     return
   }
   console.log(`[pool] starting warm pool, target=${POOL_SIZE}`)
-  await reapExisting()
+  await reconcileExisting()
   await reconcile()
   setInterval(() => void reconcile(), RECONCILE_MS)
 }
