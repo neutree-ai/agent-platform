@@ -29,6 +29,8 @@ interface OAuthToken {
   scope: string | null
   expires_at: Date | null
   updated_at: Date
+  refresh_fail_count: number
+  refresh_fail_first_at: Date | null
 }
 
 // Fallback TTL when the OAuth provider doesn't return `expires_in` (e.g.
@@ -254,6 +256,34 @@ export async function exchangeCodeForToken(
 // transient and left for the next retry.
 const PERMANENT_OAUTH_ERRORS = new Set(['invalid_grant', 'invalid_client', 'unauthorized_client'])
 
+// A "permanent" OAuth code is not always permanent: upstream MCP brokers
+// surface a *transient* failure to refresh the underlying provider token (e.g.
+// a TLS UNEXPECTED_EOF to googleapis.com) as `invalid_grant`. Rather than drop
+// the token row on the first such error, we hold it through a grace window and
+// only drop + prompt re-auth once refresh has kept failing across multiple
+// requests spanning at least this long. A genuinely dead token keeps failing
+// and gets cleaned up; a transient one heals on a later request and resets the
+// counter via `upsertToken`.
+const REFRESH_FAIL_GRACE_SECONDS = 600
+const REFRESH_FAIL_MIN_COUNT = 3
+
+/**
+ * Decide whether persistent refresh failures warrant dropping the stored token
+ * and prompting the user to re-authorize. Requires both a minimum number of
+ * consecutive failures and that the first failure is older than the grace
+ * window, so a short-lived network blip (which resets the counter once it
+ * heals) never escalates to a re-auth prompt. Pure — unit-testable without a DB.
+ */
+export function shouldDropTokenOnRefreshFailure(
+  failCount: number,
+  firstFailAt: Date | null,
+  now: Date,
+): boolean {
+  if (firstFailAt === null) return false
+  const elapsedMs = now.getTime() - firstFailAt.getTime()
+  return failCount >= REFRESH_FAIL_MIN_COUNT && elapsedMs >= REFRESH_FAIL_GRACE_SECONDS * 1000
+}
+
 class McpRefreshError extends Error {
   constructor(
     message: string,
@@ -347,7 +377,8 @@ export async function upsertToken(
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (user_id, server_origin) DO UPDATE SET
        access_token = $3, refresh_token = COALESCE($4, mcp_oauth_tokens.refresh_token),
-       token_type = $5, scope = $6, expires_at = $7, updated_at = NOW()`,
+       token_type = $5, scope = $6, expires_at = $7, updated_at = NOW(),
+       refresh_fail_count = 0, refresh_fail_first_at = NULL`,
     [
       userId,
       serverOrigin,
@@ -366,6 +397,30 @@ export async function getToken(userId: string, serverOrigin: string): Promise<OA
     [userId, serverOrigin],
   )
   return rows[0] ?? null
+}
+
+/**
+ * Increment the consecutive refresh-failure counter for a token, stamping the
+ * time of the first failure in the current streak. Returns the running count
+ * and first-failure timestamp so the caller can decide whether the failures
+ * have persisted past the grace window. A successful refresh resets both via
+ * `upsertToken`.
+ */
+async function recordRefreshFailure(
+  userId: string,
+  serverOrigin: string,
+): Promise<{ failCount: number; firstFailAt: Date | null }> {
+  const { rows } = await pool.query(
+    `UPDATE mcp_oauth_tokens
+       SET refresh_fail_count = refresh_fail_count + 1,
+           refresh_fail_first_at = COALESCE(refresh_fail_first_at, NOW())
+     WHERE user_id = $1 AND server_origin = $2
+     RETURNING refresh_fail_count, refresh_fail_first_at`,
+    [userId, serverOrigin],
+  )
+  const row = rows[0]
+  if (!row) return { failCount: 0, firstFailAt: null }
+  return { failCount: row.refresh_fail_count, firstFailAt: row.refresh_fail_first_at }
 }
 
 export async function deleteToken(userId: string, serverOrigin: string): Promise<boolean> {
@@ -427,13 +482,28 @@ export async function getValidAccessToken(
     return refreshed.access_token
   } catch (e) {
     if (e instanceof McpRefreshError && e.permanent) {
-      // refresh_token / client is dead — drop the row so we stop hammering
-      // the broker on every request, and signal the caller to prompt re-auth.
-      await deleteToken(userId, serverOrigin)
+      // A "permanent" OAuth code may actually be an upstream transient (a TLS
+      // blip while the broker refreshes the provider token, reported back as
+      // `invalid_grant`). Don't drop the row on the first failure — hold it
+      // through a grace window so a network hiccup doesn't force the user to
+      // re-OAuth. Only once refresh keeps failing across multiple requests
+      // spanning the window do we drop the row (so we stop hammering the broker)
+      // and signal the caller to prompt re-auth.
+      const { failCount, firstFailAt } = await recordRefreshFailure(userId, serverOrigin)
+      if (shouldDropTokenOnRefreshFailure(failCount, firstFailAt, new Date())) {
+        await deleteToken(userId, serverOrigin)
+        console.warn(
+          `[mcp-oauth] dropped dead token for ${serverOrigin} after ${failCount} refresh failures over grace window (oauth_error=${e.oauthError ?? 'none'}, status=${e.status})`,
+        )
+        throw new McpOAuthReauthRequired(serverOrigin, e.oauthError)
+      }
+      // Within the grace window: keep the token and treat as transient so the
+      // next request retries the refresh. The agent sees a transient auth error
+      // but self-heals once the upstream blip clears.
       console.warn(
-        `[mcp-oauth] dropped dead token for ${serverOrigin} (oauth_error=${e.oauthError ?? 'none'}, status=${e.status})`,
+        `[mcp-oauth] holding token for ${serverOrigin} through grace window (refresh failure ${failCount}, oauth_error=${e.oauthError ?? 'none'}, status=${e.status}); treating as transient`,
       )
-      throw new McpOAuthReauthRequired(serverOrigin, e.oauthError)
+      return null
     }
     console.error(`[mcp-oauth] refresh failed (transient) for ${serverOrigin}:`, e)
     return null
