@@ -7,6 +7,7 @@
     "build": "esbuild src/index.ts scripts/seed-admin.ts scripts/seed-mcp-catalog-core.ts scripts/seed-oauth-clients.ts --bundle --format=esm --platform=node --target=node22 --outdir=dist --packages=external --sourcemap --entry-names=[name]",
     "start": "node --env-file=.env dist/index.js",
     "test": "vitest run",
+    "test:unit": "VITEST_UNIT=1 vitest run src",
     "test:watch": "vitest",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
