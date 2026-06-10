@@ -69,11 +69,12 @@ jobs:
             if [ -f "${d}package-lock.json" ]; then
               (cd "$d" && npm ci)
             else
-              # No lockfile: install runtime deps only. --omit=dev avoids
-              # pulling unrelated dev/peer deps (e.g. internal/theme's React),
-              # which otherwise ERESOLVE; consumers only need the runtime deps
-              # of the internal source they compile (hono, etc.).
-              (cd "$d" && npm install --no-save --omit=dev --no-audit --no-fund)
+              # No lockfile: install runtime deps only. --omit=dev skips
+              # unrelated dev deps and --legacy-peer-deps bypasses the peer
+              # check that internal/theme's mismatched React dev tree otherwise
+              # ERESOLVEs on. Consumers only need the runtime deps of the
+              # internal source they compile (hono, etc.).
+              (cd "$d" && npm install --no-save --omit=dev --legacy-peer-deps --no-audit --no-fund)
             fi
           done
 
