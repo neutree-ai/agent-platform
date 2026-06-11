@@ -35,6 +35,37 @@ const CMD_RESIZE = 0x31 // '1'
 
 const textEncoder = new TextEncoder()
 
+// ttyd/libwebsockets fragments a single client→server frame once it grows past
+// its receive buffer (~2KB observed), then mis-parses the continuation frame's
+// first byte as a tty command and tears down the connection. So a large paste
+// sent as one frame silently kills the terminal. Split outgoing input into
+// sub-buffer-size chunks; xterm.js does no input-side chunking or flow control
+// itself (its flow-control guide covers the write/output path only).
+const TERMINAL_INPUT_CHUNK_SIZE = 1024
+// Pause feeding more chunks while the socket's send buffer is backed up, so a
+// huge paste can't balloon memory faster than the wire drains it.
+const WS_BACKPRESSURE_LIMIT = 1 << 20 // 1 MiB
+
+function sendInputFrame(ws: WebSocket, payload: Uint8Array) {
+  const msg = new Uint8Array(1 + payload.length)
+  msg[0] = CMD_INPUT
+  msg.set(payload, 1)
+  ws.send(msg)
+}
+
+function waitForDrain(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount < WS_BACKPRESSURE_LIMIT) {
+        resolve()
+      } else {
+        setTimeout(check, 4)
+      }
+    }
+    check()
+  })
+}
+
 export function WorkspaceTerminalPanel({ workspaceId, instanceId }: WorkspaceTerminalPanelProps) {
   const { t } = useTranslation()
   const terminalTheme = useTerminalTheme()
@@ -274,14 +305,34 @@ export function WorkspaceTerminalPanel({ workspaceId, instanceId }: WorkspaceTer
       )
     }
 
+    // Serialize sends so a large paste's chunks stay in order ahead of any
+    // keystrokes typed while it's still streaming. Swallow rejections (e.g.
+    // socket closing mid-send) so one failure doesn't stall the chain.
+    let sendChain: Promise<void> = Promise.resolve()
+    const enqueueSend = (task: () => void | Promise<void>) => {
+      sendChain = sendChain.then(task).catch(() => {})
+    }
+
     const inputDisposable = term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        const payload = textEncoder.encode(data)
-        const msg = new Uint8Array(1 + payload.length)
-        msg[0] = CMD_INPUT
-        msg.set(payload, 1)
-        ws.send(msg)
+      if (ws.readyState !== WebSocket.OPEN) return
+      const payload = textEncoder.encode(data)
+      // Fast path: typical keystrokes fit in one frame.
+      if (payload.length <= TERMINAL_INPUT_CHUNK_SIZE) {
+        enqueueSend(() => {
+          if (ws.readyState === WebSocket.OPEN) sendInputFrame(ws, payload)
+        })
+        return
       }
+      // Large input (paste): split into sub-buffer-size frames, pausing on
+      // backpressure. Splitting mid-UTF-8/mid-escape is safe — ttyd writes each
+      // payload to the pty in order, so the byte stream reassembles downstream.
+      enqueueSend(async () => {
+        for (let offset = 0; offset < payload.length; offset += TERMINAL_INPUT_CHUNK_SIZE) {
+          if (ws.readyState !== WebSocket.OPEN) return
+          if (ws.bufferedAmount >= WS_BACKPRESSURE_LIMIT) await waitForDrain(ws)
+          sendInputFrame(ws, payload.subarray(offset, offset + TERMINAL_INPUT_CHUNK_SIZE))
+        }
+      })
     })
 
     const resizeDisposable = term.onResize(({ cols, rows }) => {
