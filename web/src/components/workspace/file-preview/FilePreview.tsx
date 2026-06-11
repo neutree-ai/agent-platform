@@ -5,7 +5,7 @@ import { useMarkdownPreferencesStore } from '@/stores/markdown-preferences-store
 import { Code, Eye, FileText, Table, WrapText } from 'lucide-react'
 import { Suspense, lazy, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { isImageFile } from './file-types'
+import { isImageFile, isVideoFile } from './file-types'
 
 const MarkdownPreview = lazy(() =>
   import('./MarkdownPreview').then((m) => ({ default: m.MarkdownPreview })),
@@ -21,11 +21,22 @@ const OfficePreview = lazy(() =>
 )
 const XlsxPreview = lazy(() => import('./XlsxPreview').then((m) => ({ default: m.XlsxPreview })))
 const HtmlPreview = lazy(() => import('./HtmlPreview').then((m) => ({ default: m.HtmlPreview })))
+const VideoPreview = lazy(() => import('./VideoPreview').then((m) => ({ default: m.VideoPreview })))
 
-type PreviewType = 'markdown' | 'image' | 'csv' | 'excalidraw' | 'office' | 'xlsx' | 'html' | 'code'
+type PreviewType =
+  | 'markdown'
+  | 'image'
+  | 'video'
+  | 'csv'
+  | 'excalidraw'
+  | 'office'
+  | 'xlsx'
+  | 'html'
+  | 'code'
 
 function getPreviewType(filename: string): PreviewType {
   if (isImageFile(filename)) return 'image'
+  if (isVideoFile(filename)) return 'video'
   const ext = filename.split('.').pop()?.toLowerCase()
   switch (ext) {
     case 'md':
@@ -121,6 +132,7 @@ export function FilePreview({
   const isCanvasEditor = previewType === 'excalidraw'
   const useRendered =
     previewType === 'image' ||
+    previewType === 'video' ||
     previewType === 'office' ||
     previewType === 'xlsx' ||
     (showRendered && (isCanvasEditor || !isEditing))
@@ -209,6 +221,8 @@ export function FilePreview({
             onPrev={onPrevImage ?? null}
             onNext={onNextImage ?? null}
           />
+        ) : useRendered && previewType === 'video' && fileUrl ? (
+          <VideoPreview src={fileUrl} filename={filename} />
         ) : useRendered && previewType === 'csv' ? (
           <CsvPreview content={content} filename={filename} />
         ) : useRendered && previewType === 'excalidraw' ? (
