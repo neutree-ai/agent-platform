@@ -50,7 +50,25 @@ export function filePreviewUrl(
   return `/api/workspaces/${workspaceId}/${ep.files}/preview?path=${encodeURIComponent(stripLeading(path))}`
 }
 
-const BINARY_PREVIEW_EXTS = new Set(['pptx', 'ppt', 'docx', 'doc', 'pdf', 'xlsx', 'xls'])
+// Files fetched as raw bytes (streamed by URL) rather than as text. Office docs
+// render via the PDF preview endpoint; video plays inline through a `<video>`
+// element. Keep the video set in sync with `isVideoFile` in the file-preview
+// helpers.
+const BINARY_PREVIEW_EXTS = new Set([
+  'pptx',
+  'ppt',
+  'docx',
+  'doc',
+  'pdf',
+  'xlsx',
+  'xls',
+  'mp4',
+  'webm',
+  'ogg',
+  'ogv',
+  'm4v',
+  'mov',
+])
 
 export function isBinaryPreviewFile(filename: string): boolean {
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
