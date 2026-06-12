@@ -1,6 +1,3 @@
-import { AgentTypeProvider } from '@/components/chat/AgentTypeContext'
-import { MessageBubble } from '@/components/chat/MessageBubble'
-import { TurnStatsBar } from '@/components/chat/TurnStatsBar'
 import { VoiceInputButton, type VoiceInputHandle } from '@/components/chat/VoiceInputButton'
 import { AppHeaderButton } from '@/components/shell/windows/AppHeaderButton'
 import { useAppHeaderSlot } from '@/components/shell/windows/AppWindow'
@@ -23,6 +20,7 @@ import {
 import { EmptyHero } from '@/components/ui/empty-hero'
 import { EmptyIllustration } from '@/components/ui/empty-illustration'
 import { Input } from '@/components/ui/input'
+import { Markdown } from '@/components/ui/markdown'
 import {
   Select,
   SelectContent,
@@ -54,6 +52,12 @@ import { useAgentSessionActions, useAgentSessionStore } from '@/stores/AgentSess
 import type { ChatMessage as ChatMessageType } from '@/stores/agent-session-store'
 import { useComposerInsertRequests } from '@/stores/composer-store'
 import { useDraft } from '@/stores/draft-store'
+import {
+  AgentTypeProvider,
+  MarkdownProvider,
+  MessageBubble,
+  TurnStatsBar,
+} from '@neutree-ai/ui-sdk'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Bot,
@@ -603,584 +607,593 @@ export function WorkspaceChatPanel({
 
   return (
     <AgentTypeProvider value={agentType}>
-      {!readonly &&
-        headerSlot &&
-        createPortal(
-          <>
-            {!sessionsAppOpened && (
-              <div className="min-w-0 flex-1">
-                <Select
-                  value={activeSessionId ?? '__new__'}
-                  onValueChange={(value) => {
-                    if (isSessionLocked) return
-                    const newSessionId = value === '__new__' ? undefined : value
-                    const session = newSessionId
-                      ? sessions.find((s) => s.id === newSessionId)
-                      : undefined
-                    actions.switchSession(
-                      newSessionId,
-                      session
-                        ? {
-                            sessionChatStatus: session.chat_status,
-                            lastTurnStats: session.last_turn_stats,
-                          }
-                        : undefined,
-                    )
+      <MarkdownProvider value={Markdown}>
+        {!readonly &&
+          headerSlot &&
+          createPortal(
+            <>
+              {!sessionsAppOpened && (
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={activeSessionId ?? '__new__'}
+                    onValueChange={(value) => {
+                      if (isSessionLocked) return
+                      const newSessionId = value === '__new__' ? undefined : value
+                      const session = newSessionId
+                        ? sessions.find((s) => s.id === newSessionId)
+                        : undefined
+                      actions.switchSession(
+                        newSessionId,
+                        session
+                          ? {
+                              sessionChatStatus: session.chat_status,
+                              lastTurnStats: session.last_turn_stats,
+                            }
+                          : undefined,
+                      )
+                    }}
+                    disabled={isSessionLocked}
+                  >
+                    <SelectTrigger className="h-7 border-foreground/[0.06] bg-foreground/[0.04] px-2 text-xs shadow-none">
+                      <SelectValue placeholder={t('components.sidebar.sessions.newSession')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sessions.map((session) => (
+                        <SelectItem key={session.id} value={session.id} className="text-xs">
+                          {formatSessionLabel(session, t)}
+                        </SelectItem>
+                      ))}
+                      {hasNextPage && <LoadMoreSentinel onVisible={fetchNextPage} />}
+                      {!activeSessionId && (
+                        <SelectItem value="__new__" className="text-xs">
+                          + {t('components.sidebar.sessions.newSession')}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {sessionSource &&
+                (sessionSource.url ? (
+                  <a
+                    href={sessionSource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-info/15 px-2 py-0.5 text-mini font-medium text-info transition-colors hover:bg-info/25"
+                  >
+                    <span>via {sessionSource.connector_name}</span>
+                    <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                ) : (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-info/15 px-2 py-0.5 text-mini font-medium text-info">
+                    via {sessionSource.connector_name}
+                  </span>
+                ))}
+              {callerAgent && (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-mini font-medium text-primary"
+                  title={t('components.workspaceChat.states.invokedBy', {
+                    agent: callerAgent.name,
+                  })}
+                >
+                  <Bot className="h-2.5 w-2.5" />
+                  {t('components.workspaceChat.states.invokedBy', { agent: callerAgent.name })}
+                </span>
+              )}
+              {isDeleting && (
+                <span className="inline-flex shrink-0 items-center gap-1 text-mini text-muted-foreground">
+                  <Spinner size="sm" className="h-3 w-3" />
+                  {t('components.workspaceChat.states.resetting')}
+                </span>
+              )}
+              <div className="flex shrink-0 items-center gap-0.5">
+                {activeSessionId && (
+                  <ShareSessionButton workspaceId={workspace.id} sessionId={activeSessionId} />
+                )}
+                <AppHeaderButton
+                  icon={SquarePen}
+                  label={t('components.sidebar.sessions.newSession')}
+                  onClick={() => {
+                    if (!isSessionLocked) actions.switchSession(undefined)
                   }}
                   disabled={isSessionLocked}
-                >
-                  <SelectTrigger className="h-7 border-foreground/[0.06] bg-foreground/[0.04] px-2 text-xs shadow-none">
-                    <SelectValue placeholder={t('components.sidebar.sessions.newSession')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sessions.map((session) => (
-                      <SelectItem key={session.id} value={session.id} className="text-xs">
-                        {formatSessionLabel(session, t)}
-                      </SelectItem>
-                    ))}
-                    {hasNextPage && <LoadMoreSentinel onVisible={fetchNextPage} />}
-                    {!activeSessionId && (
-                      <SelectItem value="__new__" className="text-xs">
-                        + {t('components.sidebar.sessions.newSession')}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            {sessionSource &&
-              (sessionSource.url ? (
-                <a
-                  href={sessionSource.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-info/15 px-2 py-0.5 text-mini font-medium text-info transition-colors hover:bg-info/25"
-                >
-                  <span>via {sessionSource.connector_name}</span>
-                  <ExternalLink className="h-2.5 w-2.5" />
-                </a>
-              ) : (
-                <span className="inline-flex shrink-0 items-center rounded-full bg-info/15 px-2 py-0.5 text-mini font-medium text-info">
-                  via {sessionSource.connector_name}
-                </span>
-              ))}
-            {callerAgent && (
-              <span
-                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-mini font-medium text-primary"
-                title={t('components.workspaceChat.states.invokedBy', { agent: callerAgent.name })}
-              >
-                <Bot className="h-2.5 w-2.5" />
-                {t('components.workspaceChat.states.invokedBy', { agent: callerAgent.name })}
-              </span>
-            )}
-            {isDeleting && (
-              <span className="inline-flex shrink-0 items-center gap-1 text-mini text-muted-foreground">
-                <Spinner size="sm" className="h-3 w-3" />
-                {t('components.workspaceChat.states.resetting')}
-              </span>
-            )}
-            <div className="flex shrink-0 items-center gap-0.5">
-              {activeSessionId && (
-                <ShareSessionButton workspaceId={workspace.id} sessionId={activeSessionId} />
-              )}
-              <AppHeaderButton
-                icon={SquarePen}
-                label={t('components.sidebar.sessions.newSession')}
-                onClick={() => {
-                  if (!isSessionLocked) actions.switchSession(undefined)
-                }}
-                disabled={isSessionLocked}
-              />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <AppHeaderButton icon={MoreHorizontal} />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem
-                    className="text-xs"
-                    onSelect={() => {
-                      const next = !searchOpen
-                      setSearchOpen(next)
-                      if (next) setTimeout(() => searchInputRef.current?.focus(), 0)
-                      else setSearchQuery('')
-                    }}
-                  >
-                    <Search className="h-3.5 w-3.5" />
-                    {t('components.workspaceChat.actions.search')}
-                  </DropdownMenuItem>
-                  {activeSessionId && (
-                    <DropdownMenuItem className="text-xs" onSelect={startRename}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      {t('components.workspaceChat.actions.rename')}
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-xs"
-                    disabled={fontSize <= FONT_SIZE_MIN}
-                    onSelect={() => changeFontSize(-FONT_SIZE_STEP)}
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                    {t('components.workspaceChat.actions.smallerText')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-xs"
-                    disabled={fontSize >= FONT_SIZE_MAX}
-                    onSelect={() => changeFontSize(FONT_SIZE_STEP)}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    {t('components.workspaceChat.actions.largerText')}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-xs text-destructive focus:text-destructive"
-                    disabled={isChatBusy}
-                    onSelect={handleResetSession}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {isDeleting
-                      ? t('components.workspaceChat.states.resetting')
-                      : t('components.workspaceChat.actions.resetSession')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </>,
-          headerSlot,
-        )}
-
-      <div ref={panelRef} className="flex h-full flex-col">
-        <div className="relative min-h-0 flex-1">
-          {/* Search bar — floats over messages */}
-          {searchOpen && (
-            <div className="absolute top-2 right-2 left-2 z-10 flex items-center gap-1.5 rounded-lg border border-foreground/[0.08] bg-popover px-3 py-1.5 shadow-lg">
-              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (isCommitEnter(e)) {
-                    e.preventDefault()
-                    navigateSearch(e.shiftKey ? 'prev' : 'next')
-                  }
-                  if (e.key === 'Escape') {
-                    setSearchOpen(false)
-                    setSearchQuery('')
-                  }
-                }}
-                placeholder={t('components.workspaceChat.placeholders.searchMessages')}
-                className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
-              />
-              {searchQuery && (
-                <span className="text-mini tabular-nums text-muted-foreground shrink-0">
-                  {searchMatches.length > 0
-                    ? `${searchIndex + 1}/${searchMatches.length}`
-                    : t('components.workspaceChat.empty.noMatches')}
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 shrink-0"
-                onClick={() => navigateSearch('prev')}
-                disabled={searchMatches.length === 0}
-              >
-                <ChevronUp className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 shrink-0"
-                onClick={() => navigateSearch('next')}
-                disabled={searchMatches.length === 0}
-              >
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 shrink-0"
-                onClick={() => {
-                  setSearchOpen(false)
-                  setSearchQuery('')
-                }}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
-          <div ref={scrollRef} className="absolute inset-0 overflow-y-auto" style={{ fontSize }}>
-            {messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center">
-                {isSwitching ? (
-                  <Spinner size="sm" />
-                ) : (
-                  <EmptyHero
-                    illustration={<EmptyIllustration src="sessions" size="h-32" />}
-                    title={t('components.workspaceChat.empty.startConversation.title')}
-                    description={t('components.workspaceChat.empty.startConversation.description')}
-                  />
-                )}
-              </div>
-            ) : virtualizeList ? (
-              <div className="px-3 pt-3">
-                <div
-                  style={{
-                    height: virtualizer.getTotalSize(),
-                    width: '100%',
-                    position: 'relative',
-                  }}
-                >
-                  {virtualizer.getVirtualItems().map((vi) => (
-                    <div
-                      key={vi.key}
-                      data-index={vi.index}
-                      ref={virtualizer.measureElement}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        transform: `translateY(${vi.start}px)`,
+                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <AppHeaderButton icon={MoreHorizontal} />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem
+                      className="text-xs"
+                      onSelect={() => {
+                        const next = !searchOpen
+                        setSearchOpen(next)
+                        if (next) setTimeout(() => searchInputRef.current?.focus(), 0)
+                        else setSearchQuery('')
                       }}
                     >
-                      <div className="pb-3">
-                        <MessageBubble message={messages[vi.index]} />
+                      <Search className="h-3.5 w-3.5" />
+                      {t('components.workspaceChat.actions.search')}
+                    </DropdownMenuItem>
+                    {activeSessionId && (
+                      <DropdownMenuItem className="text-xs" onSelect={startRename}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        {t('components.workspaceChat.actions.rename')}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-xs"
+                      disabled={fontSize <= FONT_SIZE_MIN}
+                      onSelect={() => changeFontSize(-FONT_SIZE_STEP)}
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                      {t('components.workspaceChat.actions.smallerText')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="text-xs"
+                      disabled={fontSize >= FONT_SIZE_MAX}
+                      onSelect={() => changeFontSize(FONT_SIZE_STEP)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {t('components.workspaceChat.actions.largerText')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-xs text-destructive focus:text-destructive"
+                      disabled={isChatBusy}
+                      onSelect={handleResetSession}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {isDeleting
+                        ? t('components.workspaceChat.states.resetting')
+                        : t('components.workspaceChat.actions.resetSession')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </>,
+            headerSlot,
+          )}
+
+        <div ref={panelRef} className="flex h-full flex-col">
+          <div className="relative min-h-0 flex-1">
+            {/* Search bar — floats over messages */}
+            {searchOpen && (
+              <div className="absolute top-2 right-2 left-2 z-10 flex items-center gap-1.5 rounded-lg border border-foreground/[0.08] bg-popover px-3 py-1.5 shadow-lg">
+                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (isCommitEnter(e)) {
+                      e.preventDefault()
+                      navigateSearch(e.shiftKey ? 'prev' : 'next')
+                    }
+                    if (e.key === 'Escape') {
+                      setSearchOpen(false)
+                      setSearchQuery('')
+                    }
+                  }}
+                  placeholder={t('components.workspaceChat.placeholders.searchMessages')}
+                  className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+                />
+                {searchQuery && (
+                  <span className="text-mini tabular-nums text-muted-foreground shrink-0">
+                    {searchMatches.length > 0
+                      ? `${searchIndex + 1}/${searchMatches.length}`
+                      : t('components.workspaceChat.empty.noMatches')}
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0"
+                  onClick={() => navigateSearch('prev')}
+                  disabled={searchMatches.length === 0}
+                >
+                  <ChevronUp className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0"
+                  onClick={() => navigateSearch('next')}
+                  disabled={searchMatches.length === 0}
+                >
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0"
+                  onClick={() => {
+                    setSearchOpen(false)
+                    setSearchQuery('')
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+            <div ref={scrollRef} className="absolute inset-0 overflow-y-auto" style={{ fontSize }}>
+              {messages.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  {isSwitching ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <EmptyHero
+                      illustration={<EmptyIllustration src="sessions" size="h-32" />}
+                      title={t('components.workspaceChat.empty.startConversation.title')}
+                      description={t(
+                        'components.workspaceChat.empty.startConversation.description',
+                      )}
+                    />
+                  )}
+                </div>
+              ) : virtualizeList ? (
+                <div className="px-3 pt-3">
+                  <div
+                    style={{
+                      height: virtualizer.getTotalSize(),
+                      width: '100%',
+                      position: 'relative',
+                    }}
+                  >
+                    {virtualizer.getVirtualItems().map((vi) => (
+                      <div
+                        key={vi.key}
+                        data-index={vi.index}
+                        ref={virtualizer.measureElement}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${vi.start}px)`,
+                        }}
+                      >
+                        <div className="pb-3">
+                          <MessageBubble message={messages[vi.index]} />
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                  {/* Tail rendered in normal flow — see virtualCount above. */}
+                  {messages.length > 0 && (
+                    <div className="pb-3">
+                      <MessageBubble message={messages[messages.length - 1]} />
+                    </div>
+                  )}
+                  {error && (
+                    <Alert variant="destructive" className="mb-3 p-3">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              ) : (
+                <div className="p-3 space-y-3">
+                  {messages.map((msg) => (
+                    <MessageBubble key={msg.id} message={msg} />
+                  ))}
+                  {error && (
+                    <Alert variant="destructive" className="p-3">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              )}
+            </div>
+            {showScrollBtn && (
+              <button
+                type="button"
+                onClick={handleScrollBtnClick}
+                className="absolute bottom-3 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-foreground/[0.08] bg-popover text-muted-foreground shadow-md transition-colors hover:text-foreground"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {!isLoading && messages.length > 0 && (
+            <TurnStatsBar
+              turns={turnCount}
+              contextTokens={lastTurnStats?.contextTokens}
+              contextWindow={lastTurnStats?.contextWindow}
+            />
+          )}
+
+          {pendingQuestion && (
+            <AskUserQuestionPanel request={pendingQuestion} onRespond={actions.respondToQuestion} />
+          )}
+
+          {!readonly && <HintBar visible={isLoading} hints={hints} />}
+          {!readonly && (
+            <form
+              onSubmit={handleSubmit}
+              className="shrink-0 border-t border-foreground/[0.06] p-3"
+            >
+              {attachedImages.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pb-2">
+                  {attachedImages.map((img, i) => (
+                    <div key={i} className="relative group">
+                      <img
+                        src={`data:${img.media_type};base64,${img.data}`}
+                        alt="attachment"
+                        className="h-14 w-14 rounded border border-foreground/[0.08] object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
+                        className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-mini"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
-                {/* Tail rendered in normal flow — see virtualCount above. */}
-                {messages.length > 0 && (
-                  <div className="pb-3">
-                    <MessageBubble message={messages[messages.length - 1]} />
-                  </div>
-                )}
-                {error && (
-                  <Alert variant="destructive" className="mb-3 p-3">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            ) : (
-              <div className="p-3 space-y-3">
-                {messages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
-                ))}
-                {error && (
-                  <Alert variant="destructive" className="p-3">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
-          </div>
-          {showScrollBtn && (
-            <button
-              type="button"
-              onClick={handleScrollBtnClick}
-              className="absolute bottom-3 left-1/2 z-10 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-foreground/[0.08] bg-popover text-muted-foreground shadow-md transition-colors hover:text-foreground"
-            >
-              <ChevronDown className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {!isLoading && messages.length > 0 && (
-          <TurnStatsBar
-            turns={turnCount}
-            contextTokens={lastTurnStats?.contextTokens}
-            contextWindow={lastTurnStats?.contextWindow}
-          />
-        )}
-
-        {pendingQuestion && (
-          <AskUserQuestionPanel request={pendingQuestion} onRespond={actions.respondToQuestion} />
-        )}
-
-        {!readonly && <HintBar visible={isLoading} hints={hints} />}
-        {!readonly && (
-          <form onSubmit={handleSubmit} className="shrink-0 border-t border-foreground/[0.06] p-3">
-            {attachedImages.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pb-2">
-                {attachedImages.map((img, i) => (
-                  <div key={i} className="relative group">
-                    <img
-                      src={`data:${img.media_type};base64,${img.data}`}
-                      alt="attachment"
-                      className="h-14 w-14 rounded border border-foreground/[0.08] object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setAttachedImages((prev) => prev.filter((_, j) => j !== i))}
-                      className="absolute -top-1.5 -right-1.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground text-mini"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="relative">
-              {slashMenu}
-              {mentionMenu}
-              {fileMentionMenu}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files) addImageFiles(e.target.files)
-                  e.target.value = ''
-                }}
-              />
-              <div
-                className={cn(
-                  'relative overflow-hidden rounded-lg border border-foreground/[0.08] bg-background/40 transition-colors',
-                  'focus-within:border-foreground/[0.20] focus-within:bg-background',
-                  // Writing line: a hairline of primary at the bottom edge — fades in on focus,
-                  // and stays steadily lit while the assistant streams (no animation).
-                  'after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0 after:h-px after:rounded-full',
-                  'after:bg-gradient-to-r after:from-transparent after:via-primary/70 after:to-transparent',
-                  'after:opacity-0 after:transition-opacity after:duration-300 focus-within:after:opacity-100',
-                  isLoading && 'after:opacity-100',
-                  // In-pending: the whole composer surface signals the queued
-                  // state — primary tint + solid primary border, held through
-                  // focus so it doesn't flicker back to neutral.
-                  pendingMessage &&
-                    'border-primary/50 bg-primary/[0.06] focus-within:border-primary/60 focus-within:bg-primary/[0.06]',
-                )}
-              >
-                {isLoading && (
-                  <div
-                    className={cn(
-                      // Fixed height so the strip doesn't grow when it swaps
-                      // from the plain hint to the taller pending pill + ✕.
-                      'flex h-7 items-center gap-1.5 border-b px-3',
-                      pendingMessage ? 'border-primary/15' : 'border-foreground/[0.06]',
-                    )}
-                  >
-                    {pendingMessage ? (
-                      <>
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-mini font-medium text-primary-foreground">
-                          <Hourglass className="h-2.5 w-2.5" />
-                          {t('components.workspaceChat.pending.label')}
-                        </span>
-                        <span className="truncate text-mini text-muted-foreground">
-                          {isQueuedDirty
-                            ? t('components.workspaceChat.pending.unsavedChanges')
-                            : t('components.workspaceChat.pending.autoSendHint')}
-                        </span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="ml-auto h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
-                              onClick={actions.clearPendingMessage}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t('components.workspaceChat.pending.clear')}
-                          </TooltipContent>
-                        </Tooltip>
-                      </>
-                    ) : (
-                      <>
-                        <Hourglass className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        <span className="truncate text-mini text-muted-foreground">
-                          {t('components.workspaceChat.pending.composerHint')}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                )}
-                <div className="relative">
-                  <Textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={(e) => {
-                      setInput(e.target.value)
-                      adjustTextareaHeight()
-                    }}
-                    onKeyDown={handleKeyDown}
-                    onPaste={handlePaste}
-                    readOnly={isVoiceActive}
-                    placeholder={
-                      chatSendKeyMode === 'enter'
-                        ? t('components.workspaceChat.placeholders.messageInputEnter')
-                        : t('components.workspaceChat.placeholders.messageInput', {
-                            modifier: navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl',
-                          })
-                    }
-                    className={cn(
-                      'resize-none text-xs min-h-0 border-0 bg-transparent px-3 pt-2 pb-1 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto max-h-[50vh] caret-primary',
-                      isVoiceActive && 'invisible pointer-events-none',
-                    )}
-                    rows={1}
-                  />
-                  {isVoiceActive && <VoiceCapturePanel state={voiceState} />}
-                </div>
-                <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-0">
-                  <div className="flex items-center gap-1">
-                    {!isLoading && (
-                      <>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={isChatBusy}
-                              onClick={() => fileInputRef.current?.click()}
-                            >
-                              <ImagePlus className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t('components.workspaceChat.actions.attachImage')}
-                          </TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={isChatBusy}
-                              onClick={() => {
-                                actions.sendMessage('/compact')
-                                markPendingScroll()
-                              }}
-                            >
-                              <Shrink className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t('components.workspaceChat.actions.compactConversation')}
-                          </TooltipContent>
-                        </Tooltip>
-                        <VoiceInputButton
-                          ref={voiceInputRef}
-                          disabled={isChatBusy}
-                          onStateChange={setVoiceState}
-                          onTranscribed={(text) => {
-                            setInput(input ? `${input} ${text}` : text)
-                            requestAnimationFrame(() => {
-                              inputRef.current?.focus()
-                              adjustTextareaHeight()
-                            })
-                          }}
-                        />
-                      </>
-                    )}
-                  </div>
-                  {isLoading ? (
-                    <span
-                      key="stop"
-                      className="inline-flex items-center gap-1 animate-in fade-in zoom-in-90 duration-200"
-                    >
-                      {input.trim() && !isQueued && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button type="submit" size="sm" className="h-7 px-3">
-                              <ListPlus className="h-3.5 w-3.5" />
-                              {t('components.workspaceChat.actions.queue')}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t('components.workspaceChat.pending.queueHint')}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={actions.stop}
-                          >
-                            <Square className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t('components.workspaceChat.actions.stop')}
-                        </TooltipContent>
-                      </Tooltip>
-                    </span>
-                  ) : (
-                    <span
-                      key="send"
-                      className="inline-flex animate-in fade-in zoom-in-90 duration-200"
-                    >
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="submit"
-                            size="sm"
-                            className="h-7 px-3"
-                            disabled={!input.trim() || isChatBusy}
-                          >
-                            <Send className="h-3.5 w-3.5" />
-                            {t('components.workspaceChat.actions.send')}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t(
-                            chatSendKeyMode === 'enter'
-                              ? 'components.workspaceChat.actions.sendShortcutEnter'
-                              : 'components.workspaceChat.actions.sendShortcut',
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
-                    </span>
+              )}
+              <div className="relative">
+                {slashMenu}
+                {mentionMenu}
+                {fileMentionMenu}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) addImageFiles(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
+                <div
+                  className={cn(
+                    'relative overflow-hidden rounded-lg border border-foreground/[0.08] bg-background/40 transition-colors',
+                    'focus-within:border-foreground/[0.20] focus-within:bg-background',
+                    // Writing line: a hairline of primary at the bottom edge — fades in on focus,
+                    // and stays steadily lit while the assistant streams (no animation).
+                    'after:pointer-events-none after:absolute after:inset-x-3 after:bottom-0 after:h-px after:rounded-full',
+                    'after:bg-gradient-to-r after:from-transparent after:via-primary/70 after:to-transparent',
+                    'after:opacity-0 after:transition-opacity after:duration-300 focus-within:after:opacity-100',
+                    isLoading && 'after:opacity-100',
+                    // In-pending: the whole composer surface signals the queued
+                    // state — primary tint + solid primary border, held through
+                    // focus so it doesn't flicker back to neutral.
+                    pendingMessage &&
+                      'border-primary/50 bg-primary/[0.06] focus-within:border-primary/60 focus-within:bg-primary/[0.06]',
                   )}
+                >
+                  {isLoading && (
+                    <div
+                      className={cn(
+                        // Fixed height so the strip doesn't grow when it swaps
+                        // from the plain hint to the taller pending pill + ✕.
+                        'flex h-7 items-center gap-1.5 border-b px-3',
+                        pendingMessage ? 'border-primary/15' : 'border-foreground/[0.06]',
+                      )}
+                    >
+                      {pendingMessage ? (
+                        <>
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-mini font-medium text-primary-foreground">
+                            <Hourglass className="h-2.5 w-2.5" />
+                            {t('components.workspaceChat.pending.label')}
+                          </span>
+                          <span className="truncate text-mini text-muted-foreground">
+                            {isQueuedDirty
+                              ? t('components.workspaceChat.pending.unsavedChanges')
+                              : t('components.workspaceChat.pending.autoSendHint')}
+                          </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="ml-auto h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
+                                onClick={actions.clearPendingMessage}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t('components.workspaceChat.pending.clear')}
+                            </TooltipContent>
+                          </Tooltip>
+                        </>
+                      ) : (
+                        <>
+                          <Hourglass className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="truncate text-mini text-muted-foreground">
+                            {t('components.workspaceChat.pending.composerHint')}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <Textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={(e) => {
+                        setInput(e.target.value)
+                        adjustTextareaHeight()
+                      }}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
+                      readOnly={isVoiceActive}
+                      placeholder={
+                        chatSendKeyMode === 'enter'
+                          ? t('components.workspaceChat.placeholders.messageInputEnter')
+                          : t('components.workspaceChat.placeholders.messageInput', {
+                              modifier: navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl',
+                            })
+                      }
+                      className={cn(
+                        'resize-none text-xs min-h-0 border-0 bg-transparent px-3 pt-2 pb-1 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto max-h-[50vh] caret-primary',
+                        isVoiceActive && 'invisible pointer-events-none',
+                      )}
+                      rows={1}
+                    />
+                    {isVoiceActive && <VoiceCapturePanel state={voiceState} />}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-0">
+                    <div className="flex items-center gap-1">
+                      {!isLoading && (
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={isChatBusy}
+                                onClick={() => fileInputRef.current?.click()}
+                              >
+                                <ImagePlus className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t('components.workspaceChat.actions.attachImage')}
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={isChatBusy}
+                                onClick={() => {
+                                  actions.sendMessage('/compact')
+                                  markPendingScroll()
+                                }}
+                              >
+                                <Shrink className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t('components.workspaceChat.actions.compactConversation')}
+                            </TooltipContent>
+                          </Tooltip>
+                          <VoiceInputButton
+                            ref={voiceInputRef}
+                            disabled={isChatBusy}
+                            onStateChange={setVoiceState}
+                            onTranscribed={(text) => {
+                              setInput(input ? `${input} ${text}` : text)
+                              requestAnimationFrame(() => {
+                                inputRef.current?.focus()
+                                adjustTextareaHeight()
+                              })
+                            }}
+                          />
+                        </>
+                      )}
+                    </div>
+                    {isLoading ? (
+                      <span
+                        key="stop"
+                        className="inline-flex items-center gap-1 animate-in fade-in zoom-in-90 duration-200"
+                      >
+                        {input.trim() && !isQueued && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button type="submit" size="sm" className="h-7 px-3">
+                                <ListPlus className="h-3.5 w-3.5" />
+                                {t('components.workspaceChat.actions.queue')}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t('components.workspaceChat.pending.queueHint')}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={actions.stop}
+                            >
+                              <Square className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t('components.workspaceChat.actions.stop')}
+                          </TooltipContent>
+                        </Tooltip>
+                      </span>
+                    ) : (
+                      <span
+                        key="send"
+                        className="inline-flex animate-in fade-in zoom-in-90 duration-200"
+                      >
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="submit"
+                              size="sm"
+                              className="h-7 px-3"
+                              disabled={!input.trim() || isChatBusy}
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              {t('components.workspaceChat.actions.send')}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t(
+                              chatSendKeyMode === 'enter'
+                                ? 'components.workspaceChat.actions.sendShortcutEnter'
+                                : 'components.workspaceChat.actions.sendShortcut',
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </form>
-        )}
-        {slashStructDialog}
-      </div>
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('components.workspaceChat.dialog.renameTitle')}</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              commitRename()
-            }}
-          >
-            <Input
-              autoFocus
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              placeholder={t('components.workspaceChat.placeholders.sessionName')}
-            />
-            <DialogFooter className="mt-4">
-              <Button type="button" variant="ghost" onClick={() => setRenameOpen(false)}>
-                {t('common.cancel')}
-              </Button>
-              <Button type="submit" disabled={!renameValue.trim()}>
-                {t('common.save')}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+            </form>
+          )}
+          {slashStructDialog}
+        </div>
+        <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('components.workspaceChat.dialog.renameTitle')}</DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                commitRename()
+              }}
+            >
+              <Input
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                placeholder={t('components.workspaceChat.placeholders.sessionName')}
+              />
+              <DialogFooter className="mt-4">
+                <Button type="button" variant="ghost" onClick={() => setRenameOpen(false)}>
+                  {t('common.cancel')}
+                </Button>
+                <Button type="submit" disabled={!renameValue.trim()}>
+                  {t('common.save')}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </MarkdownProvider>
     </AgentTypeProvider>
   )
 }

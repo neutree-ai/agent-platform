@@ -1,14 +1,18 @@
-import { AgentTypeProvider } from '@/components/chat/AgentTypeContext'
-import { MessageBubble } from '@/components/chat/MessageBubble'
-import { TurnStatsBar } from '@/components/chat/TurnStatsBar'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Markdown } from '@/components/ui/markdown'
 import { Spinner } from '@/components/ui/spinner'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { api } from '@/lib/api/client'
 import type { ApiShareConfig, ApiShareData, ApiShareTrigger } from '@/lib/api/types'
 import type { ChatMessage } from '@/stores/agent-session-store'
-import { toChatMessage } from '@/stores/agent-session-store'
+import {
+  AgentTypeProvider,
+  MarkdownProvider,
+  MessageBubble,
+  TurnStatsBar,
+  toChatMessage,
+} from '@neutree-ai/ui-sdk'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -135,53 +139,55 @@ export function SharePage() {
 
   return (
     <AgentTypeProvider value={agentType}>
-      <div className="flex h-screen flex-col bg-background">
-        <div className="flex min-h-0 flex-1">
-          <div className="flex w-full flex-col">
-            <div className="shrink-0 border-b border-border px-4 py-2">
-              <div className="space-y-1.5 mx-auto w-full max-w-3xl">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <h1 className="min-w-0 truncate text-xs font-semibold">{displayTitle}</h1>
-                    {data.owner_name && (
-                      <span className="shrink-0 text-mini text-muted-foreground">
-                        {t('pages.share.sharedBy', {
-                          name: data.owner_name,
-                          defaultValue: 'Shared by {{name}}',
-                        })}
-                      </span>
-                    )}
+      <MarkdownProvider value={Markdown}>
+        <div className="flex h-screen flex-col bg-background">
+          <div className="flex min-h-0 flex-1">
+            <div className="flex w-full flex-col">
+              <div className="shrink-0 border-b border-border px-4 py-2">
+                <div className="space-y-1.5 mx-auto w-full max-w-3xl">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-baseline gap-2">
+                      <h1 className="min-w-0 truncate text-xs font-semibold">{displayTitle}</h1>
+                      {data.owner_name && (
+                        <span className="shrink-0 text-mini text-muted-foreground">
+                          {t('pages.share.sharedBy', {
+                            name: data.owner_name,
+                            defaultValue: 'Shared by {{name}}',
+                          })}
+                        </span>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-mini text-muted-foreground">
+                      {new Date(data.created_at).toLocaleDateString()}
+                    </span>
                   </div>
-                  <span className="shrink-0 text-mini text-muted-foreground">
-                    {new Date(data.created_at).toLocaleDateString()}
-                  </span>
+                  {data.trigger && data.trigger.type !== 'manual' && (
+                    <TriggerInfo trigger={data.trigger} />
+                  )}
+                  {data.workspaceConfig && <ConfigSummary config={data.workspaceConfig} />}
                 </div>
-                {data.trigger && data.trigger.type !== 'manual' && (
-                  <TriggerInfo trigger={data.trigger} />
-                )}
-                {data.workspaceConfig && <ConfigSummary config={data.workspaceConfig} />}
               </div>
-            </div>
-            {/* Messages scroll area — full column width */}
-            <div className="min-h-0 flex-1 overflow-y-auto text-xs">
-              <div className="p-3 space-y-3 mx-auto w-full max-w-3xl">
-                {chatMessages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
-                ))}
+              {/* Messages scroll area — full column width */}
+              <div className="min-h-0 flex-1 overflow-y-auto text-xs">
+                <div className="p-3 space-y-3 mx-auto w-full max-w-3xl">
+                  {chatMessages.map((msg) => (
+                    <MessageBubble key={msg.id} message={msg} />
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Turn stats footer */}
-            {(turnCount > 0 || data.turnStats) && (
-              <TurnStatsBar
-                turns={turnCount}
-                contextTokens={data.turnStats?.contextTokens}
-                contextWindow={data.turnStats?.contextWindow}
-              />
-            )}
+              {/* Turn stats footer */}
+              {(turnCount > 0 || data.turnStats) && (
+                <TurnStatsBar
+                  turns={turnCount}
+                  contextTokens={data.turnStats?.contextTokens}
+                  contextWindow={data.turnStats?.contextWindow}
+                />
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </MarkdownProvider>
     </AgentTypeProvider>
   )
 }

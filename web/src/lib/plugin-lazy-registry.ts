@@ -48,10 +48,6 @@ export function getLazyPanel(panelId: string): LazyPanelDescriptor | undefined {
   return lazyPanels.get(panelId)
 }
 
-export function getLazyToolRenderer(toolName: string): string | undefined {
-  return lazyToolRenderers.get(toolName)
-}
-
 export function matchLazyToolHandlers(toolName: string): string[] {
   const hits: string[] = []
   for (const h of lazyToolHandlers) {

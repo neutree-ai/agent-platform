@@ -22,7 +22,8 @@
       "@/*": ["./src/*"],
       "@neutree-ai/types": ["../internal/types"],
       "@neutree-ai/sse-consumer": ["../internal/sse-consumer/src"],
-      "@neutree-ai/theme": ["../internal/theme/index.d.ts"]
+      "@neutree-ai/theme": ["../internal/theme/index.d.ts"],
+      "@neutree-ai/ui-sdk": ["../internal/ui-sdk/src/index.ts"]
     }
   },
   "include": ["src"],

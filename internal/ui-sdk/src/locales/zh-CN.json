@@ -1,0 +1,219 @@
+{
+  "components": {
+    "chat": {
+      "messageBubble": {
+        "alts": {
+          "attachment": "附件",
+          "content": "内容"
+        },
+        "states": {
+          "thinking": "思考中..."
+        },
+        "actions": {
+          "copy": "复制",
+          "copied": "已复制"
+        }
+      },
+      "toolRenderers": {
+        "labels": {
+          "unknown": "（未知）"
+        },
+        "agentRequest": {
+          "proposedBadge": "待审",
+          "approve": "批准",
+          "reject": "拒绝",
+          "confirmReject": "确认拒绝",
+          "cancel": "取消",
+          "reasonPlaceholder": "拒绝原因（可选）",
+          "reason": "原因",
+          "loading": "加载请求中…",
+          "loadFailed": "加载请求失败",
+          "invalidPayload": "请求 payload 无效",
+          "appliedAt": "已执行",
+          "status": {
+            "pending": "待审批",
+            "approved": "已批准",
+            "rejected": "已拒绝",
+            "applied": "已执行"
+          },
+          "fields": {
+            "id": "ID",
+            "name": "名称",
+            "cron": "Cron",
+            "runAt": "执行时间",
+            "timezone": "时区",
+            "prompt": "Prompt",
+            "promptId": "Prompt 引用",
+            "type": "类型",
+            "enabled": "启用",
+            "attach": "附加",
+            "detach": "移除",
+            "model": "模型",
+            "smallModel": "小模型",
+            "systemPrompt": "系统提示词",
+            "slug": "Slug",
+            "visibility": "可见性",
+            "agentType": "Agent",
+            "provider": "Provider",
+            "content": "内容"
+          },
+          "cleared": "（清空）",
+          "commandTypes": {
+            "plain": "普通",
+            "struct": "结构化"
+          },
+          "enabledStates": {
+            "on": "已启用",
+            "off": "已暂停"
+          },
+          "visibilityValues": {
+            "private": "私有",
+            "user": "用户级",
+            "public": "公开"
+          }
+        },
+        "defaults": {
+          "input": "输入：",
+          "result": "结果："
+        },
+        "browser": {
+          "timeout": "超时：{{value}} 秒",
+          "status": {
+            "created": "已创建"
+          },
+          "empty": {
+            "noBrowsers": "当前没有浏览器"
+          }
+        },
+        "codexEdit": {
+          "preview": {
+            "files_one": "{{count}} 个文件",
+            "files_other": "{{count}} 个文件"
+          }
+        },
+        "codexExec": {
+          "labels": {
+            "inPath": "位于 {{value}}",
+            "command": "命令：",
+            "cwd": "工作目录：{{value}}",
+            "stdout": "标准输出：",
+            "stderr": "标准错误：",
+            "exitCode": "退出码：{{value}}"
+          }
+        },
+        "codexWebSearch": {
+          "empty": "Codex 未暴露查询关键词与搜索结果"
+        },
+        "agent": {
+          "preview": {
+            "background": "@{{slug}}（后台）"
+          },
+          "input": {
+            "continue": "续聊 {{sid}}",
+            "newSession": "新会话"
+          }
+        },
+        "claudeBash": {
+          "labels": {
+            "command": "命令："
+          }
+        },
+        "claudeFileEdit": {
+          "labels": {
+            "old": "旧内容",
+            "new": "新内容",
+            "replaceAllOccurrences": "替换全部匹配项"
+          }
+        },
+        "claudeFileRead": {
+          "labels": {
+            "lineRange": "第 {{start}}-{{end}} 行",
+            "fromLine": "从第 {{value}} 行开始",
+            "firstLines_one": "前 {{count}} 行",
+            "firstLines_other": "前 {{count}} 行",
+            "pages": "第 {{value}} 页"
+          }
+        },
+        "claudeSearch": {
+          "preview": {
+            "patternInPath": "{{pattern}}，范围 {{path}}"
+          },
+          "labels": {
+            "inPath": "范围：{{value}}",
+            "glob": "Glob：{{value}}",
+            "type": "类型：{{value}}",
+            "mode": "模式：{{value}}"
+          }
+        },
+        "claudeTodo": {
+          "preview": {
+            "done": "已完成 {{done}}/{{total}}"
+          }
+        },
+        "claudeTask": {
+          "status": {
+            "pending": "待办",
+            "in_progress": "进行中",
+            "completed": "已完成",
+            "deleted": "已删除"
+          }
+        },
+        "sandbox": {
+          "status": {
+            "created": "已创建"
+          },
+          "labels": {
+            "cpu": "CPU：{{value}}",
+            "memory": "内存：{{value}}",
+            "timeout": "超时：{{value}} 秒",
+            "expires": "到期时间：{{value}}",
+            "command": "命令：",
+            "cwd": "工作目录：{{value}}",
+            "sandbox": "沙箱：{{value}}",
+            "exitCode": "退出码 {{value}}"
+          },
+          "preview": {
+            "files_one": "{{count}} 个文件",
+            "files_other": "{{count}} 个文件"
+          },
+          "empty": {
+            "noSandboxes": "当前没有沙箱",
+            "noUrl": "暂无 URL"
+          }
+        },
+        "skills": {
+          "labels": {
+            "path": "路径：{{value}}"
+          }
+        },
+        "afs": {
+          "labels": {
+            "readOnly": "只读",
+            "readWrite": "可读写",
+            "membersAffected_one": "已卸载 {{count}} 个挂载点",
+            "membersAffected_other": "已卸载 {{count}} 个挂载点"
+          }
+        },
+        "exportFileUrl": {
+          "labels": {
+            "ttl": "有效期：{{value}} 秒",
+            "expires": "过期时间：{{value}}"
+          }
+        }
+      },
+      "toolCallBlock": {
+        "status": {
+          "error": "错误",
+          "done": "完成"
+        }
+      },
+      "turnStatsBar": {
+        "turns_one": "{{count}} 轮",
+        "turns_other": "{{count}} 轮",
+        "context": "上下文 {{used}} / {{total}}",
+        "contextWarning": "建议执行 /compact 或开启新会话",
+        "turnWarning": "轮次较高，建议开启新会话或压缩会话"
+      }
+    }
+  }
+}

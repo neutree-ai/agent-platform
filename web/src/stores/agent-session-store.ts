@@ -12,7 +12,6 @@
 
 import type { ContentDelta, UniversalItem } from '@/lib/api/sse'
 import type {
-  ApiContentPart,
   ApiMessage,
   AskUserRequest,
   ChatImageAttachment,
@@ -22,37 +21,21 @@ import type {
 } from '@/lib/api/types'
 import { i18n } from '@/lib/i18n'
 import { createToolResultDispatcher } from '@/plugins/registry'
+// Render types + the static normalizer now live in the shared UI SDK.
+import {
+  type ChatMessage,
+  type ContentBlock,
+  type ToolCall,
+  toChatMessage,
+} from '@neutree-ai/ui-sdk'
 import { type StoreApi, createStore } from 'zustand/vanilla'
 import { clearDraftFor, getDraftFor } from './draft-store'
 
 // ── UI types ──
-
-export interface ToolCall {
-  id: string
-  name: string
-  input: Record<string, unknown>
-  result?: string | object
-  isError?: boolean
-  startedAt?: number
-  completedAt?: number
-  resultAt?: number
-  parentToolUseId?: string | null
-}
-
-type ContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'tool'; tool: ToolCall }
-  | { type: 'status'; label: string; detail?: string; isError?: boolean }
-  | { type: 'image'; data: string; media_type: string }
-
-export interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  blocks: ContentBlock[]
-  isStreaming?: boolean
-  created_at?: string
-}
+// Re-exported from the UI SDK so existing importers of this module keep working.
+// (ContentBlock/toChatMessage are used internally below but not re-imported by
+// other modules, so they are not re-exported.)
+export type { ChatMessage, ToolCall }
 
 // ── Injectable dependencies ──
 
@@ -196,55 +179,6 @@ export type AgentSessionSlice = AgentSessionState & AgentSessionActions
 let _id = 0
 function genId(): string {
   return `msg-${Date.now()}-${++_id}`
-}
-
-export function toChatMessage(message: ApiMessage): ChatMessage {
-  const blocks: ContentBlock[] = []
-  const parts = (Array.isArray(message.blocks) ? message.blocks : []) as ApiContentPart[]
-  const resultMap = new Map<string, { output: string; is_error?: boolean; timestamp?: number }>()
-  for (const p of parts) {
-    if (p.type === 'tool_result') {
-      resultMap.set(p.call_id, {
-        output: p.output,
-        is_error: p.is_error,
-        timestamp: (p as any).timestamp,
-      })
-    }
-  }
-  for (const part of parts) {
-    if (part.type === 'text') {
-      blocks.push({ type: 'text', text: part.text })
-    } else if (part.type === 'image') {
-      blocks.push({ type: 'image', data: (part as any).data, media_type: (part as any).media_type })
-    } else if (part.type === 'tool_call') {
-      const result = resultMap.get(part.call_id)
-      let input: Record<string, unknown> = {}
-      try {
-        input = JSON.parse(part.arguments)
-      } catch {}
-      blocks.push({
-        type: 'tool',
-        tool: {
-          id: part.call_id,
-          name: part.name ?? i18n.t('components.chat.toolRenderers.labels.unknown'),
-          input,
-          result: result?.output,
-          isError: result?.is_error,
-          startedAt: (part as any).started_at,
-          completedAt: (part as any).completed_at,
-          resultAt: result?.timestamp,
-          parentToolUseId: (part as any).parent_tool_use_id ?? null,
-        },
-      })
-    }
-  }
-  return {
-    id: String(message.id),
-    role: message.role,
-    content: message.content,
-    blocks,
-    created_at: message.created_at,
-  }
 }
 
 // ── Factory ──

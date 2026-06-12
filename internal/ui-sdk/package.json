@@ -1,0 +1,48 @@
+{
+  "name": "@neutree-ai/ui-sdk",
+  "version": "0.1.1",
+  "description": "Neutree Agent Platform shared UI SDK — reusable React components for embedding platform UI in third-party apps. First module: agent session transcript rendering (messages, tool calls) from the platform's wire message format. Host-agnostic: drop in with a locale, inject your own markdown if you have one.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "i18next": "^23.0.0 || ^24.0.0 || ^25.0.0",
+    "lucide-react": "*",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-i18next": "^14.0.0 || ^15.0.0"
+  },
+  "dependencies": {
+    "@radix-ui/react-collapsible": "^1.1.12",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tooltip": "^1.2.8",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "diff": "^5.2.0",
+    "tailwind-merge": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/diff": "^5.2.0",
+    "@types/react": "^18.0.0",
+    "i18next": "^25.0.0",
+    "lucide-react": "*",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-i18next": "^15.0.0",
+    "typescript": "~5.6.2"
+  }
+}

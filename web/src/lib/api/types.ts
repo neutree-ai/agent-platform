@@ -24,7 +24,7 @@ export type { ApiTag as Tag } from '@neutree-ai/types'
 
 export type { ApiSession as Session, ApiK8sStatus as K8sResourceStatus } from '@neutree-ai/types'
 
-export type { ApiContentPart, ApiMessage } from '@neutree-ai/types'
+export type { ApiMessage } from '@neutree-ai/types'
 
 export interface ChatImageAttachment {
   data: string // base64 encoded
@@ -86,7 +86,10 @@ export type {
 export type { ApiCredentialMeta } from '@neutree-ai/types'
 
 export type { ApiShare, ApiShareConfig, ApiShareTrigger } from '@neutree-ai/types'
-export type { ApiSchedule as Schedule, ApiWorkspaceCommand as WorkspaceCommand } from '@neutree-ai/types'
+export type {
+  ApiSchedule as Schedule,
+  ApiWorkspaceCommand as WorkspaceCommand,
+} from '@neutree-ai/types'
 export type { ApiAgentRequest } from '@neutree-ai/types'
 
 export type { ApiApplication, ApiApplicationSecret } from '@neutree-ai/types'
