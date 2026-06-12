@@ -27,6 +27,7 @@ import {
   type ContentBlock,
   type ToolCall,
   toChatMessage,
+  transcriptI18n,
 } from '@neutree-ai/ui-sdk'
 import { type StoreApi, createStore } from 'zustand/vanilla'
 import { clearDraftFor, getDraftFor } from './draft-store'
@@ -410,7 +411,9 @@ export function createAgentSessionStore(
                           type: 'tool' as const,
                           tool: {
                             id: tc.call_id!,
-                            name: tc.name ?? i18n.t('components.chat.toolRenderers.labels.unknown'),
+                            name:
+                              tc.name ??
+                              transcriptI18n.t('components.chat.toolRenderers.labels.unknown'),
                             input: {},
                             startedAt: Date.now(),
                             parentToolUseId: item.parent_tool_use_id ?? null,
@@ -509,7 +512,9 @@ export function createAgentSessionStore(
                       type: 'tool' as const,
                       tool: {
                         id: tc.call_id!,
-                        name: tc.name ?? i18n.t('components.chat.toolRenderers.labels.unknown'),
+                        name:
+                          tc.name ??
+                          transcriptI18n.t('components.chat.toolRenderers.labels.unknown'),
                         input,
                         completedAt: Date.now(),
                         parentToolUseId: item.parent_tool_use_id ?? null,

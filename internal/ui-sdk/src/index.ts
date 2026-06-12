@@ -30,6 +30,10 @@ export type { MarkdownComponent, MarkdownProps } from './markdown'
 export { TranscriptI18nProvider, transcriptI18n } from './i18n'
 export type { TranscriptI18nProviderProps } from './i18n'
 
+// ── Lazy tool renderers (host-injectable; for on-demand plugin bundles) ──
+export { LazyToolRenderersProvider, useLazyToolRenderers } from './lazy'
+export type { LazyToolRenderers } from './lazy'
+
 // ── Tool-renderer registry (for host-registered custom renderers) ──
 export { resolveRenderer, getToolDisplayName } from './tool-renderers/registry'
 export { registerToolRenderer } from './tool-renderers/plugin-registry'

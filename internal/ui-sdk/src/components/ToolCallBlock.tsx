@@ -1,14 +1,18 @@
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
-import { Spinner } from '../ui/spinner'
-import { getToolRenderersVersion, subscribeToolRenderers } from '../tool-renderers/plugin-registry'
-import type { ToolCall } from '../types'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { memo, useMemo, useState, useSyncExternalStore } from 'react'
+import { memo, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAgentType } from './AgentTypeContext'
+import { useLazyToolRenderers } from '../lazy'
+import { getToolRenderersVersion, subscribeToolRenderers } from '../tool-renderers/plugin-registry'
 import { DefaultInput, DefaultResult } from '../tool-renderers/defaults'
 import { getToolDisplayName, resolveRenderer } from '../tool-renderers/registry'
 import { jsonPreview } from '../tool-renderers/types'
+import type { ToolCall } from '../types'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
+import { Spinner } from '../ui/spinner'
+import { useAgentType } from './AgentTypeContext'
+
+const NOOP_SUBSCRIBE = () => () => {}
+const ZERO = () => 0
 
 // ── Duration formatting ──
 
@@ -33,10 +37,20 @@ function getToolDuration(tool: ToolCall): number | null {
 function ToolCallBlockImpl({ tool }: { tool: ToolCall }) {
   const { t } = useTranslation()
   const agentType = useAgentType()
-  // Re-render when a host registers a renderer (via registerToolRenderer) so a
-  // card swaps from the default view to the real one the moment it lands.
+  const lazy = useLazyToolRenderers()
+  // Re-render when a host registers a renderer (via registerToolRenderer) — or
+  // when the lazy-descriptor registry changes — so a card swaps from skeleton /
+  // default to the real renderer the moment it lands.
   useSyncExternalStore(subscribeToolRenderers, getToolRenderersVersion)
+  useSyncExternalStore(lazy?.subscribe ?? NOOP_SUBSCRIBE, lazy?.getVersion ?? ZERO)
   const renderer = resolveRenderer(tool.name, agentType)
+  // No synchronous renderer yet — if a host-provided lazy source owns this tool,
+  // show a skeleton and kick off the bundle load; the subscriptions above
+  // re-render once it registers.
+  const lazyPluginId = renderer ? null : (lazy?.getPluginId(getToolDisplayName(tool.name)) ?? null)
+  useEffect(() => {
+    if (lazyPluginId && lazy) lazy.load(lazyPluginId).catch(() => {})
+  }, [lazyPluginId, lazy])
   const [expanded, setExpanded] = useState(renderer?.defaultExpanded ?? false)
   const preview = useMemo(
     () => renderer?.getPreview(tool) ?? jsonPreview(tool.input),
@@ -102,9 +116,15 @@ function ToolCallBlockImpl({ tool }: { tool: ToolCall }) {
         {expanded && (
           <CollapsibleContent forceMount>
             <div className="border-t border-foreground/[0.06] p-2.5 space-y-2">
-              {renderer?.renderInput(tool) ?? <DefaultInput tool={tool} />}
-              {tool.result !== undefined &&
-                (renderer?.renderResult(tool) ?? <DefaultResult tool={tool} />)}
+              {lazyPluginId ? (
+                <LazyRendererSkeleton />
+              ) : (
+                <>
+                  {renderer?.renderInput(tool) ?? <DefaultInput tool={tool} />}
+                  {tool.result !== undefined &&
+                    (renderer?.renderResult(tool) ?? <DefaultResult tool={tool} />)}
+                </>
+              )}
             </div>
           </CollapsibleContent>
         )}
@@ -114,3 +134,15 @@ function ToolCallBlockImpl({ tool }: { tool: ToolCall }) {
 }
 
 export const ToolCallBlock = memo(ToolCallBlockImpl)
+
+/** Skeleton shown while a lazy plugin's tool-renderer bundle is loading. Once it
+ *  registers, the parent re-renders with the real card and this disappears. */
+function LazyRendererSkeleton() {
+  return (
+    <div className="animate-pulse space-y-2" aria-hidden>
+      <div className="h-3 w-1/3 rounded bg-muted-foreground/15" />
+      <div className="h-3 w-2/3 rounded bg-muted-foreground/10" />
+      <div className="h-12 w-full rounded bg-muted-foreground/10" />
+    </div>
+  )
+}
