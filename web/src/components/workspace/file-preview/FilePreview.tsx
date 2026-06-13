@@ -11,7 +11,6 @@ const MarkdownPreview = lazy(() =>
   import('./MarkdownPreview').then((m) => ({ default: m.MarkdownPreview })),
 )
 const ImagePreview = lazy(() => import('./ImagePreview').then((m) => ({ default: m.ImagePreview })))
-const CsvPreview = lazy(() => import('./CsvPreview').then((m) => ({ default: m.CsvPreview })))
 const CodePreview = lazy(() => import('./CodePreview').then((m) => ({ default: m.CodePreview })))
 const ExcalidrawPreview = lazy(() =>
   import('./ExcalidrawPreview').then((m) => ({ default: m.ExcalidrawPreview })),
@@ -19,7 +18,16 @@ const ExcalidrawPreview = lazy(() =>
 const OfficePreview = lazy(() =>
   import('./OfficePreview').then((m) => ({ default: m.OfficePreview })),
 )
-const XlsxPreview = lazy(() => import('./XlsxPreview').then((m) => ({ default: m.XlsxPreview })))
+// CSV/XLSX rendering is provided by Extend UI components (see ./extend).
+const ExtendCsvPreview = lazy(() =>
+  import('./ExtendCsvPreview').then((m) => ({ default: m.ExtendCsvPreview })),
+)
+const ExtendXlsxPreview = lazy(() =>
+  import('./ExtendXlsxPreview').then((m) => ({ default: m.ExtendXlsxPreview })),
+)
+const ExtendXlsxEditor = lazy(() =>
+  import('./ExtendXlsxEditor').then((m) => ({ default: m.ExtendXlsxEditor })),
+)
 const HtmlPreview = lazy(() => import('./HtmlPreview').then((m) => ({ default: m.HtmlPreview })))
 const VideoPreview = lazy(() => import('./VideoPreview').then((m) => ({ default: m.VideoPreview })))
 
@@ -224,17 +232,17 @@ export function FilePreview({
         ) : useRendered && previewType === 'video' && fileUrl ? (
           <VideoPreview src={fileUrl} filename={filename} />
         ) : useRendered && previewType === 'csv' ? (
-          <CsvPreview content={content} filename={filename} />
+          <ExtendCsvPreview content={content} filename={filename} />
         ) : useRendered && previewType === 'excalidraw' ? (
           <ExcalidrawPreview content={content} isEditing={isEditing} onChange={onChange} />
         ) : useRendered && previewType === 'html' ? (
           <HtmlPreview content={content} filename={filename} />
         ) : useRendered && previewType === 'xlsx' && fileUrl && !xlsxOfficeMode ? (
-          <XlsxPreview
-            fileUrl={fileUrl}
-            isEditing={isEditing}
-            onBytesChange={isEditing ? onBytesChange : undefined}
-          />
+          isEditing ? (
+            <ExtendXlsxEditor fileUrl={fileUrl} onBytesChange={onBytesChange} />
+          ) : (
+            <ExtendXlsxPreview fileUrl={fileUrl} />
+          )
         ) : useRendered &&
           (previewType === 'office' || (previewType === 'xlsx' && xlsxOfficeMode)) &&
           previewUrl &&

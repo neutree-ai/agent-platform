@@ -8,6 +8,7 @@
     "web": {
       "entry": [
         "src/components/ui/**/*.{ts,tsx}",
+        "src/components/workspace/file-preview/extend/**/*.{ts,tsx}",
         "src/**/*.test.{ts,tsx}"
       ],
       "project": ["src/**/*.{ts,tsx,mdx}"],
