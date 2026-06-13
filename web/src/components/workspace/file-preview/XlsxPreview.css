@@ -1,8 +1,0 @@
-/* Frozen row-number gutter on the left edge of the xlsx grid. Mirrors
- * Excel's row header: faint gray background, monospace, no resize handle.
- * Cell padding is reset because the row-number is centered by the inner
- * flex container. */
-.rdg-xlsx-row-gutter {
-  background-color: hsl(0deg 0% 97.5%);
-  padding-inline: 0;
-}

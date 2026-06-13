@@ -32,7 +32,10 @@ jobs:
       matrix:
         include:
           - { ws: control-plane, test: npm run test:unit }
-          - { ws: web, test: npm test }
+          # web installs with --legacy-peer-deps: @base-ui/react (vendored Extend
+          # UI file viewers) declares a peerOptional date-fns@^4 that conflicts
+          # with the app's date-fns@3 (pinned via react-day-picker/@tremor).
+          - { ws: web, test: npm test, install: npm ci --legacy-peer-deps }
           - { ws: channel-gateway }
           - { ws: scheduler }
           - { ws: sandbox-service }
@@ -54,7 +57,7 @@ jobs:
 
       - name: Install
         working-directory: ${{ matrix.ws }}
-        run: npm ci
+        run: ${{ matrix.install || 'npm ci' }}
 
       # internal/* is consumed through tsconfig path aliases that resolve to its
       # *source* (e.g. @neutree-ai/types → internal/types/api.ts). Typecheck
@@ -122,7 +125,8 @@ jobs:
         run: |
           npm ci
           for ws in control-plane web browser-service channel-gateway sandbox-service scheduler skills-content-service; do
-            (cd "$ws" && npm ci)
+            # web needs --legacy-peer-deps for @base-ui/react's date-fns peer (see check job).
+            if [ "$ws" = "web" ]; then (cd "$ws" && npm ci --legacy-peer-deps); else (cd "$ws" && npm ci); fi
           done
 
       - name: knip

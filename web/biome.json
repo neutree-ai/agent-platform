@@ -2,7 +2,12 @@
   "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
   "extends": ["../biome.base.json"],
   "files": {
-    "ignore": ["node_modules", "dist", "public/excalidraw-assets"]
+    "ignore": [
+      "node_modules",
+      "dist",
+      "public/excalidraw-assets",
+      "src/components/workspace/file-preview/extend"
+    ]
   },
   "linter": {
     "rules": {
