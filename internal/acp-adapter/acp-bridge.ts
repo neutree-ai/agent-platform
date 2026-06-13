@@ -12,22 +12,29 @@ import { type ChildProcess, spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { Readable, Writable } from 'node:stream'
 import {
-  ClientSideConnection,
-  PROTOCOL_VERSION,
-  ndJsonStream,
   type Client,
+  ClientSideConnection,
   type ContentBlock,
   type McpServer,
+  PROTOCOL_VERSION,
   type PromptResponse,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
   type SessionNotification,
   type SessionUpdate,
+  ndJsonStream,
 } from '@agentclientprotocol/sdk'
+import { formatAttachmentNote, writeInputAttachments } from '../types/attachments.js'
 import type { ChatImageAttachment } from '../types/events.js'
 
 // Re-export SDK types that consumers need
-export type { McpServer, PromptResponse, RequestPermissionRequest, RequestPermissionResponse, SessionUpdate }
+export type {
+  McpServer,
+  PromptResponse,
+  RequestPermissionRequest,
+  RequestPermissionResponse,
+  SessionUpdate,
+}
 
 // ── Bridge options ──
 
@@ -42,9 +49,7 @@ export interface AcpBridgeOptions {
 
 export interface AcpSessionHandler {
   onUpdate(update: SessionUpdate): void
-  onPermissionRequest(
-    params: RequestPermissionRequest,
-  ): Promise<RequestPermissionResponse>
+  onPermissionRequest(params: RequestPermissionRequest): Promise<RequestPermissionResponse>
 }
 
 // ── Bridge ──
@@ -207,10 +212,13 @@ export class AcpBridge {
    * Load (restore) a previously persisted session. Returns the session ID.
    * Throws if the agent doesn't support loadSession or the session is not found.
    */
-  async loadSession(sessionId: string, opts?: {
-    cwd?: string
-    mcpServers?: McpServer[]
-  }): Promise<string> {
+  async loadSession(
+    sessionId: string,
+    opts?: {
+      cwd?: string
+      mcpServers?: McpServer[]
+    },
+  ): Promise<string> {
     if (!this.connection) throw new Error('ACP bridge not started')
     await this.connection.loadSession({
       sessionId,
@@ -240,25 +248,37 @@ export class AcpBridge {
    * Send a prompt to an existing session. Resolves when the turn completes.
    * During execution, session updates flow through the registered handler.
    */
-  async prompt(sessionId: string, text: string, images?: ChatImageAttachment[]): Promise<PromptResponse> {
+  async prompt(
+    sessionId: string,
+    text: string,
+    images?: ChatImageAttachment[],
+  ): Promise<PromptResponse> {
     if (!this.connection) throw new Error('ACP bridge not started')
     const contentBlocks: ContentBlock[] = []
+    let promptText = text
     if (images?.length) {
       for (const img of images) {
         contentBlocks.push({ type: 'image', data: img.data, mimeType: img.media_type })
       }
+      // Also persist the images as files so the model can hand them to tools
+      // that need a real file or URL — the ACP image block only feeds vision,
+      // it does not expose a path the model can pass downstream.
+      const written = writeInputAttachments(images, { workspaceDir: this.options.cwd, sessionId })
+      promptText += formatAttachmentNote(written)
     }
-    contentBlocks.push({ type: 'text', text })
+    contentBlocks.push({ type: 'text', text: promptText })
     // Race the protocol-level prompt against a child-died rejection so the
     // promise actually settles when codex-acp gets OOM-killed mid-turn.
     return new Promise<PromptResponse>((resolve, reject) => {
       this.pendingPromptRejects.set(sessionId, reject)
-      this.connection!.prompt({ sessionId, prompt: contentBlocks }).then(resolve, reject).finally(() => {
-        // Only clear our own entry — concurrent prompts on different
-        // sessions share this map.
-        const current = this.pendingPromptRejects.get(sessionId)
-        if (current === reject) this.pendingPromptRejects.delete(sessionId)
-      })
+      this.connection!.prompt({ sessionId, prompt: contentBlocks })
+        .then(resolve, reject)
+        .finally(() => {
+          // Only clear our own entry — concurrent prompts on different
+          // sessions share this map.
+          const current = this.pendingPromptRejects.get(sessionId)
+          if (current === reject) this.pendingPromptRejects.delete(sessionId)
+        })
     })
   }
 
