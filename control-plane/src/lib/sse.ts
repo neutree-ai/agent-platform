@@ -460,9 +460,36 @@ export function createInterceptedSSEResponse(
   // Plugin order matters: persist runs first so its DB enqueues land on
   // the shared queue before broadcast's deferred emits, ensuring emits
   // observe a consistent DB state.
+  // Tap the raw agent stream: any byte from the agent — a real event OR the
+  // acp-adapter heartbeat comment — proves the session is alive, so bump
+  // last_active_at (throttled). Previously last_active_at only advanced when a
+  // message/tool_result was persisted, so a single long operation (a slow tool,
+  // a long inference with no streamed text) starved it and looked "stalled" to
+  // the orchestrator's stall detector even while the agent was working.
+  let lastActivityTouchAt = 0
+  const ACTIVITY_TOUCH_THROTTLE_MS = 10_000
+  const tapActivity = (resp: Response | null): Response | null => {
+    if (!resp?.body) return resp
+    const tap = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        const sid = state.sessionId
+        const now = Date.now()
+        if (sid && now - lastActivityTouchAt >= ACTIVITY_TOUCH_THROTTLE_MS) {
+          lastActivityTouchAt = now
+          void updateSessionActivity(sid).catch(() => {})
+        }
+        controller.enqueue(chunk)
+      },
+    })
+    return new Response(resp.body.pipeThrough(tap), {
+      status: resp.status,
+      headers: resp.headers,
+    })
+  }
+
   runTurn(
     {
-      stream: async () => response,
+      stream: async () => tapActivity(response) ?? response,
       reconnect: reconnectFactory
         ? async () => {
             // During shutdown this CP is already on its way out; firing a
@@ -476,7 +503,7 @@ export function createInterceptedSSEResponse(
             const sid = state.sessionId
             if (!sid) return null
             try {
-              return await reconnectFactory(sid)
+              return tapActivity(await reconnectFactory(sid))
             } catch (e) {
               console.error(`[SSE] reconnect factory threw ${tag} session=${sid}:`, e)
               return null
