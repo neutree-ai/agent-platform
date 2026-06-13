@@ -28,6 +28,9 @@ COPY internal/sse-consumer /app/internal/sse-consumer
 # @neutree-ai/theme is referenced via vite alias '@neutree-ai/theme' → ../internal/theme/src
 # and tsconfig path "../internal/theme/index.d.ts"
 COPY internal/theme /app/internal/theme
+# @neutree-ai/ui-sdk is referenced via vite alias '@neutree-ai/ui-sdk' → ../internal/ui-sdk/src
+# and tsconfig path "../internal/ui-sdk/src/index.ts"; deps resolve from web/node_modules.
+COPY internal/ui-sdk /app/internal/ui-sdk
 
 # Build-time environment for vite — these are baked into the bundle.
 # Each is optional; unset means the corresponding feature degrades gracefully
@@ -45,6 +48,15 @@ ENV VITE_BUILD_TIME=$BUILD_TIME
 # zod relative to /app/internal/types/, which has no node_modules of its
 # own, so install them here.
 RUN cd /app/internal/types && npm install --no-audit --no-fund
+
+# @neutree-ai/ui-sdk is consumed via its src (vite alias + tsconfig path). ui-sdk
+# lives OUTSIDE the vite root (/app/web), so vite's resolve.dedupe does NOT reach
+# the deps it imports — giving ui-sdk its own node_modules yields duplicate
+# react / react-i18next / @radix-ui/* instances, which break React/i18next/Radix
+# context across the boundary (raw i18n keys, "must be used within Provider").
+# Point ui-sdk at web's single node_modules instead so every shared lib resolves
+# to one identical module (web/package.json already carries all of ui-sdk's deps).
+RUN ln -sfn /app/web/node_modules /app/internal/ui-sdk/node_modules
 
 # Build frontend
 ENV NODE_OPTIONS=--max-old-space-size=4096
