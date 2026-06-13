@@ -7,6 +7,7 @@ import {
   type SDKUserMessage,
   query,
 } from '@anthropic-ai/claude-agent-sdk'
+import { formatAttachmentNote, writeInputAttachments } from '../../../internal/types/attachments.js'
 import type {
   AskUserRequest,
   ChatImageAttachment,
@@ -178,7 +179,10 @@ export async function chat(
         source: { type: 'base64', media_type: img.media_type, data: img.data },
       })
     }
-    contentBlocks.push({ type: 'text', text: userMessage })
+    // Also persist the images as files so the model can hand them to tools that
+    // need a real file or URL (vision content alone cannot be re-exported).
+    const written = writeInputAttachments(images, { workspaceDir: WORKSPACE_DIR, sessionId })
+    contentBlocks.push({ type: 'text', text: userMessage + formatAttachmentNote(written) })
     const userMsg = {
       type: 'user' as const,
       message: { role: 'user' as const, content: contentBlocks },
