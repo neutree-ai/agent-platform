@@ -13,13 +13,6 @@
  * not dictate UI style or own per-domain API surface.
  */
 
-import {
-  getMcpText,
-  jsonPreview,
-  safeParseResult,
-  truncate,
-  unwrapMcpInput,
-} from '@/components/chat/tool-renderers/types'
 import { AppHeaderButton } from '@/components/shell/windows/AppHeaderButton'
 import { useAppHeaderSlot } from '@/components/shell/windows/AppWindow'
 import { Markdown } from '@/components/ui/markdown'
@@ -28,14 +21,21 @@ import { registerPlugin } from '@/plugins/registry'
 import type { WorkspacePlugin } from '@/plugins/types'
 import { useAgentSessionActions, useAgentSessionStore } from '@/stores/AgentSessionContext'
 import { useInstancePersistentState, useInstanceState } from '@/stores/instance-state-store'
+import { useResolvedTheme } from '@neutree-ai/theme'
+import {
+  getMcpText,
+  jsonPreview,
+  registerToolRenderer,
+  safeParseResult,
+  truncate,
+  unwrapMcpInput,
+} from '@neutree-ai/ui-sdk'
 import i18n from 'i18next'
 import * as React from 'react'
 import * as ReactDOM from 'react-dom'
 import * as ReactJSXRuntime from 'react/jsx-runtime'
-import { useResolvedTheme } from '@neutree-ai/theme'
 import { events } from './host-events'
 import { type PluginPanel, registerPanel } from './panel-registry'
-import { registerToolRenderer } from './tool-renderer-registry'
 
 interface TosHost {
   version: string

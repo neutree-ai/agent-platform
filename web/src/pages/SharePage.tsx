@@ -1,6 +1,4 @@
-import { AgentTypeProvider } from '@/components/chat/AgentTypeContext'
-import { MessageBubble } from '@/components/chat/MessageBubble'
-import { TurnStatsBar } from '@/components/chat/TurnStatsBar'
+import { TranscriptProviders } from '@/components/chat/TranscriptProviders'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Spinner } from '@/components/ui/spinner'
@@ -8,7 +6,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { api } from '@/lib/api/client'
 import type { ApiShareConfig, ApiShareData, ApiShareTrigger } from '@/lib/api/types'
 import type { ChatMessage } from '@/stores/agent-session-store'
-import { toChatMessage } from '@/stores/agent-session-store'
+import { MessageBubble, TurnStatsBar, toChatMessage } from '@neutree-ai/ui-sdk'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -134,7 +132,7 @@ export function SharePage() {
   }, 0)
 
   return (
-    <AgentTypeProvider value={agentType}>
+    <TranscriptProviders agentType={agentType}>
       <div className="flex h-screen flex-col bg-background">
         <div className="flex min-h-0 flex-1">
           <div className="flex w-full flex-col">
@@ -182,6 +180,6 @@ export function SharePage() {
           </div>
         </div>
       </div>
-    </AgentTypeProvider>
+    </TranscriptProviders>
   )
 }

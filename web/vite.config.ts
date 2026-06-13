@@ -82,14 +82,18 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
         '@neutree-ai/types': path.resolve(__dirname, '../internal/types/index.ts'),
-        '@neutree-ai/sse-consumer': path.resolve(__dirname, '../internal/sse-consumer/src/index.ts'),
+        '@neutree-ai/sse-consumer': path.resolve(
+          __dirname,
+          '../internal/sse-consumer/src/index.ts',
+        ),
         '@neutree-ai/theme/variables.css': path.resolve(
           __dirname,
           '../internal/theme/src/variables.css',
         ),
         '@neutree-ai/theme': path.resolve(__dirname, '../internal/theme/src/index.ts'),
+        '@neutree-ai/ui-sdk': path.resolve(__dirname, '../internal/ui-sdk/src/index.ts'),
       },
-      dedupe: ['react', 'react-dom', 'sonner', 'lucide-react'],
+      dedupe: ['react', 'react-dom', 'sonner', 'lucide-react', 'react-i18next', 'i18next'],
     },
     server: {
       host: '0.0.0.0',

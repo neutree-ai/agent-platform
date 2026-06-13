@@ -1,6 +1,4 @@
-import { AgentTypeProvider } from '@/components/chat/AgentTypeContext'
-import { MessageBubble } from '@/components/chat/MessageBubble'
-import { TurnStatsBar } from '@/components/chat/TurnStatsBar'
+import { TranscriptProviders } from '@/components/chat/TranscriptProviders'
 import { VoiceInputButton, type VoiceInputHandle } from '@/components/chat/VoiceInputButton'
 import { AppHeaderButton } from '@/components/shell/windows/AppHeaderButton'
 import { useAppHeaderSlot } from '@/components/shell/windows/AppWindow'
@@ -54,6 +52,7 @@ import { useAgentSessionActions, useAgentSessionStore } from '@/stores/AgentSess
 import type { ChatMessage as ChatMessageType } from '@/stores/agent-session-store'
 import { useComposerInsertRequests } from '@/stores/composer-store'
 import { useDraft } from '@/stores/draft-store'
+import { MessageBubble, TurnStatsBar } from '@neutree-ai/ui-sdk'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Bot,
@@ -602,7 +601,7 @@ export function WorkspaceChatPanel({
   }
 
   return (
-    <AgentTypeProvider value={agentType}>
+    <TranscriptProviders agentType={agentType}>
       {!readonly &&
         headerSlot &&
         createPortal(
@@ -667,7 +666,9 @@ export function WorkspaceChatPanel({
             {callerAgent && (
               <span
                 className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-mini font-medium text-primary"
-                title={t('components.workspaceChat.states.invokedBy', { agent: callerAgent.name })}
+                title={t('components.workspaceChat.states.invokedBy', {
+                  agent: callerAgent.name,
+                })}
               >
                 <Bot className="h-2.5 w-2.5" />
                 {t('components.workspaceChat.states.invokedBy', { agent: callerAgent.name })}
@@ -1181,6 +1182,6 @@ export function WorkspaceChatPanel({
           </form>
         </DialogContent>
       </Dialog>
-    </AgentTypeProvider>
+    </TranscriptProviders>
   )
 }
