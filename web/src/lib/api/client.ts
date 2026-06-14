@@ -281,6 +281,12 @@ class ApiClient {
     return this.request<K8sResourceStatus>(`/workspaces/${id}/status`)
   }
 
+  async rebuildWorkspace(id: string): Promise<{ rebuilt: boolean; reason?: string }> {
+    return this.request<{ rebuilt: boolean; reason?: string }>(`/workspaces/${id}/rebuild`, {
+      method: 'POST',
+    })
+  }
+
   async getWorkspaceMessages(id: string, sessionId?: string): Promise<ApiMessage[]> {
     const params = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''
     return this.request<ApiMessage[]>(`/workspaces/${id}/messages${params}`)
