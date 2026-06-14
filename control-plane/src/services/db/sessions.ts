@@ -233,6 +233,24 @@ export async function listActiveSessionIds(workspaceId: string): Promise<string[
   return rows.map((r: { id: string }) => r.id)
 }
 
+/**
+ * Workspace IDs with a session whose agent is mid-turn (chat_status='agent')
+ * and was active within the given interval. Used by the admin rebuild sweep
+ * to skip workspaces a user is actively streaming with, so a rollout doesn't
+ * kill a live turn. `withinInterval` is a Postgres interval literal
+ * (e.g. '10 minutes'), bound as a parameter.
+ */
+export async function listStreamingWorkspaceIds(withinInterval: string): Promise<string[]> {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT workspace_id FROM sessions
+      WHERE status = 'active'
+        AND chat_status = 'agent'
+        AND last_active_at >= NOW() - $1::interval`,
+    [withinInterval],
+  )
+  return rows.map((r: { workspace_id: string }) => r.workspace_id)
+}
+
 interface RecentSessionItem {
   session_id: string
   workspace_id: string

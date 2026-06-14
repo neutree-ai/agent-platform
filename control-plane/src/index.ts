@@ -178,11 +178,14 @@ app.use('/*', async (c, next) => {
   const isApiRequest = path.startsWith('/api/')
   const isProxyRequest = path.startsWith('/_proxy/')
 
-  // CI/rollout bypass for plugin admin endpoints — the static
-  // PLUGIN_ADMIN_TOKEN env grants both auth and admin role for the route's
-  // own check below. No user system involvement.
+  // CI/rollout bypass for ops admin endpoints — the static PLUGIN_ADMIN_TOKEN
+  // env grants both auth and admin role for the route's own check below. No
+  // user system involvement. Covers the plugin admin API and the rollout's
+  // batch workspace rebuild sweep.
   if (
-    (path === '/api/plugins/admin' || path.startsWith('/api/plugins/admin/')) &&
+    (path === '/api/plugins/admin' ||
+      path.startsWith('/api/plugins/admin/') ||
+      path === '/api/admin/cluster/rebuild-stale') &&
     process.env.PLUGIN_ADMIN_TOKEN
   ) {
     const headerToken = c.req.header('x-plugin-admin-token')
