@@ -181,10 +181,20 @@ cluster.post('/rebuild-stale', async (c) => {
 
   const { deployments } = await k8sService.listWorkspaceDeployments()
   const targets: string[] = []
+  let stoppedSkipped = 0
   for (const [wsId, dep] of deployments) {
     if (wantImage) {
       const image = dep.spec?.template?.spec?.containers?.find((x) => x.name === 'agent')?.image
       if (image !== wantImage) continue
+    }
+    // Skip stopped workspaces. rebuildInstance is delete+recreate, and the
+    // recreated Deployment defaults to replicas=1 — so reconciling a stopped
+    // (replicas=0) workspace would resurrect it. Stopped workspaces pick up
+    // the new template on their next start (reconcile-on-start), so the sweep
+    // must leave them as-is.
+    if ((dep.spec?.replicas ?? 0) === 0) {
+      stoppedSkipped++
+      continue
     }
     targets.push(wsId)
   }
@@ -193,6 +203,7 @@ cluster.post('/rebuild-stale', async (c) => {
 
   const result = {
     total: targets.length,
+    stoppedSkipped,
     rebuilt: [] as string[],
     restarted: [] as string[],
     inSync: 0,
@@ -237,7 +248,8 @@ cluster.post('/rebuild-stale', async (c) => {
   console.log(
     `[rebuild-stale] agentType=${agentType ?? 'all'} dryRun=${dryRun} total=${result.total} ` +
       `rebuilt=${result.rebuilt.length} restarted=${result.restarted.length} ` +
-      `inSync=${result.inSync} skipped=${result.skipped.length} failed=${result.failed.length}`,
+      `inSync=${result.inSync} skipped=${result.skipped.length} ` +
+      `stoppedSkipped=${result.stoppedSkipped} failed=${result.failed.length}`,
   )
 
   return c.json(result, result.failed.length > 0 ? 207 : 200)
