@@ -1,9 +1,9 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { writePlatformPrompt } from '../../../internal/platform-prompt/src/index.js'
 import { SkillManager } from '../../../internal/agent-skills/src/index.js'
 import { nodeFetch, nodeFs, nodeShell } from '../../../internal/agent-skills/src/node.js'
 import { renderPlatformSkillFiles } from '../../../internal/agent-skills/src/platform.js'
+import { writePlatformPrompt } from '../../../internal/platform-prompt/src/index.js'
 
 export const CP_URL = process.env.CP_URL
 export const WORKSPACE_ID = process.env.WORKSPACE_ID
@@ -128,6 +128,9 @@ export async function loadSkills(): Promise<{ ok: boolean; failed: string[] }> {
     workspaceId: WORKSPACE_ID,
     skillsDir: join(WORKSPACE_DIR, '.claude', 'skills'),
     localBase: '/tmp',
+    // Drafts (unpublished edits) live here on the persistent workspace volume so
+    // they survive pod rebuilds; published skills stay on tmpfs (localBase).
+    draftBase: join(WORKSPACE_DIR, '.skills-draft'),
     useSymlink: true,
     fetch: nodeFetch,
     fs: nodeFs,

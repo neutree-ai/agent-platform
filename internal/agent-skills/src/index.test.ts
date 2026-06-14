@@ -556,3 +556,131 @@ describe('SkillManager', () => {
     })
   })
 })
+
+describe('SkillManager draft persistence (draftBase)', () => {
+  let fs: ReturnType<typeof createMemFs>
+  let shell: ReturnType<typeof createMemShell>
+  const SKILLS_DIR = '/workspace/.claude/skills'
+  const LOCAL_BASE = '/tmp'
+  const DRAFT_BASE = '/workspace/.skills-draft'
+
+  function createManager(fetchImpl: (url: string) => Promise<FetchResponse>) {
+    return new SkillManager({
+      cpUrl: 'http://cp:3000',
+      workspaceId: 'ws-1',
+      skillsDir: SKILLS_DIR,
+      localBase: LOCAL_BASE,
+      draftBase: DRAFT_BASE,
+      useSymlink: true,
+      fetch: fetchImpl,
+      fs,
+      shell,
+    })
+  }
+
+  beforeEach(() => {
+    fs = createMemFs()
+    shell = createMemShell()
+  })
+
+  test('createDraft places content + lock on the persistent draftBase, not tmpfs', async () => {
+    const mgr = createManager(async () => {
+      throw new Error('createDraft should not fetch')
+    })
+    await mgr.createDraft('my-draft')
+
+    // Content and the .editing lock live under draftBase → survive a pod rebuild.
+    expect(fs.dirs.has('/workspace/.skills-draft/skill-my-draft')).toBe(true)
+    expect(fs.files.has('/workspace/.skills-draft/skill-my-draft/SKILL.md')).toBe(true)
+    expect(fs.files.has('/workspace/.skills-draft/skill-my-draft/.editing')).toBe(true)
+    // Nothing was written to tmpfs.
+    expect(fs.dirs.has('/tmp/skill-my-draft')).toBe(false)
+    // Symlink points at the persistent draft dir.
+    expect(shell.calls).toContainEqual({
+      cmd: 'ln',
+      args: ['-s', '/workspace/.skills-draft/skill-my-draft', '/workspace/.claude/skills/my-draft'],
+    })
+  })
+
+  test('load preserves an unpublished draft after a rebuild (tmpfs wiped, draftBase intact)', async () => {
+    // A draft on persistent NFS, not enabled in CP (never published).
+    fs.dirs.add('/workspace/.skills-draft/skill-wip')
+    fs.files.set('/workspace/.skills-draft/skill-wip/SKILL.md', 'draft body')
+    fs.dirs.add('/workspace/.claude/skills/wip') // symlink dest, still materialized
+
+    const fetchImpl = async (url: string) => {
+      if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [] })
+      throw new Error(`Unexpected fetch: ${url}`)
+    }
+    const result = await createManager(fetchImpl).load()
+
+    // Draft content untouched; not swept as an orphan.
+    expect(fs.dirs.has('/workspace/.skills-draft/skill-wip')).toBe(true)
+    expect(fs.files.get('/workspace/.skills-draft/skill-wip/SKILL.md')).toBe('draft body')
+    expect(result.loaded).toEqual([])
+  })
+
+  test('load recognises a still-editing draft via the NFS lock after a rebuild', async () => {
+    fs.dirs.add('/workspace/.skills-draft/skill-wip')
+    fs.files.set('/workspace/.skills-draft/skill-wip/.editing', '')
+    fs.dirs.add('/workspace/.claude/skills/wip')
+
+    const fetchImpl = async (url: string) => {
+      if (url.includes('/workspaces/ws-1/skills'))
+        return jsonResponse({ skills: [{ name: 'wip', id: 'sk-wip' }] })
+      if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'wip' }])
+      throw new Error(`Should not download a skill being edited: ${url}`)
+    }
+    const result = await createManager(fetchImpl).load()
+
+    expect(result.editing).toEqual(['wip'])
+    expect(shell.calls.find((c) => c.cmd === 'tar')).toBeUndefined()
+  })
+
+  test('startEditing promotes a published skill (tmpfs) into a persistent draft', async () => {
+    // Published skill content present on tmpfs (as after a normal load).
+    fs.dirs.add('/tmp/skill-pub')
+    fs.files.set('/tmp/skill-pub/SKILL.md', 'published body')
+
+    const mgr = createManager(async () => {
+      throw new Error('startEditing should not fetch')
+    })
+    await mgr.startEditing('pub')
+
+    // Copied to draftBase via `cp -a` (preserves +x), re-symlinked, lock on NFS.
+    expect(shell.calls).toContainEqual({
+      cmd: 'cp',
+      args: ['-a', '/tmp/skill-pub/.', '/workspace/.skills-draft/skill-pub'],
+    })
+    expect(shell.calls).toContainEqual({
+      cmd: 'ln',
+      args: ['-s', '/workspace/.skills-draft/skill-pub', '/workspace/.claude/skills/pub'],
+    })
+    expect(fs.files.has('/workspace/.skills-draft/skill-pub/.editing')).toBe(true)
+    // The tmpfs copy is dropped; the draft is now authoritative.
+    expect(fs.dirs.has('/tmp/skill-pub')).toBe(false)
+  })
+
+  test('load reclaims a stale draft once the skill is published (enabled + not editing)', async () => {
+    // Draft dir lingers on NFS with no lock, and CP now lists it as enabled.
+    fs.dirs.add('/workspace/.skills-draft/skill-done')
+    fs.files.set('/workspace/.skills-draft/skill-done/SKILL.md', 'old draft')
+    fs.dirs.add('/workspace/.claude/skills/done')
+
+    const tarBuf = Buffer.from('fake-tar-gz')
+    const fetchImpl = async (url: string) => {
+      if (url.includes('/workspaces/ws-1/skills'))
+        return jsonResponse({ skills: [{ name: 'done', id: 'sk-done' }] })
+      if (url.includes('/_cp/skills/sk-done/package')) return binaryResponse(tarBuf)
+      if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'done' }])
+      throw new Error(`Unexpected fetch: ${url}`)
+    }
+    const result = await createManager(fetchImpl).load()
+
+    // Stale NFS draft cleared; re-extracted onto tmpfs (staging dir under /tmp).
+    expect(fs.dirs.has('/workspace/.skills-draft/skill-done')).toBe(false)
+    const tarCall = shell.calls.find((c) => c.cmd === 'tar' && c.args[0] === 'xzf')
+    expect(tarCall!.args[1]).toMatch(/^\/tmp\/skill-done\.staging-/)
+    expect(result.loaded).toEqual(['done'])
+  })
+})
