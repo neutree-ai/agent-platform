@@ -525,8 +525,22 @@ export class SkillManager {
     const dest = this.destDir(name)
     const staging = `${local}.staging-${process.pid}-${Date.now()}`
 
-    // Extract into staging (clean any stale staging from a prior crash).
-    await this.fs.rm(staging)
+    // Sweep leaked staging dirs for this skill before extracting. Each staging
+    // dir carries a unique pid/timestamp suffix, so the old single rm of the
+    // current name never caught siblings left behind by a crashed or concurrent
+    // extract — they accumulated in localBase (hundreds were observed in prod).
+    // Clear them all, then stage fresh.
+    try {
+      const prefix = `skill-${name}.staging-`
+      const entries = await this.fs.readdir(this.localBase)
+      await Promise.all(
+        entries
+          .filter((e) => e.startsWith(prefix))
+          .map((e) => this.fs.rm(`${this.localBase}/${e}`)),
+      )
+    } catch {
+      // Best-effort
+    }
     await this.fs.mkdir(staging)
     const tmpFile = `${staging}/.skill.tar.gz`
     try {
