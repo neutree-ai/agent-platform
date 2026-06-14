@@ -60,6 +60,14 @@ export interface SkillManagerOptions {
    */
   localBase?: string
   /**
+   * Persistent (NFS-backed) base directory for *draft* skills — unpublished
+   * edits that must survive pod rebuilds. When set, a draft's content lives at
+   * `draftBase/skill-{name}` (not tmpfs), so it is not lost when /tmp is wiped.
+   * Must be distinct from `localBase` and outside the dufs-served skills tree.
+   * When unset, drafts fall back to tmpfs (legacy behaviour: lost on rebuild).
+   */
+  draftBase?: string
+  /**
    * Whether to symlink skillsDir/{name} → localBase/skill-{name}.
    * true for claude-code & codex (NFS workspace), false if skillsDir is already local.
    */
@@ -123,6 +131,7 @@ export class SkillManager {
   private workspaceId: string
   private skillsDir: string
   private localBase: string
+  private draftBase: string | null
   private useSymlink: boolean
   private fetch: Fetcher
   private fs: Fs
@@ -146,6 +155,7 @@ export class SkillManager {
     this.workspaceId = opts.workspaceId
     this.skillsDir = opts.skillsDir
     this.localBase = opts.localBase ?? '/tmp'
+    this.draftBase = opts.draftBase ?? null
     this.useSymlink = opts.useSymlink ?? true
     this._filesBrowsePath = opts.filesBrowsePath ?? '/.claude/skills'
     this.fetch = opts.fetch
@@ -153,9 +163,30 @@ export class SkillManager {
     this.shell = opts.shell
   }
 
-  /** Local extraction directory for a skill. */
+  /**
+   * Content directory for a skill. Drafts (unpublished edits) live on the
+   * persistent draftBase so they survive pod rebuilds; published skills live on
+   * tmpfs (localBase) and are re-downloaded from CP after a wipe. The draftBase
+   * probe is a stat on an NFS path that outlives the pod, so this stays correct
+   * across rebuilds without any in-memory state to reconstruct.
+   */
   private localDir(name: string): string {
+    const db = this.draftBase
+    if (db && this.fs.exists(`${db}/skill-${name}`)) {
+      return `${db}/skill-${name}`
+    }
     return `${this.localBase}/skill-${name}`
+  }
+
+  /** A skill is a (persistent) draft iff its content dir exists under draftBase. */
+  private isDraft(name: string): boolean {
+    const db = this.draftBase
+    return db != null && this.fs.exists(`${db}/skill-${name}`)
+  }
+
+  /** Persistent draft content dir for a skill (caller must ensure draftBase is set). */
+  private draftDir(name: string): string {
+    return `${this.draftBase}/skill-${name}`
   }
 
   /** Lock file path for a skill. */
@@ -324,6 +355,14 @@ export class SkillManager {
         if (this.isEditing(name)) {
           editing.push(name)
           return
+        }
+
+        // Enabled + not editing, yet a persistent draft dir lingers → it was
+        // published (or replaced) elsewhere. Reclaim it so we re-materialise the
+        // active version on tmpfs instead of serving the stale draft off NFS.
+        if (this.draftBase && this.isDraft(name)) {
+          await this.fs.rm(this.draftDir(name))
+          await this.fs.rm(this.destDir(name))
         }
 
         const res = await this.downloadWithRetry(name)
@@ -540,9 +579,24 @@ export class SkillManager {
     if (!this.isEditable(name)) {
       throw new Error(`Not allowed to edit skill: ${name}`)
     }
-    const local = this.localDir(name)
-    if (!this.fs.exists(local)) {
+    const cur = this.localDir(name)
+    if (!this.fs.exists(cur)) {
       throw new Error(`Skill not found locally: ${name}`)
+    }
+    // Promote a published skill (content on tmpfs) into a persistent draft so
+    // the edit isn't lost on pod rebuild. `cp -a` preserves mode bits, so
+    // executable scripts in the skill keep their +x. No-op if it's already a
+    // draft or draftBase isn't configured.
+    if (this.draftBase && !this.isDraft(name)) {
+      const draft = this.draftDir(name)
+      await this.fs.rm(draft)
+      await this.fs.mkdir(draft)
+      await this.shell.exec('cp', ['-a', `${cur}/.`, draft])
+      if (this.useSymlink) {
+        await this.fs.rm(this.destDir(name))
+        await this.shell.exec('ln', ['-s', draft, this.destDir(name)])
+      }
+      await this.fs.rm(cur)
     }
     await this.fs.writeFile(this.lockPath(name), '')
   }
@@ -561,7 +615,11 @@ export class SkillManager {
   /** Create a new empty skill with a template SKILL.md. */
   async createDraft(name: string): Promise<void> {
     assertNotReserved(name)
-    const local = this.localDir(name)
+    // A brand-new skill is a draft from birth: place its content on the
+    // persistent draftBase (when configured) so it survives a pod rebuild
+    // before it is ever published. localDir() can't be used here because it
+    // probes for an existing draft dir that we are about to create.
+    const local = this.draftBase ? this.draftDir(name) : this.localDir(name)
     const dest = this.destDir(name)
 
     await this.fs.rm(local)
@@ -589,7 +647,8 @@ export class SkillManager {
   async remove(name: string): Promise<void> {
     assertNotReserved(name)
     await this.fs.rm(this.destDir(name))
-    await this.fs.rm(this.localDir(name))
+    await this.fs.rm(`${this.localBase}/skill-${name}`)
+    if (this.draftBase) await this.fs.rm(this.draftDir(name))
     await this.fs.rm(this.etagPath(name))
     await this.fs.rm(this.managedPath(name))
     this.editableSkills.delete(name)
