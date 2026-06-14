@@ -462,6 +462,43 @@ export async function startInstance(workspaceId: string): Promise<boolean> {
   return scaleInstance(workspaceId, 1)
 }
 
+/**
+ * Roll the instance's pods without changing the Deployment spec — the
+ * equivalent of `kubectl rollout restart`. Stamps a template annotation so
+ * the Deployment controller recreates the pod (e.g. to re-pull a moving
+ * `:latest` tag). Returns false when the Deployment doesn't exist.
+ */
+export async function restartInstance(workspaceId: string): Promise<boolean> {
+  const name = getResourceName(workspaceId)
+  try {
+    await k8sAppsApi.patchNamespacedDeployment(
+      name,
+      NAMESPACE,
+      {
+        spec: {
+          template: {
+            metadata: {
+              annotations: {
+                'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
+              },
+            },
+          },
+        },
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+    )
+    return true
+  } catch (e: any) {
+    if (e.response?.statusCode === 404) return false
+    throw e
+  }
+}
+
 interface InstanceSpecMarkers {
   templateVersion: number | null
   agentImage: string | null
@@ -778,6 +815,18 @@ export function resolveDeploymentStatus(dep: k8s.V1Deployment | undefined): Reco
   if (progressing?.status === 'True') return 'starting'
 
   return 'error'
+}
+
+/**
+ * Read the template version stamped on a Deployment (the workspace-version
+ * annotation), or null if absent/unparseable. The reconcile loop caches this
+ * onto the workspace row so drift checks don't need a live k8s read.
+ */
+export function deploymentTemplateVersion(dep: k8s.V1Deployment | undefined): number | null {
+  const raw = dep?.metadata?.annotations?.[TEMPLATE_VERSION_ANNOTATION]
+  if (raw === undefined) return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
 }
 
 /**

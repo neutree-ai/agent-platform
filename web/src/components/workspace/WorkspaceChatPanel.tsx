@@ -52,7 +52,7 @@ import { useAgentSessionActions, useAgentSessionStore } from '@/stores/AgentSess
 import type { ChatMessage as ChatMessageType } from '@/stores/agent-session-store'
 import { useComposerInsertRequests } from '@/stores/composer-store'
 import { useDraft } from '@/stores/draft-store'
-import { MessageBubble, TurnStatsBar } from '@neutree-ai/ui-sdk'
+import { MessageBubble, TranscriptI18nProvider, TurnStatsBar } from '@neutree-ai/ui-sdk'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Bot,
@@ -76,7 +76,8 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useTranslation } from 'react-i18next'
+import { I18nextProvider, useTranslation } from 'react-i18next'
+import { i18n as appI18n } from '@/lib/i18n'
 
 const FONT_SIZE_MIN = 10
 const FONT_SIZE_MAX = 18
@@ -246,7 +247,7 @@ export function WorkspaceChatPanel({
   readonly = false,
   onMessages,
 }: WorkspaceChatPanelProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { mode: chatSendKeyMode } = useChatSendKey()
   const hints = useMemo(
     () => [
@@ -602,8 +603,16 @@ export function WorkspaceChatPanel({
 
   return (
     <TranscriptProviders agentType={agentType}>
-      {!readonly &&
-        headerSlot &&
+      {/* The panel chrome (header, composer, dialogs) is app UI keyed against
+          the host i18n bundle. TranscriptProviders' TranscriptI18nProvider
+          rebinds useTranslation to the SDK's chat-only instance, which would
+          make every self-translating app child (ShareSessionButton,
+          AskUserQuestionPanel, VoiceInputButton, …) render raw keys. Override
+          back to the app instance here; the few SDK components that genuinely
+          need the chat bundle (MessageBubble / TurnStatsBar) re-assert it. */}
+      <I18nextProvider i18n={appI18n}>
+        {!readonly &&
+          headerSlot &&
         createPortal(
           <>
             {!sessionsAppOpened && (
@@ -848,7 +857,9 @@ export function WorkspaceChatPanel({
                       }}
                     >
                       <div className="pb-3">
-                        <MessageBubble message={messages[vi.index]} />
+                        <TranscriptI18nProvider locale={i18n.language}>
+                          <MessageBubble message={messages[vi.index]} />
+                        </TranscriptI18nProvider>
                       </div>
                     </div>
                   ))}
@@ -856,7 +867,9 @@ export function WorkspaceChatPanel({
                 {/* Tail rendered in normal flow — see virtualCount above. */}
                 {messages.length > 0 && (
                   <div className="pb-3">
-                    <MessageBubble message={messages[messages.length - 1]} />
+                    <TranscriptI18nProvider locale={i18n.language}>
+                      <MessageBubble message={messages[messages.length - 1]} />
+                    </TranscriptI18nProvider>
                   </div>
                 )}
                 {error && (
@@ -868,7 +881,9 @@ export function WorkspaceChatPanel({
             ) : (
               <div className="p-3 space-y-3">
                 {messages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
+                  <TranscriptI18nProvider key={msg.id} locale={i18n.language}>
+                    <MessageBubble message={msg} />
+                  </TranscriptI18nProvider>
                 ))}
                 {error && (
                   <Alert variant="destructive" className="p-3">
@@ -890,11 +905,13 @@ export function WorkspaceChatPanel({
         </div>
 
         {!isLoading && messages.length > 0 && (
-          <TurnStatsBar
-            turns={turnCount}
-            contextTokens={lastTurnStats?.contextTokens}
-            contextWindow={lastTurnStats?.contextWindow}
-          />
+          <TranscriptI18nProvider locale={i18n.language}>
+            <TurnStatsBar
+              turns={turnCount}
+              contextTokens={lastTurnStats?.contextTokens}
+              contextWindow={lastTurnStats?.contextWindow}
+            />
+          </TranscriptI18nProvider>
         )}
 
         {pendingQuestion && (
@@ -1182,6 +1199,7 @@ export function WorkspaceChatPanel({
           </form>
         </DialogContent>
       </Dialog>
+      </I18nextProvider>
     </TranscriptProviders>
   )
 }

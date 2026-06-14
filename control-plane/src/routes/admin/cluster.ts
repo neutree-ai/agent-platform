@@ -1,6 +1,9 @@
 import * as k8s from '@kubernetes/client-node'
 import { Hono } from 'hono'
 import type { AppEnv } from '../../lib/types'
+import { listStreamingWorkspaceIds } from '../../services/db/sessions'
+import * as k8sService from '../../services/k8s'
+import { computeWorkspaceDrift, reconcileWorkspacePod } from '../../services/workspace-reconcile'
 
 const cluster = new Hono<AppEnv>()
 
@@ -147,6 +150,97 @@ cluster.get('/', async (c) => {
     total_workspaces: deploymentsRes.body.items.length,
     total_sandboxes: totalSandboxes,
   })
+})
+
+/**
+ * Batch "rebuild stale" sweep — the fleet/ops counterpart of the per-workspace
+ * POST /workspaces/:id/rebuild action, built on the SAME drift core. For every
+ * agent workspace whose Deployment drifts from the current platform template,
+ * reconcile (rebuild) it; for ones already in sync, roll the pods so a moving
+ * `:latest` image is re-pulled. Workspaces with a live streaming turn are
+ * skipped so a rollout never kills an in-flight session.
+ *
+ * Admin-authorized; also callable headless by the rollout pipeline via the
+ * static x-plugin-admin-token bypass (see index.ts).
+ *
+ * Body (all optional): {
+ *   agentType?: string,   // only this agent type (by image); default all
+ *   activeWindow?: string,// PG interval for the streaming skip; default '10 minutes'
+ *   concurrency?: number, // parallel reconciles; default 16
+ *   dryRun?: boolean,     // report drift without mutating; default false
+ * }
+ */
+cluster.post('/rebuild-stale', async (c) => {
+  const body = await c.req.json().catch(() => ({}) as Record<string, unknown>)
+  const agentType = typeof body.agentType === 'string' ? body.agentType : undefined
+  const activeWindow = typeof body.activeWindow === 'string' ? body.activeWindow : '10 minutes'
+  const concurrency = Math.max(1, Math.min(32, Number(body.concurrency) || 16))
+  const dryRun = body.dryRun === true
+
+  const wantImage = agentType ? k8sService.getAgentImage(agentType) : null
+
+  const { deployments } = await k8sService.listWorkspaceDeployments()
+  const targets: string[] = []
+  for (const [wsId, dep] of deployments) {
+    if (wantImage) {
+      const image = dep.spec?.template?.spec?.containers?.find((x) => x.name === 'agent')?.image
+      if (image !== wantImage) continue
+    }
+    targets.push(wsId)
+  }
+
+  const streaming = new Set(await listStreamingWorkspaceIds(activeWindow))
+
+  const result = {
+    total: targets.length,
+    rebuilt: [] as string[],
+    restarted: [] as string[],
+    inSync: 0,
+    skipped: [] as string[],
+    failed: [] as { workspaceId: string; error: string }[],
+  }
+
+  let cursor = 0
+  async function worker() {
+    while (cursor < targets.length) {
+      const wsId = targets[cursor++]
+      if (streaming.has(wsId)) {
+        result.skipped.push(wsId)
+        continue
+      }
+      try {
+        const drift = await computeWorkspaceDrift(wsId)
+        if (!drift.hasInstance) continue
+        if (drift.reasons.length > 0) {
+          if (dryRun) {
+            result.rebuilt.push(wsId)
+          } else {
+            const { rebuilt } = await reconcileWorkspacePod(wsId)
+            if (rebuilt) result.rebuilt.push(wsId)
+            else result.inSync++
+          }
+        } else if (dryRun) {
+          result.inSync++
+        } else {
+          // In sync, but roll the pod so a moving :latest tag is re-pulled.
+          await k8sService.restartInstance(wsId)
+          result.restarted.push(wsId)
+        }
+      } catch (e: any) {
+        result.failed.push({ workspaceId: wsId, error: e?.message || String(e) })
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, worker))
+
+  console.log(
+    `[rebuild-stale] agentType=${agentType ?? 'all'} dryRun=${dryRun} total=${result.total} ` +
+      `rebuilt=${result.rebuilt.length} restarted=${result.restarted.length} ` +
+      `inSync=${result.inSync} skipped=${result.skipped.length} failed=${result.failed.length}`,
+  )
+
+  return c.json(result, result.failed.length > 0 ? 207 : 200)
 })
 
 export default cluster

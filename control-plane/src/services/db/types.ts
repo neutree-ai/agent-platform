@@ -22,6 +22,10 @@ export interface Workspace {
   is_system: boolean
   status: string
   created_at: string
+  // Deployed runtime template version (cached from the Deployment's
+  // workspace-version annotation). null = unknown/legacy. Compared against
+  // CURRENT_TEMPLATE_VERSION to decide whether a rebuild/update is available.
+  runtime_version: number | null
 }
 
 /**

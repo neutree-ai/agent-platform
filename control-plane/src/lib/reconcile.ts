@@ -58,9 +58,20 @@ async function fullReconcile(): Promise<string> {
     t2 = Date.now()
 
     for (const ws of allWorkspaces) {
-      const resolved = k8s.resolveDeploymentStatus(deployments.get(ws.id))
+      const dep = deployments.get(ws.id)
+      const resolved = k8s.resolveDeploymentStatus(dep)
       if (resolved !== ws.status) {
         await applyStatusChange(ws.id, resolved, ws.status)
+        dbUpdates++
+      }
+      // Cache the deployed template version so "update available" is a pure DB
+      // comparison (no live k8s read per status request). Backfills legacy rows
+      // and catches annotations changed outside cp (e.g. manual patches). Only
+      // sync when the Deployment actually carries a version — don't clobber the
+      // last-known value when the Deployment is absent/stopped.
+      const ver = k8s.deploymentTemplateVersion(dep)
+      if (ver !== null && ver !== ws.runtime_version) {
+        await updateWorkspace(ws.id, { runtime_version: ver })
         dbUpdates++
       }
     }

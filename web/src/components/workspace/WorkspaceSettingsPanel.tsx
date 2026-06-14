@@ -42,6 +42,7 @@ import { useSetWorkspaceTags, useTags } from '@/hooks/useTags'
 import { useWorkspaceConfig } from '@/hooks/useWorkspaceConfig'
 import {
   usePatchWorkspace,
+  useRebuildWorkspace,
   useRestartWorkspace,
   useStartWorkspace,
   useStopWorkspace,
@@ -489,6 +490,8 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
   const startMutation = useStartWorkspace()
   const stopMutation = useStopWorkspace()
   const restartMutation = useRestartWorkspace()
+  const rebuildMutation = useRebuildWorkspace()
+  const [rebuildConfirmOpen, setRebuildConfirmOpen] = useState(false)
   const isRunning = workspace?.status === 'running' || workspace?.status === 'starting'
   const lifecyclePending =
     startMutation.isPending || stopMutation.isPending || restartMutation.isPending
@@ -506,6 +509,22 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
   const showStartupAlert =
     workspace?.status === 'starting' &&
     (startupWarnings.length > 0 || startupFailedConditions.length > 0)
+  // Runtime is behind the current platform template — offer a rebuild. Read
+  // straight off the workspace object (cached server-side), no status poll.
+  const updateAvailable = (workspace?.rebuild_available ?? false) && !lifecyclePending
+
+  async function handleRebuild() {
+    try {
+      const res = await rebuildMutation.mutateAsync(workspaceId)
+      toast.success(
+        res.rebuilt
+          ? t('components.settings.rebuild.toasts.started')
+          : t('components.settings.rebuild.toasts.upToDate'),
+      )
+    } finally {
+      setRebuildConfirmOpen(false)
+    }
+  }
 
   // Persisted: which settings nav page is showing — "where am I".
   const [activeSection, setActiveSection] = useInstancePersistentState<SectionKey>(
@@ -1079,6 +1098,53 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
         {/* Center content */}
         <ScrollArea className="min-w-0 flex-1">
           <div className="px-6 py-5">
+            {updateAvailable && (
+              <Alert className="mb-4">
+                <ArrowUpCircle className="h-4 w-4 text-primary" strokeWidth={2} />
+                <AlertTitle className="text-sm">
+                  {t('components.settings.rebuild.available.title')}
+                </AlertTitle>
+                <AlertDescription className="mt-1.5">
+                  <p className="text-xs text-muted-foreground">
+                    {t('components.settings.rebuild.available.description')}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-7 gap-1.5 px-3 text-xs"
+                    onClick={() => setRebuildConfirmOpen(true)}
+                  >
+                    <ArrowUpCircle className="h-3 w-3" strokeWidth={2} />
+                    {t('components.settings.rebuild.available.action')}
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            <Dialog open={rebuildConfirmOpen} onOpenChange={setRebuildConfirmOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{t('components.settings.rebuild.confirm.title')}</DialogTitle>
+                  <DialogDescription>
+                    {t('components.settings.rebuild.confirm.description')}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRebuildConfirmOpen(false)}
+                    disabled={rebuildMutation.isPending}
+                  >
+                    {t('components.settings.rebuild.confirm.cancel')}
+                  </Button>
+                  <Button size="sm" onClick={handleRebuild} disabled={rebuildMutation.isPending}>
+                    {rebuildMutation.isPending
+                      ? t('components.settings.rebuild.confirm.pending')
+                      : t('components.settings.rebuild.confirm.confirm')}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             {showStartupAlert && (
               <Alert variant="destructive" className="mb-4">
                 <AlertTriangle className="h-4 w-4" />

@@ -86,6 +86,26 @@ export function useRestartWorkspace() {
 }
 
 /**
+ * Rebuilds the workspace's runtime when it drifts from the current platform
+ * template (relaxed probes, new sidecars, image). Disruptive — the pod is
+ * replaced. No-op server-side when already in sync.
+ */
+export function useRebuildWorkspace() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => api.rebuildWorkspace(id),
+    onSuccess: (_res, id) => {
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] })
+      queryClient.invalidateQueries({ queryKey: ['workspace-status', id] })
+    },
+    onError: (error: Error) => {
+      toast.error(error.message)
+    },
+  })
+}
+
+/**
  * Polls the K8s status endpoint while a workspace is in a transient state
  * (e.g. `starting`). Surfaces pod warnings like FailedScheduling so users
  * see *why* a start is hanging instead of an indefinite spinner.

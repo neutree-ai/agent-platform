@@ -33,6 +33,10 @@ export const ApiWorkspaceSchema = z.object({
       name: z.string().optional(),
     }),
   ),
+  // True when the deployed runtime is behind the current platform template
+  // and can be rebuilt to pick it up. Derived from the cached runtime_version,
+  // so it's free to read (no k8s call).
+  rebuild_available: z.boolean(),
 })
 
 export type ApiWorkspace = z.infer<typeof ApiWorkspaceSchema>

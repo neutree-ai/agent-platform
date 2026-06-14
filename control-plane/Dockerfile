@@ -8,12 +8,18 @@ COPY .npmrc /root/.npmrc
 
 WORKDIR /app/web
 
-# Copy frontend package files (lockfile excluded — npm resolves platform-specific
-# optional deps like @rollup/rollup-linux-x64-gnu fresh on each build)
-COPY web/package.json ./
+# Copy frontend package files INCLUDING the lockfile. A lockfile-less install
+# resolves a fresh, non-reproducible tree that can duplicate singleton-context
+# packages (e.g. two @radix-ui/react-tooltip copies → "must be used within
+# TooltipProvider" at runtime). npm ci pins the exact deduped tree and still
+# installs the correct per-platform optional deps (@rollup/rollup-linux-x64-gnu)
+# from the lockfile's os/cpu metadata.
+COPY web/package.json web/package-lock.json ./
 
-# Install frontend dependencies
-RUN npm install
+# --legacy-peer-deps mirrors the local web/.npmrc: @base-ui/react (vendored
+# Extend UI viewers) declares a peerOptional date-fns@^4 while the app pins
+# date-fns@3 — an unused/harmless conflict that otherwise aborts with ERESOLVE.
+RUN npm ci --legacy-peer-deps
 
 # Copy frontend source
 COPY web/tsconfig.json web/vite.config.ts web/tailwind.config.js web/postcss.config.js web/index.html ./

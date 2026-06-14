@@ -3349,6 +3349,24 @@
       "startupAlert": {
         "title": "Workspace is having trouble starting"
       },
+      "rebuild": {
+        "available": {
+          "title": "A new workspace version is available",
+          "description": "The platform runtime has been updated. Rebuild the workspace to pick up the latest version.",
+          "action": "Update workspace"
+        },
+        "confirm": {
+          "title": "Update workspace?",
+          "description": "Updating restarts the workspace pod: any in-progress session is interrupted.",
+          "cancel": "Cancel",
+          "confirm": "Update now",
+          "pending": "Updating…"
+        },
+        "toasts": {
+          "started": "Workspace update started",
+          "upToDate": "Workspace is already up to date"
+        }
+      },
       "resizeConfirm": {
         "title": "Restart workspace to apply new size?",
         "description": "Changing the compute size restarts the workspace pod. Any in-progress session will be interrupted. The new size takes effect after you click Save.",

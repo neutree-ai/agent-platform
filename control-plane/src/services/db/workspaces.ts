@@ -99,7 +99,7 @@ export async function listWorkspaces(
 
 export async function updateWorkspace(
   id: string,
-  updates: Partial<Pick<Workspace, 'name' | 'slug' | 'visibility' | 'status'>>,
+  updates: Partial<Pick<Workspace, 'name' | 'slug' | 'visibility' | 'status' | 'runtime_version'>>,
 ): Promise<boolean> {
   const sets: string[] = []
   const values: any[] = []
@@ -120,6 +120,10 @@ export async function updateWorkspace(
   if (updates.status !== undefined) {
     sets.push(`status = $${paramIndex++}`)
     values.push(updates.status)
+  }
+  if (updates.runtime_version !== undefined) {
+    sets.push(`runtime_version = $${paramIndex++}`)
+    values.push(updates.runtime_version)
   }
 
   if (sets.length === 0) return false

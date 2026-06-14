@@ -70,6 +70,10 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_BACKEND_URL || 'http://localhost:3000'
 
   return {
+    // @extend-ai/react-xlsx ships a Web Worker that code-splits; Rollup
+    // rejects the default iife worker format for code-splitting builds, so
+    // emit workers as ES modules.
+    worker: { format: 'es' },
     plugins: [
       {
         enforce: 'pre',
@@ -93,7 +97,23 @@ export default defineConfig(({ mode }) => {
         '@neutree-ai/theme': path.resolve(__dirname, '../internal/theme/src/index.ts'),
         '@neutree-ai/ui-sdk': path.resolve(__dirname, '../internal/ui-sdk/src/index.ts'),
       },
-      dedupe: ['react', 'react-dom', 'sonner', 'lucide-react', 'react-i18next', 'i18next'],
+      // @neutree-ai/ui-sdk (aliased to source) ships its own copies of these
+      // packages under internal/ui-sdk/node_modules. Radix primitives use
+      // module-scoped React contexts, so a second instance means a <Tooltip>
+      // from ui-sdk's MessageBubble can't see the app-root <TooltipProvider>
+      // (web's instance) → "Tooltip must be used within TooltipProvider".
+      // Dedupe forces a single instance across web + ui-sdk (same as React).
+      dedupe: [
+        'react',
+        'react-dom',
+        'sonner',
+        'lucide-react',
+        'react-i18next',
+        'i18next',
+        '@radix-ui/react-tooltip',
+        '@radix-ui/react-collapsible',
+        '@radix-ui/react-slot',
+      ],
     },
     server: {
       host: '0.0.0.0',
