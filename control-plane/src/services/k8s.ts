@@ -66,7 +66,13 @@ const NAME_PREFIX = 'tos'
 //     reconcile no longer fires from attach/detach (count is always >= 1).
 // v5: afs-fuse sidecar gains AFS_BOOTSTRAP_URL env so it can self-heal
 //     mounts on pod replacement without relying on cp's push path.
-export const CURRENT_TEMPLATE_VERSION = 5
+// v6: agent probes relaxed — added a startupProbe (up to 600s boot grace)
+//     and widened liveness/readiness timeouts so skill-heavy boots and
+//     event-loop saturation no longer trip a SIGKILL. The probe spec
+//     changed in buildDeploymentSpec without a version bump, so existing
+//     v5 Deployments kept the old 1s-timeout / no-startupProbe config and
+//     CrashLoopBackOff'd; bumping forces reconcile to rebuild them.
+export const CURRENT_TEMPLATE_VERSION = 6
 const TEMPLATE_VERSION_ANNOTATION = 'agent-platform/workspace-version'
 const MEMORY_FUSE_CONTAINER_NAME = 'memory-fuse'
 
