@@ -37,7 +37,8 @@ export interface WorkspacePlugin {
   id: string
   toolResultHandlers?: ToolResultHandler[]
   /** Tabs the plugin contributes to the workspace view. The panel `id` must
-   *  match the `ui_panel` value of an mcp_catalog entry; the tab only shows
-   *  when an enabled MCP server points to that ui_panel. */
+   *  match a panel declared in the plugin's manifest (`owns.panels`, or the
+   *  eager-plugin ui_panel fallback); the tab shows when the plugin is
+   *  installed in the workspace — independent of any MCP server. */
   panels?: PluginPanel[]
 }

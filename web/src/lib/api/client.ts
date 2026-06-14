@@ -60,6 +60,7 @@ import type {
   K8sResourceStatus,
   LayoutSkeleton,
   McpCatalogEntry,
+  WorkspacePluginEntry,
   MemoryAccess,
   PendingMessage,
   PromptGrant,
@@ -1830,6 +1831,28 @@ class ApiClient {
 
   async getMcpCatalog(): Promise<McpCatalogEntry[]> {
     return this.request('/mcp-catalog')
+  }
+
+  // ── Workspace UI plugins (install state, decoupled from MCP) ──
+
+  async getWorkspacePlugins(workspaceId: string): Promise<WorkspacePluginEntry[]> {
+    return this.request(`/workspaces/${workspaceId}/plugins`)
+  }
+
+  async installWorkspacePlugin(workspaceId: string, pluginId: string): Promise<unknown> {
+    return this.request(`/workspaces/${workspaceId}/plugins`, {
+      method: 'POST',
+      body: JSON.stringify({ plugin_id: pluginId }),
+    })
+  }
+
+  async uninstallWorkspacePlugin(
+    workspaceId: string,
+    pluginId: string,
+  ): Promise<{ success: boolean }> {
+    return this.request(`/workspaces/${workspaceId}/plugins/${pluginId}`, {
+      method: 'DELETE',
+    })
   }
 
   // ── MCP OAuth ──

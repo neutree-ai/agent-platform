@@ -6,8 +6,9 @@ interface PluginPanelProps {
 }
 
 export interface PluginPanel {
-  /** Matches `ui_panel` on mcp_catalog entries; the workspace shows the panel
-   *  iff an enabled MCP server's catalog row points to this id. */
+  /** Panel id, matching a panel the plugin declares in its manifest
+   *  (`owns.panels[].id`). The workspace shows it when the plugin is
+   *  installed there — see useWsApps / workspace_plugins. */
   id: string
   /** Returns the localized tab label. Called every render so plugins with
    *  their own i18next instance can react to language changes (the host

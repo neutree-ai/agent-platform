@@ -21,10 +21,9 @@ import {
   getPluginApp,
 } from '@/components/shell/apps/wsApps'
 import { useAuth } from '@/contexts/AuthContext'
-import { useWorkspaceConfig } from '@/hooks/useWorkspaceConfig'
 import { useWorkspaces } from '@/hooks/useWorkspaces'
 import { api } from '@/lib/api/client'
-import type { McpCatalogEntry } from '@/lib/api/types'
+import type { WorkspacePluginEntry } from '@/lib/api/types'
 import type { AppDefinition } from '@/lib/app-registry'
 import { getPanel, getPanelsVersion, subscribePanels } from '@/lib/panel-registry'
 import {
@@ -38,7 +37,7 @@ import { useTranslation } from 'react-i18next'
 
 /**
  * Resolves the AppDefinition list for a workspace. Built-ins come first;
- * plugin apps (filtered by enabled MCP servers in this ws) come last.
+ * plugin apps (the UI plugins installed in this ws) come last.
  *
  * `disabled` flags reflect ws.status — disabled apps still render (so an
  * already-active disabled app shows its own NotRunning state), but the
@@ -49,10 +48,13 @@ export function useWsApps(workspaceId: string | undefined): AppDefinition[] {
   const { user } = useAuth()
   const { data: workspaces } = useWorkspaces()
   const ws = workspaces?.find((w) => w.id === workspaceId)
-  const { config } = useWorkspaceConfig(workspaceId ?? '')
-  const { data: catalog } = useQuery<McpCatalogEntry[]>({
-    queryKey: ['mcp-catalog'],
-    queryFn: () => api.getMcpCatalog(),
+  // Installed UI plugins for this workspace — the visibility source for
+  // extension apps. Decoupled from mcp_config: a plugin shows because it's
+  // installed here, not because a same-id MCP server is enabled.
+  const { data: wsPlugins } = useQuery<WorkspacePluginEntry[]>({
+    queryKey: ['workspace-plugins', workspaceId],
+    queryFn: () => api.getWorkspacePlugins(workspaceId ?? ''),
+    enabled: !!workspaceId,
     staleTime: 5 * 60 * 1000,
   })
   // Re-run the memo when a plugin panel registers after first render — remote
@@ -215,31 +217,28 @@ export function useWsApps(workspaceId: string | undefined): AppDefinition[] {
       },
     })
 
-    // Extensions — user-installed plugin apps (MCP-driven)
-    if (config?.mcp_config && catalog) {
-      try {
-        const parsed = JSON.parse(config.mcp_config) as { mcpServers?: Record<string, unknown> }
-        const servers = parsed.mcpServers ?? {}
-        for (const entry of catalog) {
-          if (!entry.ui_panel || !(entry.id in servers)) continue
-          // Three states for the panel:
-          //  - registered (bundle loaded): use its label() — supports i18n
-          //  - lazy descriptor only: use the static manifest label so the
-          //    tab appears in the launcher before the bundle loads
-          //  - neither: bundle not loaded and not declared → skip
-          const panel = getPanel(entry.ui_panel)
-          const lazyDesc = panel ? null : getLazyPanel(entry.ui_panel)
-          const label = panel?.label() ?? lazyDesc?.label
-          if (!label) continue
-          apps.push({
-            id: entry.id,
-            label,
-            Component: getPluginApp(entry.ui_panel),
-            group: 'extension',
-          })
-        }
-      } catch {
-        // mcp_config not valid json — skip plugin apps
+    // Extensions — UI plugins installed in this workspace. One app per
+    // owned panel; the install record (not MCP enablement) gates visibility.
+    for (const plugin of wsPlugins ?? []) {
+      for (const decl of plugin.panels) {
+        // Three states for the panel:
+        //  - registered (bundle loaded): use its label() — supports i18n
+        //  - lazy descriptor only: use the static manifest label so the
+        //    tab appears in the launcher before the bundle loads
+        //  - neither: fall back to the install-time label from the manifest
+        const panel = getPanel(decl.id)
+        const lazyDesc = panel ? null : getLazyPanel(decl.id)
+        const label = panel?.label() ?? lazyDesc?.label ?? decl.label
+        if (!label) continue
+        apps.push({
+          // Single-panel plugins keep the plugin id as the app id (preserves
+          // saved layouts for translation/reviewdeck); multi-panel plugins
+          // namespace per panel to stay unique.
+          id: plugin.panels.length === 1 ? plugin.plugin_id : decl.id,
+          label,
+          Component: getPluginApp(decl.id),
+          group: 'extension',
+        })
       }
     }
 
@@ -248,8 +247,7 @@ export function useWsApps(workspaceId: string | undefined): AppDefinition[] {
     t,
     workspaceId,
     ws?.status,
-    config?.mcp_config,
-    catalog,
+    wsPlugins,
     user?.role,
     panelsVersion,
     lazyVersion,

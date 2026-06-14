@@ -211,6 +211,14 @@ export interface McpCatalogEntry {
   params: { header: string; label: string; type: string; default: string }[]
 }
 
+/** A UI plugin installed in a workspace, resolved to the launcher panels it
+ *  surfaces. Visibility source for extension apps — decoupled from mcp_config. */
+export interface WorkspacePluginEntry {
+  plugin_id: string
+  version: string
+  panels: { id: string; label: string }[]
+}
+
 export interface AdminMcpUsage {
   server_id: string
   workspace_count: number
