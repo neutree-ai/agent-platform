@@ -684,3 +684,48 @@ describe('SkillManager draft persistence (draftBase)', () => {
     expect(result.loaded).toEqual(['done'])
   })
 })
+
+describe('SkillManager staging cleanup', () => {
+  let fs: ReturnType<typeof createMemFs>
+  let shell: ReturnType<typeof createMemShell>
+
+  function createManager(fetchImpl: (url: string) => Promise<FetchResponse>) {
+    return new SkillManager({
+      cpUrl: 'http://cp:3000',
+      workspaceId: 'ws-1',
+      skillsDir: '/workspace/.claude/skills',
+      localBase: '/tmp',
+      useSymlink: true,
+      fetch: fetchImpl,
+      fs,
+      shell,
+    })
+  }
+
+  beforeEach(() => {
+    fs = createMemFs()
+    shell = createMemShell()
+  })
+
+  test('extract sweeps leaked .staging-* dirs for the same skill', async () => {
+    // Two leaked staging dirs from prior crashed/concurrent extracts.
+    fs.dirs.add('/tmp/skill-foo.staging-1-111')
+    fs.dirs.add('/tmp/skill-foo.staging-1-222')
+    // An unrelated skill's staging must NOT be touched.
+    fs.dirs.add('/tmp/skill-bar.staging-1-333')
+
+    const tarBuf = Buffer.from('fake-tar-gz')
+    const fetchImpl = async (url: string) => {
+      if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: ['foo'] })
+      if (url.includes('/_cp/skills/foo')) return binaryResponse(tarBuf)
+      if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'foo' }])
+      throw new Error(`Unexpected fetch: ${url}`)
+    }
+    await createManager(fetchImpl).load()
+
+    expect(fs.dirs.has('/tmp/skill-foo.staging-1-111')).toBe(false)
+    expect(fs.dirs.has('/tmp/skill-foo.staging-1-222')).toBe(false)
+    // Different skill untouched.
+    expect(fs.dirs.has('/tmp/skill-bar.staging-1-333')).toBe(true)
+  })
+})
