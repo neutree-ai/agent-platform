@@ -14,6 +14,7 @@ import { getTagAssignmentsForUser } from '../../services/db/tags'
 import type { SessionWithPreview } from '../../services/db/types'
 import { getWorkspace, getWorkspaceConfig, listWorkspaces } from '../../services/db/workspaces'
 import * as k8s from '../../services/k8s'
+import { computeWorkspaceDrift } from '../../services/workspace-reconcile'
 import { canManage, toApiWorkspace } from './_shared'
 
 function toApiSession(s: SessionWithPreview) {
@@ -266,7 +267,10 @@ read.openapi(getStatusRoute, async (c) => {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   try {
-    const status = await k8s.getInstanceStatus(workspace.id)
+    const [status, drift] = await Promise.all([
+      k8s.getInstanceStatus(workspace.id),
+      computeWorkspaceDrift(workspace.id),
+    ])
     return c.json(
       {
         deployment: status.deployment.exists
@@ -280,6 +284,11 @@ read.openapi(getStatusRoute, async (c) => {
         pods: { total: status.pods.total, ready: status.pods.ready },
         warnings: status.warnings,
         conditions: status.conditions,
+        rebuild: {
+          current: drift.current,
+          latest: drift.latest,
+          available: drift.hasInstance && drift.reasons.length > 0,
+        },
       },
       200,
     )

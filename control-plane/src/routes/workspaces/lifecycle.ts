@@ -3,7 +3,7 @@ import type { AppEnv } from '../../lib/types'
 import { resetAllSessionsIdle } from '../../services/db/sessions'
 import { getWorkspace, updateWorkspace } from '../../services/db/workspaces'
 import * as k8s from '../../services/k8s'
-import { startWorkspaceInstance } from '../../services/workspace-reconcile'
+import { reconcileWorkspacePod, startWorkspaceInstance } from '../../services/workspace-reconcile'
 import { canManage, interruptAllSessions } from './_shared'
 
 const lifecycle = new OpenAPIHono<AppEnv>()
@@ -16,6 +16,13 @@ const StartResponseSchema = z.object({
 })
 
 const SuccessSchema = z.object({ success: z.boolean() })
+
+const RebuildResponseSchema = z.object({
+  // false when the workspace was already in sync (no-op).
+  rebuilt: z.boolean(),
+  // Diagnostic drift summary when rebuilt; omitted otherwise. Not shown to users.
+  reason: z.string().optional(),
+})
 
 const WorkspaceIdParam = z.object({
   id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
@@ -108,6 +115,61 @@ lifecycle.openapi(stopRoute, async (c) => {
     return c.json({ success: true }, 200)
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
+  }
+})
+
+// ── POST /:id/rebuild ──────────────────────────────────────────────────────
+const rebuildRoute = createRoute({
+  method: 'post',
+  path: '/{id}/rebuild',
+  tags: ['workspaces'],
+  summary: 'Rebuild a workspace to the current platform template',
+  description:
+    "Recreates the workspace's Deployment when it drifts from the current " +
+    'desired spec (template version, agent image, sidecars), picking up ' +
+    'platform updates. DISRUPTIVE: the pod is replaced, interrupting any ' +
+    'in-flight session and clearing ephemeral (tmpfs) state. No-op when ' +
+    'already in sync.',
+  security: [{ bearerAuth: [] }],
+  request: { params: WorkspaceIdParam },
+  responses: {
+    200: {
+      description: 'Rebuild evaluated (rebuilt=false when already in sync)',
+      content: { 'application/json': { schema: RebuildResponseSchema } },
+    },
+    404: {
+      description: 'Workspace not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    500: {
+      description: 'Internal error',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+lifecycle.openapi(rebuildRoute, async (c) => {
+  const currentUser = c.get('user')
+  const { id } = c.req.valid('param')
+  const workspace = await getWorkspace(id)
+  if (!workspace || !canManage(workspace, currentUser)) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    const { rebuilt, reason } = await reconcileWorkspacePod(workspace.id)
+    if (rebuilt) {
+      console.log(`[Rebuild] workspace=${id} rebuilt: ${reason}`)
+      // The old pod is gone — clear stale chat status and reflect that the
+      // instance is coming back up so the UI shows it re-launching.
+      await resetAllSessionsIdle(id)
+      await updateWorkspace(id, { status: 'starting' })
+    }
+    return c.json({ rebuilt, reason }, 200)
+  } catch (e: any) {
+    console.error('[Rebuild] Failed:', e)
+    const msg = e?.body?.message || e?.message || 'Unknown error'
+    return c.json({ error: msg }, 500)
   }
 })
 

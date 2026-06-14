@@ -15,34 +15,46 @@ async function getDesiredSpec(workspaceId: string): Promise<DesiredSpec> {
   }
 }
 
+interface WorkspaceDrift {
+  /** Deployed template version (annotation), or null when no Deployment exists. */
+  current: number | null
+  /** Desired template version (CURRENT_TEMPLATE_VERSION). */
+  latest: number
+  /** Whether a Deployment exists for this workspace at all. */
+  hasInstance: boolean
+  /**
+   * Human/diagnostic descriptions of each drifted marker. Empty => in sync.
+   * Internal only — not surfaced to end users (they see a boolean).
+   */
+  reasons: string[]
+}
+
 /**
- * Bring the workspace's Deployment in line with the current desired spec:
- * template_version, agent image, and memory-fuse sidecar presence. Rebuilds
- * (delete + recreate Deployment) if any marker drifts. Returns `rebuilt: false`
- * when the workspace has no Deployment yet (caller should use createInstance).
+ * Read-only drift check: compare the workspace's Deployment against the
+ * current desired spec (template_version, agent image, memory-fuse sidecar)
+ * WITHOUT mutating anything. Shared source of truth for "is an update
+ * available" — consumed by the status endpoint (read), the user-facing
+ * rebuild action, and the admin batch sweep. {@link reconcileWorkspacePod}
+ * is the write path built on top of it.
  *
  * Drift sources:
  *   - template_version annotation < CURRENT_TEMPLATE_VERSION (structural bump)
  *   - agent image != getAgentImage(desired agent_type)
  *   - memory-fuse sidecar present != cluster provides MEMORY_FUSE_IMAGE
  *     (only surfaces on v3 pods built before sidecar became unconditional)
- *
- * The PVC and Service are preserved across rebuilds — only the Deployment is
- * replaced.
  */
-export async function reconcileWorkspacePod(
-  workspaceId: string,
-): Promise<{ rebuilt: boolean; reason?: string }> {
+export async function computeWorkspaceDrift(workspaceId: string): Promise<WorkspaceDrift> {
+  const latest = k8s.CURRENT_TEMPLATE_VERSION
   const markers = await k8s.getInstanceSpecMarkers(workspaceId)
-  if (!markers) return { rebuilt: false }
+  if (!markers) return { current: null, latest, hasInstance: false, reasons: [] }
 
   const desired = await getDesiredSpec(workspaceId)
   const desiredImage = k8s.getAgentImage(desired.agentType)
   const desiredSidecar = k8s.isMemoryFuseAvailable()
 
   const reasons: string[] = []
-  if ((markers.templateVersion ?? 0) < k8s.CURRENT_TEMPLATE_VERSION) {
-    reasons.push(`template_version ${markers.templateVersion} < ${k8s.CURRENT_TEMPLATE_VERSION}`)
+  if ((markers.templateVersion ?? 0) < latest) {
+    reasons.push(`template_version ${markers.templateVersion} < ${latest}`)
   }
   if (markers.agentImage !== desiredImage) {
     reasons.push(`image ${markers.agentImage} != ${desiredImage}`)
@@ -51,10 +63,25 @@ export async function reconcileWorkspacePod(
     reasons.push(`memory-fuse sidecar ${markers.hasMemoryFuseSidecar} != cluster ${desiredSidecar}`)
   }
 
-  if (reasons.length === 0) return { rebuilt: false }
+  return { current: markers.templateVersion, latest, hasInstance: true, reasons }
+}
 
+/**
+ * Bring the workspace's Deployment in line with the current desired spec by
+ * rebuilding (delete + recreate Deployment) when any marker drifts — see
+ * {@link computeWorkspaceDrift}. Returns `rebuilt: false` when the workspace
+ * has no Deployment yet (caller should use createInstance) or is already in
+ * sync. The PVC and Service are preserved — only the Deployment is replaced.
+ */
+export async function reconcileWorkspacePod(
+  workspaceId: string,
+): Promise<{ rebuilt: boolean; reason?: string }> {
+  const drift = await computeWorkspaceDrift(workspaceId)
+  if (!drift.hasInstance || drift.reasons.length === 0) return { rebuilt: false }
+
+  const desired = await getDesiredSpec(workspaceId)
   await k8s.rebuildInstance(workspaceId, desired.agentType, desired.resources)
-  return { rebuilt: true, reason: reasons.join('; ') }
+  return { rebuilt: true, reason: drift.reasons.join('; ') }
 }
 
 /**
