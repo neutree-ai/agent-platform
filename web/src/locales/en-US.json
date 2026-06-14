@@ -3357,7 +3357,7 @@
         },
         "confirm": {
           "title": "Update workspace?",
-          "description": "Updating restarts the workspace pod: any in-progress session is interrupted, ephemeral files are cleared, and the runtime takes a few minutes to come back up.",
+          "description": "Updating restarts the workspace pod: any in-progress session is interrupted.",
           "cancel": "Cancel",
           "confirm": "Update now",
           "pending": "Updating…"

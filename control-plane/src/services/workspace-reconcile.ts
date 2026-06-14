@@ -81,6 +81,9 @@ export async function reconcileWorkspacePod(
 
   const desired = await getDesiredSpec(workspaceId)
   await k8s.rebuildInstance(workspaceId, desired.agentType, desired.resources)
+  // Cache the now-deployed version so the "update available" prompt clears
+  // immediately, without waiting for the reconcile loop's next annotation sync.
+  await updateWorkspace(workspaceId, { runtime_version: k8s.CURRENT_TEMPLATE_VERSION })
   return { rebuilt: true, reason: drift.reasons.join('; ') }
 }
 

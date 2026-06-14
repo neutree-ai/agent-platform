@@ -1361,5 +1361,6 @@ function resolveMemberWorkspace(
     active_agent_sessions: 0,
     active_human_sessions: 0,
     active_sessions: [],
+    rebuild_available: false,
   }
 }

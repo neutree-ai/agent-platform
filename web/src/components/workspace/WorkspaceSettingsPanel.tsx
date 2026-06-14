@@ -496,11 +496,11 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
   const lifecyclePending =
     startMutation.isPending || stopMutation.isPending || restartMutation.isPending
 
-  // Poll K8s status while the workspace is mid-transition (to surface
-  // FailedScheduling / image pull / OOM reasons behind a stuck 'starting')
-  // and while running (to detect template drift → "update available").
+  // Poll K8s status only while the workspace is mid-transition. Surfaces
+  // FailedScheduling / image pull / OOM reasons that otherwise leave the
+  // workspace stuck in 'starting' with no visible explanation.
   const { data: k8sStatus } = useWorkspaceStatus(workspaceId, {
-    enabled: workspace?.status === 'starting' || workspace?.status === 'running',
+    enabled: workspace?.status === 'starting',
   })
   const startupWarnings = k8sStatus?.warnings ?? []
   const startupFailedConditions = (k8sStatus?.conditions ?? []).filter(
@@ -509,8 +509,9 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
   const showStartupAlert =
     workspace?.status === 'starting' &&
     (startupWarnings.length > 0 || startupFailedConditions.length > 0)
-  // Runtime is behind the current platform template — offer a rebuild.
-  const updateAvailable = (k8sStatus?.rebuild?.available ?? false) && !lifecyclePending
+  // Runtime is behind the current platform template — offer a rebuild. Read
+  // straight off the workspace object (cached server-side), no status poll.
+  const updateAvailable = (workspace?.rebuild_available ?? false) && !lifecyclePending
 
   async function handleRebuild() {
     try {

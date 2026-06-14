@@ -33,6 +33,10 @@ export const ApiWorkspaceSchema = z.object({
       name: z.string().optional(),
     }),
   ),
+  // True when the deployed runtime is behind the current platform template
+  // and can be rebuilt to pick it up. Derived from the cached runtime_version,
+  // so it's free to read (no k8s call).
+  rebuild_available: z.boolean(),
 })
 
 export type ApiWorkspace = z.infer<typeof ApiWorkspaceSchema>
@@ -273,15 +277,6 @@ export const ApiK8sStatusSchema = z.object({
   conditions: z.array(
     z.object({ type: z.string(), status: z.boolean(), message: z.string().optional() }),
   ),
-  // Whether the workspace's runtime is behind the current platform template
-  // and can be rebuilt to pick it up. `available` is the only field the UI
-  // needs; `current`/`latest` are exposed for diagnostics. The underlying
-  // drift reasons are intentionally NOT surfaced to end users.
-  rebuild: z.object({
-    current: z.number().int().nullable(),
-    latest: z.number().int(),
-    available: z.boolean(),
-  }),
 })
 
 export type ApiK8sStatus = z.infer<typeof ApiK8sStatusSchema>

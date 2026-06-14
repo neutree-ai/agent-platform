@@ -3381,7 +3381,7 @@
         },
         "confirm": {
           "title": "更新工作空间？",
-          "description": "更新会重启工作空间的 pod：正在进行的 session 会被中断，临时文件会清空，环境需要几分钟重新就绪。",
+          "description": "更新会重启工作空间的 pod：正在进行的 session 会被中断。",
           "cancel": "取消",
           "confirm": "立即更新",
           "pending": "更新中…"

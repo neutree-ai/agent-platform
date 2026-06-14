@@ -818,6 +818,18 @@ export function resolveDeploymentStatus(dep: k8s.V1Deployment | undefined): Reco
 }
 
 /**
+ * Read the template version stamped on a Deployment (the workspace-version
+ * annotation), or null if absent/unparseable. The reconcile loop caches this
+ * onto the workspace row so drift checks don't need a live k8s read.
+ */
+export function deploymentTemplateVersion(dep: k8s.V1Deployment | undefined): number | null {
+  const raw = dep?.metadata?.annotations?.[TEMPLATE_VERSION_ANNOTATION]
+  if (raw === undefined) return null
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
  * Full list of all workspace deployments. Returns deployments indexed by
  * workspace-id plus the response resourceVersion for starting a watch.
  */

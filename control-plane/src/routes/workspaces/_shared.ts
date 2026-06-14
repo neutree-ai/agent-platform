@@ -2,6 +2,7 @@ import type { ApiWorkspace } from '../../../../internal/types/api'
 import { getWorkspaceAddress } from '../../lib/workspace-address'
 import { listActiveSessionIds } from '../../services/db/sessions'
 import type { Workspace } from '../../services/db/types'
+import { CURRENT_TEMPLATE_VERSION } from '../../services/k8s'
 
 /** Check if user can manage (edit/delete/start/stop) a workspace */
 export function canManage(workspace: Workspace, user: { sub: string; role: string }): boolean {
@@ -70,5 +71,8 @@ export function toApiWorkspace(
     active_agent_sessions: w.active_agent_sessions ?? 0,
     active_human_sessions: w.active_human_sessions ?? 0,
     active_sessions: w.active_sessions ?? [],
+    // A rebuild/update is available when the deployed runtime version is known
+    // and behind the current platform template. Pure DB comparison — no k8s.
+    rebuild_available: w.runtime_version != null && w.runtime_version < CURRENT_TEMPLATE_VERSION,
   }
 }
