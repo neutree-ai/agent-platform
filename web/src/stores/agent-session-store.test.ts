@@ -140,10 +140,14 @@ describe('createAgentSessionStore', () => {
     })
 
     test('reconnects SSE when session is active (chat_status=agent)', async () => {
-      const deps = makeDeps()
+      const deps = makeDeps({
+        api: {
+          getSession: vi.fn().mockResolvedValue({ chat_status: 'agent', pending_message: null }),
+        },
+      })
       const { s } = make('ws-1', deps)
 
-      await s.switchSession('session-1', { sessionChatStatus: 'agent' })
+      await s.switchSession('session-1')
 
       expect(deps.sse.createCPReconnectStream).toHaveBeenCalledWith(
         'ws-1',
@@ -158,15 +162,36 @@ describe('createAgentSessionStore', () => {
       const deps = makeDeps()
       const { s } = make('ws-1', deps)
 
-      await s.switchSession('session-1', { sessionChatStatus: 'idle' })
+      await s.switchSession('session-1')
 
       expect(deps.sse.createCPReconnectStream).not.toHaveBeenCalled()
       expect(s.isLoading).toBe(false)
     })
 
+    test('reconnects from the authoritative getSession status, not a stale context snapshot', async () => {
+      // Regression: switch-back / reload would skip reconnect when the
+      // caller-supplied context snapshot was stale (taken before the turn
+      // went live), leaving a running turn un-reattached and the composer
+      // looking idle. The decision must follow the freshly fetched status.
+      const deps = makeDeps({
+        api: {
+          getSession: vi.fn().mockResolvedValue({ chat_status: 'agent', pending_message: null }),
+        },
+      })
+      const { s } = make('ws-1', deps)
+
+      await s.switchSession('session-1', { sessionChatStatus: 'idle' })
+
+      expect(deps.sse.createCPReconnectStream).toHaveBeenCalled()
+      expect(s.isLoading).toBe(true)
+    })
+
     test('aborts previous SSE stream when switching sessions', async () => {
       const abortSignals: AbortSignal[] = []
       const deps = makeDeps({
+        api: {
+          getSession: vi.fn().mockResolvedValue({ chat_status: 'agent', pending_message: null }),
+        },
         sse: {
           createCPReconnectStream: vi.fn((_wid, _h, signal) => {
             abortSignals.push(signal)
@@ -175,7 +200,7 @@ describe('createAgentSessionStore', () => {
       })
       const { s } = make('ws-1', deps)
 
-      await s.switchSession('session-1', { sessionChatStatus: 'agent' })
+      await s.switchSession('session-1')
       expect(abortSignals[0].aborted).toBe(false)
 
       await s.switchSession('session-2')
