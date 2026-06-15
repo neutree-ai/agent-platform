@@ -88,13 +88,16 @@ export async function aggregateChatStream(response: Response): Promise<Aggregate
  *
  * `knownSessionId` short-circuits the wait for resumed sessions, whose id is
  * already known before dispatch. For a new session we wait for the first
- * frame (`session.started` arrives well before the model finishes), bounded by
- * `timeoutMs` so a stuck agent can't hang the request.
+ * frame (`session.started`), bounded by `timeoutMs` so a stuck agent can't hang
+ * the request. The bound is generous because several sessions cold-starting in
+ * the same workspace at once (e.g. a fan-out of sub-agents) can delay
+ * `session.started` well past a tight timeout — and a premature timeout drops
+ * the id for a session that is in fact starting and will run to completion.
  */
 export async function awaitSessionId(
   response: Response,
   knownSessionId: string | null,
-  timeoutMs = 30_000,
+  timeoutMs = 300_000,
 ): Promise<{ sessionId: string | null; error: string | null }> {
   if (knownSessionId) {
     void response.body?.cancel().catch(() => {})
