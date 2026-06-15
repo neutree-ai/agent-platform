@@ -694,7 +694,19 @@ export function createAgentSessionStore(
         loadedSessionId: sessionId,
       })
 
-      if (context?.sessionChatStatus === 'agent') {
+      // Decide whether to re-attach to a live turn from the authoritative
+      // chat_status we just fetched, not the caller-supplied `context`
+      // snapshot. That snapshot is stale on reload (no live status) and on
+      // switch-back (the sidebar cached it before the turn went live), which
+      // left running turns un-reattached and the composer looking idle — so
+      // the turn kept running in the background while the user saw a ready
+      // input box and had to manually type "continue". Fall back to the
+      // snapshot only if the fresh fetch failed.
+      const liveChatStatus =
+        sessionResult.status === 'fulfilled'
+          ? sessionResult.value.chat_status
+          : context?.sessionChatStatus
+      if (liveChatStatus === 'agent') {
         startReconnect()
       }
     },
