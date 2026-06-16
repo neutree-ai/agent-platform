@@ -5,6 +5,7 @@ import { dbQueryDuration } from '../../lib/metrics'
 
 const _pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://tos:tos@localhost:5432/tos',
+  max: 35,
 })
 
 // Wrap pool.query to observe DB query duration
