@@ -214,6 +214,9 @@
         "contextWarning": "consider /compact or starting a new session",
         "turnWarning": "High turn count - consider starting a new session or compacting"
       }
+    },
+    "markdown": {
+      "systemMessage": "System message"
     }
   }
 }

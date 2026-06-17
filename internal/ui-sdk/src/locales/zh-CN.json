@@ -214,6 +214,9 @@
         "contextWarning": "建议执行 /compact 或开启新会话",
         "turnWarning": "轮次较高，建议开启新会话或压缩会话"
       }
+    },
+    "markdown": {
+      "systemMessage": "系统消息"
     }
   }
 }
