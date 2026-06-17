@@ -136,10 +136,16 @@ function SessionRow({
       className="h-6 px-1.5 py-0 text-xs"
     />
   ) : (
-    <div
-      className={cn('truncate text-xs', active ? 'font-medium text-foreground' : 'text-foreground')}
-    >
-      {session.name || previewTitle || t('components.sessions.untitled')}
+    <div className="min-w-0">
+      <div
+        className={cn(
+          'truncate text-xs',
+          active ? 'font-medium text-foreground' : 'text-foreground',
+        )}
+      >
+        {session.name || previewTitle || t('components.sessions.untitled')}
+      </div>
+      <div className="truncate font-mono text-[10px] text-muted-foreground/40">{session.id}</div>
     </div>
   )
 
@@ -396,15 +402,16 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
   const handleSelect = useCallback(
     (sessionId: string) => {
       const session = sessions.find((s) => s.id === sessionId)
-      useActiveSession
-        .getState()
-        .switchTo(
-          workspaceId,
-          sessionId,
-          session
-            ? { sessionChatStatus: session.chat_status, lastTurnStats: session.last_turn_stats }
-            : undefined,
-        )
+      useActiveSession.getState().switchTo(
+        workspaceId,
+        sessionId,
+        session
+          ? {
+              sessionChatStatus: session.chat_status,
+              lastTurnStats: session.last_turn_stats,
+            }
+          : undefined,
+      )
     },
     [sessions, workspaceId],
   )
@@ -469,7 +476,10 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
                 ? p.items.filter((s: Session) => s.id !== session.id)
                 : p.items.map((s: Session) =>
                     s.id === session.id
-                      ? { ...s, starred_at: next ? new Date().toISOString() : null }
+                      ? {
+                          ...s,
+                          starred_at: next ? new Date().toISOString() : null,
+                        }
                       : s,
                   ),
           })),
