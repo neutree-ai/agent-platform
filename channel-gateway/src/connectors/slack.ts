@@ -5,6 +5,40 @@ import { TosClient } from '../../../internal/client/src/index'
 import * as db from '../services/db'
 
 const NAP_API_URL = process.env.NAP_API_URL || 'http://localhost:3000'
+
+/** Extract plain text from a Slack event/message, falling back to attachments then blocks
+ *  when the top-level text field is empty (rich-text / Block Kit messages). */
+export function extractSlackText(msg: Record<string, unknown>): string {
+  let raw = (msg.text as string) || ''
+  if (!raw) {
+    const atts = (
+      msg as {
+        attachments?: Array<{
+          fallback?: string
+          text?: string
+          pretext?: string
+          title?: string
+        }>
+      }
+    ).attachments
+    if (atts?.length) {
+      raw = atts
+        .map((a) => [a.pretext, a.title, a.text, a.fallback].filter(Boolean).join(' '))
+        .filter(Boolean)
+        .join('\n')
+    }
+  }
+  if (!raw) {
+    const blocks = (msg as { blocks?: Array<{ type?: string; text?: { text?: string } }> }).blocks
+    if (blocks?.length) {
+      raw = blocks
+        .map((b) => b.text?.text || '')
+        .filter(Boolean)
+        .join('\n')
+    }
+  }
+  return raw
+}
 const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
 
 type SlackImage = { data: string; media_type: string; filename?: string }
@@ -178,37 +212,7 @@ Indexes are 1-based and match the attached images order.
         history,
         async (m) => {
           const who = m.bot_id ? 'bot' : `user(<@${m.user}>)`
-          // Bot messages (e.g. Jenkins) often carry content in attachments/blocks
-          // rather than top-level text, so fall back to those when text is empty.
-          let raw = m.text || ''
-          if (!raw) {
-            const atts = (
-              m as {
-                attachments?: Array<{
-                  fallback?: string
-                  text?: string
-                  pretext?: string
-                  title?: string
-                }>
-              }
-            ).attachments
-            if (atts?.length) {
-              raw = atts
-                .map((a) => [a.pretext, a.title, a.text, a.fallback].filter(Boolean).join(' '))
-                .filter(Boolean)
-                .join('\n')
-            }
-          }
-          if (!raw) {
-            const blocks = (m as { blocks?: Array<{ type?: string; text?: { text?: string } }> })
-              .blocks
-            if (blocks?.length) {
-              raw = blocks
-                .map((b) => b.text?.text || '')
-                .filter(Boolean)
-                .join('\n')
-            }
-          }
+          const raw = extractSlackText(m as unknown as Record<string, unknown>)
 
           // Download images from history messages
           const files = (
@@ -322,7 +326,7 @@ Indexes are 1-based and match the attached images order.
   /** Create a job for the given event and route. Shared by app_mention and message handlers. */
   async function dispatchJob(event: Record<string, unknown>, route: db.Route) {
     const channel = event.channel as string
-    const text = (event.text as string) || ''
+    const text = extractSlackText(event)
     const user = event.user as string
     const messageTs = event.ts as string
     const threadTs = (event.thread_ts || event.ts) as string
