@@ -99,11 +99,9 @@ app.use('*', async (c, next) => {
   const start = Date.now()
   await next()
   httpActiveRequests.dec()
-  // Normalize path: replace workspace/session IDs with :id
-  const route = c.req.path
-    .replace(/\/[a-z0-9]{8,}(?=-)/g, '/:id') // workspace-prefixed paths
-    .replace(/\/[0-9a-f]{8}-[0-9a-f-]{27}/g, '/:id') // UUIDs
-    .replace(/\/019[0-9a-f]{5}-[0-9a-f-]{19}/g, '/:id') // UUIDv7 session IDs
+  // Use Hono's matched route pattern (e.g. /api/workspaces/:id/...) so dynamic
+  // IDs never become label values. Fall back to the raw path on unmatched routes.
+  const route = c.req.routePath ?? c.req.path
   httpRequestDuration.observe(
     { method: c.req.method, route, status: String(c.res.status) },
     (Date.now() - start) / 1000,
