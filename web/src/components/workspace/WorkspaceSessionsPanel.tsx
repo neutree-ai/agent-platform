@@ -145,7 +145,6 @@ function SessionRow({
       >
         {session.name || previewTitle || t('components.sessions.untitled')}
       </div>
-      <div className="truncate font-mono text-[10px] text-muted-foreground/40">{session.id}</div>
     </div>
   )
 

@@ -652,12 +652,7 @@ export function WorkspaceChatPanel({
                     <SelectContent>
                       {sessions.map((session) => (
                         <SelectItem key={session.id} value={session.id} className="text-xs">
-                          <span className="flex min-w-0 flex-col">
-                            <span className="truncate">{formatSessionLabel(session, t)}</span>
-                            <span className="font-mono text-[10px] text-muted-foreground/50">
-                              {session.id}
-                            </span>
-                          </span>
+                          <span className="truncate">{formatSessionLabel(session, t)}</span>
                         </SelectItem>
                       ))}
                       {hasNextPage && <LoadMoreSentinel onVisible={fetchNextPage} />}
@@ -669,11 +664,6 @@ export function WorkspaceChatPanel({
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-              {!sessionsAppOpened && activeSessionId && (
-                <span className="shrink-0 font-mono text-[10px] text-muted-foreground/40">
-                  {activeSessionId}
-                </span>
               )}
               {sessionSource &&
                 (sessionSource.url ? (
