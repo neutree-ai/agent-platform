@@ -2,10 +2,33 @@ import { Markdown } from '../markdown'
 import { Spinner } from '../ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import type { ChatMessage } from '../types'
-import { ClipboardCheck, Copy } from 'lucide-react'
+import { ClipboardCheck, Copy, X } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ToolCallBlock } from './ToolCallBlock'
+
+function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        className="absolute right-4 top-4 rounded-full bg-white/10 p-1.5 text-white hover:bg-white/20"
+        onClick={onClose}
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <img
+        src={src}
+        alt={alt}
+        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  )
+}
 
 function formatTimestamp(iso: string, locale: string): { short: string; full: string } {
   const date = new Date(iso)
@@ -47,6 +70,7 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
     typeof message.content === 'string' &&
     /^\s*<agent-sys>[\s\S]*<\/agent-sys>\s*$/.test(message.content)
   const [copied, setCopied] = useState(false)
+  const [zoomedSrc, setZoomedSrc] = useState<string | null>(null)
 
   const handleCopy = useCallback(() => {
     const textContent = message.blocks
@@ -80,7 +104,8 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
                   key={idx}
                   src={`data:${block.media_type};base64,${block.data}`}
                   alt={t('components.chat.messageBubble.alts.attachment')}
-                  className="mt-2 max-w-full max-h-48 rounded-md border border-primary-foreground/20"
+                  className="mt-2 max-w-full max-h-48 cursor-zoom-in rounded-md border border-primary-foreground/20"
+                  onClick={() => setZoomedSrc(`data:${block.media_type};base64,${block.data}`)}
                 />
               ) : null,
             )}
@@ -131,7 +156,8 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
                 key={idx}
                 src={`data:${block.media_type};base64,${block.data}`}
                 alt={t('components.chat.messageBubble.alts.content')}
-                className="my-2 max-w-full max-h-96 rounded-md border border-foreground/[0.08]"
+                className="my-2 max-w-full max-h-96 cursor-zoom-in rounded-md border border-foreground/[0.08]"
+                onClick={() => setZoomedSrc(`data:${block.media_type};base64,${block.data}`)}
               />
             ) : null,
           )}
@@ -150,6 +176,13 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
             <div className="whitespace-pre-wrap break-words text-[1em]">{message.content}</div>
           )}
         </div>
+      )}
+      {zoomedSrc && (
+        <ImageLightbox
+          src={zoomedSrc}
+          alt={t('components.chat.messageBubble.alts.zoomed')}
+          onClose={() => setZoomedSrc(null)}
+        />
       )}
       {/* Copy button + timestamp — visible on hover, hidden while streaming */}
       {!message.isStreaming && (
