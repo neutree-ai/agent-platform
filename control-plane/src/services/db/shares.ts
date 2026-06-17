@@ -1,5 +1,5 @@
 import { generateId, pool } from './pool'
-import type { ServiceToken, Share } from './types'
+import type { ServiceToken, Share, ShareSummary } from './types'
 
 export async function createShare(
   userId: string,
@@ -40,23 +40,25 @@ export async function getShareWithOwner(
   return (rows[0] as Share & { owner_name: string }) ?? null
 }
 
+const SHARE_SUMMARY_COLS = 'id, user_id, workspace_id, session_id, title, created_at'
+
 export async function listSharesBySession(
   workspaceId: string,
   sessionId: string,
-): Promise<Share[]> {
+): Promise<ShareSummary[]> {
   const { rows } = await pool.query(
-    'SELECT * FROM shares WHERE workspace_id = $1 AND session_id = $2 ORDER BY created_at DESC',
+    `SELECT ${SHARE_SUMMARY_COLS} FROM shares WHERE workspace_id = $1 AND session_id = $2 ORDER BY created_at DESC`,
     [workspaceId, sessionId],
   )
-  return rows as Share[]
+  return rows as ShareSummary[]
 }
 
-export async function listSharesByWorkspace(workspaceId: string): Promise<Share[]> {
+export async function listSharesByWorkspace(workspaceId: string): Promise<ShareSummary[]> {
   const { rows } = await pool.query(
-    'SELECT * FROM shares WHERE workspace_id = $1 ORDER BY created_at DESC',
+    `SELECT ${SHARE_SUMMARY_COLS} FROM shares WHERE workspace_id = $1 ORDER BY created_at DESC`,
     [workspaceId],
   )
-  return rows as Share[]
+  return rows as ShareSummary[]
 }
 
 export async function updateShareTitle(
