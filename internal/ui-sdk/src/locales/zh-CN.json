@@ -4,7 +4,8 @@
       "messageBubble": {
         "alts": {
           "attachment": "附件",
-          "content": "内容"
+          "content": "内容",
+          "zoomed": "图片"
         },
         "states": {
           "thinking": "思考中..."
