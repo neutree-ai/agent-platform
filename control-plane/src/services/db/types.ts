@@ -274,6 +274,9 @@ export interface Share {
   created_at: string
 }
 
+/** List projection of Share — omits the heavy `data` column. */
+export type ShareSummary = Omit<Share, 'data'>
+
 export interface ServiceToken {
   id: string
   name: string
