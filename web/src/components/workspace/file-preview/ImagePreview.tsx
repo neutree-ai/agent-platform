@@ -1,5 +1,6 @@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import Zoom from 'react-medium-image-zoom'
 import 'react-medium-image-zoom/dist/styles.css'
 
@@ -13,6 +14,7 @@ interface ImagePreviewProps {
 }
 
 export function ImagePreview({ src, filename, onPrev, onNext }: ImagePreviewProps) {
+  const { t } = useTranslation()
   return (
     <ScrollArea className="flex-1">
       <div className="relative flex items-center justify-center p-4">
@@ -27,7 +29,7 @@ export function ImagePreview({ src, filename, onPrev, onNext }: ImagePreviewProp
           <button
             type="button"
             onClick={onPrev}
-            aria-label="Previous image"
+            aria-label={t('components.filePreview.image.prev')}
             className="absolute left-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-background/70 text-foreground/80 backdrop-blur transition hover:bg-background/90 hover:text-foreground shadow-sm"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -37,7 +39,7 @@ export function ImagePreview({ src, filename, onPrev, onNext }: ImagePreviewProp
           <button
             type="button"
             onClick={onNext}
-            aria-label="Next image"
+            aria-label={t('components.filePreview.image.next')}
             className="absolute right-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-background/70 text-foreground/80 backdrop-blur transition hover:bg-background/90 hover:text-foreground shadow-sm"
           >
             <ChevronRight className="h-5 w-5" />

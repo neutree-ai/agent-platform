@@ -86,7 +86,7 @@ function LiveViewEmbed({ url }: { url: string }) {
 
   return (
     <iframe
-      title="Browser session"
+      title={t('components.workspaceBrowser.sessionTitle')}
       src={url}
       className="w-full h-full border-0"
       allow="clipboard-read; clipboard-write"

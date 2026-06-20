@@ -943,7 +943,7 @@ export function WorkspaceChatPanel({
                     <div key={i} className="relative group">
                       <img
                         src={`data:${img.media_type};base64,${img.data}`}
-                        alt="attachment"
+                        alt={t('components.workspaceChat.attachmentAlt')}
                         className="h-14 w-14 rounded border border-foreground/[0.08] object-cover"
                       />
                       <button

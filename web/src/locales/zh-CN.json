@@ -33,7 +33,8 @@
       "themeProviderRequired": "useTheme 必须在 ThemeProvider 内使用",
       "unknown": "未知错误",
       "fileOverlayProviderRequired": "useFileOverlay 必须在 FileOverlayProvider 内使用"
-    }
+    },
+    "edit": "编辑"
   },
   "session": {
     "status": {
@@ -1056,10 +1057,17 @@
         "appsCount": "{{count}} 个应用",
         "labels": {
           "custom": "自定义",
-          "resourcesSummary": "CPU：{{cpuRequest}} / {{cpuLimit}} · 内存：{{memoryRequest}} / {{memoryLimit}} · 存储：{{storage}}"
+          "resourcesSummary": "CPU：{{cpuRequest}} / {{cpuLimit}} · 内存：{{memoryRequest}} / {{memoryLimit}} · 存储：{{storage}}",
+          "preset": "预设",
+          "cpu": "CPU",
+          "memory": "内存",
+          "storage": "存储"
         },
         "empty": {
           "value": "-"
+        },
+        "actions": {
+          "openInLibrary": "在资源库中打开"
         }
       },
       "templates": {
@@ -1260,7 +1268,8 @@
     "popout": {
       "actions": {
         "closeAll": "全部关闭",
-        "closeTab": "关闭标签"
+        "closeTab": "关闭标签",
+        "resize": "调整大小"
       }
     },
     "scheduleConsent": {
@@ -1370,7 +1379,8 @@
       "empty": {
         "title": "当前没有活跃浏览器",
         "description": "您可以手动启动浏览器实例，或让 Agent 通过 MCP 创建。"
-      }
+      },
+      "sessionTitle": "浏览器会话"
     },
     "workspaceChat": {
       "actions": {
@@ -1429,7 +1439,8 @@
         "queueHint": "Agent 忙碌中，将加入待发",
         "unsavedChanges": "有改动",
         "composerHint": "Agent 忙碌中，发送即加入待发"
-      }
+      },
+      "attachmentAlt": "附件"
     },
     "workspaceSandbox": {
       "empty": {
@@ -1578,7 +1589,8 @@
         "clear": "清除",
         "dragBadge_one": "正在移动 1 项",
         "dragBadge_other": "正在移动 {{count}} 项",
-        "deleteConfirm": "再次点击确认删除 {{count}} 项"
+        "deleteConfirm": "再次点击确认删除 {{count}} 项",
+        "toggleAll": "全选/取消全选"
       },
       "errors": {
         "listFailed": "列出目录失败：{{status}}",
@@ -1629,7 +1641,8 @@
         "noAttachments": "未挂载"
       },
       "placeholders": {
-        "content": "记忆内容，推荐使用 Markdown 格式"
+        "content": "记忆内容，推荐使用 Markdown 格式",
+        "version": "v?"
       },
       "dialog": {
         "createTitle": "新建记忆库",
@@ -2183,6 +2196,9 @@
         "providerRequired": "API 供应商不能为空",
         "modelRequired": "模型不能为空",
         "createFailed": "创建模板失败"
+      },
+      "toasts": {
+        "created": "模板已创建"
       }
     },
     "teamworkSection": {
@@ -2359,7 +2375,8 @@
       },
       "actions": {
         "new": "新建",
-        "delete": "删除凭证"
+        "delete": "删除凭证",
+        "edit": "编辑凭证"
       },
       "dialogs": {
         "editTitle": "编辑凭证"
@@ -2532,6 +2549,10 @@
       "toc": {
         "label": "本页目录",
         "empty": "当前文档没有标题。"
+      },
+      "image": {
+        "prev": "上一张",
+        "next": "下一张"
       }
     },
     "officePreview": {
@@ -2806,7 +2827,8 @@
         "library": "资源库",
         "integration": "集成",
         "management": "管理",
-        "admin": "管理后台"
+        "admin": "管理后台",
+        "label": "程序坞"
       },
       "slot": {
         "openApp": "打开应用",
@@ -2864,7 +2886,8 @@
         "empty": "还没有工作空间 —— 创建一个开始使用",
         "noResults": "没有匹配的工作空间。",
         "sessionCount_one": "{{count}} 个会话",
-        "sessionCount_other": "{{count}} 个会话"
+        "sessionCount_other": "{{count}} 个会话",
+        "needsReply": "待回复"
       },
       "activityApp": {
         "appLabel": "统计信息",
@@ -2901,6 +2924,12 @@
           "cacheRead": "缓存读",
           "cacheCreation": "缓存写"
         }
+      },
+      "punchCard": {
+        "aria": "按小时活跃度"
+      },
+      "statCard": {
+        "aria": "迷你趋势图"
       }
     },
     "admin": {
@@ -3039,6 +3068,10 @@
         },
         "errors": {
           "loadFailed": "加载集群数据失败"
+        },
+        "pools": {
+          "agent": "Agent 池 — 工作区",
+          "sandbox": "Sandbox 池 — Sandbox"
         }
       },
       "systemSettingsSection": {
@@ -3514,7 +3547,8 @@
       "lastRun": "最近运行：{{value}}",
       "actions": {
         "new": "新建",
-        "delete": "删除"
+        "delete": "删除",
+        "edit": "编辑"
       },
       "states": {
         "saving": "保存中...",
@@ -3572,6 +3606,65 @@
       "ownTitle": "你的 workspace 正在使用此 Skill",
       "otherCount": "另有 {{count}} 个其他用户的 workspace 在使用。",
       "templateCount": "{{count}} 个模板版本引用了此 Skill。"
+    },
+    "chat": {
+      "toolRenderers": {
+        "labels": {
+          "unknown": "未知"
+        },
+        "agentRequest": {
+          "loadFailed": "加载请求失败",
+          "loading": "加载中…",
+          "approve": "批准",
+          "reject": "拒绝",
+          "reasonPlaceholder": "原因（可选）",
+          "confirmReject": "确认拒绝",
+          "cancel": "取消",
+          "reason": "原因",
+          "appliedAt": "应用时间",
+          "invalidPayload": "无效的请求内容",
+          "cleared": "已清除",
+          "fields": {
+            "name": "名称",
+            "cron": "Cron",
+            "runAt": "执行时间",
+            "prompt": "Prompt",
+            "type": "类型",
+            "timezone": "时区",
+            "enabled": "启用",
+            "slug": "Slug",
+            "visibility": "可见性",
+            "agentType": "Agent 类型",
+            "provider": "API 供应商",
+            "model": "模型",
+            "smallModel": "小模型",
+            "systemPrompt": "系统 Prompt",
+            "content": "内容",
+            "id": "ID",
+            "attach": "启用技能",
+            "detach": "禁用技能"
+          },
+          "status": {
+            "pending": "待处理",
+            "approved": "已批准",
+            "rejected": "已拒绝",
+            "applied": "已应用"
+          },
+          "commandTypes": {
+            "plain": "普通",
+            "struct": "结构化"
+          },
+          "visibilityValues": {
+            "private": "私有",
+            "user": "用户",
+            "public": "公开"
+          },
+          "enabledStates": {
+            "on": "开启",
+            "off": "关闭"
+          }
+        }
+      }
     }
   }
 }

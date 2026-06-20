@@ -1089,7 +1089,7 @@ function MemoryViewer({ storeId, path, locale, onDeleted, onSaved }: MemoryViewe
           }}
         >
           <SelectTrigger className="h-6 w-auto gap-1 border-0 bg-foreground/[0.06] px-2 text-tiny shadow-none focus:ring-0">
-            <SelectValue placeholder="v?" />
+            <SelectValue placeholder={t('components.memoryStores.placeholders.version')} />
           </SelectTrigger>
           <SelectContent>
             {versionsQuery.isLoading ? (

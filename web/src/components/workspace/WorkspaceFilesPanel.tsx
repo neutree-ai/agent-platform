@@ -1361,7 +1361,7 @@ export function WorkspaceFilesPanel({
                 <Checkbox
                   checked={allSelected ? true : someSelected ? 'indeterminate' : false}
                   onCheckedChange={toggleAll}
-                  aria-label="Toggle select all"
+                  aria-label={t('components.workspaceFiles.selection.toggleAll')}
                 />
                 <span className="min-w-0 flex-1 truncate font-medium text-foreground">
                   {t('components.workspaceFiles.selection.count', { count: selected.size })}

@@ -302,14 +302,14 @@ function CapacityEstimate({ data }: { data: AdminCluster }) {
     <div className="grid gap-3 @3xl:grid-cols-2">
       {agentGroup && (
         <PoolCapacityCard
-          title="Agent Pool — Workspaces"
+          title={i18n.t('components.admin.infraSection.pools.agent')}
           group={agentGroup}
           tiers={workspaceTiers}
         />
       )}
       {sandboxGroup && (
         <PoolCapacityCard
-          title="Sandbox Pool — Sandboxes"
+          title={i18n.t('components.admin.infraSection.pools.sandbox')}
           group={sandboxGroup}
           tiers={sandboxTiers}
         />

@@ -641,10 +641,11 @@ function DockShell({
   footerRef?: React.Ref<HTMLElement>
   maxWidth?: number
 }) {
+  const { t } = useTranslation()
   return (
     <footer ref={footerRef} className="flex shrink-0 justify-center px-4 pb-3 pt-1">
       <nav
-        aria-label="dock"
+        aria-label={t('components.shell.dock.label')}
         style={{ minWidth: MIN_DOCK_WIDTH, maxWidth: maxWidth || undefined }}
         className={cn(
           'group relative flex items-center justify-center',

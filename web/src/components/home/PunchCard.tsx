@@ -12,6 +12,8 @@ interface PunchCardProps {
     /** Short weekday name for each day index 0..6 (Sun..Sat). Caller-supplied
      *  so it can match the rest of the app's locale (i18n keys vs. Intl). */
     dowShort: (dow: number) => string
+    /** Accessible label for the chart's `role="img"` SVG. */
+    ariaLabel: string
   }
   className?: string
 }
@@ -82,7 +84,7 @@ export function PunchCard({ data, i18n, className }: PunchCardProps) {
             viewBox={`0 0 ${totalW} ${totalH}`}
             preserveAspectRatio="none"
             role="img"
-            aria-label="hour-of-day activity"
+            aria-label={i18n.ariaLabel}
             className="block w-full"
             style={{ aspectRatio: `${cols} / ${rows}` }}
           >
