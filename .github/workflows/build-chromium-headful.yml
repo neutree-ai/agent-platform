@@ -10,7 +10,9 @@ name: Build & push chromium-headful
 #
 # Credit: https://github.com/onkernel/kernel-images (Apache-2.0). See NOTICE.
 #
-# Manual only (workflow_dispatch). Bump UPSTREAM_REF to take a newer upstream.
+# Triggered by a `chromium-headful-v<x.y.z>` tag (publishes :latest, :<sha>,
+# :<x.y.z>) or manually via workflow_dispatch. Bump UPSTREAM_REF to take a newer
+# upstream.
 
 on:
   workflow_dispatch:
@@ -19,6 +21,9 @@ on:
         description: "onkernel/kernel-images ref to build (default: pinned commit)"
         required: false
         default: ""
+  push:
+    tags:
+      - "chromium-headful-v*"
 
 env:
   IMAGE: ghcr.io/neutree-ai/agent-platform/chromium-headful
@@ -43,6 +48,11 @@ jobs:
         run: |
           sha="$(git rev-parse --short HEAD)"
           tags="$(printf '%s\n%s' "${IMAGE}:latest" "${IMAGE}:${sha}")"
+          # On a `chromium-headful-v<x.y.z>` tag push, also publish :<x.y.z>.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            ver="v${GITHUB_REF_NAME##*-v}"
+            tags="$(printf '%s\n%s' "$tags" "${IMAGE}:${ver}")"
+          fi
           { echo "tags<<EOF"; echo "$tags"; echo "EOF"; } >> "$GITHUB_OUTPUT"
           echo "building ${UPSTREAM_REPO}@${sha}"
 

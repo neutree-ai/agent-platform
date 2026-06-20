@@ -19,7 +19,7 @@ on:
         default: ""
   push:
     tags:
-      - "*-v*"
+      - "nap-*-v*"
 
 env:
   IMAGE_PREFIX: ghcr.io/neutree-ai/agent-platform
