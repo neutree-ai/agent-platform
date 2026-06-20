@@ -59,23 +59,7 @@ const docs = import.meta.glob('./*/*.md', {
 
 const FALLBACK = 'en-US'
 
-// TODO(2026-05-08): backfill missing en-US/*.md and remove ULTIMATE_FALLBACK.
-// Today most `agent-config-*.md` (and several others) only exist under
-// zh-CN/, so non-zh users get "" from loadDoc. In DocumentedDialog that
-// empty string flips `hasDocs` between false (1 empty section → empty
-// join) and true (≥2 empty sections → just the "\n\n---\n\n" separator),
-// which makes the dialog's column layout flicker — Safari fires a scroll
-// event on every resulting resize, the scroll-synced `visibleSections`
-// recomputes, hasDocs flips again, infinite loop. Falling back from en-US
-// to zh-CN keeps docs non-empty and stable until en-US files land.
-const ULTIMATE_FALLBACK = 'zh-CN'
-
 export function loadDoc(name: InlineDocName): string {
   const lang = i18n.language || FALLBACK
-  return (
-    docs[`./${lang}/${name}.md`] ??
-    docs[`./${FALLBACK}/${name}.md`] ??
-    docs[`./${ULTIMATE_FALLBACK}/${name}.md`] ??
-    ''
-  )
+  return docs[`./${lang}/${name}.md`] ?? docs[`./${FALLBACK}/${name}.md`] ?? ''
 }
