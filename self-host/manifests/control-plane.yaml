@@ -118,7 +118,7 @@ spec:
             - name: AFS_ENABLED
               value: "true"
             - name: AFS_IMAGE
-              value: "${REGISTRY}/afs:${IMAGE_TAG}"
+              value: "${AFS_IMAGE}"
             - name: AFS_CONTROLLER_ADDR
               value: "afs-controller.${NAMESPACE}.svc:9100"
             - name: MEMORY_FUSE_IMAGE
