@@ -1,0 +1,36 @@
+---
+import Default from '@astrojs/starlight/components/Head.astro'
+---
+<Default />
+<script>
+  import mermaid from 'mermaid'
+
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'default',
+    securityLevel: 'loose',
+  })
+
+  async function render() {
+    const nodes = document.querySelectorAll<HTMLElement>('.mermaid')
+    if (nodes.length === 0) return
+    nodes.forEach((n) => {
+      if (n.dataset.processed === 'true') {
+        n.removeAttribute('data-processed')
+        n.innerHTML = n.dataset.source ?? n.innerHTML
+      } else {
+        n.dataset.source = n.textContent ?? ''
+      }
+    })
+    await mermaid.run({ nodes: Array.from(nodes) })
+  }
+
+  // Initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', render)
+  } else {
+    render()
+  }
+  // Starlight client-side navigation (if View Transitions enabled)
+  document.addEventListener('astro:page-load', render)
+</script>

@@ -1,0 +1,78 @@
+---
+import Default from '@astrojs/starlight/components/TableOfContents.astro'
+
+const { entry } = Astro.locals.starlightRoute
+const slug = entry?.slug ?? entry?.id ?? ''
+const sourceUrl = slug ? `/source/${slug}.md` : null
+const fileName = slug ? `${slug.split('/').pop()}.md` : 'page.md'
+const isMdx = entry?.id?.endsWith('.mdx')
+---
+
+<div class="page-actions" data-no-print>
+  {sourceUrl && (
+    <a
+      href={sourceUrl}
+      download={fileName}
+      title={isMdx ? 'This page includes components; the source is kept as-is — view the full version online' : 'Download the Markdown source of this page'}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+      Download .md{isMdx ? ' *' : ''}
+    </a>
+  )}
+  <button type="button" class="page-actions__print" title="Print this page or save as PDF">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="6 9 6 2 18 2 18 9" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <rect x="6" y="14" width="12" height="8" />
+    </svg>
+    Print / Export PDF
+  </button>
+</div>
+
+<Default><slot /></Default>
+
+<script>
+  document.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement
+    if (t.closest('.page-actions__print')) window.print()
+  })
+</script>
+
+<style>
+  .page-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+
+  .page-actions a,
+  .page-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.35rem;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-2);
+    font-size: 0.78rem;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+    justify-content: flex-start;
+  }
+
+  .page-actions a:hover,
+  .page-actions button:hover {
+    color: var(--sl-color-text-accent);
+    border-color: var(--sl-color-text-accent);
+  }
+</style>

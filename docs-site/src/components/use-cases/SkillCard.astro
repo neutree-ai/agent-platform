@@ -1,0 +1,130 @@
+---
+interface Props {
+  name: string
+  description: string
+  repo: string
+  path: string
+}
+
+const { name, description, repo, path } = Astro.props
+
+const repoLabel = repo.replace(/^https?:\/\/(www\.)?github\.com\//, '')
+const repoDir = repoLabel.split('/')[1] ?? 'repo'
+const skillSlug = path.split('/').filter(Boolean).pop() ?? 'skill'
+const cloneUrl = `${repo.replace(/\/$/, '')}.git`
+const tarCmd = `git clone --depth 1 ${cloneUrl}\ntar -czf ${skillSlug}.tar.gz -C ${repoDir}/${path} .`
+---
+
+<article class="skill-card">
+  <div class="skill-card__head">
+    <code class="skill-card__name">{name}</code>
+    <span class="skill-card__sep">·</span>
+    <a class="skill-card__repo" href={repo} target="_blank" rel="noopener noreferrer">
+      {repoLabel}
+    </a>
+    <code class="skill-card__path">{path}</code>
+  </div>
+
+  <p class="skill-card__desc">{description}</p>
+
+  <details class="skill-card__offline">
+    <summary>Offline install</summary>
+    <pre><code>{tarCmd}</code></pre>
+    <p class="skill-card__offline-hint">
+      Upload via: Library → Skills → Create → Upload archive
+    </p>
+  </details>
+</article>
+
+<style>
+  .skill-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+  }
+
+  .skill-card__head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+  }
+
+  .skill-card__name {
+    font-size: 0.92rem;
+    font-weight: 600;
+    background: transparent;
+    padding: 0;
+    color: var(--sl-color-white);
+  }
+
+  .skill-card__sep {
+    color: var(--sl-color-gray-4);
+  }
+
+  .skill-card__repo {
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+  }
+
+  .skill-card__repo:hover {
+    text-decoration: underline;
+  }
+
+  .skill-card__path {
+    background: var(--sl-color-gray-6);
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--sl-color-gray-2);
+  }
+
+  .skill-card__desc {
+    margin: 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--sl-color-gray-2);
+  }
+
+  .skill-card__offline {
+    margin-top: 0.15rem;
+    font-size: 0.82rem;
+  }
+
+  .skill-card__offline > summary {
+    cursor: pointer;
+    color: var(--sl-color-gray-3);
+    user-select: none;
+  }
+
+  .skill-card__offline > summary:hover {
+    color: var(--sl-color-text-accent);
+  }
+
+  .skill-card__offline > pre {
+    margin: 0.45rem 0 0.35rem;
+    padding: 0.55rem 0.7rem;
+    background: var(--sl-color-gray-6);
+    border-radius: 0.35rem;
+    font-size: 0.78rem;
+    overflow-x: auto;
+  }
+
+  .skill-card__offline > pre code {
+    background: transparent;
+    padding: 0;
+    color: var(--sl-color-gray-1);
+    white-space: pre;
+  }
+
+  .skill-card__offline-hint {
+    margin: 0;
+    color: var(--sl-color-gray-3);
+    font-size: 0.78rem;
+  }
+</style>
