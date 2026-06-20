@@ -80,6 +80,11 @@ export RUNTIME_PYTHON_IMAGE="${RUNTIME_PYTHON_IMAGE:-docker.io/library/python:3.
 export RUNTIME_GOLANG_IMAGE="${RUNTIME_GOLANG_IMAGE:-docker.io/library/golang:1.23}"
 export PAUSE_IMAGE="${PAUSE_IMAGE:-registry.k8s.io/pause:3.9}"
 
+# AFS (AgentFS) ships from its own repo (github.com/neutree-ai/afs) and versions
+# independently of the platform, so it lives outside ${REGISTRY}/${IMAGE_TAG}.
+# Default to its public image; an offline/mirrored install overrides this.
+export AFS_IMAGE="${AFS_IMAGE:-ghcr.io/neutree-ai/afs:latest}"
+
 # Resolve AGENT_IMAGE_PREFIX if it references REGISTRY
 AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}-agent}"
 export AGENT_IMAGE_PREFIX
@@ -248,6 +253,7 @@ render_manifests() {
   VARS+='${IMAGE_PULL_SECRET}'
   VARS+='${POSTGRES_IMAGE}${GOTENBERG_IMAGE}${COTURN_IMAGE}${NFS_SERVER_IMAGE}'
   VARS+='${RUNTIME_NODE_IMAGE}${RUNTIME_PYTHON_IMAGE}${RUNTIME_GOLANG_IMAGE}${PAUSE_IMAGE}'
+  VARS+='${AFS_IMAGE}'
   VARS+='${PG_USERNAME}${PG_PASSWORD}${PG_INSTANCES}${PG_STORAGE_SIZE}${PG_STORAGE_CLASS}'
   VARS+='${NFS_SERVER}${NFS_PATH}${NFS_STORAGE_CLASS}'
   VARS+='${JWT_SECRET}${CREDENTIAL_ENCRYPTION_KEY}'
