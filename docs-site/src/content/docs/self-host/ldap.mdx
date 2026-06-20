@@ -1,0 +1,49 @@
+---
+title: LDAP Integration
+description: Connect your enterprise LDAP to Neutree Agent Platform login, overriding the default search filter and attribute mapping as needed.
+---
+
+## Enabling
+
+LDAP is an optional module, off by default. Set `LDAP_ENABLED` to `true` in `values.env`, fill in the 4 required connection parameters, and after the next `install.sh` users can sign in with their LDAP account.
+
+Once enabled, the control plane's login flow is "try the local password first, then LDAP": local users (such as the admin created by the seed job) stay usable, and an LDAP user is auto-registered into the `users` table on first login, with no password persisted (`Cannot set password for LDAP users`).
+
+## Required: connection
+
+| Variable | Meaning |
+| --- | --- |
+| `LDAP_URL` | LDAP server address, e.g. `ldap://192.168.32.4:389` or `ldaps://...:636` |
+| `LDAP_BIND_DN` | DN of the service account used to search users, e.g. `cn=Manager,dc=example,dc=com` |
+| `LDAP_BIND_PASSWORD` | Password for the bind account above |
+| `LDAP_SEARCH_BASE` | Starting point for the user search, e.g. `ou=Users,dc=example,dc=com` |
+
+The control plane binds with `LDAP_BIND_DN` / `LDAP_BIND_PASSWORD`, searches the matching user entry with `subtree` scope under `LDAP_SEARCH_BASE`, then re-binds with the resolved user DN + the password the user typed to verify it.
+
+## Optional: schema overrides
+
+The control plane ships a default schema oriented around `inetOrgPerson`. If your enterprise LDAP differs (typical case: the login name is on `cn` rather than `sn`, or the objectClass is entirely different), override each item with the 4 variables below. Leave them blank to use the defaults.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `LDAP_SEARCH_FILTER` | `(objectClass=inetOrgPerson)` | User filter; the control plane builds the final filter as `(&<LDAP_SEARCH_FILTER>(<LDAP_ATTR_USERNAME>=<login-name>))` |
+| `LDAP_ATTR_USERNAME` | `sn` | Attribute matched against the login name the user types |
+| `LDAP_ATTR_NAME` | `cn` | Pulled out as the display name inside the platform |
+| `LDAP_ATTR_EMAIL` | `mail` | Pulled out as the email; an empty value becomes "no email" |
+
+Example: a customer whose user DNs look like `cn=zhouhw2,ou=user,ou=cfzq,dc=cfzq,dc=com`, with the login name on `cn`, the real name on `sn`, and an objectClass that may not include `inetOrgPerson`. Configure it like this:
+
+```bash
+LDAP_SEARCH_FILTER=(objectClass=person)
+LDAP_ATTR_USERNAME=cn
+LDAP_ATTR_NAME=sn
+LDAP_ATTR_EMAIL=mail
+```
+
+## Debugging
+
+When login fails, check the control plane logs first:
+
+- `LDAP: User not found: <username>` — the search didn't match. Usually one of `LDAP_SEARCH_BASE` / `LDAP_SEARCH_FILTER` / `LDAP_ATTR_USERNAME` doesn't match the schema. Reproduce outside the control plane with `ldapsearch -x -H $LDAP_URL -D $LDAP_BIND_DN -w '...' -b $LDAP_SEARCH_BASE '(&<filter>(<attr>=<username>))'`.
+- `LDAP: Invalid password for user: <username>` — the search matched, but binding with the user DN + supplied password failed. Usually just a wrong password; if every user reports this, check the password policy (e.g. lockout) and whether the server requires STARTTLS.
+- `LDAP authentication error: ...` — a connection-layer error. Check `LDAP_URL` reachability, the TLS certificate, and the bind account's permissions.

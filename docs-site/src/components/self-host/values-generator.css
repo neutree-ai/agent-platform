@@ -1,0 +1,342 @@
+.vg-root {
+  margin: 1.5rem 0;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem;
+  background: var(--sl-color-bg-nav);
+  /* Do NOT use overflow:hidden — it clips child position:sticky preview panels */
+}
+
+/* Sticky toolbar: stacks below sh-head sticky tab nav; top=124px hugs the bottom edge of the tab nav. */
+.vg-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  background: var(--sl-color-bg-sidebar);
+  flex-wrap: wrap;
+  position: sticky;
+  top: 124px;
+  z-index: 4;
+}
+
+.vg-toolbar-status {
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+}
+.vg-ok {
+  color: var(--sl-color-green);
+}
+.vg-err {
+  color: var(--sl-color-red);
+}
+
+.vg-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+/* Base button sizing inherited from the unified rules in self-host-shell.css;
+   only semantic "secondary" color tweaks go here (to avoid competing with the primary action). */
+.vg-root button.vg-secondary {
+  color: var(--sl-color-gray-3);
+}
+
+/* Import panel: paste an existing values.env to back-fill recognized fields */
+.vg-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  background: var(--sl-color-bg);
+}
+.vg-import-hint {
+  margin: 0;
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-2);
+  line-height: 1.5;
+}
+.vg-import-textarea {
+  width: 100%;
+  min-height: 10rem;
+  padding: 0.5rem 0.625rem;
+  font-family: var(--sl-font-mono);
+  font-size: var(--sl-text-xs);
+  line-height: 1.5;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.375rem;
+  background: var(--sl-color-bg-nav);
+  color: var(--sl-color-text);
+  box-sizing: border-box;
+  resize: vertical;
+}
+.vg-import-textarea:focus {
+  outline: none;
+  border-color: var(--sl-color-accent);
+  box-shadow: 0 0 0 2px var(--sl-color-accent-low, rgba(96, 165, 250, 0.2));
+}
+.vg-import-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.375rem;
+}
+.vg-import-status {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+  background: var(--sl-color-accent-low, rgba(96, 165, 250, 0.12));
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-text);
+}
+
+.vg-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+}
+@media (max-width: 900px) {
+  .vg-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vg-form {
+  padding: 1rem;
+}
+@media (max-width: 900px) {
+  .vg-form {
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+}
+
+.vg-section {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0 0 1rem;
+  background: var(--sl-color-bg);
+}
+.vg-section > legend {
+  font-weight: 600;
+  font-size: var(--sl-text-base);
+  padding: 0 0.4rem;
+  color: var(--sl-color-text-accent);
+}
+
+/* Optional section group title */
+.vg-group-title {
+  margin: 0.5rem 0 0.75rem;
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+  color: var(--sl-color-gray-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Optional section — collapsed: shows only the toggle; expanded: shows fields */
+.vg-section-optional {
+  background: var(--sl-color-bg-nav);
+}
+.vg-section-optional.vg-off {
+  padding: 0.5rem 1rem;
+}
+.vg-section-optional.vg-off > .vg-section-desc {
+  display: none;
+}
+.vg-section-optional.vg-on {
+  background: var(--sl-color-bg);
+  border-color: var(--sl-color-accent);
+}
+.vg-section-optional > legend {
+  padding: 0 0.4rem 0 0.2rem;
+}
+
+/* Toggle switch (iOS-style) — input is nested inside the track, inset:0 fills the track.
+   This gives the input explicit viewport coordinates so the browser won't scroll unexpectedly on focus. */
+.vg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.vg-toggle-track {
+  position: relative;
+  width: 2rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: var(--sl-color-gray-5, #4a4a4a);
+  transition: background 120ms ease;
+  flex: 0 0 auto;
+}
+.vg-toggle-track > input[type='checkbox'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.vg-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.125rem - 4px);
+  height: calc(1.125rem - 4px);
+  border-radius: 50%;
+  background: var(--sl-color-white, #fff);
+  transition: transform 120ms ease;
+  pointer-events: none;
+}
+.vg-toggle-track:has(> input:checked) {
+  background: var(--sl-color-accent);
+}
+.vg-toggle-track:has(> input:checked) > .vg-toggle-thumb {
+  transform: translateX(calc(2rem - 1.125rem));
+}
+.vg-toggle-track:has(> input:focus-visible) {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
+}
+.vg-toggle-label {
+  font-weight: 600;
+  font-size: var(--sl-text-base);
+  color: var(--sl-color-text-accent);
+}
+.vg-section-desc {
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-3);
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
+.vg-field {
+  margin-bottom: 0.75rem;
+}
+.vg-field:last-child {
+  margin-bottom: 0;
+}
+.vg-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.vg-label-text {
+  font-size: var(--sl-text-xs);
+  font-family: var(--sl-font-mono);
+  color: var(--sl-color-gray-2);
+}
+.vg-req {
+  color: var(--sl-color-red);
+  margin-left: 0.15rem;
+}
+
+.vg-field input,
+.vg-field select {
+  font: inherit;
+  font-family: var(--sl-font-mono);
+  font-size: var(--sl-text-sm);
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.375rem;
+  background: var(--sl-color-bg);
+  color: var(--sl-color-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+.vg-field input:focus,
+.vg-field select:focus {
+  outline: none;
+  border-color: var(--sl-color-accent);
+  box-shadow: 0 0 0 2px var(--sl-color-accent-low, rgba(96, 165, 250, 0.2));
+}
+
+.vg-field-err input,
+.vg-field-err select {
+  border-color: var(--sl-color-red);
+}
+
+.vg-secret-row {
+  display: flex;
+  gap: 0.25rem;
+}
+.vg-secret-row input {
+  flex: 1;
+  min-width: 0;
+}
+/* Icon button: keeps the unified min-height, narrows horizontal padding only */
+.vg-icon-btn {
+  flex: 0 0 auto;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  width: 2.1rem;
+}
+
+.vg-hint {
+  margin: 0.25rem 0 0;
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-gray-3);
+  line-height: 1.4;
+}
+.vg-error {
+  margin: 0.25rem 0 0;
+  font-size: var(--sl-text-xs);
+  color: var(--sl-color-red);
+  line-height: 1.4;
+}
+
+/* Sticky preview: floats in the right column while the page scrolls. top=180px
+   accounts for the sticky tab nav (~123px) + sticky toolbar (~55px) above. */
+.vg-preview {
+  display: flex;
+  flex-direction: column;
+  background: var(--sl-color-bg);
+  position: sticky;
+  top: 180px;
+  max-height: calc(100vh - 200px);
+  border-left: 1px solid var(--sl-color-hairline);
+  align-self: start;
+}
+@media (max-width: 900px) {
+  .vg-preview {
+    position: static;
+    max-height: 60vh;
+    border-left: none;
+    border-top: 1px solid var(--sl-color-hairline);
+  }
+}
+
+.vg-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+}
+.vg-preview-title {
+  font-size: var(--sl-text-sm);
+  font-weight: 600;
+}
+.vg-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.vg-preview-pre {
+  flex: 1;
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  font-family: var(--sl-font-mono);
+  font-size: var(--sl-text-xs);
+  line-height: 1.55;
+  background: transparent;
+  color: var(--sl-color-text);
+  white-space: pre;
+}

@@ -1,0 +1,83 @@
+---
+title: Code Sandbox / Remote Browser
+description: Enable the platform's Code Sandbox and Remote Browser services, including OAuth client auto-registration and public-URL overrides.
+---
+
+Code Sandbox (sandbox-service) and Remote Browser (browser-service) are two optional advanced services, off by default. Both log in via the platform's OAuth flow. This page covers enabling them, OAuth client auto-registration, and public-URL overrides for external-ingress scenarios.
+
+## The two services
+
+| Service | Capability | Dependency |
+| --- | --- | --- |
+| Code Sandbox | Lets agents run code and serve temporary web previews | The third-party OpenSandbox (you install it yourself; the platform points at it via `OPENSANDBOX_URL`) |
+| Remote Browser | Lets agents drive a real browser while users watch live over WebRTC | The bundled TURN relay (coturn), enabled together with `BROWSER_ENABLED` |
+
+In the [configuration generator](/self-host/#configure), toggle the corresponding module to produce a `values.env` with these sections, or set `SANDBOX_ENABLED` / `BROWSER_ENABLED` to `true` by hand.
+
+## Enabling
+
+Set the relevant `values.env` toggle to `true`, fill in the required fields, and the next `install.sh` applies it:
+
+```bash
+# Code Sandbox
+SANDBOX_ENABLED=true
+SANDBOX_NODE_PORT=30086
+SANDBOX_JWT_SECRET=      # openssl rand -hex 32
+SANDBOX_SERVICE_KEY=     # openssl rand -hex 32, shared between browser and sandbox
+
+# Remote Browser (incl. TURN)
+BROWSER_ENABLED=true
+BROWSER_NODE_PORT=30085
+BROWSER_JWT_SECRET=      # openssl rand -hex 32
+TURN_HOST=               # public / LAN IP browsers can reach, required
+TURN_AUTH_SECRET=        # openssl rand -hex 32
+```
+
+`SANDBOX_JWT_SECRET` / `BROWSER_JWT_SECRET` are each service's session signing key; `SANDBOX_SERVICE_KEY` is the shared key the browser uses to call the sandbox (reused by the browser when both modules are on). For `TURN_HOST` and its troubleshooting, see [Ingress Integration](/self-host/ingress/) and "Debugging" below.
+
+## Installing OpenSandbox
+
+Code Sandbox is powered by **OpenSandbox** ([github.com/alibaba/OpenSandbox](https://github.com/alibaba/OpenSandbox)), a **third-party** component the platform installer does **not** install for you. When `SANDBOX_ENABLED=true`, `install.sh` deploys `nap-sandbox` and assumes OpenSandbox is already installed and reachable at `OPENSANDBOX_URL`.
+
+Install OpenSandbox (controller + server) from its upstream Helm charts, then point the platform at it:
+
+```bash
+git clone https://github.com/alibaba/OpenSandbox && cd OpenSandbox/kubernetes/charts
+helm dependency build opensandbox
+helm install opensandbox ./opensandbox \
+  --namespace nap --create-namespace \
+  -f <path-to>/optional/sandbox/opensandbox-values.yaml
+```
+
+Running OpenSandbox in the `nap` namespace lets the platform's default `OPENSANDBOX_URL` resolve. If you install OpenSandbox into its own namespace, set `OPENSANDBOX_URL` explicitly (e.g. `http://opensandbox-server.opensandbox-system.svc:80`). See the self-host README "Enabling Code Sandbox" for the full reference, including mounting the platform's sandbox pod template.
+
+## OAuth client auto-registration
+
+Both services log in via the platform OAuth flow with fixed `client_id`s (`sandbox-service` / `browser-service`) — they are PKCE public clients with no `client_secret`. These clients must exist in the control plane's `oauth_clients` table, or `GET /api/oauth/authorize` returns `400 invalid_client` at login.
+
+After seeding the admin, `install.sh` runs a `nap-seed-oauth-clients` Job that **auto-registers** these two rows based on the enabled modules — no manual creation on the "applications" page. The registered `redirect_uri` is the same origin the service computes its own callback from, so they don't drift:
+
+| client_id | Default redirect_uri |
+| --- | --- |
+| `sandbox-service` | `http://<TOS_HOST>:<SANDBOX_NODE_PORT>/api/auth/callback` |
+| `browser-service` | `http://<TOS_HOST>:<BROWSER_NODE_PORT>/api/auth/callback` |
+
+The Job is idempotent: after changing a NodePort or public URL, re-running `install.sh` (or `install.sh --seed-only`) syncs the `redirect_uris` automatically.
+
+## Optional: public-URL override
+
+Service addresses are derived from the NodePort by default. When you expose the services through your own ingress / a custom domain (typically `INGRESS_MODE=external`, see [Ingress Integration](/self-host/ingress/)), the NodePort-form address is neither externally correct nor matches the OAuth callback. Override it with `*_PUBLIC_URL`:
+
+```bash
+SANDBOX_PUBLIC_URL=https://sandbox.example.com
+BROWSER_PUBLIC_URL=https://browsers.example.com
+```
+
+The override feeds **both** the service's own callback address and the registered `redirect_uri`, keeping them in sync. Leave it blank to keep the original NodePort behavior, which doesn't affect existing deployments. The address has no trailing slash.
+
+## Debugging
+
+- Login redirect reports `400 invalid_client` — the matching row is missing in `oauth_clients`. Confirm the seed Job ran and succeeded: `kubectl -n <ns> logs job/nap-seed-oauth-clients`; the log prints `registered "sandbox-service" → ...`. Re-run manually: `install.sh --seed-only`.
+- Login callback reports `400 invalid_redirect_uri` — the registered `redirect_uri` doesn't match the service's actual callback address. Common when external ingress is configured but `*_PUBLIC_URL` isn't set, or a NodePort changed without re-seeding. Set `*_PUBLIC_URL` and re-run `install.sh --seed-only`.
+- Browser shows no video / black screen — usually TURN can't be reached. Verify `TURN_HOST` is an IP the browser side can actually reach (kubelet auto-detect is unreliable on multi-NIC nodes, so set it explicitly), and that coturn is ready: `kubectl -n <ns> get pod -l app=coturn`.
+- Sandbox won't start — first check whether OpenSandbox is installed: `kubectl -n <ns> get pod -l app.kubernetes.io/name=opensandbox`.

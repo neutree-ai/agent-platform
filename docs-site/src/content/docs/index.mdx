@@ -1,0 +1,30 @@
+---
+title: Neutree Agent Platform Docs
+description: "Agent Cloud: build, distribute, and optimize your Agents in the cloud"
+template: splash
+hero:
+  tagline: "Agent Cloud: build, distribute, and optimize your Agents in the cloud"
+  actions:
+    - text: Start with the concepts
+      link: /concepts/overview/
+      icon: right-arrow
+      variant: primary
+    - text: Follow the guides
+      link: /guides/1-setup/
+      icon: rocket
+      variant: secondary
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components'
+
+<CardGrid stagger>
+  <Card title="Concepts" icon="open-book">
+    Get acquainted first: what an agent, workspace, skill, provider, and route are. Once you've read this section, every feature that follows has somewhere to hang.
+  </Card>
+  <Card title="Guides" icon="rocket">
+    Get an agent running from scratch, then progressively extend its behavior, wire up triggers, collaborate, and scale. The main path for new users.
+  </Card>
+  <Card title="Self-hosting" icon="setting">
+    Install Neutree Agent Platform on your own Kubernetes cluster, with full support for offline deployment.
+  </Card>
+</CardGrid>

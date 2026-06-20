@@ -1,0 +1,16 @@
+---
+// Wrapper that lays SkillCard children out in a responsive grid.
+---
+
+<div class="skill-card-grid">
+  <slot />
+</div>
+
+<style>
+  .skill-card-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 1.25rem 0 1.5rem;
+  }
+</style>

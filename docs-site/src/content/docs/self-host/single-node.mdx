@@ -1,0 +1,111 @@
+---
+title: Single-Node k3s Quick Deploy
+description: Bring up Neutree Agent Platform on a single k3s node — for resource-constrained internal testing and demos, with no high availability. Pulls images from the public registry.
+---
+
+Install Neutree Agent Platform on a single-node k3s cluster, pulling every image straight from the public registry. **Only suitable** for quick trials, internal demos, and PoC validation in resource-constrained settings; **do not** use it in production — the control plane, data, and storage all collapse onto one machine, so the node going down stops everything.
+
+## When to use it
+
+- **PoC / demo** — give a stakeholder a quickly reachable instance to validate the platform's capabilities
+- **Internal testing / integration** — your team needs a stable shared environment but doesn't want to stand up multi-node k8s
+- **Resource-constrained deployment** — only one machine is available, but you still want the full flow working
+
+For real production needs (multiple users, SLA, disaster recovery), use the multi-node path in the standard [deployment guide](/self-host/).
+
+## What it does not provide
+
+| Dimension | Single-node k3s | Multi-node standard deploy |
+| --- | --- | --- |
+| Control-plane HA | No — single k3s server, node down stops everything | Yes — multiple masters |
+| Postgres HA | No — single instance (CNPG `instances: 1`) | Yes — 3 replicas + sync replication |
+| Shared storage | No — in-cluster NFS pod, unavailable if node is down | Yes — external NFS / enterprise CSI |
+| Workspace container disk | RWO `local-path`, bound to the node | RWX CSI, can move across nodes |
+| Horizontal scaling | No — adding a node means reinstalling | Yes — add workers |
+| Rolling upgrade | Brief interruption while images roll | Seamless with multiple replicas |
+
+Recommended spec: **8 vCPU / 32 GB / 200 GB disk**, supporting roughly **10 concurrent workspaces**. Below that, workspaces are easily OOMKilled from CPU / memory contention; more than that needs more machines on the multi-node path.
+
+## Connected single-node
+
+A 1-node k3s that pulls every image straight from the public registry — same as the full profile, just with `PG_INSTANCES=1` and an in-cluster NFS server for RWX storage (a single node has no external NFS). There is **no** in-cluster registry and **no** offline tarball; the node must be able to reach the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`).
+
+> For fully air-gapped single-node sites, use the separate offline installer, which ships an image tarball, k3s binaries, and a host-prep step.
+
+## Deployment
+
+Run this on a host that has a working k3s with its kubeconfig at `/etc/rancher/k3s/k3s.yaml` (the default in the single-node example).
+
+### 1. Prepare values.env
+
+```bash
+cd self-host
+cp values.env.single-node.example values.env
+./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
+vi values.env           # set TOS_HOST + ADMIN_PASSWORD
+```
+
+`values.env.single-node.example` already has single-node defaults baked in, so you only need to change two things:
+
+- `TOS_HOST` — the node's externally reachable IP; pods and the login entry both use it
+- `ADMIN_PASSWORD` — the initial admin password
+
+Everything else (PG replica count, storage classes, NFS backend) is preset for the single-node shape.
+
+### 2. Install
+
+```bash
+./install.sh --profile=single-node
+```
+
+`install.sh` first brings up the in-cluster NFS server (`nap-nfs-server` pod, backed by `local-path`), installs the CloudNativePG operator and the NFS subdir provisioner from their public sources, renders and applies the manifests, then seeds the admin user, OAuth clients, and the MCP catalog. All images are pulled from the public registry.
+
+### 3. Log in
+
+```
+http://<TOS_HOST>:30080
+admin / <ADMIN_PASSWORD>
+```
+
+## Key differences from the standard deploy
+
+Only the values that differ from the [deployment guide](/self-host/) defaults are listed; everything else carries over:
+
+| Field | Standard default | Single-node |
+| --- | --- | --- |
+| `DEPLOY_PROFILE` | `multi-node` (implicit) | `single-node` |
+| `PG_INSTANCES` | 3 | 1 |
+| `PG_STORAGE_CLASS` | any RWO CSI | `local-path` |
+| `AGENT_STORAGE_CLASS` | NFS / RWX CSI | `local-path` |
+| `NFS_SERVER` / `NFS_PATH` | external NFS | in-cluster NFS pod (`nap-nfs-server`), computed by `install.sh` |
+
+All of these are already written into `values.env.single-node.example`, so you don't fill them by hand.
+
+:::caution[NFS kernel modules must be enabled on the host]
+The in-cluster NFS uses the host kernel: the `nap-nfs-server` pod mounts `nfsd` on startup, and the nfs-subdir provisioner needs the `nfs` client module to mount. If the modules are missing, the `nap-nfs-server` pod won't come up and the AFS PVC stays `Pending`.
+
+Check whether they're loaded:
+
+```bash
+lsmod | grep -E 'nfs|nfsd'
+```
+
+If there's no output, load both manually:
+
+```bash
+sudo modprobe nfs
+sudo modprobe nfsd
+lsmod | grep -E 'nfs|nfsd'   # confirm loaded
+```
+
+If `modprobe` reports `module not found`, the kernel lacks the NFS module package — install it first (e.g. `apt-get install linux-modules-extra-$(uname -r)`) or switch to a kernel image with NFS support, then re-run the install.
+:::
+
+## Notes
+
+- **There really is no HA** — node reboots, kernel panics, and disk stalls are all user-visible interruptions. Check the machine is healthy before a demo
+- **`local-path` data is bound to the node** — deleting the node or reinstalling the system disk loses all PVC data. Backups depend on snapshots / application-level export
+- **AFS runs on the in-cluster NFS pod** — its data lives on a `local-path` PVC, bound to the node disk. If the machine dies or the disk fails, all agent shared files are gone with it
+- **`install.sh` must run on the node** — the single-node profile pulls images into the local cluster; the operator cannot run from a different machine
+- **Upgrades go through a rolling restart** — cp / browser / sandbox have a brief unavailability window while images update (a window the multi-node deploy doesn't have). The upgrade flow matches the [standard upgrade](/self-host/#upgrade): re-run `./install.sh --profile=single-node`
+- **Once production requirements appear** — don't try to patch a single node into HA; migrate to multi-node. The operational mindset differs more than the configuration does

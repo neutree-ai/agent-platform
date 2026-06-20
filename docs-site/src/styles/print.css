@@ -1,0 +1,55 @@
+.sh-print-only,
+.print-only {
+  display: none;
+}
+
+@media print {
+  .sh-print-only,
+  .print-only {
+    display: block !important;
+  }
+
+  [data-no-print],
+  header[class*='header'],
+  nav[class*='sidebar'],
+  [class*='Sidebar'],
+  [class*='right-sidebar'],
+  [class*='page-sidebar'],
+  [class*='ThemeSelect'],
+  [class*='LanguageSelect'],
+  [class*='SocialIcons'],
+  [class*='Footer'],
+  [class*='Pagination'] {
+    display: none !important;
+  }
+
+  main,
+  [class*='main-frame'],
+  [class*='content-panel'] {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  a {
+    color: black !important;
+    text-decoration: underline;
+  }
+
+  pre,
+  code {
+    page-break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    page-break-after: avoid;
+  }
+}

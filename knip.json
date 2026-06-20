@@ -28,6 +28,14 @@
     },
     "skills-content-service": {
       "project": ["src/**/*.ts"]
+    },
+    "docs-site": {
+      "entry": [
+        "src/pages/**/*.{ts,astro}",
+        "src/content/**/*.{md,mdx}",
+        "src/components/**/*.{astro,ts,tsx}"
+      ],
+      "project": ["src/**/*.{ts,tsx,astro}"]
     }
   },
   "ignore": [

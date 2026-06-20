@@ -1,0 +1,176 @@
+---
+title: Ingress Integration
+description: Replace the default NodePort with your existing ingress controller and put a domain + TLS in front of Neutree Agent Platform.
+---
+
+## When to replace NodePort
+
+The default deployment exposes the platform with NodePort (`TOS_NODE_PORT` / `BROWSER_NODE_PORT` / `SANDBOX_NODE_PORT`). If your cluster already has an ingress stack, you want a domain + TLS, or you need WAF / auth / canary at the ingress layer, you can route these three HTTP services through your own ingress.
+
+To switch: set `INGRESS_MODE` to `external` in `values.env`. `install.sh` renders these three Services as `ClusterIP` and strips the `nodePort` field, then you proxy traffic to the ClusterIP Services from your own ingress controller. The three `*_NODE_PORT` values stay in `values.env` so you can switch back, but the rendered output won't include them.
+
+## What goes through ingress, and what doesn't
+
+Pick one **main domain** for the platform control plane (Service `nap-cp` in the manifests); below, `<main-domain>` stands for that value. The other services' subdomains all derive from it — so in an OEM scenario the control plane can occupy the customer's root domain (e.g. `acme.com`) and users never see a vendor-branded subdomain.
+
+**Through ingress** — the HTTP protocol family, which any controller can proxy directly:
+
+| Service | Hostname | Port | Notes |
+| --- | --- | --- | --- |
+| nap-cp | `<main-domain>` | 3000 | Web UI + API, SSE / WebSocket |
+| nap-cp | `files.<main-domain>` | 3000 | Public file export, anonymous access, control plane routes by host |
+| nap-browser | `browsers.<main-domain>` | 3005 | Remote Browser WebRTC signaling + WebSocket |
+| nap-sandbox | `sandbox.<main-domain>` | 3006 | Sandbox API + WebSocket |
+| nap-sandbox subdomain preview | `*.sandbox.<main-domain>` | 3006 | Temporary web services users start in the sandbox; wildcard subdomain, needs a wildcard cert |
+
+In other words, whatever the main domain is, the others grow underneath it. When `<main-domain>` is an apex (`acme.com`), files is `files.acme.com`; when it's `nap.acme.com`, files is `files.nap.acme.com`.
+
+**Not through ingress** — **TURN** (coturn) is UDP, which an HTTP ingress can't handle. It stays on hostPort / NodePort; open `3478/tcp+udp` and `49152-49252/udp` on the node firewall. If you have an L4 LB (Gateway API UDPRoute, MetalLB, a cloud NLB), you can attach it there instead.
+
+## Prerequisites
+
+1. An ingress controller is already deployed (Contour / nginx-ingress / Traefik / Istio gateway, etc.) and its entry IP or LoadBalancer is reachable from your users' network
+2. Two TLS Secrets are created in the platform namespace:
+   - `nap-tls-cert` — SAN covering `<main-domain>` itself plus the `files` / `browsers` / `sandbox` direct subdomains
+   - `nap-sandbox-tls-cert` — **must be wildcard**, covering `*.sandbox.<main-domain>`. Preview subdomain names differ every time and can't be enumerated
+3. DNS records (see the next section)
+4. In `values.env`: `INGRESS_MODE=external`; `TOS_HOST` set to `<main-domain>`; `SANDBOX_DOMAIN=sandbox.<main-domain>`
+
+## DNS records
+
+Resolution targets the **entry address your ingress controller exposes** — the exact form depends on your network stack:
+
+- Environments with a `LoadBalancer` Service: the `EXTERNAL-IP` of the ingress controller's `Service` (a cloud ELB / NLB / ALB, or a VIP allocated locally by MetalLB / Cilium / kube-vip)
+- Pure on-prem without a cloud LB: run the ingress controller as `hostNetwork` or `NodePort` and point DNS at one worker's node IP (in production, put a hardware LB / keepalived VIP in front to avoid a single point of failure)
+
+The four concrete subdomains plus the one wildcard subdomain **all point to the same entry IP / VIP**:
+
+| Record type | Name | Target |
+| --- | --- | --- |
+| A / AAAA | `<main-domain>` | ingress VIP |
+| A / AAAA | `files.<main-domain>` | ingress VIP |
+| A / AAAA | `browsers.<main-domain>` | ingress VIP |
+| A / AAAA | `sandbox.<main-domain>` | ingress VIP |
+| A / AAAA | `*.sandbox.<main-domain>` | ingress VIP |
+
+**The wildcard is required** — sandbox preview URLs look like `{id}-{port}.sandbox.<main-domain>`, a new name on every start, so they can't be added one at a time. For the same reason, `nap-sandbox-tls-cert` must be a wildcard certificate.
+
+If your DNS system doesn't support wildcard A records, you can CNAME `*.sandbox.<main-domain>` to `sandbox.<main-domain>` for an equivalent effect.
+
+## Full Contour example
+
+Below is a validated Contour example. After copying, replace `nap.example.com` everywhere with your actual domain and the namespace with your actual namespace, then apply. The routing shape is identical for other controllers — translate it across directly.
+
+```yaml
+# nap.example.com is a placeholder for <main-domain>. You can replace it with
+# any name — a subdomain (nap.acme.com) or an apex (acme.com); the other
+# routes' fqdns derive from it (files. / browsers. / sandbox. / *.sandbox.).
+
+# Main entry: web UI + API. SSE / WebSocket, timeouts pulled to infinity.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-main
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-cp
+          port: 3000
+---
+# Public file export. The control plane routes files.* by host as an anonymous
+# public export endpoint; it must use a separate subdomain and cannot be merged
+# with the main domain.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-files
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: files.nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - services:
+        - name: nap-cp
+          port: 3000
+---
+# Remote Browser: WebRTC signaling + WebSocket.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-browser
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: browsers.nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-browser
+          port: 3005
+---
+# Sandbox API.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-sandbox
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: sandbox.nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-sandbox
+          port: 3006
+---
+# Sandbox subdomain preview: temporary web services / URLs users start are routed
+# back to nap-sandbox via a wildcard subdomain. Looks like
+# {id}-{port}.sandbox.nap.example.com. Requires a wildcard cert (nap-sandbox-tls-cert).
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-sandbox-preview
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: "*.sandbox.nap.example.com"
+    tls:
+      secretName: nap-sandbox-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-sandbox
+          port: 3006
+```
+
+## Long-connection timeouts
+
+WebSocket / SSE traffic must have its timeout extended explicitly, or a reverse proxy's default 60 seconds will drop the connection. In the Contour example, the `nap-cp` / `nap-browser` / `nap-sandbox` routes all set `timeoutPolicy: infinity`. When porting to other controllers, match this:
+
+- **nginx-ingress**: `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"` and `proxy-send-timeout: "3600"`
+- **traefik**: add `forwardingTimeouts.responseHeaders` and `responseForwarding.flushInterval` to the route middleware
+- **istio**: set the VirtualService `timeout` to a large value or omit it
