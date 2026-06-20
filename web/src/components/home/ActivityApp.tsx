@@ -132,11 +132,13 @@ export function ActivityApp({ instanceId }: AppComponentProps) {
               label={t('components.shell.activityApp.interactionsToday')}
               value={stats.interactionsToday}
               sparkline={stats.interactionsSpark}
+              sparklineAriaLabel={t('components.shell.statCard.aria')}
             />
             <StatCard
               label={t('components.shell.activityApp.sessionsToday')}
               value={stats.sessionsToday}
               sparkline={stats.sessionsSpark}
+              sparklineAriaLabel={t('components.shell.statCard.aria')}
             />
             <div className="flex flex-col gap-2 rounded-lg border border-foreground/[0.06] bg-card/40 p-3">
               <div className="flex flex-col gap-0.5">
@@ -158,6 +160,7 @@ export function ActivityApp({ instanceId }: AppComponentProps) {
                     }),
                   hourSuffix: t('components.shell.activityApp.hourSuffix'),
                   dowShort: (dow) => t(`components.shell.activityApp.dow.${dow}`),
+                  ariaLabel: t('components.shell.punchCard.aria'),
                 }}
               />
             </div>

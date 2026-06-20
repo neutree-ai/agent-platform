@@ -16,6 +16,8 @@ interface StatCardProps {
   sparkline?: SparklinePoint[]
   /** Optional leading icon next to the label. */
   icon?: LucideIcon
+  /** Accessible label for the sparkline SVG (caller-supplied for i18n). */
+  sparklineAriaLabel?: string
   className?: string
 }
 
@@ -25,7 +27,14 @@ interface StatCardProps {
  * sparkline. Future stat surfaces (cost, success rate, cluster) compose
  * visually without re-design.
  */
-export function StatCard({ label, value, sparkline, icon: Icon, className }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  sparkline,
+  icon: Icon,
+  sparklineAriaLabel,
+  className,
+}: StatCardProps) {
   return (
     <div
       className={cn(
@@ -43,7 +52,7 @@ export function StatCard({ label, value, sparkline, icon: Icon, className }: Sta
         </span>
         {sparkline && sparkline.length > 1 && (
           <div className="min-w-0 flex-1">
-            <Sparkline data={sparkline} />
+            <Sparkline data={sparkline} ariaLabel={sparklineAriaLabel} />
           </div>
         )}
       </div>
@@ -51,7 +60,7 @@ export function StatCard({ label, value, sparkline, icon: Icon, className }: Sta
   )
 }
 
-export function Sparkline({ data }: { data: SparklinePoint[] }) {
+export function Sparkline({ data, ariaLabel }: { data: SparklinePoint[]; ariaLabel?: string }) {
   const N = data.length
   const cellUnit = 4
   const gap = 1
@@ -79,7 +88,7 @@ export function Sparkline({ data }: { data: SparklinePoint[] }) {
         className="block w-full text-primary/50"
         style={{ height: totalH }}
         role="img"
-        aria-label="sparkline"
+        aria-label={ariaLabel ?? 'sparkline'}
       >
         {data.map((d, i) => {
           const barH = Math.max(1, (d.value / max) * (totalH - 2))

@@ -50,7 +50,7 @@ export function AppHeaderSearch({
         <button
           type="button"
           onClick={() => onChange('')}
-          aria-label="clear"
+          aria-label={t('common.clear')}
           className="absolute right-1.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-muted-foreground/60 hover:text-foreground"
         >
           <X className="h-3 w-3" />

@@ -272,7 +272,7 @@ export function PopoutLayer() {
         onPointerDown={onPointerDownResize}
       >
         <svg className="h-4 w-4 text-muted-foreground/40" viewBox="0 0 16 16" fill="currentColor">
-          <title>Resize</title>
+          <title>{t('components.popout.actions.resize')}</title>
           <circle cx="12" cy="12" r="1.5" />
           <circle cx="7" cy="12" r="1.5" />
           <circle cx="12" cy="7" r="1.5" />
