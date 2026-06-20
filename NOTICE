@@ -5,3 +5,15 @@ This product includes software developed at Arcfra.
 
 Licensed under the Apache License, Version 2.0. See the LICENSE file for the
 full license text.
+
+--------------------------------------------------------------------------------
+
+This product's Remote Browser capability uses a headful Chromium container image
+built from:
+
+  kernel-images — https://github.com/onkernel/kernel-images
+  Copyright onkernel, Inc.
+  Licensed under the Apache License, Version 2.0.
+
+The image is built from upstream sources as-is (pinned to a specific commit) and
+republished for distribution; the sources are not modified.

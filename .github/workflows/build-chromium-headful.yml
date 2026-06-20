@@ -1,0 +1,69 @@
+name: Build & push chromium-headful
+
+# The headful Chromium image used by browser-service is built from the upstream
+# project onkernel/kernel-images (Apache-2.0), pinned to a known-good commit,
+# and republished to GHCR so a self-host install pulls it from the same registry
+# path as the first-party images (${REGISTRY}/chromium-headful).
+#
+# We do not vendor or modify their sources — this workflow checks out the pinned
+# upstream commit and builds their Dockerfile as-is.
+#
+# Credit: https://github.com/onkernel/kernel-images (Apache-2.0). See NOTICE.
+#
+# Manual only (workflow_dispatch). Bump UPSTREAM_REF to take a newer upstream.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "onkernel/kernel-images ref to build (default: pinned commit)"
+        required: false
+        default: ""
+
+env:
+  IMAGE: ghcr.io/neutree-ai/agent-platform/chromium-headful
+  UPSTREAM_REPO: onkernel/kernel-images
+  UPSTREAM_REF: 4e9359cab045c95d4250aa378c583eaeb9dcc4d8
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout upstream kernel-images
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ github.event.inputs.ref || env.UPSTREAM_REF }}
+
+      - name: Resolve tags
+        id: t
+        run: |
+          sha="$(git rev-parse --short HEAD)"
+          tags="$(printf '%s\n%s' "${IMAGE}:latest" "${IMAGE}:${sha}")"
+          { echo "tags<<EOF"; echo "$tags"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          echo "building ${UPSTREAM_REPO}@${sha}"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build context is the upstream repo root — the Dockerfile's first stage
+      # COPYs server/ sources from there (see images/chromium-headful/build-docker.sh).
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/chromium-headful/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.t.outputs.tags }}
+          cache-from: type=gha,scope=chromium-headful
+          cache-to: type=gha,scope=chromium-headful,mode=max
