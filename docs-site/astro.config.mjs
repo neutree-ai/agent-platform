@@ -1,6 +1,17 @@
+import { existsSync, readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import preact from '@astrojs/preact'
+
+// "Use Cases" is an extension point: this repo ships none. A downstream
+// distribution adds deployment-specific scenarios by dropping .md/.mdx files
+// into src/content/docs/use-cases/ (default locale) before building. The
+// section auto-appears (and auto-generates its entries) only when files exist,
+// so the upstream build shows no empty "Use Cases" group.
+const useCasesDir = fileURLToPath(new URL('./src/content/docs/use-cases/', import.meta.url))
+const hasUseCases =
+  existsSync(useCasesDir) && readdirSync(useCasesDir).some((f) => /\.mdx?$/.test(f))
 
 export default defineConfig({
   site: 'https://nap.docs.neutree.ai',
@@ -108,13 +119,15 @@ export default defineConfig({
             },
           ],
         },
-        {
-          label: 'Use Cases',
-          translations: { 'zh-CN': '场景' },
-          items: [
-            { label: 'Translation', translations: { 'zh-CN': '翻译' }, slug: 'use-cases/translation' },
-          ],
-        },
+        ...(hasUseCases
+          ? [
+              {
+                label: 'Use Cases',
+                translations: { 'zh-CN': '场景' },
+                autogenerate: { directory: 'use-cases' },
+              },
+            ]
+          : []),
         {
           label: 'Self-Host',
           translations: { 'zh-CN': '自部署' },
