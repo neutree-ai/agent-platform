@@ -1,0 +1,49 @@
+---
+title: LDAP 接入
+description: 把企业 LDAP 接入 Neutree Agent Platform 登录，并按需覆盖默认的搜索过滤器与属性映射。
+---
+
+## 启用
+
+LDAP 是可选模块，默认关闭。在 `values.env` 中把 `LDAP_ENABLED` 设为 `true`，填好 4 个必需的连接参数，下一次 `install.sh` 后用户就能用自己的 LDAP 账号登录。
+
+启用后，控制面的登录流程是"先试本地密码，再试 LDAP"：本地用户（例如 seed job 创建的 admin）依旧可用，LDAP 用户首次登录时会自动注册进 `users` 表，且不持久化密码（`Cannot set password for LDAP users`）。
+
+## 必填：连接
+
+| 变量 | 含义 |
+| --- | --- |
+| `LDAP_URL` | LDAP 服务器地址，例如 `ldap://192.168.32.4:389` 或 `ldaps://...:636` |
+| `LDAP_BIND_DN` | 用于搜索用户的服务账号 DN，例如 `cn=Manager,dc=example,dc=com` |
+| `LDAP_BIND_PASSWORD` | 上述 bind 账号的密码 |
+| `LDAP_SEARCH_BASE` | 用户搜索的起点，例如 `ou=Users,dc=example,dc=com` |
+
+控制面用 `LDAP_BIND_DN` / `LDAP_BIND_PASSWORD` 绑定，在 `LDAP_SEARCH_BASE` 下以 `subtree` 范围搜索匹配的用户条目，然后用解析出的用户 DN + 用户输入的密码重新绑定以完成校验。
+
+## 可选：schema 覆盖
+
+控制面内置了一套以 `inetOrgPerson` 为中心的默认 schema。如果你的企业 LDAP 不一样（典型情况：登录名在 `cn` 而非 `sn` 上，或者 objectClass 完全不同），用下面 4 个变量逐项覆盖。留空则使用默认值。
+
+| 变量 | 默认值 | 含义 |
+| --- | --- | --- |
+| `LDAP_SEARCH_FILTER` | `(objectClass=inetOrgPerson)` | 用户过滤器；控制面把最终过滤器拼成 `(&<LDAP_SEARCH_FILTER>(<LDAP_ATTR_USERNAME>=<login-name>))` |
+| `LDAP_ATTR_USERNAME` | `sn` | 与用户输入的登录名匹配的属性 |
+| `LDAP_ATTR_NAME` | `cn` | 取出作为平台内的显示名 |
+| `LDAP_ATTR_EMAIL` | `mail` | 取出作为 email；空值视为"无 email" |
+
+示例：某客户的用户 DN 形如 `cn=zhouhw2,ou=user,ou=cfzq,dc=cfzq,dc=com`，登录名在 `cn` 上，真实姓名在 `sn` 上，objectClass 可能不包含 `inetOrgPerson`。这样配置：
+
+```bash
+LDAP_SEARCH_FILTER=(objectClass=person)
+LDAP_ATTR_USERNAME=cn
+LDAP_ATTR_NAME=sn
+LDAP_ATTR_EMAIL=mail
+```
+
+## 排障
+
+登录失败时，先看控制面日志：
+
+- `LDAP: User not found: <username>` —— 搜索没匹配上。通常是 `LDAP_SEARCH_BASE` / `LDAP_SEARCH_FILTER` / `LDAP_ATTR_USERNAME` 之一与 schema 不符。用 `ldapsearch -x -H $LDAP_URL -D $LDAP_BIND_DN -w '...' -b $LDAP_SEARCH_BASE '(&<filter>(<attr>=<username>))'` 在控制面之外复现。
+- `LDAP: Invalid password for user: <username>` —— 搜索匹配上了，但用用户 DN + 提供的密码绑定失败。通常只是密码错了；如果每个用户都报这个，检查密码策略（例如锁定）以及服务器是否要求 STARTTLS。
+- `LDAP authentication error: ...` —— 连接层错误。检查 `LDAP_URL` 可达性、TLS 证书以及 bind 账号的权限。

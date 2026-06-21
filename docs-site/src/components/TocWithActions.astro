@@ -6,6 +6,24 @@ const slug = entry?.slug ?? entry?.id ?? ''
 const sourceUrl = slug ? `/source/${slug}.md` : null
 const fileName = slug ? `${slug.split('/').pop()}.md` : 'page.md'
 const isMdx = entry?.id?.endsWith('.mdx')
+
+const zh = (Astro.locals.starlightRoute.lang ?? '').startsWith('zh')
+const ui = zh
+  ? {
+      mdxTitle: '本页含组件，源文件保留原貌；建议在线查看完整版',
+      mdTitle: '下载本页 Markdown 源文件',
+      download: '下载 .md',
+      printTitle: '打印本页或另存为 PDF',
+      print: '打印 / 导出 PDF',
+    }
+  : {
+      mdxTitle:
+        'This page includes components; the source is kept as-is — view the full version online',
+      mdTitle: 'Download the Markdown source of this page',
+      download: 'Download .md',
+      printTitle: 'Print this page or save as PDF',
+      print: 'Print / Export PDF',
+    }
 ---
 
 <div class="page-actions" data-no-print>
@@ -13,23 +31,23 @@ const isMdx = entry?.id?.endsWith('.mdx')
     <a
       href={sourceUrl}
       download={fileName}
-      title={isMdx ? 'This page includes components; the source is kept as-is — view the full version online' : 'Download the Markdown source of this page'}
+      title={isMdx ? ui.mdxTitle : ui.mdTitle}
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         <polyline points="7 10 12 15 17 10" />
         <line x1="12" y1="15" x2="12" y2="3" />
       </svg>
-      Download .md{isMdx ? ' *' : ''}
+      {ui.download}{isMdx ? ' *' : ''}
     </a>
   )}
-  <button type="button" class="page-actions__print" title="Print this page or save as PDF">
+  <button type="button" class="page-actions__print" title={ui.printTitle}>
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <polyline points="6 9 6 2 18 2 18 9" />
       <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
       <rect x="6" y="14" width="12" height="8" />
     </svg>
-    Print / Export PDF
+    {ui.print}
   </button>
 </div>
 

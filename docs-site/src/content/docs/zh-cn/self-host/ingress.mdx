@@ -1,0 +1,167 @@
+---
+title: Ingress 接入
+description: 用你已有的 ingress controller 替换默认的 NodePort，为 Neutree Agent Platform 前置域名 + TLS。
+---
+
+## 何时替换 NodePort
+
+默认部署用 NodePort 暴露平台（`TOS_NODE_PORT` / `BROWSER_NODE_PORT` / `SANDBOX_NODE_PORT`）。如果你的集群已有 ingress 栈、想要域名 + TLS，或者需要在 ingress 层做 WAF / 鉴权 / 灰度，可以把这三个 HTTP 服务通过你自己的 ingress 路由。
+
+切换方式：在 `values.env` 中把 `INGRESS_MODE` 设为 `external`。`install.sh` 会把这三个 Service 渲染为 `ClusterIP` 并去掉 `nodePort` 字段，然后你从自己的 ingress controller 把流量代理到这些 ClusterIP Service。三个 `*_NODE_PORT` 值仍保留在 `values.env` 中以便切回，但渲染输出不会包含它们。
+
+## 哪些走 ingress，哪些不走
+
+为平台控制面（manifest 中的 Service `nap-cp`）选定一个**主域名**；下文用 `<main-domain>` 代指该值。其他服务的子域名都从它派生 —— 因此在 OEM 场景下，控制面可以占用客户的根域名（例如 `acme.com`），用户永远看不到带厂商品牌的子域名。
+
+**走 ingress** —— HTTP 协议族，任何 controller 都能直接代理：
+
+| 服务 | 主机名 | 端口 | 说明 |
+| --- | --- | --- | --- |
+| nap-cp | `<main-domain>` | 3000 | Web UI + API，SSE / WebSocket |
+| nap-cp | `files.<main-domain>` | 3000 | 公开文件导出，匿名访问，控制面按 host 路由 |
+| nap-browser | `browsers.<main-domain>` | 3005 | Remote Browser WebRTC 信令 + WebSocket |
+| nap-sandbox | `sandbox.<main-domain>` | 3006 | Sandbox API + WebSocket |
+| nap-sandbox 子域名预览 | `*.sandbox.<main-domain>` | 3006 | 用户在 sandbox 中启动的临时 web 服务；通配子域名，需要通配证书 |
+
+换句话说，无论主域名是什么，其他域名都在它下面生长。当 `<main-domain>` 是顶级域（`acme.com`）时，files 为 `files.acme.com`；当它是 `nap.acme.com` 时，files 为 `files.nap.acme.com`。
+
+**不走 ingress** —— **TURN**（coturn）是 UDP，HTTP ingress 无法处理。它保留在 hostPort / NodePort 上；在节点防火墙上放开 `3478/tcp+udp` 和 `49152-49252/udp`。如果你有 L4 LB（Gateway API UDPRoute、MetalLB、云上 NLB），也可以挂在那里。
+
+## DNS 记录
+
+解析目标是**你的 ingress controller 暴露的入口地址** —— 具体形式取决于你的网络栈：
+
+- 有 `LoadBalancer` Service 的环境：ingress controller 的 `Service` 的 `EXTERNAL-IP`（云上 ELB / NLB / ALB，或由 MetalLB / Cilium / kube-vip 在本地分配的 VIP）
+- 纯本地、无云 LB：把 ingress controller 以 `hostNetwork` 或 `NodePort` 运行，DNS 指向某个 worker 的节点 IP（生产环境请在前面放硬件 LB / keepalived VIP，避免单点故障）
+
+四个具体子域名加一个通配子域名**全部指向同一个入口 IP / VIP**：
+
+| 记录类型 | 名称 | 目标 |
+| --- | --- | --- |
+| A / AAAA | `<main-domain>` | ingress VIP |
+| A / AAAA | `files.<main-domain>` | ingress VIP |
+| A / AAAA | `browsers.<main-domain>` | ingress VIP |
+| A / AAAA | `sandbox.<main-domain>` | ingress VIP |
+| A / AAAA | `*.sandbox.<main-domain>` | ingress VIP |
+
+**通配记录是必需的** —— sandbox 预览 URL 形如 `{id}-{port}.sandbox.<main-domain>`，每次启动都是新名字，无法逐个添加。同样的原因，`nap-sandbox-tls-cert` 必须是通配证书。
+
+如果你的 DNS 系统不支持通配 A 记录，可以把 `*.sandbox.<main-domain>` CNAME 到 `sandbox.<main-domain>`，效果等价。
+
+## 完整 Contour 示例
+
+下面是一个已验证的 Contour 示例。拷贝后，把其中所有 `nap.example.com` 替换为你的实际域名、把 namespace 替换为你的实际 namespace，然后 apply。其他 controller 的路由形态完全一致 —— 直接照搬翻译即可。
+
+```yaml
+# nap.example.com is a placeholder for <main-domain>. You can replace it with
+# any name — a subdomain (nap.acme.com) or an apex (acme.com); the other
+# routes' fqdns derive from it (files. / browsers. / sandbox. / *.sandbox.).
+
+# Main entry: web UI + API. SSE / WebSocket, timeouts pulled to infinity.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-main
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-cp
+          port: 3000
+---
+# Public file export. The control plane routes files.* by host as an anonymous
+# public export endpoint; it must use a separate subdomain and cannot be merged
+# with the main domain.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-files
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: files.nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - services:
+        - name: nap-cp
+          port: 3000
+---
+# Remote Browser: WebRTC signaling + WebSocket.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-browser
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: browsers.nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-browser
+          port: 3005
+---
+# Sandbox API.
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-sandbox
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: sandbox.nap.example.com
+    tls:
+      secretName: nap-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-sandbox
+          port: 3006
+---
+# Sandbox subdomain preview: temporary web services / URLs users start are routed
+# back to nap-sandbox via a wildcard subdomain. Looks like
+# {id}-{port}.sandbox.nap.example.com. Requires a wildcard cert (nap-sandbox-tls-cert).
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: nap-sandbox-preview
+  namespace: nap
+spec:
+  virtualhost:
+    fqdn: "*.sandbox.nap.example.com"
+    tls:
+      secretName: nap-sandbox-tls-cert
+  routes:
+    - timeoutPolicy:
+        response: infinity
+        idle: infinity
+      enableWebsockets: true
+      services:
+        - name: nap-sandbox
+          port: 3006
+```
+
+## 长连接超时
+
+WebSocket / SSE 流量必须显式延长超时，否则反向代理默认的 60 秒会断开连接。在 Contour 示例中，`nap-cp` / `nap-browser` / `nap-sandbox` 路由都设置了 `timeoutPolicy: infinity`。移植到其他 controller 时，按同样思路配置：
+
+- **nginx-ingress**：`nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"` 和 `proxy-send-timeout: "3600"`
+- **traefik**：在路由 middleware 上加 `forwardingTimeouts.responseHeaders` 和 `responseForwarding.flushInterval`
+- **istio**：把 VirtualService 的 `timeout` 设为一个很大的值或直接省略

@@ -1,0 +1,83 @@
+---
+title: 代码沙箱 / 远程浏览器
+description: 启用平台的代码沙箱与远程浏览器服务，包括 OAuth client 自动注册和公网 URL 覆盖。
+---
+
+代码沙箱（sandbox-service）和远程浏览器（browser-service）是两个可选的高级服务，默认关闭。两者都通过平台的 OAuth 流程登录。本页介绍如何启用、OAuth client 自动注册，以及外部 ingress 场景下的公网 URL 覆盖。
+
+## 两个服务
+
+| 服务 | 能力 | 依赖 |
+| --- | --- | --- |
+| 代码沙箱 | 让 agent 运行代码并提供临时 web 预览 | 第三方 OpenSandbox（你自行安装；平台通过 `OPENSANDBOX_URL` 指向它） |
+| 远程浏览器 | 让 agent 驱动真实浏览器，用户通过 WebRTC 实时观看 | 内置的 TURN relay（coturn），随 `BROWSER_ENABLED` 一起启用 |
+
+在[配置生成器](/self-host/#configure)中切换对应模块即可生成带这些段落的 `values.env`，或手动把 `SANDBOX_ENABLED` / `BROWSER_ENABLED` 设为 `true`。
+
+## 启用
+
+把相应的 `values.env` 开关设为 `true`，填好必填项，下一次 `install.sh` 即生效：
+
+```bash
+# Code Sandbox
+SANDBOX_ENABLED=true
+SANDBOX_NODE_PORT=30086
+SANDBOX_JWT_SECRET=      # openssl rand -hex 32
+SANDBOX_SERVICE_KEY=     # openssl rand -hex 32, shared between browser and sandbox
+
+# Remote Browser (incl. TURN)
+BROWSER_ENABLED=true
+BROWSER_NODE_PORT=30085
+BROWSER_JWT_SECRET=      # openssl rand -hex 32
+TURN_HOST=               # public / LAN IP browsers can reach, required
+TURN_AUTH_SECRET=        # openssl rand -hex 32
+```
+
+`SANDBOX_JWT_SECRET` / `BROWSER_JWT_SECRET` 分别是各自服务的会话签名密钥；`SANDBOX_SERVICE_KEY` 是 browser 调用 sandbox 时使用的共享密钥（两个模块都开时由 browser 复用）。关于 `TURN_HOST` 及其排障，见 [Ingress 接入](/self-host/ingress/)和下文"排障"。
+
+## 安装 OpenSandbox
+
+代码沙箱由 **OpenSandbox**（[github.com/alibaba/OpenSandbox](https://github.com/alibaba/OpenSandbox)）驱动，这是一个**第三方**组件，平台安装器**不会**为你安装。当 `SANDBOX_ENABLED=true` 时，`install.sh` 部署 `nap-sandbox`，并假定 OpenSandbox 已安装好且可在 `OPENSANDBOX_URL` 处访问。
+
+从 OpenSandbox 上游 Helm charts 安装它（controller + server），然后把平台指向它：
+
+```bash
+git clone https://github.com/alibaba/OpenSandbox && cd OpenSandbox/kubernetes/charts
+helm dependency build opensandbox
+helm install opensandbox ./opensandbox \
+  --namespace nap --create-namespace \
+  -f <path-to>/optional/sandbox/opensandbox-values.yaml
+```
+
+把 OpenSandbox 装在 `nap` namespace 里，平台默认的 `OPENSANDBOX_URL` 才能解析。如果你把 OpenSandbox 装到独立 namespace，需显式设置 `OPENSANDBOX_URL`（例如 `http://opensandbox-server.opensandbox-system.svc:80`）。完整参考（包括挂载平台的 sandbox pod 模板）见 self-host README 的 "Enabling Code Sandbox"。
+
+## OAuth client 自动注册
+
+两个服务都通过平台 OAuth 流程登录，使用固定的 `client_id`（`sandbox-service` / `browser-service`）—— 它们是 PKCE public client，没有 `client_secret`。这些 client 必须存在于控制面的 `oauth_clients` 表中，否则登录时 `GET /api/oauth/authorize` 会返回 `400 invalid_client`。
+
+seed 完 admin 后，`install.sh` 运行一个 `nap-seed-oauth-clients` Job，根据已启用的模块**自动注册**这两行 —— 无需在"应用"页面手动创建。注册的 `redirect_uri` 与服务自身计算回调用的 origin 一致，因此不会漂移：
+
+| client_id | 默认 redirect_uri |
+| --- | --- |
+| `sandbox-service` | `http://<TOS_HOST>:<SANDBOX_NODE_PORT>/api/auth/callback` |
+| `browser-service` | `http://<TOS_HOST>:<BROWSER_NODE_PORT>/api/auth/callback` |
+
+该 Job 是幂等的：改了 NodePort 或公网 URL 后，重新执行 `install.sh`（或 `install.sh --seed-only`）会自动同步 `redirect_uris`。
+
+## 可选：公网 URL 覆盖
+
+服务地址默认从 NodePort 派生。当你通过自己的 ingress / 自定义域名暴露服务时（通常是 `INGRESS_MODE=external`，见 [Ingress 接入](/self-host/ingress/)），NodePort 形式的地址既不是对外正确的地址，也与 OAuth 回调不匹配。用 `*_PUBLIC_URL` 覆盖它：
+
+```bash
+SANDBOX_PUBLIC_URL=https://sandbox.example.com
+BROWSER_PUBLIC_URL=https://browsers.example.com
+```
+
+该覆盖**同时**作用于服务自身的回调地址和注册的 `redirect_uri`，让两者保持同步。留空则保持原有的 NodePort 行为，不影响既有部署。地址末尾不带斜杠。
+
+## 排障
+
+- 登录跳转报 `400 invalid_client` —— `oauth_clients` 中缺少匹配行。确认 seed Job 已运行且成功：`kubectl -n <ns> logs job/nap-seed-oauth-clients`；日志会打印 `registered "sandbox-service" → ...`。手动重跑：`install.sh --seed-only`。
+- 登录回调报 `400 invalid_redirect_uri` —— 注册的 `redirect_uri` 与服务实际的回调地址不匹配。常见于配置了外部 ingress 但没设 `*_PUBLIC_URL`，或改了 NodePort 却没重新 seed。设置 `*_PUBLIC_URL` 并重新执行 `install.sh --seed-only`。
+- 浏览器无画面 / 黑屏 —— 通常是 TURN 不可达。确认 `TURN_HOST` 是浏览器端实际能访问到的 IP（kubelet 自动探测在多网卡节点上不可靠，所以要显式设置），并确认 coturn 已就绪：`kubectl -n <ns> get pod -l app=coturn`。
+- Sandbox 起不来 —— 先检查 OpenSandbox 是否已安装：`kubectl -n <ns> get pod -l app.kubernetes.io/name=opensandbox`。

@@ -13,6 +13,11 @@ const repoDir = repoLabel.split('/')[1] ?? 'repo'
 const skillSlug = path.split('/').filter(Boolean).pop() ?? 'skill'
 const cloneUrl = `${repo.replace(/\/$/, '')}.git`
 const tarCmd = `git clone --depth 1 ${cloneUrl}\ntar -czf ${skillSlug}.tar.gz -C ${repoDir}/${path} .`
+
+const zh = (Astro.locals.starlightRoute.lang ?? '').startsWith('zh')
+const ui = zh
+  ? { offline: '离线安装', hint: '上传入口：资源库 → Skills → 创建 → 上传压缩包' }
+  : { offline: 'Offline install', hint: 'Upload via: Library → Skills → Create → Upload archive' }
 ---
 
 <article class="skill-card">
@@ -28,10 +33,10 @@ const tarCmd = `git clone --depth 1 ${cloneUrl}\ntar -czf ${skillSlug}.tar.gz -C
   <p class="skill-card__desc">{description}</p>
 
   <details class="skill-card__offline">
-    <summary>Offline install</summary>
+    <summary>{ui.offline}</summary>
     <pre><code>{tarCmd}</code></pre>
     <p class="skill-card__offline-hint">
-      Upload via: Library → Skills → Create → Upload archive
+      {ui.hint}
     </p>
   </details>
 </article>
