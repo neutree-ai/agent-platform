@@ -21,21 +21,54 @@ interface TabDef {
   hint: string
 }
 
-const TABS: TabDef[] = [
-  { id: 'overview', label: 'Overview', hint: 'Capabilities & prerequisites' },
-  { id: 'configure', label: 'Configure', hint: 'Generate values.env interactively' },
-  { id: 'install', label: 'Install', hint: 'Quick start, script, subcommands' },
-  { id: 'upgrade', label: 'Upgrade', hint: 'One-command upgrade path' },
-  { id: 'troubleshoot', label: 'Troubleshoot', hint: 'Common failures & diagnosis' },
-]
+const STR = {
+  en: {
+    headEyebrow: 'Neutree Agent Platform — Self-Host',
+    headTag: 'Install the platform on your own Kubernetes cluster, pulling images from public registries',
+    printTitle: 'Print all sections together or export to PDF',
+    printBtn: 'Print / Export PDF',
+    tocLabel: 'On this page',
+    tabs: {
+      overview: { label: 'Overview', hint: 'Capabilities & prerequisites' },
+      configure: { label: 'Configure', hint: 'Generate values.env interactively' },
+      install: { label: 'Install', hint: 'Quick start, script, subcommands' },
+      upgrade: { label: 'Upgrade', hint: 'One-command upgrade path' },
+      troubleshoot: { label: 'Troubleshoot', hint: 'Common failures & diagnosis' },
+    },
+  },
+  'zh-CN': {
+    headEyebrow: 'Neutree Agent Platform — 私有化部署',
+    headTag: '在你自己的 Kubernetes 集群上安装平台，从公共镜像仓库拉取镜像',
+    printTitle: '将所有章节一起打印或导出为 PDF',
+    printBtn: '打印 / 导出 PDF',
+    tocLabel: '本页目录',
+    tabs: {
+      overview: { label: '概览', hint: '能力与前置条件' },
+      configure: { label: '配置', hint: '交互式生成 values.env' },
+      install: { label: '安装', hint: '快速开始、脚本、子命令' },
+      upgrade: { label: '升级', hint: '一条命令完成升级' },
+      troubleshoot: { label: '排障', hint: '常见故障与诊断' },
+    },
+  },
+} as const
 
 function readHashTab(): TabId {
   if (typeof window === 'undefined') return 'overview'
   const h = window.location.hash.replace(/^#/, '') as TabId
-  return TABS.some((t) => t.id === h) ? h : 'overview'
+  const ids: TabId[] = ['overview', 'configure', 'install', 'upgrade', 'troubleshoot']
+  return ids.includes(h) ? h : 'overview'
 }
 
-export default function SelfHostShell() {
+export default function SelfHostShell({ locale = 'en' }: { locale?: string }) {
+  const t = STR[locale as keyof typeof STR] ?? STR.en
+  const TABS: TabDef[] = [
+    { id: 'overview', label: t.tabs.overview.label, hint: t.tabs.overview.hint },
+    { id: 'configure', label: t.tabs.configure.label, hint: t.tabs.configure.hint },
+    { id: 'install', label: t.tabs.install.label, hint: t.tabs.install.hint },
+    { id: 'upgrade', label: t.tabs.upgrade.label, hint: t.tabs.upgrade.hint },
+    { id: 'troubleshoot', label: t.tabs.troubleshoot.label, hint: t.tabs.troubleshoot.hint },
+  ]
+
   // Initial state must be fixed to 'overview' to match the SSR output.
   // If the useState initializer read location.hash directly, the client's first
   // render would diverge from SSR (no window during SSR, always 'overview'); on
@@ -119,14 +152,14 @@ export default function SelfHostShell() {
       <header class="sh-head">
         <div class="sh-head-row">
           <div class="sh-head-title">
-            <span class="sh-head-eyebrow">Neutree Agent Platform — Self-Host</span>
-            <span class="sh-head-tag">Install the platform on your own Kubernetes cluster, pulling images from public registries</span>
+            <span class="sh-head-eyebrow">{t.headEyebrow}</span>
+            <span class="sh-head-tag">{t.headTag}</span>
           </div>
           <button
             type="button"
             class="sh-print-btn"
             onClick={() => window.print()}
-            title="Print all sections together or export to PDF"
+            title={t.printTitle}
             data-no-print
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -134,20 +167,20 @@ export default function SelfHostShell() {
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
               <rect x="6" y="14" width="12" height="8" />
             </svg>
-            Print / Export PDF
+            {t.printBtn}
           </button>
         </div>
         <nav class="sh-tabs" role="tablist">
-          {TABS.map((t) => (
+          {TABS.map((tab) => (
             <button
-              key={t.id}
+              key={tab.id}
               role="tab"
-              aria-selected={t.id === active}
-              class={`sh-tab ${t.id === active ? 'sh-tab-active' : ''}`}
-              onClick={() => goto(t.id)}
+              aria-selected={tab.id === active}
+              class={`sh-tab ${tab.id === active ? 'sh-tab-active' : ''}`}
+              onClick={() => goto(tab.id)}
             >
-              <span class="sh-tab-label">{t.label}</span>
-              <span class="sh-tab-hint">{t.hint}</span>
+              <span class="sh-tab-label">{tab.label}</span>
+              <span class="sh-tab-hint">{tab.hint}</span>
             </button>
           ))}
         </nav>
@@ -155,16 +188,16 @@ export default function SelfHostShell() {
 
       <div class={`sh-body ${hasToc ? 'sh-body-with-toc' : ''}`}>
         <main class="sh-panel" role="tabpanel" ref={panelRef}>
-          {active === 'overview' && <Overview onGo={goto} />}
-          {active === 'configure' && <Configure />}
-          {active === 'install' && <Install onGo={goto} />}
-          {active === 'upgrade' && <Upgrade />}
-          {active === 'troubleshoot' && <Troubleshoot />}
+          {active === 'overview' && <Overview onGo={goto} locale={locale} />}
+          {active === 'configure' && <Configure locale={locale} />}
+          {active === 'install' && <Install onGo={goto} locale={locale} />}
+          {active === 'upgrade' && <Upgrade locale={locale} />}
+          {active === 'troubleshoot' && <Troubleshoot locale={locale} />}
         </main>
 
         {hasToc && (
-          <aside class="sh-toc" aria-label="On this page">
-            <div class="sh-toc-label">On this page</div>
+          <aside class="sh-toc" aria-label={t.tocLabel}>
+            <div class="sh-toc-label">{t.tocLabel}</div>
             <ul>
               {toc.map((item) => (
                 <li key={item.id}>
@@ -184,14 +217,14 @@ export default function SelfHostShell() {
 
       {/* Always mounted so browser-native Ctrl+P works too; hidden on screen via CSS. */}
       <div class="sh-print-all" aria-hidden="true">
-        {TABS.map((t) => (
-          <section class="sh-print-section" key={t.id}>
-            <h1 class="sh-print-h1">{t.label}</h1>
-            {t.id === 'overview' && <Overview onGo={() => {}} />}
-            {t.id === 'configure' && <Configure />}
-            {t.id === 'install' && <Install onGo={() => {}} />}
-            {t.id === 'upgrade' && <Upgrade />}
-            {t.id === 'troubleshoot' && <Troubleshoot />}
+        {TABS.map((tab) => (
+          <section class="sh-print-section" key={tab.id}>
+            <h1 class="sh-print-h1">{tab.label}</h1>
+            {tab.id === 'overview' && <Overview onGo={() => {}} locale={locale} />}
+            {tab.id === 'configure' && <Configure locale={locale} />}
+            {tab.id === 'install' && <Install onGo={() => {}} locale={locale} />}
+            {tab.id === 'upgrade' && <Upgrade locale={locale} />}
+            {tab.id === 'troubleshoot' && <Troubleshoot locale={locale} />}
           </section>
         ))}
       </div>
@@ -203,166 +236,448 @@ export default function SelfHostShell() {
 // Panels
 // ---------------------------------------------------------------------------
 
-function Overview({ onGo }: { onGo: (id: TabId) => void }) {
+const PANEL_STR = {
+  en: {
+    // Overview
+    ovCapH2: 'What one install gives you',
+    ovIntro: (
+      <>
+        This is the <strong>connected / online</strong> installer: the target cluster must be able to reach the public internet. Images are pulled directly from public registries (<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>) and prerequisite charts/manifests are fetched from their public sources. There is no offline image bundle, no in-cluster registry, and no host image-loading step. For fully air-gapped sites, a separate offline installer ships an image tarball, an in-cluster registry, and a host-prep step.
+      </>
+    ),
+    ovCoreH3: 'Core platform (always installed)',
+    ovCoreControl: <><strong>Control plane</strong> — agent management, scheduling, user and workspace management</>,
+    ovCoreGateway: <><strong>Channel gateway</strong> — the entry point for external events (webhooks, Slack, etc.) to reach agents</>,
+    ovCoreData: <><strong>Data layer</strong> — PostgreSQL (CloudNativePG) + shared NFS</>,
+    ovCoreRuntime: <><strong>Agent workspace runtime</strong> — one pod per workspace runs the agent; agents can <code>@</code> each other, share files, and share a memory store</>,
+    ovOptH3: 'Optional modules (off by default)',
+    ovOptSandbox: <><strong>Code Sandbox</strong> — lets agents run code and serve temporary web previews. Powered by the third-party <a href="https://github.com/alibaba/OpenSandbox">OpenSandbox</a>, which you install yourself; the platform points at it via <code>OPENSANDBOX_URL</code></>,
+    ovOptBrowser: <><strong>Remote Browser</strong> — lets agents drive a real browser while users watch live over WebRTC. Ships a bundled TURN relay (coturn) and a published headful Chromium image</>,
+    ovOptLdap: <><strong>LDAP</strong> — let users sign in with their LDAP account</>,
+    ovPrereqH2: 'Prerequisites',
+    ovInfraH3: 'Infrastructure',
+    ovThResource: 'Resource',
+    ovThRequirement: 'Requirement',
+    ovThNotes: 'Notes',
+    ovK8s: 'Kubernetes',
+    ovK8sReq: 'v1.28+ (multi-node), or a single k3s node (single-node profile)',
+    ovK8sNote: '3+ workers recommended',
+    ovWorkers: 'Worker nodes',
+    ovWorkersReq: '4 vCPU / 8GB RAM minimum',
+    ovWorkersNote: 'Agent pods are created per workspace dynamically',
+    ovRegAccess: 'Public registry access',
+    ovRegAccessReq: <>Nodes can pull from <code>ghcr.io</code>, <code>docker.io</code>, <code>registry.k8s.io</code></>,
+    ovRegAccessNote: <>Override <code>REGISTRY</code> only to use a mirror</>,
+    ovRwx: 'RWX shared storage',
+    ovRwxReq: 'A CSI that supports ReadWriteMany (NFS is the most common)',
+    ovRwxNote: 'Backs the AFS shared directory, 500Gi by default',
+    ovRwo: 'RWO volume storage',
+    ovRwoReq: 'Any CSI that can run PostgreSQL (Ceph RBD, vSAN, etc.; the same NFS also works)',
+    ovRwoNote: 'PostgreSQL data volumes + agent workspace container disks',
+    ovNetH3: 'Network',
+    ovThItem: 'Item',
+    ovNodeIp: 'Node IP',
+    ovNodeIpReq: 'At least one worker IP reachable by users (NodePort uses it)',
+    ovNodePort: 'NodePort',
+    ovNodePortReq: <>3 free ports in 30000–32767: <code>TOS_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
+    ovTurnPorts: 'TURN ports',
+    ovTurnPortsReq: <>When the Remote Browser's TURN relay is enabled: open <code>3478/tcp+udp</code> and <code>49152-49252/udp</code> on the coturn node</>,
+    ovStorageReach: 'Storage reachability',
+    ovStorageReachReq: 'All nodes can mount the two storage classes above (NFS / block-storage CSI, etc.)',
+    ovRegReach: 'Registry reachability',
+    ovRegReachReq: 'All nodes can pull images from the public registries',
+    ovLlmH3: 'LLM API',
+    ovLlmIntro: 'The platform does not bundle any model. Depending on the agent types you enable, you must provide protocol-compatible API endpoints:',
+    ovThAgentType: 'Agent type',
+    ovThApiProto: 'API protocol required',
+    ovCodexProto: <>OpenAI <strong>Responses API</strong> (note: not Chat Completions)</>,
+    ovClaudeProto: 'Anthropic API',
+    ovLlmNote: <>If your existing model service only supports the <strong>OpenAI Chat Completions API</strong>, one option is to put a translating proxy in front of it that converts the OpenAI Chat protocol to the Anthropic protocol, then point Claude Code-style agents at the proxy.</>,
+    ovKubeH3: 'kubeconfig permissions',
+    ovKubeP1: <>Installation requires <strong>cluster-admin</strong> — <code>install.sh</code> touches resources that a namespace-scoped admin cannot (CRDs, webhooks, ClusterRoles, StorageClasses, etc.). You can revoke it immediately after install; at steady state the control plane authenticates via its own in-cluster ServiceAccount with tightly scoped permissions (normal read/write within the namespace + cluster-scoped get/list on <code>nodes</code> only).</>,
+    ovKubeP2: <>The operator's kubeconfig is never mounted into any platform pod. If a temporary cluster-admin is not acceptable, here is an equivalent minimal ClusterRole.</>,
+    ovClusterRoleSummary: 'Equivalent minimal ClusterRole',
+    ovClusterRoleNote: <>This is still close to cluster-admin in practice (<code>*/*</code> on the core/apps/batch groups), but spelling out the resources makes a security review easier.</>,
+    ovCtaIntro: 'Once the prerequisites are in place:',
+    ovCtaStart: 'Start configuring →',
+    ovCtaSkip: 'Already have values.env — go to install',
+    // Configure
+    cfgIntro: (
+      <>
+        Fill in the form for your environment; <code>values.env</code> is previewed live on the right. Everything is processed locally — <strong>nothing is uploaded</strong>. Secrets are generated with{' '}
+        <code>crypto.getRandomValues</code> (equivalent to{' '}
+        <code>openssl rand -hex 32</code>). <strong>Once a machine-internal secret is set, do not change it on upgrade</strong> — otherwise issued session tokens and the existing database become unusable.
+      </>
+    ),
+    cfgPrintNote: <>The interactive configuration generator is online at <a href="https://nap.docs.neutree.ai/self-host/#configure">nap.docs.neutree.ai/self-host/#configure</a>. For full field documentation see <code>self-host/values.env.example</code>.</>,
+    // Install
+    inToolsH2: 'Tools on the operator machine',
+    inToolsIntro: 'The host running the installer (distinct from the cluster nodes) needs:',
+    inToolKubectl: <><code>kubectl</code> — a version compatible with the target cluster</>,
+    inToolEnvsubst: <><code>envsubst</code> — usually shipped with the <code>gettext</code> package</>,
+    inToolOpenssl: <><code>openssl</code> — used by <code>gen-secrets.sh</code> to generate random secrets</>,
+    inToolHelm: <><code>helm</code> 3.x — only needed when the cluster doesn't already have an NFS provisioner; invoked by <code>install.sh</code>'s prerequisites stage</>,
+    inToolsNote: <>The cluster nodes (not the operator machine) must be able to pull from <code>ghcr.io</code>, <code>docker.io</code>, and <code>registry.k8s.io</code>.</>,
+    inQuickH2: 'Quick start',
+    inQuickAfter: <>When it finishes, open <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> and log in with the admin username / password from <code>values.env</code>.</>,
+    inStepsH2: 'Step by step',
+    inStep1H3: 'Get the installer',
+    inStep1Note: <>All first-party images are pulled from the public registry (<code>${'{'}REGISTRY{'}'}</code>, default <code>ghcr.io/neutree-ai/agent-platform</code>); there is no image tarball to load. Override <code>REGISTRY</code> only if you mirror the images elsewhere.</>,
+    inStep2H3: 'Prepare values.env',
+    inStep2GenBtn: 'configuration generator',
+    inStep2P1Pre: 'We recommend the',
+    inStep2P1Post: '— fill it in online, download the result, and place it in the ',
+    inStep2P1End: ' directory.',
+    inStep2Note: <>You can also edit it on the command line: <code>cp values.env.example values.env</code>, run <code>./gen-secrets.sh</code> to fill all machine-internal secrets, then <code>vi values.env</code> to set <code>TOS_HOST</code>, the admin password, and storage settings.</>,
+    inStep3H3: 'Run the installer',
+    inStep3P: <>The same command serves first-time install and upgrade; it is idempotent and safe to re-run. It installs prerequisites (the CloudNativePG operator and the NFS subdir provisioner), renders the manifests with your <code>values.env</code> and applies them, then seeds the admin user, OAuth clients, and the MCP catalog via one-shot Jobs. <code>nap-cp</code> runs SQL migrations on startup.</>,
+    inStep4H3: 'Log in',
+    inStep4P: <>Open <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> in a browser and log in with <code>ADMIN_USERNAME</code> and the <code>ADMIN_PASSWORD</code> from{' '}<code>values.env</code>.</>,
+    inSubH2: 'install.sh subcommands',
+    inSubIntro: <>For running stages separately; a single <code>./install.sh</code> is enough for the normal case.</>,
+    inSingleH2: 'Single-node profile',
+    inSingleP: <>A single k3s node that pulls every image straight from the public registry — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). It does not bring up an in-cluster registry and does not load any tarball.</>,
+    inSingleNote: <>Run this on a host that has a working k3s with its kubeconfig at <code>/etc/rancher/k3s/k3s.yaml</code> (the default in the single-node example).</>,
+    inOfflineH2: 'Air-gapped sites',
+    inOfflineP: <>This page documents the connected installer. For fully air-gapped / offline sites there is a separate offline installer that ships an image tarball, an in-cluster registry, and a host image-loading step.</>,
+    // Upgrade
+    upPathH2: 'Upgrade',
+    upPathP1: <>Upgrading is the same command as a first install. Pin <code>IMAGE_TAG</code> to the new release tag (or keep <code>latest</code>) in your existing <code>values.env</code>, then re-run:</>,
+    upPathP2: <><code>install.sh</code> is idempotent, so the upgrade path matches the first install. It re-renders and re-applies the manifests and refreshes the first-party deployments to pick up new image digests. SQL migrations run automatically when <code>nap-cp</code> starts.</>,
+    upCallout: <><strong>Do not change secrets</strong> · Reuse the <code>values.env</code> from your first install. If a machine-internal secret (e.g. <code>JWT_SECRET</code>) changes, all issued session tokens are invalidated and the existing database can no longer be reached.</>,
+    upCompatH2: 'Upgrading from a pre-2026-05 release',
+    upCompatP: <>Optional-module defaults changed from "enabled unless configured" to "disabled unless configured". If the following <code>_ENABLED</code> fields aren't set explicitly in <code>values.env</code>, the corresponding capabilities are off after the upgrade:</>,
+    upThCapability: 'Capability',
+    upThOldDefault: 'Old default',
+    upThNewDefault: 'New default',
+    upThKeepOn: 'Keep it on with',
+    upBrowserCap: 'Remote Browser (incl. TURN)',
+    upSandboxCap: 'Code Sandbox',
+    upLdapCap: 'LDAP login',
+    upOn: 'On',
+    upOff: 'Off',
+    upLdapOldDefault: <>Whether <code>LDAP_URL</code> is non-empty</>,
+    upCompatNote: <><code>COTURN_ENABLED</code> is now part of the browser module and tracks <code>BROWSER_ENABLED</code> automatically — no separate configuration.</>,
+    // Troubleshoot
+    tsErrH2: 'install.sh fails',
+    tsErrIntro: <>First find the deployment that isn't ready (replace <code>$NAMESPACE</code> with{' '}<code>NAMESPACE</code> from <code>values.env</code>, default <code>nap</code>):</>,
+    tsErrCommon: 'Common causes:',
+    tsErrPull: <><strong>Images won't pull</strong> → confirm the nodes can reach{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>. If you mirror images, check <code>REGISTRY</code> and the <code>IMAGE_PULL_SECRET</code> you configured.</>,
+    tsErrPvc: <><strong>PVCs stuck Pending</strong> → run{' '}<code>kubectl -n $NAMESPACE get pvc</code> and check the StorageClass exists and its provisioner is healthy</>,
+    tsErrPg: <><strong>PostgreSQL won't start</strong> →{' '}<code>kubectl -n $NAMESPACE describe cluster.postgresql.cnpg.io nap-pg</code>; the most common cause is the CSI behind <code>PG_STORAGE_CLASS</code> not being writable</>,
+    tsErrPort: <><strong>NodePort already in use</strong> → change <code>TOS_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> and re-run{' '}<code>install.sh</code></>,
+    tsBlankH2: 'Blank page after login / APIs return 401',
+    tsBlankP: <>Usually because <code>JWT_SECRET</code> changed during an upgrade — all issued tokens are invalidated. Roll <code>JWT_SECRET</code> in{' '}<code>values.env</code> back to its first-install value and re-run{' '}<code>./install.sh</code>.</>,
+    tsReachH2: 'Cannot reach the platform',
+    tsReachP: <>The browser gets no response at <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code>. Two common causes:</>,
+    tsReachHost: <><strong><code>TOS_HOST</code> is unreachable</strong> — the configured IP is not a worker node reachable from the browser. Set the correct node IP and re-run <code>install.sh</code></>,
+    tsReachPort: <><strong>NodePort not open</strong> — the node firewall blocks the port; ask your SRE to open it</>,
+    tsGoneH2: 'Browser / Sandbox missing after upgrade',
+    tsGoneP: <>Optional-module defaults changed to "disabled unless configured" as of 2026-05. If you previously enabled the browser or sandbox, set{' '}<code>BROWSER_ENABLED=true</code> / <code>SANDBOX_ENABLED=true</code> explicitly in{' '}<code>values.env</code>. See the compatibility section on the Upgrade tab.</>,
+    tsEaccesH2: <>Agent fails to start: <code>mkdir /workspace/.home/.claude: EACCES</code></>,
+    tsEaccesP1: <>The agent container runs as a non-root user (<code>node</code>, uid 1000), and <code>/workspace</code> is a mounted PVC.
+          If that PVC is backed by the community <code>nfs.csi.k8s.io</code> driver, <strong>that driver does not chmod the provisioned subdirectory by default</strong>
+          (per its docs, <code>mountPermissions</code> defaults to <code>0</code>; chmod only runs when non-zero), so subdirectory permissions come from the NFS server's default <code>mkdir</code> umask — typically <code>root:root 0755</code>, which uid 1000 cannot write to.</>,
+    tsEaccesVerify: 'Verify on the NFS server:',
+    tsEaccesFix: <><strong>Fix</strong>: add <code>mountPermissions: "0777"</code> (as a string) to the StorageClass <code>parameters</code>, then delete the failed PVC and let the control plane recreate it. This only affects newly provisioned PVs; existing subdirectories need a manual <code>chmod 0777</code> on the NFS server.</>,
+    tsEaccesConfirm: <><strong>Confirm the StorageClass backend first</strong>, then decide how to fix:</>,
+    tsEaccesBullet1: <>Returns <code>cluster.local/nfs-subdir-external-provisioner</code> — this is the installer's own provisioner, which <code>mkdir 0777</code>s subdirectories, so this normally doesn't happen; if it still errors, check the actual NFS server permissions.</>,
+    tsEaccesBullet2: <>Returns <code>nfs.csi.k8s.io</code> (or another CSI driver such as SFS) — apply the{' '}<code>mountPermissions: "0777"</code> fix above.</>,
+    tsEaccesPitfall: <><strong>Common pitfall</strong>: the installer's NFS provisioner step has a "<strong>skip if a StorageClass of the same name already exists</strong>" check (see <code>install_nfs_provisioner</code>). If a StorageClass named{' '}<code>NFS_STORAGE_CLASS</code> (default <code>nfs-nap</code>) already exists before install and is backed by <code>nfs.csi.k8s.io</code> / SFS,
+          the installer <strong>silently skips</strong> and does not deploy the bundled nfs-subdir provisioner, so agent workspaces land on a 0755 backend and hit this error.
+          In that case <code>kubectl get deploy -n nap nfs-subdir-external-provisioner</code> returns NotFound.
+          Fix either way: add <code>mountPermissions: "0777"</code> to that SC (as above), or delete the pre-existing SC / use a different <code>NFS_STORAGE_CLASS</code> name and re-run the installer so nfs-subdir actually installs.</>,
+    tsVideoH2: 'Browser live view doesn\'t render',
+    tsVideoP: <>Enable Remote Browser in the configuration generator, set{' '}<code>TURN_HOST</code> (a LAN or public IP browsers can reach) and{' '}<code>TURN_AUTH_SECRET</code>, and re-run{' '}<code>install.sh</code>. The TURN relay is bundled with the browser and starts/stops together with it.</>,
+  },
+  'zh-CN': {
+    // Overview
+    ovCapH2: '一次安装能得到什么',
+    ovIntro: (
+      <>
+        这是 <strong>联网 / 在线</strong> 安装器：目标集群必须能访问公网。镜像直接从公共仓库（<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>）拉取，前置 chart/manifest 也从各自的公共来源获取。没有离线镜像包、没有集群内仓库，也没有主机侧加载镜像的步骤。对于完全隔离网络的场景，另有一套离线安装器，提供镜像 tarball、集群内仓库和主机准备步骤。
+      </>
+    ),
+    ovCoreH3: '核心平台（始终安装）',
+    ovCoreControl: <><strong>Control plane</strong> — Agent 管理、调度、用户与 Workspace 管理</>,
+    ovCoreGateway: <><strong>Channel gateway</strong> — 外部事件（webhook、Slack 等）到达 Agent 的入口</>,
+    ovCoreData: <><strong>数据层</strong> — PostgreSQL（CloudNativePG）+ 共享 NFS</>,
+    ovCoreRuntime: <><strong>Agent Workspace 运行时</strong> — 每个 Workspace 一个 pod 运行 Agent；Agent 之间可以互相 <code>@</code>、共享文件并共用记忆存储</>,
+    ovOptH3: '可选模块（默认关闭）',
+    ovOptSandbox: <><strong>Code Sandbox</strong> — 让 Agent 运行代码并提供临时 web 预览。由第三方 <a href="https://github.com/alibaba/OpenSandbox">OpenSandbox</a> 提供能力，需自行安装；平台通过 <code>OPENSANDBOX_URL</code> 指向它</>,
+    ovOptBrowser: <><strong>Remote Browser</strong> — 让 Agent 驱动真实浏览器，用户通过 WebRTC 实时观看。内置 TURN 中继（coturn）和已发布的有头 Chromium 镜像</>,
+    ovOptLdap: <><strong>LDAP</strong> — 让用户用 LDAP 账号登录</>,
+    ovPrereqH2: '前置条件',
+    ovInfraH3: '基础设施',
+    ovThResource: '资源',
+    ovThRequirement: '要求',
+    ovThNotes: '说明',
+    ovK8s: 'Kubernetes',
+    ovK8sReq: 'v1.28+（多节点），或单个 k3s 节点（single-node profile）',
+    ovK8sNote: '推荐 3 个及以上 worker',
+    ovWorkers: 'Worker 节点',
+    ovWorkersReq: '至少 4 vCPU / 8GB 内存',
+    ovWorkersNote: 'Agent pod 按 Workspace 动态创建',
+    ovRegAccess: '公共仓库访问',
+    ovRegAccessReq: <>节点能从 <code>ghcr.io</code>、<code>docker.io</code>、<code>registry.k8s.io</code> 拉取镜像</>,
+    ovRegAccessNote: <>仅在使用镜像源时才覆盖 <code>REGISTRY</code></>,
+    ovRwx: 'RWX 共享存储',
+    ovRwxReq: '支持 ReadWriteMany 的 CSI（最常见的是 NFS）',
+    ovRwxNote: '承载 AFS 共享目录，默认 500Gi',
+    ovRwo: 'RWO 卷存储',
+    ovRwoReq: '任何能运行 PostgreSQL 的 CSI（Ceph RBD、vSAN 等；同一套 NFS 也可以）',
+    ovRwoNote: 'PostgreSQL 数据卷 + Agent Workspace 容器磁盘',
+    ovNetH3: '网络',
+    ovThItem: '项目',
+    ovNodeIp: '节点 IP',
+    ovNodeIpReq: '至少一个用户可达的 worker IP（NodePort 会用到）',
+    ovNodePort: 'NodePort',
+    ovNodePortReq: <>30000–32767 范围内 3 个空闲端口：<code>TOS_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
+    ovTurnPorts: 'TURN 端口',
+    ovTurnPortsReq: <>启用 Remote Browser 的 TURN 中继时：在 coturn 节点上开放 <code>3478/tcp+udp</code> 和 <code>49152-49252/udp</code></>,
+    ovStorageReach: '存储可达性',
+    ovStorageReachReq: '所有节点都能挂载上面两个 storage class（NFS / 块存储 CSI 等）',
+    ovRegReach: '仓库可达性',
+    ovRegReachReq: '所有节点都能从公共仓库拉取镜像',
+    ovLlmH3: 'LLM API',
+    ovLlmIntro: '平台不内置任何模型。根据启用的 Agent 类型，你需要提供协议兼容的 API endpoint：',
+    ovThAgentType: 'Agent 类型',
+    ovThApiProto: '所需 API 协议',
+    ovCodexProto: <>OpenAI <strong>Responses API</strong>（注意：不是 Chat Completions）</>,
+    ovClaudeProto: 'Anthropic API',
+    ovLlmNote: <>如果你现有的模型服务只支持 <strong>OpenAI Chat Completions API</strong>，一种做法是在其前面加一个转换代理，把 OpenAI Chat 协议转成 Anthropic 协议，再让 Claude Code 类的 Agent 指向该代理。</>,
+    ovKubeH3: 'kubeconfig 权限',
+    ovKubeP1: <>安装需要 <strong>cluster-admin</strong> — <code>install.sh</code> 会操作命名空间级管理员无法操作的资源（CRD、webhook、ClusterRole、StorageClass 等）。安装完成后可立即回收该权限；稳态运行时，control plane 通过它自己的集群内 ServiceAccount 鉴权，权限范围收得很紧（命名空间内的常规读写 + 仅对 <code>nodes</code> 的集群级 get/list）。</>,
+    ovKubeP2: <>操作者的 kubeconfig 永远不会挂载进任何平台 pod。如果无法接受临时的 cluster-admin，这里给出一个等价的最小 ClusterRole。</>,
+    ovClusterRoleSummary: '等价的最小 ClusterRole',
+    ovClusterRoleNote: <>实际上这仍然接近 cluster-admin（在 core/apps/batch 这几个组上是 <code>*/*</code>），但把资源逐项列出来会让安全评审更容易。</>,
+    ovCtaIntro: '前置条件就绪后：',
+    ovCtaStart: '开始配置 →',
+    ovCtaSkip: '已有 values.env — 直接去安装',
+    // Configure
+    cfgIntro: (
+      <>
+        按你的环境填写表单；右侧会实时预览 <code>values.env</code>。所有处理都在本地完成 — <strong>不会上传任何内容</strong>。密钥用{' '}
+        <code>crypto.getRandomValues</code> 生成（等价于{' '}
+        <code>openssl rand -hex 32</code>）。<strong>机器内部密钥一旦设定，升级时不要改动</strong> — 否则已签发的会话 token 和现有数据库都会失效。
+      </>
+    ),
+    cfgPrintNote: <>交互式配置生成器在线地址为 <a href="https://nap.docs.neutree.ai/self-host/#configure">nap.docs.neutree.ai/self-host/#configure</a>。完整字段文档见 <code>self-host/values.env.example</code>。</>,
+    // Install
+    inToolsH2: '操作者机器上的工具',
+    inToolsIntro: '运行安装器的主机（与集群节点不同）需要：',
+    inToolKubectl: <><code>kubectl</code> — 与目标集群兼容的版本</>,
+    inToolEnvsubst: <><code>envsubst</code> — 通常随 <code>gettext</code> 包一起提供</>,
+    inToolOpenssl: <><code>openssl</code> — 被 <code>gen-secrets.sh</code> 用来生成随机密钥</>,
+    inToolHelm: <><code>helm</code> 3.x — 仅当集群尚未有 NFS provisioner 时需要；由 <code>install.sh</code> 的前置阶段调用</>,
+    inToolsNote: <>集群节点（而非操作者机器）必须能从 <code>ghcr.io</code>、<code>docker.io</code> 和 <code>registry.k8s.io</code> 拉取镜像。</>,
+    inQuickH2: '快速开始',
+    inQuickAfter: <>完成后打开 <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的管理员用户名 / 密码登录。</>,
+    inStepsH2: '分步操作',
+    inStep1H3: '获取安装器',
+    inStep1Note: <>所有第一方镜像都从公共仓库拉取（<code>${'{'}REGISTRY{'}'}</code>，默认 <code>ghcr.io/neutree-ai/agent-platform</code>）；没有镜像 tarball 需要加载。仅当你把镜像放到别处镜像源时才覆盖 <code>REGISTRY</code>。</>,
+    inStep2H3: '准备 values.env',
+    inStep2GenBtn: '配置生成器',
+    inStep2P1Pre: '我们推荐使用',
+    inStep2P1Post: '— 在线填写、下载结果，放到 ',
+    inStep2P1End: ' 目录下。',
+    inStep2Note: <>你也可以在命令行编辑：<code>cp values.env.example values.env</code>，运行 <code>./gen-secrets.sh</code> 填好所有机器内部密钥，再用 <code>vi values.env</code> 设置 <code>TOS_HOST</code>、管理员密码和存储配置。</>,
+    inStep3H3: '运行安装器',
+    inStep3P: <>首次安装和升级用的是同一条命令；它是幂等的，可以安全地重复运行。它会安装前置组件（CloudNativePG operator 和 NFS subdir provisioner），用你的 <code>values.env</code> 渲染 manifest 并 apply，然后通过一次性 Job 写入管理员用户、OAuth client 和 MCP catalog。<code>nap-cp</code> 在启动时运行 SQL 迁移。</>,
+    inStep4H3: '登录',
+    inStep4P: <>在浏览器打开 <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的 <code>ADMIN_USERNAME</code> 和{' '}<code>ADMIN_PASSWORD</code> 登录。</>,
+    inSubH2: 'install.sh 子命令',
+    inSubIntro: <>用于单独运行各阶段；通常情况下一条 <code>./install.sh</code> 就够了。</>,
+    inSingleH2: 'Single-node profile',
+    inSingleP: <>单个 k3s 节点，所有镜像直接从公共仓库拉取 — 与完整 profile 相同，只是改成 <code>PG_INSTANCES=1</code> 并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。它不会启动集群内仓库，也不加载任何 tarball。</>,
+    inSingleNote: <>在一台已经跑好 k3s、kubeconfig 位于 <code>/etc/rancher/k3s/k3s.yaml</code>（single-node 示例中的默认值）的主机上运行。</>,
+    inOfflineH2: '隔离网络场景',
+    inOfflineP: <>本页文档讲的是联网安装器。对于完全隔离网络 / 离线的场景，另有一套离线安装器，提供镜像 tarball、集群内仓库和主机侧加载镜像的步骤。</>,
+    // Upgrade
+    upPathH2: '升级',
+    upPathP1: <>升级与首次安装用的是同一条命令。在现有 <code>values.env</code> 里把 <code>IMAGE_TAG</code> 固定到新的发布 tag（或保持 <code>latest</code>），然后重新运行：</>,
+    upPathP2: <><code>install.sh</code> 是幂等的，所以升级路径与首次安装一致。它会重新渲染并重新 apply manifest，并刷新第一方 deployment 以拉取新的镜像 digest。<code>nap-cp</code> 启动时会自动运行 SQL 迁移。</>,
+    upCallout: <><strong>不要修改密钥</strong> · 复用首次安装时的 <code>values.env</code>。如果机器内部密钥（例如 <code>JWT_SECRET</code>）发生变化，所有已签发的会话 token 都会失效，现有数据库也将无法访问。</>,
+    upCompatH2: '从 2026-05 之前的版本升级',
+    upCompatP: <>可选模块的默认值从"未配置即启用"改为"未配置即禁用"。如果以下 <code>_ENABLED</code> 字段没有在 <code>values.env</code> 里显式设置，升级后对应能力将处于关闭状态：</>,
+    upThCapability: '能力',
+    upThOldDefault: '旧默认值',
+    upThNewDefault: '新默认值',
+    upThKeepOn: '保持开启的方式',
+    upBrowserCap: 'Remote Browser（含 TURN）',
+    upSandboxCap: 'Code Sandbox',
+    upLdapCap: 'LDAP 登录',
+    upOn: '开',
+    upOff: '关',
+    upLdapOldDefault: <>取决于 <code>LDAP_URL</code> 是否非空</>,
+    upCompatNote: <><code>COTURN_ENABLED</code> 现已并入浏览器模块，自动跟随 <code>BROWSER_ENABLED</code> — 无需单独配置。</>,
+    // Troubleshoot
+    tsErrH2: 'install.sh 失败',
+    tsErrIntro: <>先找出未就绪的 deployment（把 <code>$NAMESPACE</code> 替换为{' '}<code>values.env</code> 里的 <code>NAMESPACE</code>，默认 <code>nap</code>）：</>,
+    tsErrCommon: '常见原因：',
+    tsErrPull: <><strong>镜像拉不下来</strong> → 确认节点能访问{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>。如果你用镜像源，检查 <code>REGISTRY</code> 和你配置的 <code>IMAGE_PULL_SECRET</code>。</>,
+    tsErrPvc: <><strong>PVC 卡在 Pending</strong> → 运行{' '}<code>kubectl -n $NAMESPACE get pvc</code>，检查 StorageClass 是否存在、其 provisioner 是否健康</>,
+    tsErrPg: <><strong>PostgreSQL 起不来</strong> →{' '}<code>kubectl -n $NAMESPACE describe cluster.postgresql.cnpg.io nap-pg</code>；最常见的原因是 <code>PG_STORAGE_CLASS</code> 背后的 CSI 不可写</>,
+    tsErrPort: <><strong>NodePort 已被占用</strong> → 修改 <code>TOS_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> 并重新运行{' '}<code>install.sh</code></>,
+    tsBlankH2: '登录后白屏 / API 返回 401',
+    tsBlankP: <>通常是因为升级时 <code>JWT_SECRET</code> 发生了变化 — 所有已签发 token 都失效了。把 <code>values.env</code> 里的 <code>JWT_SECRET</code>{' '}改回首次安装时的值，并重新运行{' '}<code>./install.sh</code>。</>,
+    tsReachH2: '无法访问平台',
+    tsReachP: <>浏览器在 <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> 得不到任何响应。两个常见原因：</>,
+    tsReachHost: <><strong><code>TOS_HOST</code> 不可达</strong> — 配置的 IP 不是浏览器能访问到的 worker 节点。设置正确的节点 IP 并重新运行 <code>install.sh</code></>,
+    tsReachPort: <><strong>NodePort 未开放</strong> — 节点防火墙拦截了该端口；请让 SRE 开放它</>,
+    tsGoneH2: '升级后 Browser / Sandbox 不见了',
+    tsGoneP: <>自 2026-05 起，可选模块的默认值改为"未配置即禁用"。如果你之前启用过 browser 或 sandbox，请在 <code>values.env</code> 里显式设置{' '}<code>BROWSER_ENABLED=true</code> / <code>SANDBOX_ENABLED=true</code>。详见 Upgrade 标签页的兼容性章节。</>,
+    tsEaccesH2: <>Agent 启动失败：<code>mkdir /workspace/.home/.claude: EACCES</code></>,
+    tsEaccesP1: <>Agent 容器以非 root 用户（<code>node</code>，uid 1000）运行，而 <code>/workspace</code> 是挂载的 PVC。
+          如果该 PVC 由社区版 <code>nfs.csi.k8s.io</code> 驱动提供，<strong>该驱动默认不会对所分配的子目录执行 chmod</strong>
+          （根据其文档，<code>mountPermissions</code> 默认为 <code>0</code>；只有非零时才执行 chmod），所以子目录权限来自 NFS server 默认的 <code>mkdir</code> umask — 通常是 <code>root:root 0755</code>，uid 1000 无法写入。</>,
+    tsEaccesVerify: '在 NFS server 上验证：',
+    tsEaccesFix: <><strong>修复</strong>：在 StorageClass 的 <code>parameters</code> 中加上 <code>mountPermissions: "0777"</code>（作为字符串），然后删除失败的 PVC，让 control plane 重建它。这只影响新分配的 PV；已有的子目录需要在 NFS server 上手动 <code>chmod 0777</code>。</>,
+    tsEaccesConfirm: <><strong>先确认 StorageClass 的后端</strong>，再决定如何修复：</>,
+    tsEaccesBullet1: <>返回 <code>cluster.local/nfs-subdir-external-provisioner</code> — 这是安装器自带的 provisioner，会对子目录 <code>mkdir 0777</code>，所以通常不会出现这个问题；如果仍报错，检查 NFS server 上的实际权限。</>,
+    tsEaccesBullet2: <>返回 <code>nfs.csi.k8s.io</code>（或 SFS 等其他 CSI 驱动）— 应用上面的{' '}<code>mountPermissions: "0777"</code> 修复。</>,
+    tsEaccesPitfall: <><strong>常见坑</strong>：安装器的 NFS provisioner 步骤有一个"<strong>同名 StorageClass 已存在则跳过</strong>"的检查（见 <code>install_nfs_provisioner</code>）。如果安装前就已存在一个名为{' '}<code>NFS_STORAGE_CLASS</code>（默认 <code>nfs-nap</code>）且后端是 <code>nfs.csi.k8s.io</code> / SFS 的 StorageClass，
+          安装器会<strong>静默跳过</strong>，不部署自带的 nfs-subdir provisioner，于是 Agent Workspace 落到 0755 的后端上并触发该错误。
+          此时 <code>kubectl get deploy -n nap nfs-subdir-external-provisioner</code> 返回 NotFound。
+          两种修法皆可：给该 SC 加上 <code>mountPermissions: "0777"</code>（如上），或删除已存在的 SC / 改用一个不同的 <code>NFS_STORAGE_CLASS</code> 名称并重新运行安装器，让 nfs-subdir 真正装上。</>,
+    tsVideoH2: 'Browser 实时画面不显示',
+    tsVideoP: <>在配置生成器里启用 Remote Browser，设置{' '}<code>TURN_HOST</code>（浏览器能访问到的局域网或公网 IP）和{' '}<code>TURN_AUTH_SECRET</code>，并重新运行{' '}<code>install.sh</code>。TURN 中继与浏览器捆绑，随其一起启停。</>,
+  },
+} as const
+
+function Overview({ onGo, locale = 'en' }: { onGo: (id: TabId) => void; locale?: string }) {
+  const t = PANEL_STR[locale as keyof typeof PANEL_STR] ?? PANEL_STR.en
   return (
     <div class="sh-content">
       <section>
-        <h2 id="capabilities">What one install gives you</h2>
+        <h2 id="capabilities">{t.ovCapH2}</h2>
 
-        <p class="sh-muted">
-          This is the <strong>connected / online</strong> installer: the target cluster must be able to reach the public internet. Images are pulled directly from public registries (<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>) and prerequisite charts/manifests are fetched from their public sources. There is no offline image bundle, no in-cluster registry, and no host image-loading step. For fully air-gapped sites, a separate offline installer ships an image tarball, an in-cluster registry, and a host-prep step.
-        </p>
+        <p class="sh-muted">{t.ovIntro}</p>
 
-        <h3>Core platform (always installed)</h3>
+        <h3>{t.ovCoreH3}</h3>
         <ul class="sh-bullets">
-          <li>
-            <strong>Control plane</strong> — agent management, scheduling, user and workspace management
-          </li>
-          <li>
-            <strong>Channel gateway</strong> — the entry point for external events (webhooks, Slack, etc.) to reach agents
-          </li>
-          <li>
-            <strong>Data layer</strong> — PostgreSQL (CloudNativePG) + shared NFS
-          </li>
-          <li>
-            <strong>Agent workspace runtime</strong> — one pod per workspace runs the agent; agents can <code>@</code> each other, share files, and share a memory store
-          </li>
+          <li>{t.ovCoreControl}</li>
+          <li>{t.ovCoreGateway}</li>
+          <li>{t.ovCoreData}</li>
+          <li>{t.ovCoreRuntime}</li>
         </ul>
 
-        <h3>Optional modules (off by default)</h3>
+        <h3>{t.ovOptH3}</h3>
         <ul class="sh-bullets">
-          <li>
-            <strong>Code Sandbox</strong> — lets agents run code and serve temporary web previews. Powered by the third-party <a href="https://github.com/alibaba/OpenSandbox">OpenSandbox</a>, which you install yourself; the platform points at it via <code>OPENSANDBOX_URL</code>
-          </li>
-          <li>
-            <strong>Remote Browser</strong> — lets agents drive a real browser while users watch live over WebRTC. Ships a bundled TURN relay (coturn) and a published headful Chromium image
-          </li>
-          <li>
-            <strong>LDAP</strong> — let users sign in with their LDAP account
-          </li>
+          <li>{t.ovOptSandbox}</li>
+          <li>{t.ovOptBrowser}</li>
+          <li>{t.ovOptLdap}</li>
         </ul>
       </section>
 
       <section>
-        <h2 id="prereqs">Prerequisites</h2>
+        <h2 id="prereqs">{t.ovPrereqH2}</h2>
 
-        <h3>Infrastructure</h3>
+        <h3>{t.ovInfraH3}</h3>
         <div class="sh-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Resource</th>
-                <th>Requirement</th>
-                <th>Notes</th>
+                <th>{t.ovThResource}</th>
+                <th>{t.ovThRequirement}</th>
+                <th>{t.ovThNotes}</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Kubernetes</td>
-                <td>v1.28+ (multi-node), or a single k3s node (single-node profile)</td>
-                <td>3+ workers recommended</td>
+                <td>{t.ovK8s}</td>
+                <td>{t.ovK8sReq}</td>
+                <td>{t.ovK8sNote}</td>
               </tr>
               <tr>
-                <td>Worker nodes</td>
-                <td>4 vCPU / 8GB RAM minimum</td>
-                <td>Agent pods are created per workspace dynamically</td>
+                <td>{t.ovWorkers}</td>
+                <td>{t.ovWorkersReq}</td>
+                <td>{t.ovWorkersNote}</td>
               </tr>
               <tr>
-                <td>Public registry access</td>
-                <td>Nodes can pull from <code>ghcr.io</code>, <code>docker.io</code>, <code>registry.k8s.io</code></td>
-                <td>Override <code>REGISTRY</code> only to use a mirror</td>
+                <td>{t.ovRegAccess}</td>
+                <td>{t.ovRegAccessReq}</td>
+                <td>{t.ovRegAccessNote}</td>
               </tr>
               <tr>
-                <td>RWX shared storage</td>
-                <td>A CSI that supports ReadWriteMany (NFS is the most common)</td>
-                <td>Backs the AFS shared directory, 500Gi by default</td>
+                <td>{t.ovRwx}</td>
+                <td>{t.ovRwxReq}</td>
+                <td>{t.ovRwxNote}</td>
               </tr>
               <tr>
-                <td>RWO volume storage</td>
-                <td>Any CSI that can run PostgreSQL (Ceph RBD, vSAN, etc.; the same NFS also works)</td>
-                <td>PostgreSQL data volumes + agent workspace container disks</td>
+                <td>{t.ovRwo}</td>
+                <td>{t.ovRwoReq}</td>
+                <td>{t.ovRwoNote}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <h3>Network</h3>
+        <h3>{t.ovNetH3}</h3>
         <div class="sh-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Requirement</th>
+                <th>{t.ovThItem}</th>
+                <th>{t.ovThRequirement}</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Node IP</td>
-                <td>At least one worker IP reachable by users (NodePort uses it)</td>
+                <td>{t.ovNodeIp}</td>
+                <td>{t.ovNodeIpReq}</td>
               </tr>
               <tr>
-                <td>NodePort</td>
-                <td>
-                  3 free ports in 30000–32767: <code>TOS_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code>
-                </td>
+                <td>{t.ovNodePort}</td>
+                <td>{t.ovNodePortReq}</td>
               </tr>
               <tr>
-                <td>TURN ports</td>
-                <td>
-                  When the Remote Browser's TURN relay is enabled: open <code>3478/tcp+udp</code> and <code>49152-49252/udp</code> on the coturn node
-                </td>
+                <td>{t.ovTurnPorts}</td>
+                <td>{t.ovTurnPortsReq}</td>
               </tr>
               <tr>
-                <td>Storage reachability</td>
-                <td>All nodes can mount the two storage classes above (NFS / block-storage CSI, etc.)</td>
+                <td>{t.ovStorageReach}</td>
+                <td>{t.ovStorageReachReq}</td>
               </tr>
               <tr>
-                <td>Registry reachability</td>
-                <td>All nodes can pull images from the public registries</td>
+                <td>{t.ovRegReach}</td>
+                <td>{t.ovRegReachReq}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        <h3>LLM API</h3>
-        <p>
-          The platform does not bundle any model. Depending on the agent types you enable, you must provide protocol-compatible API endpoints:
-        </p>
+        <h3>{t.ovLlmH3}</h3>
+        <p>{t.ovLlmIntro}</p>
         <div class="sh-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Agent type</th>
-                <th>API protocol required</th>
+                <th>{t.ovThAgentType}</th>
+                <th>{t.ovThApiProto}</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Codex</td>
-                <td>OpenAI <strong>Responses API</strong> (note: not Chat Completions)</td>
+                <td>{t.ovCodexProto}</td>
               </tr>
               <tr>
                 <td>Claude Code</td>
-                <td>Anthropic API</td>
+                <td>{t.ovClaudeProto}</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="sh-muted">
-          If your existing model service only supports the <strong>OpenAI Chat Completions API</strong>, one option is to put a translating proxy in front of it that converts the OpenAI Chat protocol to the Anthropic protocol, then point Claude Code-style agents at the proxy.
-        </p>
+        <p class="sh-muted">{t.ovLlmNote}</p>
 
-        <h3>kubeconfig permissions</h3>
-        <p>
-          Installation requires <strong>cluster-admin</strong> — <code>install.sh</code> touches resources that a namespace-scoped admin cannot (CRDs, webhooks, ClusterRoles, StorageClasses, etc.). You can revoke it immediately after install; at steady state the control plane authenticates via its own in-cluster ServiceAccount with tightly scoped permissions (normal read/write within the namespace + cluster-scoped get/list on <code>nodes</code> only).
-        </p>
-        <p class="sh-muted">
-          The operator's kubeconfig is never mounted into any platform pod. If a temporary cluster-admin is not acceptable, here is an equivalent minimal ClusterRole.
-        </p>
+        <h3>{t.ovKubeH3}</h3>
+        <p>{t.ovKubeP1}</p>
+        <p class="sh-muted">{t.ovKubeP2}</p>
 
         <details class="sh-details">
-          <summary>Equivalent minimal ClusterRole</summary>
-          <CodeBlock lang="yaml">{`apiVersion: rbac.authorization.k8s.io/v1
+          <summary>{t.ovClusterRoleSummary}</summary>
+          <CodeBlock lang="yaml" locale={locale}>{`apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: nap-installer
@@ -394,20 +709,18 @@ rules:
   - apiGroups: [""]
     resources: [nodes]
     verbs: [get, list, watch]`}</CodeBlock>
-          <p class="sh-muted">
-            This is still close to cluster-admin in practice (<code>*/*</code> on the core/apps/batch groups), but spelling out the resources makes a security review easier.
-          </p>
+          <p class="sh-muted">{t.ovClusterRoleNote}</p>
         </details>
       </section>
 
       <section class="sh-cta">
-        <p>Once the prerequisites are in place:</p>
+        <p>{t.ovCtaIntro}</p>
         <div class="sh-cta-row">
           <button class="sh-primary" onClick={() => onGo('configure')}>
-            Start configuring →
+            {t.ovCtaStart}
           </button>
           <button class="sh-secondary" onClick={() => onGo('install')}>
-            Already have values.env — go to install
+            {t.ovCtaSkip}
           </button>
         </div>
       </section>
@@ -415,110 +728,83 @@ rules:
   )
 }
 
-function Configure() {
+function Configure({ locale = 'en' }: { locale?: string }) {
+  const t = PANEL_STR[locale as keyof typeof PANEL_STR] ?? PANEL_STR.en
   return (
     <div class="sh-content sh-content-flush">
-      <p class="sh-config-intro">
-        Fill in the form for your environment; <code>values.env</code> is previewed live on the right. Everything is processed locally — <strong>nothing is uploaded</strong>. Secrets are generated with{' '}
-        <code>crypto.getRandomValues</code> (equivalent to{' '}
-        <code>openssl rand -hex 32</code>). <strong>Once a machine-internal secret is set, do not change it on upgrade</strong> — otherwise issued session tokens and the existing database become unusable.
-      </p>
+      <p class="sh-config-intro">{t.cfgIntro}</p>
       <div data-no-print>
-        <ValuesGenerator />
+        <ValuesGenerator locale={locale} />
       </div>
-      <p class="sh-print-only sh-print-note">
-        The interactive configuration generator is online at <a href="https://nap.docs.neutree.ai/self-host/#configure">nap.docs.neutree.ai/self-host/#configure</a>. For full field documentation see <code>self-host/values.env.example</code>.
-      </p>
+      <p class="sh-print-only sh-print-note">{t.cfgPrintNote}</p>
     </div>
   )
 }
 
-function Install({ onGo }: { onGo: (id: TabId) => void }) {
+function Install({ onGo, locale = 'en' }: { onGo: (id: TabId) => void; locale?: string }) {
+  const t = PANEL_STR[locale as keyof typeof PANEL_STR] ?? PANEL_STR.en
   return (
     <div class="sh-content">
       <section>
-        <h2 id="client-tools">Tools on the operator machine</h2>
-        <p>
-          The host running the installer (distinct from the cluster nodes) needs:
-        </p>
+        <h2 id="client-tools">{t.inToolsH2}</h2>
+        <p>{t.inToolsIntro}</p>
         <ul class="sh-bullets">
-          <li>
-            <code>kubectl</code> — a version compatible with the target cluster
-          </li>
-          <li>
-            <code>envsubst</code> — usually shipped with the <code>gettext</code> package
-          </li>
-          <li>
-            <code>openssl</code> — used by <code>gen-secrets.sh</code> to generate random secrets
-          </li>
-          <li>
-            <code>helm</code> 3.x — only needed when the cluster doesn't already have an NFS provisioner; invoked by <code>install.sh</code>'s prerequisites stage
-          </li>
+          <li>{t.inToolKubectl}</li>
+          <li>{t.inToolEnvsubst}</li>
+          <li>{t.inToolOpenssl}</li>
+          <li>{t.inToolHelm}</li>
         </ul>
-        <p class="sh-muted">
-          The cluster nodes (not the operator machine) must be able to pull from <code>ghcr.io</code>, <code>docker.io</code>, and <code>registry.k8s.io</code>.
-        </p>
+        <p class="sh-muted">{t.inToolsNote}</p>
       </section>
 
       <section>
-        <h2 id="quick-start">Quick start</h2>
-        <CodeBlock>{`git clone <this-repo> && cd self-host
+        <h2 id="quick-start">{t.inQuickH2}</h2>
+        <CodeBlock locale={locale}>{`git clone <this-repo> && cd self-host
 cp values.env.example values.env
 ./gen-secrets.sh                # fills random machine secrets
 vi values.env                   # set TOS_HOST, ADMIN_PASSWORD, storage, etc.
 ./install.sh`}</CodeBlock>
-        <p>
-          When it finishes, open <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> and log in with the admin username / password from <code>values.env</code>.
-        </p>
+        <p>{t.inQuickAfter}</p>
       </section>
 
       <section>
-        <h2 id="steps">Step by step</h2>
+        <h2 id="steps">{t.inStepsH2}</h2>
         <ol class="sh-steps">
           <li>
-            <h3>Get the installer</h3>
-            <CodeBlock>{`git clone <this-repo> && cd self-host`}</CodeBlock>
-            <p class="sh-muted">
-              All first-party images are pulled from the public registry (<code>${'{'}REGISTRY{'}'}</code>, default <code>ghcr.io/neutree-ai/agent-platform</code>); there is no image tarball to load. Override <code>REGISTRY</code> only if you mirror the images elsewhere.
-            </p>
+            <h3>{t.inStep1H3}</h3>
+            <CodeBlock locale={locale}>{`git clone <this-repo> && cd self-host`}</CodeBlock>
+            <p class="sh-muted">{t.inStep1Note}</p>
           </li>
           <li>
-            <h3>Prepare values.env</h3>
+            <h3>{t.inStep2H3}</h3>
             <p>
-              We recommend the{' '}
+              {t.inStep2P1Pre}{' '}
               <button
                 class="sh-link-btn"
                 onClick={() => onGo('configure')}
               >
-                configuration generator
+                {t.inStep2GenBtn}
               </button>{' '}
-              — fill it in online, download the result, and place it in the <code>self-host/</code> directory.
+              {t.inStep2P1Post}<code>self-host/</code>{t.inStep2P1End}
             </p>
-            <p class="sh-muted">
-              You can also edit it on the command line: <code>cp values.env.example values.env</code>, run <code>./gen-secrets.sh</code> to fill all machine-internal secrets, then <code>vi values.env</code> to set <code>TOS_HOST</code>, the admin password, and storage settings.
-            </p>
+            <p class="sh-muted">{t.inStep2Note}</p>
           </li>
           <li>
-            <h3>Run the installer</h3>
-            <CodeBlock>{`./install.sh`}</CodeBlock>
-            <p>
-              The same command serves first-time install and upgrade; it is idempotent and safe to re-run. It installs prerequisites (the CloudNativePG operator and the NFS subdir provisioner), renders the manifests with your <code>values.env</code> and applies them, then seeds the admin user, OAuth clients, and the MCP catalog via one-shot Jobs. <code>nap-cp</code> runs SQL migrations on startup.
-            </p>
+            <h3>{t.inStep3H3}</h3>
+            <CodeBlock locale={locale}>{`./install.sh`}</CodeBlock>
+            <p>{t.inStep3P}</p>
           </li>
           <li>
-            <h3>Log in</h3>
-            <p>
-              Open <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> in a browser and log in with <code>ADMIN_USERNAME</code> and the <code>ADMIN_PASSWORD</code> from{' '}
-              <code>values.env</code>.
-            </p>
+            <h3>{t.inStep4H3}</h3>
+            <p>{t.inStep4P}</p>
           </li>
         </ol>
       </section>
 
       <section>
-        <h2 id="subcommands">install.sh subcommands</h2>
-        <p>For running stages separately; a single <code>./install.sh</code> is enough for the normal case.</p>
-        <CodeBlock>{`./install.sh                  # full: prereqs + manifests + seed
+        <h2 id="subcommands">{t.inSubH2}</h2>
+        <p>{t.inSubIntro}</p>
+        <CodeBlock locale={locale}>{`./install.sh                  # full: prereqs + manifests + seed
 ./install.sh --prereqs-only   # only CNPG operator + NFS provisioner
 ./install.sh --manifests-only # only render + apply k8s manifests
 ./install.sh --seed-only      # only seed admin / OAuth clients / MCP (K8s Jobs)
@@ -526,203 +812,137 @@ vi values.env                   # set TOS_HOST, ADMIN_PASSWORD, storage, etc.
       </section>
 
       <section>
-        <h2 id="single-node">Single-node profile</h2>
-        <p>
-          A single k3s node that pulls every image straight from the public registry — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). It does not bring up an in-cluster registry and does not load any tarball.
-        </p>
-        <CodeBlock>{`cp values.env.single-node.example values.env
+        <h2 id="single-node">{t.inSingleH2}</h2>
+        <p>{t.inSingleP}</p>
+        <CodeBlock locale={locale}>{`cp values.env.single-node.example values.env
 ./gen-secrets.sh
 vi values.env                 # set TOS_HOST + ADMIN_PASSWORD
 ./install.sh --profile=single-node`}</CodeBlock>
-        <p class="sh-muted">
-          Run this on a host that has a working k3s with its kubeconfig at <code>/etc/rancher/k3s/k3s.yaml</code> (the default in the single-node example).
-        </p>
+        <p class="sh-muted">{t.inSingleNote}</p>
       </section>
 
       <section>
-        <h2 id="offline">Air-gapped sites</h2>
-        <p class="sh-muted">
-          This page documents the connected installer. For fully air-gapped / offline sites there is a separate offline installer that ships an image tarball, an in-cluster registry, and a host image-loading step.
-        </p>
+        <h2 id="offline">{t.inOfflineH2}</h2>
+        <p class="sh-muted">{t.inOfflineP}</p>
       </section>
     </div>
   )
 }
 
-function Upgrade() {
+function Upgrade({ locale = 'en' }: { locale?: string }) {
+  const t = PANEL_STR[locale as keyof typeof PANEL_STR] ?? PANEL_STR.en
   return (
     <div class="sh-content">
       <section>
-        <h2 id="upgrade-path">Upgrade</h2>
-        <p>
-          Upgrading is the same command as a first install. Pin <code>IMAGE_TAG</code> to the new release tag (or keep <code>latest</code>) in your existing <code>values.env</code>, then re-run:
-        </p>
-        <CodeBlock>{`./install.sh`}</CodeBlock>
-        <p>
-          <code>install.sh</code> is idempotent, so the upgrade path matches the first install. It re-renders and re-applies the manifests and refreshes the first-party deployments to pick up new image digests. SQL migrations run automatically when <code>nap-cp</code> starts.
-        </p>
-        <div class="sh-callout sh-callout-warn">
-          <strong>Do not change secrets</strong> · Reuse the <code>values.env</code> from your first install. If a machine-internal secret (e.g. <code>JWT_SECRET</code>) changes, all issued session tokens are invalidated and the existing database can no longer be reached.
-        </div>
+        <h2 id="upgrade-path">{t.upPathH2}</h2>
+        <p>{t.upPathP1}</p>
+        <CodeBlock locale={locale}>{`./install.sh`}</CodeBlock>
+        <p>{t.upPathP2}</p>
+        <div class="sh-callout sh-callout-warn">{t.upCallout}</div>
       </section>
 
       <section>
-        <h2 id="compat">Upgrading from a pre-2026-05 release</h2>
-        <p>Optional-module defaults changed from "enabled unless configured" to "disabled unless configured". If the following <code>_ENABLED</code> fields aren't set explicitly in <code>values.env</code>, the corresponding capabilities are off after the upgrade:</p>
+        <h2 id="compat">{t.upCompatH2}</h2>
+        <p>{t.upCompatP}</p>
         <div class="sh-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Capability</th>
-                <th>Old default</th>
-                <th>New default</th>
-                <th>Keep it on with</th>
+                <th>{t.upThCapability}</th>
+                <th>{t.upThOldDefault}</th>
+                <th>{t.upThNewDefault}</th>
+                <th>{t.upThKeepOn}</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Remote Browser (incl. TURN)</td>
-                <td>On</td>
-                <td>Off</td>
+                <td>{t.upBrowserCap}</td>
+                <td>{t.upOn}</td>
+                <td>{t.upOff}</td>
                 <td><code>BROWSER_ENABLED=true</code></td>
               </tr>
               <tr>
-                <td>Code Sandbox</td>
-                <td>On</td>
-                <td>Off</td>
+                <td>{t.upSandboxCap}</td>
+                <td>{t.upOn}</td>
+                <td>{t.upOff}</td>
                 <td><code>SANDBOX_ENABLED=true</code></td>
               </tr>
               <tr>
-                <td>LDAP login</td>
-                <td>Whether <code>LDAP_URL</code> is non-empty</td>
-                <td>Off</td>
+                <td>{t.upLdapCap}</td>
+                <td>{t.upLdapOldDefault}</td>
+                <td>{t.upOff}</td>
                 <td><code>LDAP_ENABLED=true</code></td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="sh-muted">
-          <code>COTURN_ENABLED</code> is now part of the browser module and tracks <code>BROWSER_ENABLED</code> automatically — no separate configuration.
-        </p>
+        <p class="sh-muted">{t.upCompatNote}</p>
       </section>
     </div>
   )
 }
 
-function Troubleshoot() {
+function Troubleshoot({ locale = 'en' }: { locale?: string }) {
+  const t = PANEL_STR[locale as keyof typeof PANEL_STR] ?? PANEL_STR.en
   return (
     <div class="sh-content">
       <section>
-        <h2 id="install-error">install.sh fails</h2>
-        <p>
-          First find the deployment that isn't ready (replace <code>$NAMESPACE</code> with{' '}
-          <code>NAMESPACE</code> from <code>values.env</code>, default <code>nap</code>):
-        </p>
-        <CodeBlock>{`kubectl -n $NAMESPACE get pods
+        <h2 id="install-error">{t.tsErrH2}</h2>
+        <p>{t.tsErrIntro}</p>
+        <CodeBlock locale={locale}>{`kubectl -n $NAMESPACE get pods
 kubectl -n $NAMESPACE describe pod <not-ready-pod>
 kubectl -n $NAMESPACE logs deploy/<deployment>`}</CodeBlock>
-        <p>Common causes:</p>
+        <p>{t.tsErrCommon}</p>
         <ul class="sh-bullets">
-          <li>
-            <strong>Images won't pull</strong> → confirm the nodes can reach{' '}
-            <code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>. If you mirror images, check <code>REGISTRY</code> and the <code>IMAGE_PULL_SECRET</code> you configured.
-          </li>
-          <li>
-            <strong>PVCs stuck Pending</strong> → run{' '}
-            <code>kubectl -n $NAMESPACE get pvc</code> and check the StorageClass exists and its provisioner is healthy
-          </li>
-          <li>
-            <strong>PostgreSQL won't start</strong> →{' '}
-            <code>kubectl -n $NAMESPACE describe cluster.postgresql.cnpg.io nap-pg</code>; the most common cause is the CSI behind <code>PG_STORAGE_CLASS</code> not being writable
-          </li>
-          <li>
-            <strong>NodePort already in use</strong> → change <code>TOS_NODE_PORT</code> /{' '}
-            <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> and re-run{' '}
-            <code>install.sh</code>
-          </li>
+          <li>{t.tsErrPull}</li>
+          <li>{t.tsErrPvc}</li>
+          <li>{t.tsErrPg}</li>
+          <li>{t.tsErrPort}</li>
         </ul>
       </section>
 
       <section>
-        <h2 id="login-blank">Blank page after login / APIs return 401</h2>
-        <p>
-          Usually because <code>JWT_SECRET</code> changed during an upgrade — all issued tokens are invalidated. Roll <code>JWT_SECRET</code> in{' '}
-          <code>values.env</code> back to its first-install value and re-run{' '}
-          <code>./install.sh</code>.
-        </p>
+        <h2 id="login-blank">{t.tsBlankH2}</h2>
+        <p>{t.tsBlankP}</p>
       </section>
 
       <section>
-        <h2 id="cannot-reach">Cannot reach the platform</h2>
-        <p>
-          The browser gets no response at <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code>. Two common causes:
-        </p>
+        <h2 id="cannot-reach">{t.tsReachH2}</h2>
+        <p>{t.tsReachP}</p>
         <ul class="sh-bullets">
-          <li>
-            <strong><code>TOS_HOST</code> is unreachable</strong> — the configured IP is not a worker node reachable from the browser. Set the correct node IP and re-run <code>install.sh</code>
-          </li>
-          <li>
-            <strong>NodePort not open</strong> — the node firewall blocks the port; ask your SRE to open it
-          </li>
+          <li>{t.tsReachHost}</li>
+          <li>{t.tsReachPort}</li>
         </ul>
       </section>
 
       <section>
-        <h2 id="capability-gone">Browser / Sandbox missing after upgrade</h2>
-        <p>
-          Optional-module defaults changed to "disabled unless configured" as of 2026-05. If you previously enabled the browser or sandbox, set{' '}
-          <code>BROWSER_ENABLED=true</code> / <code>SANDBOX_ENABLED=true</code> explicitly in{' '}
-          <code>values.env</code>. See the compatibility section on the Upgrade tab.
-        </p>
+        <h2 id="capability-gone">{t.tsGoneH2}</h2>
+        <p>{t.tsGoneP}</p>
       </section>
 
       <section>
-        <h2 id="agent-workspace-eacces">Agent fails to start: <code>mkdir /workspace/.home/.claude: EACCES</code></h2>
-        <p>
-          The agent container runs as a non-root user (<code>node</code>, uid 1000), and <code>/workspace</code> is a mounted PVC.
-          If that PVC is backed by the community <code>nfs.csi.k8s.io</code> driver, <strong>that driver does not chmod the provisioned subdirectory by default</strong>
-          (per its docs, <code>mountPermissions</code> defaults to <code>0</code>; chmod only runs when non-zero), so subdirectory permissions come from the NFS server's default <code>mkdir</code> umask — typically <code>root:root 0755</code>, which uid 1000 cannot write to.
-        </p>
-        <p>Verify on the NFS server:</p>
-        <CodeBlock>{`ls -ld <nfs-share>/pvc-<uuid>
+        <h2 id="agent-workspace-eacces">{t.tsEaccesH2}</h2>
+        <p>{t.tsEaccesP1}</p>
+        <p>{t.tsEaccesVerify}</p>
+        <CodeBlock locale={locale}>{`ls -ld <nfs-share>/pvc-<uuid>
 # drwxr-xr-x 1 root root ...   <- 0755, not 0777`}</CodeBlock>
-        <p>
-          <strong>Fix</strong>: add <code>mountPermissions: "0777"</code> (as a string) to the StorageClass <code>parameters</code>, then delete the failed PVC and let the control plane recreate it. This only affects newly provisioned PVs; existing subdirectories need a manual <code>chmod 0777</code> on the NFS server.
-        </p>
-        <CodeBlock>{`parameters:
+        <p>{t.tsEaccesFix}</p>
+        <CodeBlock locale={locale}>{`parameters:
   server: <nfs-server>
   share: <export-path>
   mountPermissions: "0777"`}</CodeBlock>
-        <p>
-          <strong>Confirm the StorageClass backend first</strong>, then decide how to fix:
-        </p>
-        <CodeBlock>{`kubectl get sc <AGENT_STORAGE_CLASS> -o jsonpath='{.provisioner}{"\\n"}'`}</CodeBlock>
+        <p>{t.tsEaccesConfirm}</p>
+        <CodeBlock locale={locale}>{`kubectl get sc <AGENT_STORAGE_CLASS> -o jsonpath='{.provisioner}{"\\n"}'`}</CodeBlock>
         <ul>
-          <li>
-            Returns <code>cluster.local/nfs-subdir-external-provisioner</code> — this is the installer's own provisioner, which <code>mkdir 0777</code>s subdirectories, so this normally doesn't happen; if it still errors, check the actual NFS server permissions.
-          </li>
-          <li>
-            Returns <code>nfs.csi.k8s.io</code> (or another CSI driver such as SFS) — apply the{' '}
-            <code>mountPermissions: "0777"</code> fix above.
-          </li>
+          <li>{t.tsEaccesBullet1}</li>
+          <li>{t.tsEaccesBullet2}</li>
         </ul>
-        <p>
-          <strong>Common pitfall</strong>: the installer's NFS provisioner step has a "<strong>skip if a StorageClass of the same name already exists</strong>" check (see <code>install_nfs_provisioner</code>). If a StorageClass named{' '}
-          <code>NFS_STORAGE_CLASS</code> (default <code>nfs-nap</code>) already exists before install and is backed by <code>nfs.csi.k8s.io</code> / SFS,
-          the installer <strong>silently skips</strong> and does not deploy the bundled nfs-subdir provisioner, so agent workspaces land on a 0755 backend and hit this error.
-          In that case <code>kubectl get deploy -n nap nfs-subdir-external-provisioner</code> returns NotFound.
-          Fix either way: add <code>mountPermissions: "0777"</code> to that SC (as above), or delete the pre-existing SC / use a different <code>NFS_STORAGE_CLASS</code> name and re-run the installer so nfs-subdir actually installs.
-        </p>
+        <p>{t.tsEaccesPitfall}</p>
       </section>
 
       <section>
-        <h2 id="browser-no-video">Browser live view doesn't render</h2>
-        <p>
-          Enable Remote Browser in the configuration generator, set{' '}
-          <code>TURN_HOST</code> (a LAN or public IP browsers can reach) and{' '}
-          <code>TURN_AUTH_SECRET</code>, and re-run{' '}
-          <code>install.sh</code>. The TURN relay is bundled with the browser and starts/stops together with it.
-        </p>
+        <h2 id="browser-no-video">{t.tsVideoH2}</h2>
+        <p>{t.tsVideoP}</p>
       </section>
     </div>
   )

@@ -1,0 +1,30 @@
+---
+title: Neutree Agent Platform 文档
+description: Agent Cloud：在云上构建、分发、优化你的 Agent
+template: splash
+hero:
+  tagline: Agent Cloud：在云上构建、分发、优化你的 Agent
+  actions:
+    - text: 从概念开始
+      link: /concepts/overview/
+      icon: right-arrow
+      variant: primary
+    - text: 跟着指南上手
+      link: /guides/1-setup/
+      icon: rocket
+      variant: secondary
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components'
+
+<CardGrid stagger>
+  <Card title="概念" icon="open-book">
+    先认个脸：什么是 agent、workspace、skill、provider、route。读完这一节，后面的功能都能挂上去。
+  </Card>
+  <Card title="指南" icon="rocket">
+    从 0 到 1 跑通一个 agent，再一步步扩展行为、接入触发、协作和规模化。新用户的主路径。
+  </Card>
+  <Card title="自部署" icon="setting">
+    把 Neutree Agent Platform 装到自己的 Kubernetes 集群，支持完全离线部署。
+  </Card>
+</CardGrid>

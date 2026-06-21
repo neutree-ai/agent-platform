@@ -27,7 +27,7 @@ interface FieldDef {
   validate?: (
     value: string,
     values: Record<string, string>,
-  ) => string | null
+  ) => VMsg | null
 }
 
 interface SectionDef {
@@ -54,8 +54,253 @@ const isNodePort = (v: string) => {
 
 const isStorageSize = (v: string) => /^\d+(Gi|Mi|Ti)$/.test(v)
 
-const requiredNonEmpty = (v: string) =>
-  v.trim().length > 0 ? null : 'Required'
+// ---------------------------------------------------------------------------
+// Localization. Validation functions return a stable VMsg code; the UI maps
+// it to a localized string. SCHEMA display strings (title/desc/label/hint/
+// placeholder) carry the English source plus a parallel zh-CN override table
+// keyed by section id / field key. Field keys, defaults, options, kinds and
+// the generated values.env OUTPUT stay canonical/English.
+// ---------------------------------------------------------------------------
+
+type Locale = 'en' | 'zh-CN'
+
+// Validation message codes (logic returns these; UI localizes them).
+type VMsg =
+  | 'required'
+  | 'ipOrHost'
+  | 'port'
+  | 'positiveInt'
+  | 'storageSize'
+  | 'min6'
+  | { conflict: string }
+
+const requiredNonEmpty = (v: string): VMsg | null =>
+  v.trim().length > 0 ? null : 'required'
+
+const UI = {
+  en: {
+    vmsg: {
+      required: 'Required',
+      ipOrHost: 'Must be an IP or hostname',
+      port: 'Must be a port in 30000–32767',
+      positiveInt: 'Must be a positive integer',
+      storageSize: 'Format: number + Gi/Mi/Ti',
+      min6: 'At least 6 characters',
+      conflict: (other: string) => `Conflicts with ${other}`,
+    },
+    optionalModules: 'Optional modules',
+    validationPassed: 'Validation passed',
+    fieldsNeedFixing: (n: number) => `${n} field(s) need fixing`,
+    generateSecrets: 'Generate secrets',
+    showSecrets: 'Show secrets',
+    hideSecrets: 'Hide secrets',
+    importExisting: 'Import existing values.env',
+    collapseImport: 'Collapse import',
+    reset: 'Reset',
+    importHintPre: 'Paste an existing ',
+    importHintPost:
+      ' here. Recognized fields are filled back into the form; unrecognized fields are ignored and counted. Fields added in newer versions keep their defaults, so you can scan the * required fields and fill them in.',
+    importPlaceholder: '# paste an existing values.env\nREGISTRY=...\nTOS_HOST=...',
+    cancel: 'Cancel',
+    apply: 'Apply',
+    previewTitle: 'values.env preview',
+    copy: 'Copy',
+    copied: 'Copied',
+    download: 'Download',
+    fixBeforeDownload: 'Fix errors before downloading',
+    genSecretTitle: 'Generate a random 32-byte hex value',
+    secretPlaceholder: 'click ↻ to generate',
+    importNoFields: 'No fields parsed — check the pasted content',
+    importResult: (count: number, tail: string) =>
+      `Imported ${count} field(s)${tail}`,
+    importIgnored: (n: number, names: string, more: boolean) =>
+      `; ignored ${n} unrecognized field(s) (${names}${more ? '…' : ''})`,
+  },
+  'zh-CN': {
+    vmsg: {
+      required: '必填',
+      ipOrHost: '必须是 IP 或主机名',
+      port: '必须是 30000–32767 范围内的端口',
+      positiveInt: '必须是正整数',
+      storageSize: '格式：数字 + Gi/Mi/Ti',
+      min6: '至少 6 个字符',
+      conflict: (other: string) => `与 ${other} 冲突`,
+    },
+    optionalModules: '可选模块',
+    validationPassed: '校验通过',
+    fieldsNeedFixing: (n: number) => `${n} 个字段需要修正`,
+    generateSecrets: '生成密钥',
+    showSecrets: '显示密钥',
+    hideSecrets: '隐藏密钥',
+    importExisting: '导入已有 values.env',
+    collapseImport: '收起导入',
+    reset: '重置',
+    importHintPre: '在此粘贴已有的 ',
+    importHintPost:
+      ' 。可识别的字段会回填到表单；无法识别的字段会被忽略并计数。新版本新增的字段保留默认值，你可以重点检查标 * 的必填字段并补全。',
+    importPlaceholder: '# 粘贴已有的 values.env\nREGISTRY=...\nTOS_HOST=...',
+    cancel: '取消',
+    apply: '应用',
+    previewTitle: 'values.env 预览',
+    copy: '复制',
+    copied: '已复制',
+    download: '下载',
+    fixBeforeDownload: '请先修正错误再下载',
+    genSecretTitle: '生成一个随机的 32 字节十六进制值',
+    secretPlaceholder: '点击 ↻ 生成',
+    importNoFields: '未解析到任何字段 —— 请检查粘贴的内容',
+    importResult: (count: number, tail: string) =>
+      `已导入 ${count} 个字段${tail}`,
+    importIgnored: (n: number, names: string, more: boolean) =>
+      `；已忽略 ${n} 个无法识别的字段（${names}${more ? '…' : ''}）`,
+  },
+} as const
+
+// localize a VMsg code
+const locMsg = (locale: Locale, m: VMsg | null): string | undefined => {
+  if (!m) return undefined
+  const v = UI[locale].vmsg
+  if (typeof m === 'object') return v.conflict(m.conflict)
+  return v[m]
+}
+
+// zh-CN display overrides for SCHEMA. Keyed by section id (title/desc) and
+// field key (label/hint/placeholder). label defaults to the canonical key when
+// omitted (most fields display their env-var name verbatim in both locales).
+const SCHEMA_ZH: {
+  sections: Record<string, { title?: string; desc?: string }>
+  fields: Record<
+    string,
+    { label?: string; hint?: string; placeholder?: string }
+  >
+} = {
+  sections: {
+    registry: {
+      title: '容器镜像仓库',
+      desc: '存放所有第一方镜像的公共镜像仓库路径',
+    },
+    cluster: {
+      title: '集群与访问',
+      desc: 'K8s 命名空间、kubeconfig 路径，以及用户访问平台所用的 IP / NodePort',
+    },
+    admin: {
+      title: '管理员账号',
+      desc: '首次安装时由 seed Job 创建。JWT_SECRET 用于签发会话令牌',
+    },
+    postgres: { title: 'PostgreSQL' },
+    storage: {
+      title: '共享存储',
+      desc: 'AFS 后端 + 跨节点 NFS（ReadWriteMany）',
+    },
+    agent: {
+      title: 'Agent 运行时',
+      desc: '控制面动态拉起的每个 workspace pod',
+    },
+    sandbox: {
+      title: 'Code Sandbox',
+      desc: '让 agent 运行代码并提供临时的 web 预览',
+    },
+    browser: {
+      title: 'Remote Browser',
+      desc: '让 agent 操作真实浏览器，用户可实时观看。TURN relay 与浏览器捆绑，同步启用',
+    },
+    ldap: {
+      title: 'LDAP',
+      desc: '允许用户用 LDAP 账号登录',
+    },
+  },
+  fields: {
+    REGISTRY: {
+      hint: '存放镜像的镜像仓库路径，结尾不带斜杠。默认是官方公共仓库；仅在使用镜像源时才覆盖',
+    },
+    IMAGE_TAG: {
+      hint: '所有第一方镜像的 tag。固定到某个发布 tag 可获得可复现的安装',
+    },
+    TOS_HOST: {
+      hint: '用户访问平台所用的 IP 或主机名（某个 worker 节点）',
+    },
+    TOS_NODE_PORT: {
+      hint: 'Web UI + API。30000–32767。INGRESS_MODE=external 时仍会渲染但不对外暴露',
+    },
+    INGRESS_MODE: {
+      hint: 'nodeport = 默认的 NodePort 暴露方式；external = Service 改为 ClusterIP，由你自己的 ingress 接管 HTTP 服务',
+    },
+    ADMIN_PASSWORD: { hint: '至少 6 个字符' },
+    JWT_SECRET: { hint: '会话令牌签名密钥。可一键生成' },
+    CREDENTIAL_ENCRYPTION_KEY: {
+      hint: '凭据加密密钥（AES-256）。可一键生成；升级时不要更改',
+    },
+    PG_PASSWORD: { hint: '可一键随机生成' },
+    PG_INSTANCES: {
+      hint: 'CNPG 集群副本数（含主节点）。生产环境至少 3',
+    },
+    PG_STORAGE_SIZE: {
+      hint: '每个 PostgreSQL 实例的卷大小，例如 10Gi / 100Gi',
+    },
+    PG_STORAGE_CLASS: {
+      hint: 'PostgreSQL 卷使用的 StorageClass。留空则使用集群默认 StorageClass',
+    },
+    NFS_STORAGE_CLASS: {
+      hint: 'NFS provisioner 创建的 StorageClass 名称',
+    },
+    AFS_STORAGE_SIZE: { hint: 'AFS RWX PVC 的大小' },
+    AGENT_IMAGE_PREFIX: {
+      hint: '默认引用 REGISTRY；可填写完整前缀进行自定义',
+    },
+    AGENT_STORAGE_CLASS: {
+      hint: 'agent workspace PVC 使用的 StorageClass（ReadWriteOnce 即可）。卷根目录必须是 0777 —— 安装器自带的 nfs-subdir provisioner（nfs-nap）满足这一点。安装后请确认后端：kubectl get sc <class> -o jsonpath={.provisioner}；若为 nfs.csi.k8s.io / SFS，卷根目录是 0755，agent 会遇到 mkdir EACCES，需要设置 mountPermissions:"0777"',
+    },
+    AGENT_NODE_SELECTOR: {
+      hint: '可选。格式：key1=val1,key2=val2',
+    },
+    SANDBOX_SERVICE_KEY: { hint: 'browser 与 sandbox 之间的共享密钥' },
+    SANDBOX_DOMAIN: {
+      hint: '可选。子域名预览需要通配 DNS *.<domain>',
+    },
+    SANDBOX_NODE_SELECTOR: { hint: '可选。key1=val1,key2=val2' },
+    SANDBOX_PUBLIC_URL: {
+      hint: '可选。当有外部 ingress / 自定义域名接管服务时设置；留空则推导出 NodePort URL',
+    },
+    OPENSANDBOX_URL: {
+      hint: '可选。第三方 OpenSandbox server 的集群内 URL。留空则默认指向平台命名空间内的 server Service',
+    },
+    TURN_HOST: { hint: '浏览器访问 TURN 所用的公网 / 局域网 IP' },
+    COTURN_NODE_SELECTOR: {
+      hint: '建议固定到单个节点。留空 = 由调度器任意选择',
+    },
+    BROWSER_PUBLIC_URL: {
+      hint: '可选。当有外部 ingress / 自定义域名接管服务时设置；留空则推导出 NodePort URL',
+    },
+    LDAP_SEARCH_FILTER: {
+      hint: '留空则使用默认值 (objectClass=inetOrgPerson)。当你的 LDAP schema 与默认不同时覆盖。',
+    },
+    LDAP_ATTR_USERNAME: {
+      hint: '与登录名匹配的属性；留空使用默认值 sn',
+    },
+    LDAP_ATTR_NAME: {
+      hint: '用作显示名的属性；留空使用默认值 cn',
+    },
+    LDAP_ATTR_EMAIL: {
+      hint: '用作邮箱的属性；留空使用默认值 mail',
+    },
+  },
+}
+
+// Resolve a section's localized display strings.
+const secTitle = (locale: Locale, s: SectionDef) =>
+  locale === 'en' ? s.title : (SCHEMA_ZH.sections[s.id]?.title ?? s.title)
+const secDesc = (locale: Locale, s: SectionDef) =>
+  locale === 'en' ? s.desc : (SCHEMA_ZH.sections[s.id]?.desc ?? s.desc)
+
+// Resolve a field's localized display strings.
+const fldLabel = (locale: Locale, f: FieldDef) =>
+  locale === 'en' ? f.label : (SCHEMA_ZH.fields[f.key]?.label ?? f.label)
+const fldHint = (locale: Locale, f: FieldDef) =>
+  locale === 'en' ? f.hint : (SCHEMA_ZH.fields[f.key]?.hint ?? f.hint)
+const fldPlaceholder = (locale: Locale, f: FieldDef) =>
+  locale === 'en'
+    ? f.placeholder
+    : (SCHEMA_ZH.fields[f.key]?.placeholder ?? f.placeholder)
 
 const SCHEMA: SectionDef[] = [
   // ===================== Required =====================
@@ -111,10 +356,10 @@ const SCHEMA: SectionDef[] = [
         required: true,
         validate: (v) =>
           v.trim() === ''
-            ? 'Required'
+            ? 'required'
             : isIpOrHost(v.trim())
               ? null
-              : 'Must be an IP or hostname',
+              : 'ipOrHost',
       },
       {
         key: 'TOS_NODE_PORT',
@@ -123,8 +368,7 @@ const SCHEMA: SectionDef[] = [
         default: '30080',
         hint: 'Web UI + API. 30000–32767. Still rendered but not exposed when INGRESS_MODE=external',
         required: true,
-        validate: (v) =>
-          isNodePort(v) ? null : 'Must be a port in 30000–32767',
+        validate: (v) => (isNodePort(v) ? null : 'port'),
       },
       {
         key: 'INGRESS_MODE',
@@ -154,8 +398,7 @@ const SCHEMA: SectionDef[] = [
         label: 'ADMIN_PASSWORD',
         hint: 'At least 6 characters',
         required: true,
-        validate: (v) =>
-          v.length < 6 ? 'At least 6 characters' : null,
+        validate: (v) => (v.length < 6 ? 'min6' : null),
       },
       {
         key: 'ADMIN_DISPLAY_NAME',
@@ -208,9 +451,7 @@ const SCHEMA: SectionDef[] = [
         hint: 'CNPG cluster replica count (including the primary). At least 3 in production',
         validate: (v) => {
           const n = Number(v)
-          return Number.isInteger(n) && n >= 1
-            ? null
-            : 'Must be a positive integer'
+          return Number.isInteger(n) && n >= 1 ? null : 'positiveInt'
         },
       },
       {
@@ -219,8 +460,7 @@ const SCHEMA: SectionDef[] = [
         label: 'PG_STORAGE_SIZE',
         default: '10Gi',
         hint: 'Volume size per PostgreSQL instance, e.g. 10Gi / 100Gi',
-        validate: (v) =>
-          isStorageSize(v) ? null : 'Format: number + Gi/Mi/Ti',
+        validate: (v) => (isStorageSize(v) ? null : 'storageSize'),
       },
       {
         key: 'PG_STORAGE_CLASS',
@@ -272,8 +512,7 @@ const SCHEMA: SectionDef[] = [
         label: 'AFS_STORAGE_SIZE',
         default: '500Gi',
         hint: 'Size of the AFS RWX PVC',
-        validate: (v) =>
-          isStorageSize(v) ? null : 'Format: number + Gi/Mi/Ti',
+        validate: (v) => (isStorageSize(v) ? null : 'storageSize'),
       },
     ],
   },
@@ -530,7 +769,7 @@ const isSectionEnabled = (
 
 // Cross-field validation: NodePorts must not collide (only enabled sections)
 function crossValidate(values: Record<string, string>) {
-  const errors: Record<string, string> = {}
+  const errors: Record<string, VMsg> = {}
   const ports: Array<[string, string]> = [
     ['TOS_NODE_PORT', values.TOS_NODE_PORT],
   ]
@@ -542,8 +781,8 @@ function crossValidate(values: Record<string, string>) {
   for (const [k, v] of ports) {
     if (!v) continue
     if (seen.has(v)) {
-      errors[k] = `Conflicts with ${seen.get(v)}`
-      errors[seen.get(v)!] = `Conflicts with ${k}`
+      errors[k] = { conflict: seen.get(v)! }
+      errors[seen.get(v)!] = { conflict: k }
     } else {
       seen.set(v, k)
     }
@@ -664,7 +903,9 @@ function parseValuesEnv(text: string): {
   return { parsed, unknown }
 }
 
-export default function ValuesGenerator() {
+export default function ValuesGenerator({ locale = 'en' }: { locale?: string }) {
+  const loc: Locale = locale === 'zh-CN' ? 'zh-CN' : 'en'
+  const ui = UI[loc]
   const [values, setValues] = useState<Record<string, string>>(buildInitial)
   const [revealSecrets, setRevealSecrets] = useState(false)
   const [copyTip, setCopyTip] = useState<string | null>(null)
@@ -673,7 +914,7 @@ export default function ValuesGenerator() {
   const [importStatus, setImportStatus] = useState<string | null>(null)
 
   const fieldErrors = useMemo(() => {
-    const errs: Record<string, string> = {}
+    const errs: Record<string, VMsg> = {}
     for (const s of SCHEMA) {
       const enabled = isSectionEnabled(s, values)
       if (!enabled) continue // disabled optional modules aren't validated
@@ -681,7 +922,7 @@ export default function ValuesGenerator() {
         if (s.optional && f.key === s.toggleKey) continue // the toggle field itself isn't validated
         const v = values[f.key] ?? ''
         if (f.required && v.trim() === '') {
-          errs[f.key] = 'Required'
+          errs[f.key] = 'required'
           continue
         }
         if (f.validate) {
@@ -721,17 +962,19 @@ export default function ValuesGenerator() {
     const { parsed, unknown } = parseValuesEnv(importText)
     const importedCount = Object.keys(parsed).length
     if (importedCount === 0 && unknown.length === 0) {
-      setImportStatus('No fields parsed — check the pasted content')
+      setImportStatus(ui.importNoFields)
       return
     }
     setValues((prev) => ({ ...prev, ...parsed }))
     const unknownTail =
       unknown.length === 0
         ? ''
-        : `; ignored ${unknown.length} unrecognized field(s) (${unknown
-            .slice(0, 3)
-            .join(', ')}${unknown.length > 3 ? '…' : ''})`
-    setImportStatus(`Imported ${importedCount} field(s)${unknownTail}`)
+        : ui.importIgnored(
+            unknown.length,
+            unknown.slice(0, 3).join(', '),
+            unknown.length > 3,
+          )
+    setImportStatus(ui.importResult(importedCount, unknownTail))
     setImportText('')
     setImportOpen(false)
     setTimeout(() => setImportStatus(null), 6000)
@@ -749,13 +992,13 @@ export default function ValuesGenerator() {
 
   const copy = async () => {
     await navigator.clipboard.writeText(output)
-    setCopyTip('Copied')
+    setCopyTip(ui.copied)
     setTimeout(() => setCopyTip(null), 1500)
   }
 
   const renderField = (f: FieldDef) => {
     const v = values[f.key] ?? ''
-    const err = fieldErrors[f.key]
+    const err = locMsg(loc, fieldErrors[f.key] ?? null)
     const showAsSecret =
       (f.kind === 'secret' || f.kind === 'password') && !revealSecrets
 
@@ -766,7 +1009,7 @@ export default function ValuesGenerator() {
       >
         <label>
           <span class="vg-label-text">
-            {f.label}
+            {fldLabel(loc, f)}
             {f.required && <span class="vg-req">*</span>}
           </span>
           {f.kind === 'boolean' ? (
@@ -797,7 +1040,7 @@ export default function ValuesGenerator() {
               <input
                 type={showAsSecret ? 'password' : 'text'}
                 value={v}
-                placeholder={f.placeholder ?? 'click ↻ to generate'}
+                placeholder={fldPlaceholder(loc, f) ?? ui.secretPlaceholder}
                 onInput={(e) =>
                   update(f.key, (e.target as HTMLInputElement).value)
                 }
@@ -805,7 +1048,7 @@ export default function ValuesGenerator() {
               <button
                 type="button"
                 class="vg-icon-btn"
-                title="Generate a random 32-byte hex value"
+                title={ui.genSecretTitle}
                 onClick={() => update(f.key, genHex32())}
               >
                 ↻
@@ -815,7 +1058,7 @@ export default function ValuesGenerator() {
             <input
               type={showAsSecret ? 'password' : 'text'}
               value={v}
-              placeholder={f.placeholder}
+              placeholder={fldPlaceholder(loc, f)}
               inputMode={f.kind === 'number' ? 'numeric' : 'text'}
               onInput={(e) =>
                 update(f.key, (e.target as HTMLInputElement).value)
@@ -823,7 +1066,7 @@ export default function ValuesGenerator() {
             />
           )}
         </label>
-        {f.hint && !err && <p class="vg-hint">{f.hint}</p>}
+        {fldHint(loc, f) && !err && <p class="vg-hint">{fldHint(loc, f)}</p>}
         {err && <p class="vg-error">{err}</p>}
       </div>
     )
@@ -834,20 +1077,20 @@ export default function ValuesGenerator() {
       <div class="vg-toolbar">
         <div class="vg-toolbar-status">
           {errorCount === 0 ? (
-            <span class="vg-ok">Validation passed</span>
+            <span class="vg-ok">{ui.validationPassed}</span>
           ) : (
-            <span class="vg-err">{errorCount} field(s) need fixing</span>
+            <span class="vg-err">{ui.fieldsNeedFixing(errorCount)}</span>
           )}
         </div>
         <div class="vg-toolbar-actions">
           <button type="button" onClick={fillAllSecrets}>
-            Generate secrets
+            {ui.generateSecrets}
           </button>
           <button
             type="button"
             onClick={() => setRevealSecrets((s) => !s)}
           >
-            {revealSecrets ? 'Hide' : 'Show'} secrets
+            {revealSecrets ? ui.hideSecrets : ui.showSecrets}
           </button>
           <button
             type="button"
@@ -857,10 +1100,10 @@ export default function ValuesGenerator() {
             }}
             class="vg-secondary"
           >
-            {importOpen ? 'Collapse import' : 'Import existing values.env'}
+            {importOpen ? ui.collapseImport : ui.importExisting}
           </button>
           <button type="button" onClick={reset} class="vg-secondary">
-            Reset
+            {ui.reset}
           </button>
         </div>
       </div>
@@ -868,11 +1111,11 @@ export default function ValuesGenerator() {
       {importOpen && (
         <div class="vg-import-panel">
           <p class="vg-import-hint">
-            Paste an existing <code>values.env</code> here. Recognized fields are filled back into the form; unrecognized fields are ignored and counted. Fields added in newer versions keep their defaults, so you can scan the * required fields and fill them in.
+            {ui.importHintPre}<code>values.env</code>{ui.importHintPost}
           </p>
           <textarea
             class="vg-import-textarea"
-            placeholder={'# paste an existing values.env\nREGISTRY=...\nTOS_HOST=...'}
+            placeholder={ui.importPlaceholder}
             value={importText}
             onInput={(e) =>
               setImportText((e.target as HTMLTextAreaElement).value)
@@ -887,14 +1130,14 @@ export default function ValuesGenerator() {
                 setImportText('')
               }}
             >
-              Cancel
+              {ui.cancel}
             </button>
             <button
               type="button"
               onClick={applyImport}
               disabled={importText.trim() === ''}
             >
-              Apply
+              {ui.apply}
             </button>
           </div>
         </div>
@@ -909,16 +1152,16 @@ export default function ValuesGenerator() {
           {/* required first */}
           {SCHEMA.filter((s) => !s.optional).map((section) => (
             <fieldset key={section.id} class="vg-section">
-              <legend>{section.title}</legend>
-              {section.desc && (
-                <p class="vg-section-desc">{section.desc}</p>
+              <legend>{secTitle(loc, section)}</legend>
+              {secDesc(loc, section) && (
+                <p class="vg-section-desc">{secDesc(loc, section)}</p>
               )}
               {section.fields.map(renderField)}
             </fieldset>
           ))}
 
           {/* optional next */}
-          <h4 class="vg-group-title">Optional modules</h4>
+          <h4 class="vg-group-title">{ui.optionalModules}</h4>
           {SCHEMA.filter((s) => s.optional).map((section) => {
             const enabled = isSectionEnabled(section, values)
             return (
@@ -945,11 +1188,11 @@ export default function ValuesGenerator() {
                       />
                       <span class="vg-toggle-thumb" />
                     </span>
-                    <span class="vg-toggle-label">{section.title}</span>
+                    <span class="vg-toggle-label">{secTitle(loc, section)}</span>
                   </label>
                 </legend>
-                {section.desc && (
-                  <p class="vg-section-desc">{section.desc}</p>
+                {secDesc(loc, section) && (
+                  <p class="vg-section-desc">{secDesc(loc, section)}</p>
                 )}
                 {enabled &&
                   section.fields
@@ -962,18 +1205,18 @@ export default function ValuesGenerator() {
 
         <aside class="vg-preview">
           <div class="vg-preview-head">
-            <span class="vg-preview-title">values.env preview</span>
+            <span class="vg-preview-title">{ui.previewTitle}</span>
             <div class="vg-preview-actions">
               <button type="button" onClick={copy}>
-                {copyTip ?? 'Copy'}
+                {copyTip ?? ui.copy}
               </button>
               <button
                 type="button"
                 onClick={download}
                 disabled={errorCount > 0}
-                title={errorCount > 0 ? 'Fix errors before downloading' : ''}
+                title={errorCount > 0 ? ui.fixBeforeDownload : ''}
               >
-                Download
+                {ui.download}
               </button>
             </div>
           </div>

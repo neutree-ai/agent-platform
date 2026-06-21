@@ -5,7 +5,22 @@ interface Props {
   children: string
   /** Shiki language id. bash / yaml / dotenv / json / typescript, etc. */
   lang?: string
+  /** UI locale for display strings (button + aria-label). */
+  locale?: string
 }
+
+const STR = {
+  en: {
+    copyAria: 'Copy code',
+    copy: 'Copy',
+    copied: 'Copied',
+  },
+  'zh-CN': {
+    copyAria: '复制代码',
+    copy: '复制',
+    copied: '已复制',
+  },
+} as const
 
 // Cache the shiki highlighter globally to avoid reloading languages/themes.
 let highlighterPromise: Promise<typeof import('shiki')> | null = null
@@ -14,7 +29,12 @@ const loadShiki = () => {
   return highlighterPromise
 }
 
-export default function CodeBlock({ children, lang = 'bash' }: Props) {
+export default function CodeBlock({
+  children,
+  lang = 'bash',
+  locale = 'en',
+}: Props) {
+  const t = STR[locale as keyof typeof STR] ?? STR.en
   const [copied, setCopied] = useState(false)
   const [html, setHtml] = useState<string | null>(null)
 
@@ -56,10 +76,10 @@ export default function CodeBlock({ children, lang = 'bash' }: Props) {
       <button
         type="button"
         class="sh-codeblock-copy"
-        aria-label="Copy code"
+        aria-label={t.copyAria}
         onClick={copy}
       >
-        {copied ? 'Copied' : 'Copy'}
+        {copied ? t.copied : t.copy}
       </button>
       {html ? (
         // shiki output: the outer <pre class="shiki ..."> carries token colors inline
