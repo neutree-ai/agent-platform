@@ -124,7 +124,7 @@ jobs:
       - name: Install
         run: |
           npm ci
-          for ws in control-plane web browser-service channel-gateway sandbox-service scheduler skills-content-service; do
+          for ws in control-plane web browser-service channel-gateway sandbox-service scheduler skills-content-service docs-site; do
             # web needs --legacy-peer-deps for @base-ui/react's date-fns peer (see check job).
             if [ "$ws" = "web" ]; then (cd "$ws" && npm ci --legacy-peer-deps); else (cd "$ws" && npm ci); fi
           done
