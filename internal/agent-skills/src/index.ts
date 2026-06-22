@@ -149,6 +149,48 @@ export class SkillManager {
    * unique. The filesystem still uses the display name (user-facing dir).
    */
   private skillIds = new Map<string, string>()
+  /**
+   * Per-skill-name serialization. `pack()` (tar reads the skill dir) and
+   * `load()`'s `extractAtomic` (rm + rename the same dir) run in the same
+   * process on the same SkillManager instance but on independent request
+   * tasks (HTTP `/pack` vs `/reload-config`). Without coordination, an
+   * extract can rm/rename a directory mid-tar, making tar exit non-zero and
+   * surfacing as a spurious "failed to pack skill" 500. Each name maps to the
+   * tail of a promise chain; both critical sections enqueue onto it so they
+   * never overlap for the same name. The chain self-prunes when idle so the
+   * map doesn't grow unbounded.
+   */
+  private nameLocks = new Map<string, Promise<unknown>>()
+
+  /**
+   * Run `fn` while holding the per-name lock, serializing against any other
+   * holder of the same name. Different names proceed concurrently.
+   */
+  private withNameLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.nameLocks.get(name) ?? Promise.resolve()
+    // Swallow the predecessor's result/rejection: one task's failure must not
+    // reject the next in line; each still settles on its own `fn`.
+    const run = prev.then(
+      () => fn(),
+      () => fn(),
+    )
+    // The chain tail used by *subsequent* callers must never reject (a failed
+    // task must not reject the next in line) and must not be an unhandled
+    // rejection itself. Derive a settled-only tail for both bookkeeping and
+    // chaining; hand the real `run` (with its result/rejection) back to the
+    // caller.
+    const tail = run.then(
+      () => {},
+      () => {},
+    )
+    this.nameLocks.set(name, tail)
+    // Prune the chain tail once this task settles, but only if no later task
+    // has since extended it — keeps the map from leaking entries over time.
+    tail.then(() => {
+      if (this.nameLocks.get(name) === tail) this.nameLocks.delete(name)
+    })
+    return run
+  }
 
   constructor(opts: SkillManagerOptions) {
     this.cpUrl = opts.cpUrl
@@ -357,14 +399,6 @@ export class SkillManager {
           return
         }
 
-        // Enabled + not editing, yet a persistent draft dir lingers → it was
-        // published (or replaced) elsewhere. Reclaim it so we re-materialise the
-        // active version on tmpfs instead of serving the stale draft off NFS.
-        if (this.draftBase && this.isDraft(name)) {
-          await this.fs.rm(this.draftDir(name))
-          await this.fs.rm(this.destDir(name))
-        }
-
         const res = await this.downloadWithRetry(name)
         if (res.kind === 'failed') {
           // Retries exhausted — preserve existing destDir/localDir state.
@@ -380,10 +414,28 @@ export class SkillManager {
           return
         }
 
+        // Serialize all disk mutations for this name against a concurrent
+        // pack() (which tars the same dir): the reclaim-rm below and
+        // extractAtomic's rm/rename must not run while tar is reading.
         try {
-          await this.extractAtomic(name, res.buf, res.etag)
-          await this.markManaged(name)
-          loaded.push(name)
+          await this.withNameLock(name, async () => {
+            // Enabled + not editing, yet a persistent draft dir lingers → it was
+            // published (or replaced) elsewhere. Reclaim it so we re-materialise
+            // the active version on tmpfs instead of serving the stale draft off
+            // NFS. Re-check under the lock: editing state may have changed while
+            // we awaited the download.
+            if (this.isEditing(name)) {
+              editing.push(name)
+              return
+            }
+            if (this.draftBase && this.isDraft(name)) {
+              await this.fs.rm(this.draftDir(name))
+              await this.fs.rm(this.destDir(name))
+            }
+            await this.extractAtomic(name, res.buf, res.etag)
+            await this.markManaged(name)
+            loaded.push(name)
+          })
         } catch (e) {
           console.error(
             `[skills] extract_failed name=${name} error=${(e as Error).message}`,
@@ -728,24 +780,30 @@ export class SkillManager {
 
   async pack(name: string): Promise<Buffer> {
     assertNotReserved(name)
-    const local = this.localDir(name)
-    if (!this.fs.exists(local)) {
-      throw new Error(`Skill not found locally: ${name}`)
-    }
+    // Hold the per-name lock across the whole tar read: a concurrent load()
+    // for the same name must not rm/rename the directory tar is reading,
+    // which would make tar exit non-zero. Resolve localDir() inside the lock
+    // too — a draft→tmpfs reclaim in load() can move it.
+    return this.withNameLock(name, async () => {
+      const local = this.localDir(name)
+      if (!this.fs.exists(local)) {
+        throw new Error(`Skill not found locally: ${name}`)
+      }
 
-    const tarFile = `${this.localBase}/skill-${name}-publish.tar.gz`
-    try {
-      await this.fs.rm(tarFile)
-      await this.shell.exec('tar', [
-        'czf', tarFile,
-        '-C', local,
-        '--exclude', LOCK_FILE,
-        '--exclude', '.skill.tar.gz',
-        '.',
-      ])
-      return await this.fs.readFile(tarFile)
-    } finally {
-      try { await this.fs.rm(tarFile) } catch {}
-    }
+      const tarFile = `${this.localBase}/skill-${name}-publish.tar.gz`
+      try {
+        await this.fs.rm(tarFile)
+        await this.shell.exec('tar', [
+          'czf', tarFile,
+          '-C', local,
+          '--exclude', LOCK_FILE,
+          '--exclude', '.skill.tar.gz',
+          '.',
+        ])
+        return await this.fs.readFile(tarFile)
+      } finally {
+        try { await this.fs.rm(tarFile) } catch {}
+      }
+    })
   }
 }
