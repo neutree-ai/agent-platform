@@ -1,0 +1,75 @@
+name: Deploy docs
+
+# Publishes the static docs-site to its public home at nap.docs.neutree.ai.
+#
+# The site is a plain Astro/Starlight static build (no use-cases in this repo —
+# that section is a downstream extension point), so the public deploy is just:
+# build -> S3 sync -> CloudFront invalidation. This is independent of the
+# self-hosted docs image built by build-images.yml.
+#
+# AWS auth uses GitHub OIDC (no long-lived keys): the workflow assumes an IAM
+# role scoped to this repo's main branch, allowed only to sync the bucket and
+# invalidate the distribution. Infra (S3 bucket, CloudFront + OAC, ACM cert,
+# Route53, the role) is provisioned out-of-band; the identifiers below are the
+# stable references to it.
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs-site/**']
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: true
+
+permissions:
+  id-token: write   # mint the OIDC token for AWS
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  DEPLOY_ROLE: arn:aws:iam::784310920186:role/neutree-nap-docs-deploy
+  S3_BUCKET: neutree-nap-docs-prod
+  CF_DISTRIBUTION_ID: E2FR8AO2K9XIBJ
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+
+      - name: Build
+        working-directory: docs-site
+        run: |
+          npm ci
+          npm run build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Hashed assets get a long immutable cache; HTML is re-fetched each time
+      # (CloudFront still serves stale until the invalidation below lands).
+      - name: Sync to S3
+        working-directory: docs-site
+        run: |
+          aws s3 sync dist/ "s3://${S3_BUCKET}/" --delete \
+            --exclude "*.html" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync dist/ "s3://${S3_BUCKET}/" --delete \
+            --exclude "*" --include "*.html" \
+            --cache-control "no-cache"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${CF_DISTRIBUTION_ID}" \
+            --paths "/*"
