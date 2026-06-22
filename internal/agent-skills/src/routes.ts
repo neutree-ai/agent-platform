@@ -119,6 +119,9 @@ export function registerSkillRoutes(
         },
       })
     } catch (e: any) {
+      // Surface the underlying tar/exec failure (e.g. "exited with code 1",
+      // which previously vanished) so pack failures are diagnosable in logs.
+      console.error(`[skills] pack_failed name=${c.req.param('name')} error=${e?.message}`)
       return c.json({ error: e.message }, 500)
     }
   })
