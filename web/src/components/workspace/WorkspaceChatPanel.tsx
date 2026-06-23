@@ -53,7 +53,13 @@ import { useAgentSessionActions, useAgentSessionStore } from '@/stores/AgentSess
 import type { ChatMessage as ChatMessageType } from '@/stores/agent-session-store'
 import { useComposerInsertRequests } from '@/stores/composer-store'
 import { useDraft } from '@/stores/draft-store'
-import { MessageBubble, TranscriptI18nProvider, TurnStatsBar } from '@neutree-ai/ui-sdk'
+import {
+  MessageBubble,
+  type SubAgentNav,
+  TranscriptI18nProvider,
+  TurnStatsBar,
+} from '@neutree-ai/ui-sdk'
+import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Bot,
@@ -78,6 +84,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { I18nextProvider, useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 
 const FONT_SIZE_MIN = 10
 const FONT_SIZE_MAX = 18
@@ -257,7 +264,37 @@ export function WorkspaceChatPanel({
   onMessages,
 }: WorkspaceChatPanelProps) {
   const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
   const { mode: chatSendKeyMode } = useChatSendKey()
+
+  // call_agent "jump to sub-agent session" link. Only the user's OWN agents are
+  // reachable: their session lives in a workspace the user owns, so the normal
+  // route can load it. Others' public agents run in workspaces the user can't
+  // open, so they stay non-clickable. Disabled entirely in read-only views.
+  const { data: callableAgents } = useQuery({
+    queryKey: ['callable-agents'],
+    queryFn: () => api.getCallableAgents(),
+    enabled: !readonly,
+  })
+  const subAgentNav = useMemo<SubAgentNav | undefined>(() => {
+    if (readonly) return undefined
+    // Mirror call_agent's addressing: "owner/slug" for cross-user, bare slug for own.
+    const resolve = (slug: string) => {
+      const agents = callableAgents ?? []
+      if (slug.includes('/')) {
+        const [owner, bare] = slug.split('/')
+        return agents.find((a) => a.owner === owner && a.slug === bare)
+      }
+      return agents.find((a) => a.is_own && a.slug === slug)
+    }
+    return {
+      canOpen: (slug) => resolve(slug)?.is_own === true,
+      open: (slug, sessionId) => {
+        const agent = resolve(slug)
+        if (agent?.is_own) navigate(`/w/${agent.id}?session=${encodeURIComponent(sessionId)}`)
+      },
+    }
+  }, [readonly, callableAgents, navigate])
   const hints = useMemo(
     () => [
       t('components.workspaceChat.hints.customCommands'),
@@ -611,7 +648,7 @@ export function WorkspaceChatPanel({
   }
 
   return (
-    <TranscriptProviders agentType={agentType}>
+    <TranscriptProviders agentType={agentType} subAgentNav={subAgentNav}>
       {/* The panel chrome (header, composer, dialogs) is app UI keyed against
           the host i18n bundle. TranscriptProviders' TranscriptI18nProvider
           rebinds useTranslation to the SDK's chat-only instance, which would

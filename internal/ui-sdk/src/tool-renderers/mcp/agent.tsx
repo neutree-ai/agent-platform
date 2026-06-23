@@ -1,3 +1,5 @@
+import { ArrowUpRight } from 'lucide-react'
+import { useSubAgentNav } from '../../components/SubAgentNavContext'
 import { transcriptI18n as i18n } from '../../i18n'
 import { type ToolCall, getMcpText, unwrapMcpInput } from '../types'
 import type { ToolRendererDef } from '../types'
@@ -25,6 +27,31 @@ function parseAgentResult(tool: ToolCall): CallAgentResult | null {
 
 function shortId(id: string): string {
   return id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id
+}
+
+// The sub-agent's session id. When the host says it's reachable (own agent),
+// render it as a link that jumps to that session; otherwise plain text.
+function SubAgentSessionId({ slug, sessionId }: { slug: string; sessionId: string }) {
+  const nav = useSubAgentNav()
+  const label = shortId(sessionId)
+  if (slug && nav.canOpen(slug)) {
+    return (
+      <button
+        type="button"
+        onClick={() => nav.open(slug, sessionId)}
+        className="inline-flex items-center gap-1 rounded bg-info/15 px-1.5 py-0.5 font-mono text-mini text-info transition-colors hover:bg-info/25"
+        title={i18n.t('components.chat.toolRenderers.agent.result.viewSession', 'View session')}
+      >
+        <ArrowUpRight className="h-3 w-3" />
+        {label}
+      </button>
+    )
+  }
+  return (
+    <span className="font-mono text-mini text-muted-foreground" title={sessionId}>
+      {label}
+    </span>
+  )
 }
 
 export const callAgentRenderer: ToolRendererDef = {
@@ -95,6 +122,7 @@ export const callAgentRenderer: ToolRendererDef = {
     }
 
     const { status, session_id, text, message } = parsed
+    const slug = String(unwrapMcpInput(tool.input).slug || '')
 
     const statusChip =
       status === 'ended' ? (
@@ -109,11 +137,7 @@ export const callAgentRenderer: ToolRendererDef = {
       <div className="text-tiny space-y-1">
         <div className="flex flex-wrap items-center gap-1.5">
           {statusChip}
-          {session_id && (
-            <span className="font-mono text-mini text-muted-foreground" title={session_id}>
-              {shortId(session_id)}
-            </span>
-          )}
+          {session_id && <SubAgentSessionId slug={slug} sessionId={session_id} />}
         </div>
         {text ? (
           <pre className="whitespace-pre-wrap text-tiny font-mono rounded bg-muted/50 p-1.5 overflow-x-auto max-h-[300px] overflow-y-auto">
