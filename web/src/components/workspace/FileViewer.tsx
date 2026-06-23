@@ -95,6 +95,7 @@ export function FileViewer({
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [pathCopied, setPathCopied] = useState(false)
 
   const url = fileUrl(workspaceId, filePath, drive)
   const previewUrl = filePreviewUrl(workspaceId, filePath, drive)
@@ -182,6 +183,14 @@ export function FileViewer({
       setTimeout(() => setCopied(false), 1500)
     })
   }, [isEditing, editedContent, fileContent])
+
+  const handleCopyPath = useCallback(() => {
+    const fullPath = `${drive === 'afs' ? '/mnt/afs' : '/workspace'}${filePath}`
+    navigator.clipboard.writeText(fullPath).then(() => {
+      setPathCopied(true)
+      setTimeout(() => setPathCopied(false), 1500)
+    })
+  }, [drive, filePath])
 
   // Download the raw file via the same bytes endpoint the directory list and
   // context menu use. Uses the cache-buster-free `url` so the download always
@@ -351,6 +360,16 @@ export function FileViewer({
             {drive === 'afs' ? '/mnt/afs' : '/workspace'}
             {filePath}
           </span>
+          <AppHeaderButton
+            icon={pathCopied ? ClipboardCheck : Copy}
+            title={
+              pathCopied
+                ? t('components.fileViewer.actions.copiedPath')
+                : t('components.fileViewer.actions.copyPath')
+            }
+            onClick={handleCopyPath}
+            className={pathCopied ? 'text-success hover:text-success' : ''}
+          />
           <div className="flex shrink-0 items-center gap-0.5">{actions}</div>
         </div>
       )}

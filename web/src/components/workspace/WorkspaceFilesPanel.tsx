@@ -34,6 +34,8 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  ClipboardCheck,
+  Copy,
   Download,
   File,
   FilePlus,
@@ -162,6 +164,15 @@ export function WorkspaceFilesPanel({
   // Component-local — purely render-cycle state.
   const [afsRefreshToken, setAfsRefreshToken] = useState(0)
   const [fileRefreshToken, setFileRefreshToken] = useState(0)
+  const [pathCopied, setPathCopied] = useState(false)
+
+  const handleCopyPath = useCallback(() => {
+    const fullPath = `${drive === 'workspace' ? '/workspace' : '/mnt/afs'}${viewingPath}`
+    navigator.clipboard.writeText(fullPath).then(() => {
+      setPathCopied(true)
+      setTimeout(() => setPathCopied(false), 1500)
+    })
+  }, [drive, viewingPath])
 
   const isViewingFile = viewingPath !== '' && !viewingPath.endsWith('/')
   const currentPath = isViewingFile
@@ -1232,6 +1243,18 @@ export function WorkspaceFilesPanel({
                   )
                 })}
               </div>
+            )}
+            {isViewingFile && !isSearching && (
+              <AppHeaderButton
+                icon={pathCopied ? ClipboardCheck : Copy}
+                title={
+                  pathCopied
+                    ? t('components.workspaceFiles.actions.copiedPath')
+                    : t('components.workspaceFiles.actions.copyPath')
+                }
+                onClick={handleCopyPath}
+                className={pathCopied ? 'text-success hover:text-success' : ''}
+              />
             )}
           </>,
           headerSlot,
