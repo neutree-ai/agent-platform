@@ -16,8 +16,6 @@ import {
   type LazyToolRenderers,
   LazyToolRenderersProvider,
   MarkdownProvider,
-  type SubAgentNav,
-  SubAgentNavProvider,
   TranscriptI18nProvider,
 } from '@neutree-ai/ui-sdk'
 import type { ReactNode } from 'react'
@@ -32,26 +30,17 @@ const lazyToolRenderers: LazyToolRenderers = {
 
 export function TranscriptProviders({
   agentType,
-  subAgentNav,
   children,
 }: {
   agentType: string
-  /** Enables the call_agent "jump to sub-agent session" link. Omitted on
-   *  read-only / share views so those sessions stay non-clickable. */
-  subAgentNav?: SubAgentNav
   children: ReactNode
 }) {
   const { i18n } = useTranslation()
-  const content = <MarkdownProvider value={Markdown}>{children}</MarkdownProvider>
   return (
     <TranscriptI18nProvider locale={i18n.language}>
       <LazyToolRenderersProvider value={lazyToolRenderers}>
         <AgentTypeProvider value={agentType}>
-          {subAgentNav ? (
-            <SubAgentNavProvider value={subAgentNav}>{content}</SubAgentNavProvider>
-          ) : (
-            content
-          )}
+          <MarkdownProvider value={Markdown}>{children}</MarkdownProvider>
         </AgentTypeProvider>
       </LazyToolRenderersProvider>
     </TranscriptI18nProvider>

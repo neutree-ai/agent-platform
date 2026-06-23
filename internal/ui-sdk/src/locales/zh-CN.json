@@ -112,9 +112,6 @@
           "input": {
             "continue": "续聊 {{sid}}",
             "newSession": "新会话"
-          },
-          "result": {
-            "viewSession": "查看会话"
           }
         },
         "claudeBash": {

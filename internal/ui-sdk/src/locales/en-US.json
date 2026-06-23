@@ -112,9 +112,6 @@
           "input": {
             "continue": "continue {{sid}}",
             "newSession": "new session"
-          },
-          "result": {
-            "viewSession": "View session"
           }
         },
         "claudeBash": {

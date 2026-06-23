@@ -1271,6 +1271,9 @@
         "createFailed": "Failed to create template"
       }
     },
+    "subAgentSessionLink": {
+      "viewSession": "View session"
+    },
     "shareSession": {
       "trigger": "Share",
       "title": "Share Session",

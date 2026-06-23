@@ -6,8 +6,9 @@
  * handlers match.
  */
 
+import { SubAgentSessionLink } from '@/components/chat/SubAgentSessionLink'
 import { agentRequestProposeRenderer } from '@/components/chat/tool-renderers/mcp/agent-request'
-import { registerToolRenderer } from '@neutree-ai/ui-sdk'
+import { registerToolRenderer, setSubAgentSessionLink } from '@neutree-ai/ui-sdk'
 import { builderModePlugin } from './builder-mode'
 import { filesPlugin } from './files'
 import { memoryPlugin } from './memory'
@@ -45,4 +46,6 @@ export function registerBuiltinPlugins(): void {
   for (const name of AGENT_REQUEST_PROPOSE_TOOLS) {
     registerToolRenderer(name, agentRequestProposeRenderer)
   }
+  // Turn the call_agent result's session id into a jump-to-session link.
+  setSubAgentSessionLink(SubAgentSessionLink)
 }
