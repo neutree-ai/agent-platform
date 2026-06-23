@@ -20,6 +20,7 @@ import { useSlotContext } from '@/contexts/SlotContext'
 import { registerPlugin } from '@/plugins/registry'
 import type { WorkspacePlugin } from '@/plugins/types'
 import { useAgentSessionActions, useAgentSessionStore } from '@/stores/AgentSessionContext'
+import { useSessionNavigation } from '@/stores/active-session-store'
 import { useInstancePersistentState, useInstanceState } from '@/stores/instance-state-store'
 import { useResolvedTheme } from '@neutree-ai/theme'
 import {
@@ -54,6 +55,7 @@ interface TosHost {
     useSlotContext: typeof useSlotContext
     useAgentSessionActions: typeof useAgentSessionActions
     useAgentSessionStore: typeof useAgentSessionStore
+    useSessionNavigation: typeof useSessionNavigation
     useInstanceState: typeof useInstanceState
     useInstancePersistentState: typeof useInstancePersistentState
   }
@@ -91,6 +93,7 @@ export function installHost(): void {
       useSlotContext,
       useAgentSessionActions,
       useAgentSessionStore,
+      useSessionNavigation,
       useInstanceState,
       useInstancePersistentState,
     },
