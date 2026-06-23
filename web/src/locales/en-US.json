@@ -1534,7 +1534,9 @@
         "newFolder": "New folder",
         "newFolderDisabled": "Create not allowed here",
         "managePublicLinks": "Manage public links",
-        "refresh": "Refresh"
+        "refresh": "Refresh",
+        "copyPath": "Copy path",
+        "copiedPath": "Path copied!"
       },
       "placeholders": {
         "search": "Search files..."
@@ -2447,6 +2449,8 @@
         "backToList": "Back to file list",
         "copied": "Copied!",
         "copyContent": "Copy file content",
+        "copyPath": "Copy path",
+        "copiedPath": "Path copied!",
         "download": "Download file",
         "edit": "Edit file",
         "save": "Save",

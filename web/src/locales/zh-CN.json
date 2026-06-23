@@ -1559,7 +1559,9 @@
         "newFolder": "新建文件夹",
         "newFolderDisabled": "当前位置不可新建",
         "managePublicLinks": "管理公开链接",
-        "refresh": "刷新"
+        "refresh": "刷新",
+        "copyPath": "复制路径",
+        "copiedPath": "路径已复制"
       },
       "placeholders": {
         "search": "搜索文件..."
@@ -2471,6 +2473,8 @@
         "backToList": "返回文件列表",
         "copied": "已复制",
         "copyContent": "复制文件内容",
+        "copyPath": "复制路径",
+        "copiedPath": "路径已复制",
         "download": "下载文件",
         "edit": "编辑文件",
         "save": "保存",
