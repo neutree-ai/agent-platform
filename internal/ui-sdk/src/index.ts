@@ -21,6 +21,8 @@ export { MessageBubble } from './components/MessageBubble'
 export { ToolCallBlock } from './components/ToolCallBlock'
 export { TurnStatsBar } from './components/TurnStatsBar'
 export { AgentTypeProvider, useAgentType } from './components/AgentTypeContext'
+export { SubAgentNavProvider, useSubAgentNav } from './components/SubAgentNavContext'
+export type { SubAgentNav } from './components/SubAgentNavContext'
 
 // ── Markdown injection ──
 export { Markdown, MarkdownProvider, useMarkdown } from './markdown'
