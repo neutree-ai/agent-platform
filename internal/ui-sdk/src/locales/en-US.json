@@ -79,6 +79,7 @@
         },
         "browser": {
           "timeout": "timeout: {{value}}s",
+          "liveView": "live view",
           "status": {
             "created": "created"
           },

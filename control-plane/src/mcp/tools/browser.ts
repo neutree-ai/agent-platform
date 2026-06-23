@@ -5,6 +5,61 @@ import { getPlatformToken } from '../../services/db/shares'
 import { getWorkspace } from '../../services/db/workspaces'
 import { textResult, waitUntil } from './shared'
 
+interface BrowserConnectInfo {
+  cdp_url: string | null
+  connect_url: string | null
+  connect_command: string | null
+  live_view_url: string | null
+}
+
+/**
+ * Build the agent-facing connection info for a browser session, shared by
+ * create_browser and list_browsers so both expose the same fields.
+ *
+ * - cdp_url / live_view_url come straight from the session endpoints (no network).
+ * - connect_url (the wss:// URL for `agent-browser connect`) needs one
+ *   getCdpVersion round-trip and is only attempted when `resolveWss` is set
+ *   (the browser must be running). On timeout/failure it stays null — callers
+ *   treat it as best-effort. create_browser passes a generous timeout; the
+ *   list path passes a short one so a single stuck browser can't stall the list.
+ */
+async function buildConnectInfo(
+  token: string,
+  session: { id: string; endpoints?: { cdp: string | null; live_view: string | null } },
+  { resolveWss, wssTimeoutMs = 60_000 }: { resolveWss: boolean; wssTimeoutMs?: number },
+): Promise<BrowserConnectInfo> {
+  const qs = `?token=${encodeURIComponent(token)}`
+  const cdpUrl = session.endpoints?.cdp ? `${session.endpoints.cdp}${qs}` : null
+  const liveViewUrl = session.endpoints?.live_view ? `${session.endpoints.live_view}${qs}` : null
+
+  let connectUrl: string | null = null
+  if (resolveWss && cdpUrl) {
+    const externalOrigin = new URL(cdpUrl).origin
+    connectUrl = await waitUntil(
+      async () => {
+        const info = await browser.getCdpVersion(token, session.id)
+        if (!info.webSocketDebuggerUrl) return null
+        // Replace internal service host with the external hostname from endpoints.cdp
+        const internal = new URL(info.webSocketDebuggerUrl)
+        const external = new URL(externalOrigin)
+        internal.protocol = external.protocol === 'https:' ? 'wss:' : 'ws:'
+        internal.hostname = external.hostname
+        internal.port = external.port
+        return internal.toString()
+      },
+      { timeoutMs: wssTimeoutMs },
+    )
+  }
+
+  return {
+    cdp_url: cdpUrl,
+    connect_url: connectUrl,
+    // For agent-browser: run connect_command as-is, or `agent-browser connect "<connect_url>"`.
+    connect_command: connectUrl ? `agent-browser connect "${connectUrl}"` : null,
+    live_view_url: liveViewUrl,
+  }
+}
+
 export function registerBrowserTools(server: McpServer, workspaceId: string) {
   let _browserToken: string | null = null
   async function getBrowserToken(): Promise<string> {
@@ -42,70 +97,38 @@ The browser auto-expires after the timeout (default 1 hour, max 24 hours).`,
           timeout_seconds,
           metadata: { 'browser.workspace_id': workspaceId },
         })
-        const qs = `?token=${encodeURIComponent(token)}`
-        const cdpUrl = result.endpoints?.cdp ? `${result.endpoints.cdp}${qs}` : null
-
-        // Wait for browser to be ready, then resolve WSS debugger URL
-        let wssUrl: string | null = null
-        if (cdpUrl) {
+        // Wait for the browser to reach running before resolving the wss debugger URL.
+        let ready = true
+        if (result.endpoints?.cdp) {
           console.log(`[create_browser] waiting for browser ${result.id} to be running...`)
-          const ready = await waitUntil(
+          ready = !!(await waitUntil(
             async () => {
               const info = await browser.getBrowser(token, result.id)
               console.log(`[create_browser] browser ${result.id} status: ${info.status}`)
               return info.status.toLowerCase() === 'running'
             },
             { timeoutMs: 60_000 },
-          )
-
+          ))
           if (!ready) {
             console.warn(`[create_browser] browser ${result.id} did not become running within 60s`)
-          } else {
-            console.log(
-              `[create_browser] browser ${result.id} is running, resolving CDP version...`,
-            )
-            const externalOrigin = new URL(cdpUrl).origin
-            wssUrl = await waitUntil(
-              async () => {
-                const info = await browser.getCdpVersion(token, result.id)
-                if (!info.webSocketDebuggerUrl) return null
-                // Replace internal service host with the external hostname from endpoints.cdp
-                const internal = new URL(info.webSocketDebuggerUrl)
-                const external = new URL(externalOrigin)
-                internal.protocol = external.protocol === 'https:' ? 'wss:' : 'ws:'
-                internal.hostname = external.hostname
-                internal.port = external.port
-                return internal.toString()
-              },
-              { timeoutMs: 60_000 },
-            )
-
-            if (!wssUrl) {
-              console.warn(
-                `[create_browser] failed to resolve webSocketDebuggerUrl for browser ${result.id} within 60s`,
-              )
-            } else {
-              console.log(`[create_browser] resolved wssUrl for browser ${result.id}`)
-            }
           }
         }
 
-        const liveViewUrl = result.endpoints?.live_view
-          ? `${result.endpoints.live_view}${qs}`
-          : null
+        const connect = await buildConnectInfo(token, result, { resolveWss: ready })
+        if (ready && !connect.connect_url) {
+          console.warn(
+            `[create_browser] failed to resolve webSocketDebuggerUrl for browser ${result.id} within 60s`,
+          )
+        }
 
         return textResult(
           JSON.stringify({
             browser_id: result.id,
             status: result.status,
             expires_at: result.expires_at,
-            // For agent-browser: run connect_command as-is, or `agent-browser connect "<connect_url>"`.
-            connect_command: wssUrl ? `agent-browser connect "${wssUrl}"` : null,
-            connect_url: wssUrl,
             // For Playwright only: browser.connectOverCDP(cdp_url).
-            cdp_url: cdpUrl,
-            live_view_url: liveViewUrl,
-            ...(wssUrl
+            ...connect,
+            ...(connect.connect_url
               ? {}
               : {
                   warning:
@@ -123,7 +146,8 @@ The browser auto-expires after the timeout (default 1 hour, max 24 hours).`,
     'list_browsers',
     {
       title: 'List Browsers',
-      description: 'List all active browser instances for the current user.',
+      description: `List all active browser instances for the current user.
+Each item includes the same connection info as create_browser (cdp_url, live_view_url, plus connect_url/connect_command for running browsers), so this doubles as a reconnect path — pick a running browser and run its connect_command.`,
       inputSchema: z.object({}),
     },
     async () => {
@@ -132,7 +156,18 @@ The browser auto-expires after the timeout (default 1 hour, max 24 hours).`,
         const result = await browser.listBrowsers(token, {
           'browser.workspace_id': workspaceId,
         })
-        return textResult(JSON.stringify(result))
+        // Enrich each session with connection info. wss resolution is best-effort
+        // with a short timeout so one stuck browser can't stall the whole list.
+        const items = await Promise.all(
+          result.items.map(async (session) => ({
+            ...session,
+            ...(await buildConnectInfo(token, session, {
+              resolveWss: session.status.toLowerCase() === 'running',
+              wssTimeoutMs: 8_000,
+            })),
+          })),
+        )
+        return textResult(JSON.stringify({ items }))
       } catch (e: any) {
         return textResult(`Error listing browsers: ${e.message}`)
       }

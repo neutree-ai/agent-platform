@@ -79,6 +79,7 @@
         },
         "browser": {
           "timeout": "超时：{{value}} 秒",
+          "liveView": "实时画面",
           "status": {
             "created": "已创建"
           },

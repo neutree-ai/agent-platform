@@ -67,7 +67,11 @@ export const listBrowsersRenderer: ToolRendererDef = {
     let items: Record<string, unknown>[]
     try {
       const parsed = JSON.parse(text)
-      items = Array.isArray(parsed) ? parsed : []
+      items = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray((parsed as { items?: unknown })?.items)
+          ? (parsed as { items: Record<string, unknown>[] }).items
+          : []
     } catch {
       return <pre className="whitespace-pre-wrap text-tiny font-mono">{text}</pre>
     }
@@ -79,17 +83,30 @@ export const listBrowsersRenderer: ToolRendererDef = {
       )
     return (
       <div className="space-y-1">
-        {items.map((b, i) => (
-          <div
-            key={i}
-            className="rounded border border-foreground/[0.08] bg-muted/40 px-2 py-1 text-tiny font-mono flex items-center gap-2"
-          >
-            <span className="rounded bg-muted px-1 py-0.5 text-mini text-muted-foreground">
-              {String(b.status || '?')}
-            </span>
-            <span>{String(b.browser_id || '').slice(0, 12)}</span>
-          </div>
-        ))}
+        {items.map((b, i) => {
+          const liveViewUrl = String(b.live_view_url || '')
+          return (
+            <div
+              key={i}
+              className="rounded border border-foreground/[0.08] bg-muted/40 px-2 py-1 text-tiny font-mono flex items-center gap-2"
+            >
+              <span className="rounded bg-muted px-1 py-0.5 text-mini text-muted-foreground">
+                {String(b.status || '?')}
+              </span>
+              <span>{String(b.id || b.browser_id || '').slice(0, 12)}</span>
+              {liveViewUrl && (
+                <a
+                  href={liveViewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-mini text-info hover:underline"
+                >
+                  {i18n.t('components.chat.toolRenderers.browser.liveView')}
+                </a>
+              )}
+            </div>
+          )
+        })}
       </div>
     )
   },
