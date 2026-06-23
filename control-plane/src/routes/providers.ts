@@ -347,7 +347,13 @@ providers.openapi(testRoute, async (c) => {
   if (!provider) return c.json({ error: 'Provider not found' }, 404)
 
   const body = c.req.valid('json')
-  const model = body.model || ''
+  const model = body.model?.trim() || ''
+
+  // A model is mandatory: the probe issues a real completion request, so there
+  // is no safe provider-agnostic default to fall back to.
+  if (!model) {
+    return c.json({ ok: false, detail: 'Select a model to test this provider.' }, 200)
+  }
 
   // Merge optional draft config over the stored provider so the Edit Provider
   // dialog can probe unsaved values. A blank api_key keeps the stored key.
@@ -370,7 +376,7 @@ providers.openapi(testRoute, async (c) => {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: model || 'claude-haiku-4-5-20251001',
+          model,
           max_tokens: 1,
           messages: [{ role: 'user', content: 'hi' }],
         }),
@@ -381,13 +387,12 @@ providers.openapi(testRoute, async (c) => {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${effective.api_key}`,
       }
-      const testModel = model || 'gpt-4o-mini'
 
       res = await fetch(`${baseUrl}/v1/responses`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          model: testModel,
+          model,
           input: 'hi',
           max_output_tokens: 1,
         }),
@@ -400,7 +405,7 @@ providers.openapi(testRoute, async (c) => {
             method: 'POST',
             headers,
             body: JSON.stringify({
-              model: testModel,
+              model,
               max_tokens: 1,
               messages: [{ role: 'user', content: 'hi' }],
             }),

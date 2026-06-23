@@ -15,8 +15,14 @@ import { ConfirmButton } from '@/components/ui/confirm-button'
 import { DocumentedDialog } from '@/components/ui/documented-dialog'
 import { EmptyHero } from '@/components/ui/empty-hero'
 import { EmptyIllustration } from '@/components/ui/empty-illustration'
+import { Label } from '@/components/ui/label'
 import { SaveButton } from '@/components/ui/save-button'
-import { TestButton, TestResult } from '@/components/workspace/agent-config/ModelPicker'
+import {
+  ModelInput,
+  TestButton,
+  TestResult,
+  useProviderModels,
+} from '@/components/workspace/agent-config/ModelPicker'
 import { useDialogStack } from '@/contexts/DialogStackContext'
 import { getProviderDoc, getProviderDocsHint } from '@/docs/inline-help/provider-docs'
 import { useDeleteProvider, useProviders, useUpdateProvider } from '@/hooks/useProviders'
@@ -79,6 +85,12 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
   const [form, setForm] = useState<ProviderForm>(INITIAL_FORM)
   const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
   const [testDetail, setTestDetail] = useState('')
+  // Model to probe with. The provider config itself carries no model, so the
+  // test needs one explicitly — there is no backend default any more.
+  const [testModel, setTestModel] = useState('')
+  const { models: testModels, loading: testModelsLoading } = useProviderModels(
+    dialogOpen ? (editingId ?? '') : '',
+  )
 
   // Pre-load existing grants when opening edit dialog for a team-shared provider
   useEffect(() => {
@@ -112,6 +124,7 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
     setGeneralError(null)
     setTestState('idle')
     setTestDetail('')
+    setTestModel('')
     setDialogOpen(true)
   }
 
@@ -123,6 +136,7 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
     setTestDetail('')
     try {
       const res = await api.testProvider(editingId, {
+        model: testModel || undefined,
         provider_type: form.provider_type,
         base_url: form.base_url,
         api_key: form.api_key,
@@ -282,6 +296,28 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
           errors={localizedErrors}
           isEditing
         />
+        <div className="mt-4 space-y-1.5">
+          <Label htmlFor="provider-test-model" className="text-sm font-medium">
+            {t('components.management.providers.fields.testModel')}
+          </Label>
+          <ModelInput
+            value={testModel}
+            onChange={(v) => {
+              // A model change invalidates the previous probe result.
+              setTestState('idle')
+              setTestDetail('')
+              setTestModel(v)
+            }}
+            providerId={editingId ?? ''}
+            models={testModels}
+            modelsLoading={testModelsLoading}
+            placeholder={t('components.modelPicker.placeholders.selectModel')}
+            className="h-9"
+          />
+          <p className="text-tiny text-muted-foreground">
+            {t('components.management.providers.fields.testModelHint')}
+          </p>
+        </div>
         {testState !== 'idle' && (
           <div className="mt-3">
             <TestResult state={testState} detail={testDetail} />

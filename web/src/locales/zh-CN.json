@@ -3222,7 +3222,9 @@
           "editTitle": "编辑 API 供应商"
         },
         "fields": {
-          "apiKey": "API Key（留空则保留当前值）"
+          "apiKey": "API Key（留空则保留当前值）",
+          "testModel": "测试模型",
+          "testModelHint": "选择或输入一个模型用于探测——连接测试必填。"
         },
         "empty": {
           "noProviders": {

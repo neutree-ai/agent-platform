@@ -3198,7 +3198,9 @@
           "editTitle": "Edit Provider"
         },
         "fields": {
-          "apiKey": "API Key (leave empty to keep current)"
+          "apiKey": "API Key (leave empty to keep current)",
+          "testModel": "Test Model",
+          "testModelHint": "Pick or type a model to probe — required for the connection test."
         },
         "empty": {
           "noProviders": {
