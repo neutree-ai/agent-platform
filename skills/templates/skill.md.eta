@@ -130,42 +130,78 @@ The cloud agent is a **fresh, isolated agent** — it shares none of your local 
 - **Stage inputs** — write the files it needs into the workspace first (`PUT /api/workspaces/{id}/agent/files?path=…`, raw body), or tell it a repo to clone. Don't assume it can see your local tree.
 - **Write a self-contained, autonomous prompt** — the task, where the inputs live, the acceptance criteria, and how to behave unattended: proceed without asking for approval, reply tersely, and don't echo large files (you'll inspect artifacts directly). A clarifying round-trip is expensive, so decide up front. This prompt is also where you keep the agent from blocking on approval gates — instruct it to proceed rather than ask.
 
-Then dispatch async, poll until the turn ends, and collect. If the agent still hands back to you (`chat_status: "human"`), its question is the last message in the transcript — answer by POSTing the same `session_id`, which resumes the turn.
+### Driver script
+
+Save this as `handoff.sh` and call it directly, or adapt it. It dispatches a turn, polls until the turn truly ends, and prints the agent's reply. Pass `-s <session_id>` to **continue** an existing session instead of starting a new one — that's how you carry a conversation across calls.
 
 ```bash
+#!/usr/bin/env bash
+# Hand a task to a NAP cloud agent (async chat) and print its reply.
+#
+# Usage:
+#   ./handoff.sh "implement what TASK.md describes"     # new session
+#   ./handoff.sh -s <session_id> "now add tests"        # continue a session
+#   echo "long task text..." | ./handoff.sh -           # task from stdin
+#
+# Env: NAP_TOKEN (required), NAP_BASE_URL (default https://nap.example.com),
+#      NAP_WS (required, target workspace id),
+#      POLL_INTERVAL (default 3s), POLL_MAX (default 200 polls).
+#
+# Keep this file ASCII-only: macOS bash 3.2 miscounts quotes when the *source*
+# holds multibyte chars. Task text is argv, not source, so it may be any language.
+set -euo pipefail
+
 BASE="${NAP_BASE_URL:-https://nap.example.com}"
-WS="<workspace-id>"
-AUTH="Authorization: Bearer $NAP_TOKEN"
+WS="${NAP_WS:?set NAP_WS to the target workspace id}"
+INTERVAL="${POLL_INTERVAL:-3}"
+MAX="${POLL_MAX:-200}"
+TOKEN="$(printenv NAP_TOKEN || true)"
+[ -n "$TOKEN" ] || { echo "error: NAP_TOKEN not set" >&2; exit 1; }
 
-# 1. Stage an input file (skip if the agent clones a repo itself). Body is the
-#    raw file; the path is a URL-encoded query param, not a JSON field.
-curl -s -X PUT "$BASE/api/workspaces/$WS/agent/files?path=TASK.md" \
-  -H "$AUTH" -H "Content-Type: application/octet-stream" \
-  --data-binary @./TASK.md
+SID=""
+if [ "${1:-}" = "-s" ]; then
+  SID="${2:-}"; shift 2
+  [ -n "$SID" ] || { echo "error: -s requires a session_id" >&2; exit 1; }
+fi
+MSG="${1:-}"; [ "$MSG" = "-" ] && MSG="$(cat)"
+[ -n "$MSG" ] || { echo "error: no task message provided" >&2; exit 1; }
 
-# 2. Dispatch a self-contained, autonomous prompt.
-SID=$(curl -s -X POST "$BASE/api/workspaces/$WS/chat" \
-  -H "$AUTH" -H "Content-Type: application/json" \
-  -d '{"message":"Read TASK.md and implement it end to end. Work autonomously; do not ask for approval. Reply tersely; do not echo large files.","mode":"async","source":"api"}' \
-  | jq -r .session_id)
+auth=(-H "Authorization: Bearer $TOKEN")
 
-# 3. Poll until the turn ends; if the agent hands back, answer and resume.
+# 1. Start (new) or continue (-s) the turn. async returns a session_id at once.
+#    Including session_id in the body continues that conversation.
+body=$(jq -n --arg m "$MSG" --arg s "$SID" \
+  '{message:$m, mode:"async", source:"api"} + (if $s=="" then {} else {session_id:$s} end)')
+SID=$(curl -s -X POST "$BASE/api/workspaces/$WS/chat" "${auth[@]}" \
+  -H "Content-Type: application/json" -d "$body" | jq -r '.session_id // empty')
+[ -n "$SID" ] || { echo "error: no session_id returned" >&2; exit 1; }
+echo "session_id: $SID" >&2
+
+# 2. Poll until the turn truly ends, then read the latest result.
+#    Any non-"agent" status means the turn handed back (idle, human, ...) -- we
+#    don't need to tell them apart. But a just-issued POST can briefly still read
+#    the PREVIOUS turn's status, so also require the last message to be this
+#    turn's assistant reply before treating the turn as done.
+i=0
 while :; do
-  case "$(curl -s "$BASE/api/workspaces/$WS/sessions/$SID" -H "$AUTH" | jq -r .chat_status)" in
-    agent) sleep 3 ;;                  # still working
-    idle)  break ;;                    # turn finished
-    human)                             # agent asked — its question is the last message
-      curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" -H "$AUTH" | jq -r '.[-1].content'
-      # decide an answer, then resume the same session by posting again
-      curl -s -X POST "$BASE/api/workspaces/$WS/chat" -H "$AUTH" -H "Content-Type: application/json" \
-        -d "$(jq -nc --arg sid "$SID" '{message:"<your answer>",session_id:$sid,mode:"async",source:"api"}')" >/dev/null ;;
-  esac
+  i=$((i+1))
+  st=$(curl -s "$BASE/api/workspaces/$WS/sessions/$SID" "${auth[@]}" | jq -r '.chat_status // "unknown"')
+  msgs=$(curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" "${auth[@]}")
+  last_role=$(echo "$msgs" | jq -r 'last | .role // "none"')
+  printf '\r  polling... %s / last=%s (%d)   ' "$st" "$last_role" "$i" >&2
+  if [ "$st" != "agent" ] && [ "$last_role" = "assistant" ]; then
+    echo >&2
+    echo "$msgs" | jq -r '[.[] | select(.role=="assistant")] | last | (.content // "")
+      | if . == "" then "[no text reply; likely tool actions -- continue with -s to ask more]" else . end'
+    break
+  fi
+  [ "$i" -ge "$MAX" ] && { echo >&2; echo "error: timed out after $MAX polls (status=$st)" >&2; exit 2; }
+  sleep "$INTERVAL"
 done
-
-# 4. Collect: read the transcript, then pull artifacts back out of the workspace.
-curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" -H "$AUTH" | jq -r '.[] | "\(.role): \(.content)"'
-curl -s "$BASE/api/workspaces/$WS/agent/files?path=out/result.json" -H "$AUTH"
+echo "continue with: $0 -s $SID \"...\"" >&2
 ```
+
+The script prints only the agent's final text; read the full turn (tool calls included) with `GET /api/workspaces/{id}/messages?session_id=$SID`, and pull any files the agent produced with `GET /api/workspaces/{id}/agent/files?path=…`.
 <% } %>
 ## Resources
 
