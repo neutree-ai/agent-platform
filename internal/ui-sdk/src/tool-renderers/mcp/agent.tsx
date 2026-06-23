@@ -1,6 +1,7 @@
 import { ArrowUpRight } from 'lucide-react'
 import { useSubAgentNav } from '../../components/SubAgentNavContext'
 import { transcriptI18n as i18n } from '../../i18n'
+import { Button } from '../../ui/button'
 import { type ToolCall, getMcpText, unwrapMcpInput } from '../types'
 import type { ToolRendererDef } from '../types'
 
@@ -36,15 +37,18 @@ function SubAgentSessionId({ slug, sessionId }: { slug: string; sessionId: strin
   const label = shortId(sessionId)
   if (slug && nav.canOpen(slug)) {
     return (
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => nav.open(slug, sessionId)}
-        className="inline-flex items-center gap-1 rounded bg-info/15 px-1.5 py-0.5 font-mono text-mini text-info transition-colors hover:bg-info/25"
+        // Neutralize the default button height/padding/icon size down to this
+        // tool card's dense chip scale, matching the sibling status chips.
+        className="h-auto gap-1 rounded bg-info/15 px-1.5 py-0.5 font-mono text-mini font-normal text-info hover:bg-info/25 hover:text-info [&_svg]:size-3"
         title={i18n.t('components.chat.toolRenderers.agent.result.viewSession', 'View session')}
       >
-        <ArrowUpRight className="h-3 w-3" />
+        <ArrowUpRight />
         {label}
-      </button>
+      </Button>
     )
   }
   return (
