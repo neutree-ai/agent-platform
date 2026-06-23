@@ -1296,6 +1296,9 @@
         "createFailed": "创建模板失败"
       }
     },
+    "subAgentSessionLink": {
+      "viewSession": "查看会话"
+    },
     "shareSession": {
       "trigger": "分享会话",
       "title": "分享会话",
