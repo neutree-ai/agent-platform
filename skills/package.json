@@ -4,7 +4,7 @@
   "description": "NAP Agent Skills — generated REST-API skills plus hand-authored skills (e.g. the design system)",
   "scripts": {
     "fetch:cp": "curl -fsSL \"${CP_SPEC_URL:?set CP_SPEC_URL to a running control-plane, e.g. http://localhost:3000/api/docs/openapi.json}\" -o specs/control-plane.json",
-    "generate:cp": "npx -y openapi-to-skills@0.3.1 ./specs/control-plane.json -o . -n nap-api -f -t templates --excludeTags me,workspace-layouts,teamwork,invites --excludePaths '/api/workspaces/{id}/profile' --excludeDeprecated",
+    "generate:cp": "npx -y openapi-to-skills@0.3.2 ./specs/control-plane.json -o . -n nap-api -f -t templates --assets assets/nap-api --excludeTags me,workspace-layouts,teamwork,invites --excludePaths '/api/workspaces/{id}/profile' --excludeDeprecated",
     "cp": "npm run fetch:cp && npm run generate:cp"
   }
 }
