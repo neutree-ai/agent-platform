@@ -120,6 +120,52 @@ curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" \
 ```
 
 Continue the same conversation by POSTing again with this `session_id` in the body. For token-by-token output instead of polling, omit `mode` (or use `mode: "stream"`) and read the `text/event-stream` of UniversalEvent frames.
+
+## Handoff — local agent → NAP cloud agent
+
+A common use of async chat is **delegation**: a local agent (e.g. running on your laptop) hands a chunk of work to a NAP cloud agent that has its own persistent workspace, filesystem, and toolset, then collects the result.
+
+The cloud agent is a **fresh, isolated agent** — it shares none of your local context, conversation, or files. Everything it needs travels through the workspace and the prompt, so front-load it:
+
+- **Stage inputs** — write the files it needs into the workspace first (`PUT /api/workspaces/{id}/agent/files?path=…`, raw body), or tell it a repo to clone. Don't assume it can see your local tree.
+- **Write a self-contained, autonomous prompt** — the task, where the inputs live, the acceptance criteria, and how to behave unattended: proceed without asking for approval, reply tersely, and don't echo large files (you'll inspect artifacts directly). A clarifying round-trip is expensive, so decide up front. This prompt is also where you keep the agent from blocking on approval gates — instruct it to proceed rather than ask.
+
+Then dispatch async, poll until the turn ends, and collect. If the agent still hands back to you (`chat_status: "human"`), its question is the last message in the transcript — answer by POSTing the same `session_id`, which resumes the turn.
+
+```bash
+BASE="${NAP_BASE_URL:-https://nap.example.com}"
+WS="<workspace-id>"
+AUTH="Authorization: Bearer $NAP_TOKEN"
+
+# 1. Stage an input file (skip if the agent clones a repo itself). Body is the
+#    raw file; the path is a URL-encoded query param, not a JSON field.
+curl -s -X PUT "$BASE/api/workspaces/$WS/agent/files?path=TASK.md" \
+  -H "$AUTH" -H "Content-Type: application/octet-stream" \
+  --data-binary @./TASK.md
+
+# 2. Dispatch a self-contained, autonomous prompt.
+SID=$(curl -s -X POST "$BASE/api/workspaces/$WS/chat" \
+  -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{"message":"Read TASK.md and implement it end to end. Work autonomously; do not ask for approval. Reply tersely; do not echo large files.","mode":"async","source":"api"}' \
+  | jq -r .session_id)
+
+# 3. Poll until the turn ends; if the agent hands back, answer and resume.
+while :; do
+  case "$(curl -s "$BASE/api/workspaces/$WS/sessions/$SID" -H "$AUTH" | jq -r .chat_status)" in
+    agent) sleep 3 ;;                  # still working
+    idle)  break ;;                    # turn finished
+    human)                             # agent asked — its question is the last message
+      curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" -H "$AUTH" | jq -r '.[-1].content'
+      # decide an answer, then resume the same session by posting again
+      curl -s -X POST "$BASE/api/workspaces/$WS/chat" -H "$AUTH" -H "Content-Type: application/json" \
+        -d "$(jq -nc --arg sid "$SID" '{message:"<your answer>",session_id:$sid,mode:"async",source:"api"}')" >/dev/null ;;
+  esac
+done
+
+# 4. Collect: read the transcript, then pull artifacts back out of the workspace.
+curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" -H "$AUTH" | jq -r '.[] | "\(.role): \(.content)"'
+curl -s "$BASE/api/workspaces/$WS/agent/files?path=out/result.json" -H "$AUTH"
+```
 <% } %>
 ## Resources
 
