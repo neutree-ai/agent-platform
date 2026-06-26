@@ -1801,3 +1801,34 @@ export const AgentRequestResolveBodySchema = z.object({
   decision: z.enum(['approved', 'rejected']),
   reason: z.string().optional(),
 })
+
+// ── Environments (BYOI) ──
+
+export const EnvironmentVisibilitySchema = z.enum(['private', 'team', 'public'])
+export type EnvironmentVisibility = z.infer<typeof EnvironmentVisibilitySchema>
+
+export const EnvironmentMyPermissionSchema = z.enum(['owner', 'editor', 'viewer', 'public'])
+export type EnvironmentMyPermission = z.infer<typeof EnvironmentMyPermissionSchema>
+
+export const EnvironmentSharedTeamSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  permission: z.enum(['viewer', 'editor']),
+})
+
+export const ApiEnvironmentSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  visibility: EnvironmentVisibilitySchema,
+  kind: z.string(),
+  status: z.string(),
+  capabilities: z.record(z.string(), z.unknown()),
+  is_builtin: z.boolean(),
+  last_heartbeat_at: z.string().nullable(),
+  owner_name: z.string(),
+  is_own: z.boolean(),
+  my_permission: EnvironmentMyPermissionSchema,
+  shared_via_teams: z.array(EnvironmentSharedTeamSchema),
+  created_at: z.string(),
+})
+export type ApiEnvironment = z.infer<typeof ApiEnvironmentSchema>

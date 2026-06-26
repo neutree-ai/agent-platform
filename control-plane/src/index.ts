@@ -24,6 +24,7 @@ import authRoutes from './routes/auth'
 import batchRunRoutes from './routes/batch-runs'
 import cgProxy from './routes/cg-proxy'
 import credentialsRoutes from './routes/credentials'
+import environmentsRoutes from './routes/environments'
 import internalRoutes from './routes/internal'
 import invitesRoutes from './routes/invites'
 import jobRoutes from './routes/jobs'
@@ -313,6 +314,7 @@ app.route('/api/me', meActivityRoutes)
 app.route('/api/me', meUsageRoutes)
 app.route('/api/workspaces', jobRoutes)
 app.route('/api/credentials', credentialsRoutes)
+app.route('/api/environments', environmentsRoutes)
 app.route('/api/workspace-layouts', workspaceLayoutsRoutes)
 app.route('/api/prompts', promptsReadRoutes)
 app.route('/api/prompts', promptsWriteRoutes)
