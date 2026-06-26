@@ -124,6 +124,22 @@ export interface WorkspaceConfig {
   updated_at: string
 }
 
+type EnvironmentVisibility = 'private' | 'team' | 'public'
+
+export interface Environment {
+  id: string
+  user_id: string
+  name: string
+  visibility: EnvironmentVisibility
+  kind: string
+  status: string
+  capabilities: Record<string, unknown>
+  placement: Record<string, unknown>
+  last_heartbeat_at: string | null
+  is_builtin: boolean
+  created_at: string
+}
+
 export type PromptVisibility = 'private' | 'team' | 'public'
 
 export interface Prompt {
