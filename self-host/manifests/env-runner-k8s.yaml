@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${APP_PREFIX}-env-runner-k8s
+  namespace: ${NAMESPACE}
+---
+# Subset of cp's RBAC that the KubernetesProvider actually uses:
+# pods/services/events/pvcs + deployments. (No secrets/configmaps — the afs
+# ConfigMap is referenced by name in the pod spec, never read via the API.)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ${APP_PREFIX}-env-runner-k8s
+  namespace: ${NAMESPACE}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "events", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ${APP_PREFIX}-env-runner-k8s
+  namespace: ${NAMESPACE}
+subjects:
+  - kind: ServiceAccount
+    name: ${APP_PREFIX}-env-runner-k8s
+    namespace: ${NAMESPACE}
+roleRef:
+  kind: Role
+  name: ${APP_PREFIX}-env-runner-k8s
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP_PREFIX}-env-runner-k8s
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP_PREFIX}-env-runner-k8s
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${APP_PREFIX}-env-runner-k8s
+  template:
+    metadata:
+      labels:
+        app: ${APP_PREFIX}-env-runner-k8s
+    spec:
+      serviceAccountName: ${APP_PREFIX}-env-runner-k8s
+      containers:
+        - name: env-runner-k8s
+          image: ${REGISTRY}/${APP_PREFIX}-env-runner-k8s:${IMAGE_TAG}
+          imagePullPolicy: Always
+          # Provider config MUST match control-plane.yaml exactly, so both build
+          # byte-identical workspace pods. Keep this block in sync.
+          env:
+            - name: K8S_NAMESPACE
+              value: "${NAMESPACE}"
+            - name: AGENT_IMAGE_PREFIX
+              value: "${AGENT_IMAGE_PREFIX}"
+            - name: AGENT_IMAGE_TAG
+              value: "${AGENT_IMAGE_TAG}"
+            - name: AGENT_STORAGE_CLASS
+              value: "${AGENT_STORAGE_CLASS}"
+            - name: IMAGE_PULL_SECRET
+              value: "${IMAGE_PULL_SECRET}"
+            - name: AGENT_NODE_SELECTOR
+              value: "${AGENT_NODE_SELECTOR}"
+            - name: AFS_ENABLED
+              value: "true"
+            - name: AFS_IMAGE
+              value: "${AFS_IMAGE}"
+            - name: AFS_CONTROLLER_ADDR
+              value: "afs-controller.${NAMESPACE}.svc:9100"
+            - name: MEMORY_FUSE_IMAGE
+              value: "${REGISTRY}/${APP_PREFIX}-memory-fuse:${IMAGE_TAG}"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_PREFIX}-pg-user
+                  key: password
+            - name: DATABASE_URL
+              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
