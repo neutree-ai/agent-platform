@@ -26,6 +26,10 @@
     "scheduler": {
       "project": ["src/**/*.ts"]
     },
+    "env-runner-k8s": {
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["@kubernetes/client-node"]
+    },
     "skills-content-service": {
       "project": ["src/**/*.ts"]
     },

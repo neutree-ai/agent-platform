@@ -1,0 +1,25 @@
+{
+  "name": "@neutree-ai/env-runner-k8s",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx --watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=node22 --outfile=dist/index.js --packages=external --sourcemap",
+    "start": "node dist/index.js",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "0.22.3",
+    "pg": "^8.13.0",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/node": "^25.6.0",
+    "@types/pg": "^8.11.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.2"
+  }
+}
