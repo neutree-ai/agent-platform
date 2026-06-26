@@ -1,19 +1,6 @@
 import * as k8s from '@kubernetes/client-node'
 import type { ComputeResources } from '../../../internal/types/api'
 
-// Load kubeconfig
-const kc = new k8s.KubeConfig()
-if (process.env.KUBECONFIG) {
-  kc.loadFromFile(process.env.KUBECONFIG)
-} else if (process.env.KUBERNETES_SERVICE_HOST) {
-  kc.loadFromCluster()
-} else {
-  kc.loadFromDefault()
-}
-
-const k8sAppsApi = kc.makeApiClient(k8s.AppsV1Api)
-const k8sCoreApi = kc.makeApiClient(k8s.CoreV1Api)
-
 const NAMESPACE = process.env.K8S_NAMESPACE || 'default'
 const AGENT_IMAGE_PREFIX = process.env.AGENT_IMAGE_PREFIX || 'nap-agent'
 const AGENT_IMAGE_TAG = process.env.AGENT_IMAGE_TAG || 'latest'
@@ -154,18 +141,6 @@ interface K8sResourceStatus {
   pods: { total: number; ready: number }
   warnings: Array<{ reason: string; message: string }>
   conditions: Array<{ type: string; status: boolean; message?: string }>
-}
-
-function getResourceName(workspaceId: string): string {
-  return `${NAME_PREFIX}-${workspaceId}`
-}
-
-function getLabels(workspaceId: string): Record<string, string> {
-  return {
-    app: NAME_PREFIX,
-    component: 'workspace',
-    'workspace-id': workspaceId,
-  }
 }
 
 export function buildDeploymentSpec(
@@ -373,487 +348,10 @@ export function buildDeploymentSpec(
   }
 }
 
-/**
- * Create K8s resources for a workspace
- */
-export async function createInstance(
-  workspaceId: string,
-  agentType = 'claude-code',
-  resources?: ComputeResources,
-): Promise<K8sInstance> {
-  const name = getResourceName(workspaceId)
-  const labels = getLabels(workspaceId)
-  const pvcName = `${name}-workspace`
-
-  // Create PVC for workspace persistent storage
-  const storageSize = resources?.storage || WORKSPACE_STORAGE_SIZE
-  await k8sCoreApi.createNamespacedPersistentVolumeClaim(NAMESPACE, {
-    apiVersion: 'v1',
-    kind: 'PersistentVolumeClaim',
-    metadata: { name: pvcName, labels },
-    spec: {
-      accessModes: ['ReadWriteOnce'],
-      storageClassName: AGENT_STORAGE_CLASS,
-      resources: { requests: { storage: storageSize } },
-    },
-  })
-
-  // Create Deployment
-  await k8sAppsApi.createNamespacedDeployment(
-    NAMESPACE,
-    buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources),
-  )
-
-  // Create Service (ClusterIP — agents are reached via cluster DNS at
-  // tos-<wsId>.<ns>.svc:3001; afs-fuse via :9101)
-  await k8sCoreApi.createNamespacedService(NAMESPACE, {
-    apiVersion: 'v1',
-    kind: 'Service',
-    metadata: { name, labels },
-    spec: {
-      selector: labels,
-      ports: [
-        { port: 3001, targetPort: 3001 as any, name: 'http' },
-        { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
-        { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
-      ],
-      type: 'ClusterIP',
-    },
-  })
-
-  return {
-    workspaceId,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  }
-}
-
-/**
- * Get K8s instance by workspace ID
- */
-export async function getInstance(workspaceId: string): Promise<K8sInstance | null> {
-  const name = getResourceName(workspaceId)
-
-  try {
-    const deploymentRes = await k8sAppsApi.readNamespacedDeployment(name, NAMESPACE)
-    const deployment = deploymentRes.body
-    const readyReplicas = deployment.status?.readyReplicas || 0
-
-    return {
-      workspaceId,
-      status: readyReplicas > 0 ? 'running' : 'pending',
-      createdAt: deployment.metadata?.creationTimestamp?.toISOString() || '',
-    }
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) {
-      return null
-    }
-    throw e
-  }
-}
-
-/**
- * List all K8s instances
- */
-export async function listInstances(): Promise<K8sInstance[]> {
-  const response = await k8sAppsApi.listNamespacedDeployment(
-    NAMESPACE,
-    undefined, // pretty
-    undefined, // allowWatchBookmarks
-    undefined, // _continue
-    undefined, // fieldSelector
-    `app=${NAME_PREFIX}`, // labelSelector
-  )
-
-  const instances: K8sInstance[] = []
-
-  for (const dep of response.body.items) {
-    const workspaceId = dep.metadata?.labels?.['workspace-id']
-    if (!workspaceId) continue
-
-    const readyReplicas = dep.status?.readyReplicas || 0
-    instances.push({
-      workspaceId,
-      status: readyReplicas > 0 ? 'running' : 'pending',
-      createdAt: dep.metadata?.creationTimestamp?.toISOString() || '',
-    })
-  }
-
-  return instances
-}
-
-/**
- * Scale K8s deployment (0 = stopped, 1 = running)
- */
-async function scaleInstance(workspaceId: string, replicas: number): Promise<boolean> {
-  const name = getResourceName(workspaceId)
-
-  try {
-    await k8sAppsApi.patchNamespacedDeploymentScale(
-      name,
-      NAMESPACE,
-      { spec: { replicas } },
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { 'Content-Type': 'application/merge-patch+json' } },
-    )
-    return true
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) {
-      return false
-    }
-    throw e
-  }
-}
-
-/**
- * Stop instance (scale to 0)
- */
-export async function stopInstance(workspaceId: string): Promise<boolean> {
-  return scaleInstance(workspaceId, 0)
-}
-
-/**
- * Start/resume instance (scale to 1)
- */
-export async function startInstance(workspaceId: string): Promise<boolean> {
-  return scaleInstance(workspaceId, 1)
-}
-
-/**
- * Roll the instance's pods without changing the Deployment spec — the
- * equivalent of `kubectl rollout restart`. Stamps a template annotation so
- * the Deployment controller recreates the pod (e.g. to re-pull a moving
- * `:latest` tag). Returns false when the Deployment doesn't exist.
- */
-export async function restartInstance(workspaceId: string): Promise<boolean> {
-  const name = getResourceName(workspaceId)
-  try {
-    await k8sAppsApi.patchNamespacedDeployment(
-      name,
-      NAMESPACE,
-      {
-        spec: {
-          template: {
-            metadata: {
-              annotations: {
-                'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
-              },
-            },
-          },
-        },
-      },
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
-    )
-    return true
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) return false
-    throw e
-  }
-}
-
 interface InstanceSpecMarkers {
   templateVersion: number | null
   agentImage: string | null
   hasMemoryFuseSidecar: boolean
-}
-
-/**
- * Read the markers needed to decide whether a Deployment is in sync with the
- * desired spec: template_version (from annotation), agent image (from the
- * `agent` container), and memory-fuse sidecar presence (from container list).
- * Returns null when no Deployment exists for the workspace.
- */
-export async function getInstanceSpecMarkers(
-  workspaceId: string,
-): Promise<InstanceSpecMarkers | null> {
-  const name = getResourceName(workspaceId)
-  try {
-    const res = await k8sAppsApi.readNamespacedDeployment(name, NAMESPACE)
-    const dep = res.body
-    const containers = dep.spec?.template?.spec?.containers ?? []
-    const agent = containers.find((c) => c.name === 'agent')
-    const ver = dep.metadata?.annotations?.[TEMPLATE_VERSION_ANNOTATION]
-    return {
-      templateVersion: ver ? Number(ver) : null,
-      agentImage: agent?.image ?? null,
-      hasMemoryFuseSidecar: containers.some((c) => c.name === MEMORY_FUSE_CONTAINER_NAME),
-    }
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) return null
-    throw e
-  }
-}
-
-/**
- * Rebuild a workspace deployment with a new agent type.
- * Deletes only the Deployment and recreates it, preserving PVC and Service.
- */
-export async function rebuildInstance(
-  workspaceId: string,
-  agentType: string,
-  resources?: ComputeResources,
-): Promise<void> {
-  const name = getResourceName(workspaceId)
-  const labels = getLabels(workspaceId)
-  const pvcName = `${name}-workspace`
-
-  // Delete existing deployment
-  try {
-    await k8sAppsApi.deleteNamespacedDeployment(name, NAMESPACE)
-  } catch (e: any) {
-    if (e.response?.statusCode !== 404) throw e
-  }
-
-  // Recreate deployment with new agent type
-  await k8sAppsApi.createNamespacedDeployment(
-    NAMESPACE,
-    buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources),
-  )
-}
-
-/**
- * Update Deployment CPU/memory resources (triggers rolling restart)
- */
-export async function updateInstanceResources(
-  workspaceId: string,
-  resources: ComputeResources,
-): Promise<boolean> {
-  const name = getResourceName(workspaceId)
-
-  try {
-    await k8sAppsApi.patchNamespacedDeployment(
-      name,
-      NAMESPACE,
-      {
-        spec: {
-          template: {
-            spec: {
-              containers: [
-                {
-                  name: 'agent',
-                  resources: {
-                    requests: {
-                      cpu: resources.cpu_request || '100m',
-                      memory: resources.memory_request || '256Mi',
-                    },
-                    limits: {
-                      cpu: resources.cpu_limit || '500m',
-                      memory: resources.memory_limit || '1Gi',
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        },
-      },
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
-    )
-    return true
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) return false
-    throw e
-  }
-}
-
-/**
- * Expand PVC storage (only increases, requires StorageClass support)
- */
-export async function expandInstanceStorage(
-  workspaceId: string,
-  newSize: string,
-): Promise<boolean> {
-  const name = getResourceName(workspaceId)
-  const pvcName = `${name}-workspace`
-
-  try {
-    await k8sCoreApi.patchNamespacedPersistentVolumeClaim(
-      pvcName,
-      NAMESPACE,
-      { spec: { resources: { requests: { storage: newSize } } } },
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      { headers: { 'Content-Type': 'application/merge-patch+json' } },
-    )
-    return true
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) return false
-    throw e
-  }
-}
-
-/**
- * Get detailed K8s resource status for a workspace
- */
-export async function getInstanceStatus(workspaceId: string): Promise<K8sResourceStatus> {
-  const name = getResourceName(workspaceId)
-  const labelSelector = `app=${NAME_PREFIX},workspace-id=${workspaceId}`
-
-  const result: K8sResourceStatus = {
-    deployment: { exists: false, ready: false, replicas: 0, readyReplicas: 0 },
-    service: { exists: false },
-    pvc: { exists: false },
-    pods: { total: 0, ready: 0 },
-    warnings: [],
-    conditions: [],
-  }
-
-  const pvcName = `${name}-workspace`
-
-  // Query all resources concurrently
-  const [depResult, svcResult, pvcResult, podsResult] = await Promise.allSettled([
-    k8sAppsApi.readNamespacedDeployment(name, NAMESPACE),
-    k8sCoreApi.readNamespacedService(name, NAMESPACE),
-    k8sCoreApi.readNamespacedPersistentVolumeClaim(pvcName, NAMESPACE),
-    k8sCoreApi.listNamespacedPod(
-      NAMESPACE,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      labelSelector,
-    ),
-  ])
-
-  // Process Deployment
-  if (depResult.status === 'fulfilled') {
-    const dep = depResult.value.body
-    const replicas = dep.spec?.replicas || 0
-    const readyReplicas = dep.status?.readyReplicas || 0
-
-    result.deployment = {
-      exists: true,
-      ready: readyReplicas >= replicas && replicas > 0,
-      replicas,
-      readyReplicas,
-    }
-
-    // Extract conditions. Skip Available=False with reason MinimumReplicasUnavailable —
-    // this is the transient state during a rolling update (e.g. resize) where old pods
-    // are terminating and new pods are not yet ready. Surfacing it as a failure makes
-    // the Settings page flash red during routine scale-up/down.
-    if (dep.status?.conditions) {
-      for (const c of dep.status.conditions) {
-        if (c.type === 'Available' || c.type === 'Progressing') {
-          if (
-            c.type === 'Available' &&
-            c.status !== 'True' &&
-            c.reason === 'MinimumReplicasUnavailable'
-          ) {
-            continue
-          }
-          result.conditions.push({
-            type: c.type,
-            status: c.status === 'True',
-            message: c.message,
-          })
-        }
-      }
-    }
-  } else if ((depResult.reason as any)?.response?.statusCode !== 404) {
-    result.conditions.push({
-      type: 'DeploymentError',
-      status: false,
-      message: depResult.reason?.message,
-    })
-  }
-
-  // Process Service
-  if (svcResult.status === 'fulfilled') {
-    result.service = { exists: true }
-  } else if ((svcResult.reason as any)?.response?.statusCode !== 404) {
-    result.conditions.push({
-      type: 'ServiceError',
-      status: false,
-      message: svcResult.reason?.message,
-    })
-  }
-
-  // Process PVC
-  if (pvcResult.status === 'fulfilled') {
-    const pvc = pvcResult.value.body
-    result.pvc = {
-      exists: true,
-      phase: pvc.status?.phase,
-      capacity: pvc.status?.capacity?.storage,
-    }
-  } else if ((pvcResult.reason as any)?.response?.statusCode !== 404) {
-    result.conditions.push({
-      type: 'PVCError',
-      status: false,
-      message: pvcResult.reason?.message,
-    })
-  }
-
-  // Process Pods and fetch events
-  if (podsResult.status === 'fulfilled') {
-    const pods = podsResult.value.body.items
-    const podNames: string[] = []
-
-    for (const pod of pods) {
-      const podName = pod.metadata?.name || ''
-      podNames.push(podName)
-
-      const containerStatuses = pod.status?.containerStatuses || []
-      const allReady = containerStatuses.length > 0 && containerStatuses.every((c) => c.ready)
-
-      result.pods.total++
-      if (allReady) result.pods.ready++
-    }
-
-    // Fetch events for all pods concurrently
-    if (podNames.length > 0) {
-      const eventResults = await Promise.allSettled(
-        podNames.map((podName) =>
-          k8sCoreApi.listNamespacedEvent(
-            NAMESPACE,
-            undefined,
-            undefined,
-            undefined,
-            `involvedObject.name=${podName},involvedObject.kind=Pod`,
-          ),
-        ),
-      )
-
-      // Deduplicate warnings by reason+message
-      const seen = new Set<string>()
-      for (const eventResult of eventResults) {
-        if (eventResult.status === 'fulfilled') {
-          for (const event of eventResult.value.body.items) {
-            if (event.type !== 'Warning') continue
-            const key = `${event.reason}:${event.message}`
-            if (seen.has(key)) continue
-            seen.add(key)
-            result.warnings.push({
-              reason: event.reason || '',
-              message: event.message || '',
-            })
-          }
-        }
-      }
-      // Limit to 5 warnings
-      result.warnings = result.warnings.slice(0, 5)
-    }
-  }
-
-  return result
 }
 
 /**
@@ -891,93 +389,676 @@ export function deploymentTemplateVersion(dep: k8s.V1Deployment | undefined): nu
 }
 
 /**
- * Full list of all workspace deployments. Returns deployments indexed by
- * workspace-id plus the response resourceVersion for starting a watch.
+ * Kubernetes provisioning backend. Holds its own API clients + config so a
+ * remote runner can construct one with injected credentials/config; the
+ * built-in environment uses {@link defaultProvider}, which loads from env.
+ * Lifecycle methods are the same logic that used to live in the module-level
+ * functions — the exported functions below are thin wrappers over
+ * {@link defaultProvider} so existing call sites stay unchanged.
  */
-export async function listWorkspaceDeployments(timeoutMs = 30_000): Promise<{
+class KubernetesProvider {
+  constructor(
+    private readonly appsApi: k8s.AppsV1Api,
+    private readonly coreApi: k8s.CoreV1Api,
+    private readonly kc: k8s.KubeConfig,
+    private readonly cfg: K8sConfig,
+  ) {}
+
+  private getResourceName(workspaceId: string): string {
+    return `${this.cfg.namePrefix}-${workspaceId}`
+  }
+
+  private getLabels(workspaceId: string): Record<string, string> {
+    return {
+      app: this.cfg.namePrefix,
+      component: 'workspace',
+      'workspace-id': workspaceId,
+    }
+  }
+
+  /** Create K8s resources for a workspace */
+  async createInstance(
+    workspaceId: string,
+    agentType = 'claude-code',
+    resources?: ComputeResources,
+  ): Promise<K8sInstance> {
+    const name = this.getResourceName(workspaceId)
+    const labels = this.getLabels(workspaceId)
+    const pvcName = `${name}-workspace`
+
+    // Create PVC for workspace persistent storage
+    const storageSize = resources?.storage || this.cfg.workspaceStorageSize
+    await this.coreApi.createNamespacedPersistentVolumeClaim(this.cfg.namespace, {
+      apiVersion: 'v1',
+      kind: 'PersistentVolumeClaim',
+      metadata: { name: pvcName, labels },
+      spec: {
+        accessModes: ['ReadWriteOnce'],
+        storageClassName: this.cfg.storageClass,
+        resources: { requests: { storage: storageSize } },
+      },
+    })
+
+    // Create Deployment
+    await this.appsApi.createNamespacedDeployment(
+      this.cfg.namespace,
+      buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
+    )
+
+    // Create Service (ClusterIP — agents are reached via cluster DNS at
+    // tos-<wsId>.<ns>.svc:3001; afs-fuse via :9101)
+    await this.coreApi.createNamespacedService(this.cfg.namespace, {
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: { name, labels },
+      spec: {
+        selector: labels,
+        ports: [
+          { port: 3001, targetPort: 3001 as any, name: 'http' },
+          { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
+          { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
+        ],
+        type: 'ClusterIP',
+      },
+    })
+
+    return {
+      workspaceId,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    }
+  }
+
+  /** Get K8s instance by workspace ID */
+  async getInstance(workspaceId: string): Promise<K8sInstance | null> {
+    const name = this.getResourceName(workspaceId)
+
+    try {
+      const deploymentRes = await this.appsApi.readNamespacedDeployment(name, this.cfg.namespace)
+      const deployment = deploymentRes.body
+      const readyReplicas = deployment.status?.readyReplicas || 0
+
+      return {
+        workspaceId,
+        status: readyReplicas > 0 ? 'running' : 'pending',
+        createdAt: deployment.metadata?.creationTimestamp?.toISOString() || '',
+      }
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) {
+        return null
+      }
+      throw e
+    }
+  }
+
+  /** List all K8s instances */
+  async listInstances(): Promise<K8sInstance[]> {
+    const response = await this.appsApi.listNamespacedDeployment(
+      this.cfg.namespace,
+      undefined, // pretty
+      undefined, // allowWatchBookmarks
+      undefined, // _continue
+      undefined, // fieldSelector
+      `app=${this.cfg.namePrefix}`, // labelSelector
+    )
+
+    const instances: K8sInstance[] = []
+
+    for (const dep of response.body.items) {
+      const workspaceId = dep.metadata?.labels?.['workspace-id']
+      if (!workspaceId) continue
+
+      const readyReplicas = dep.status?.readyReplicas || 0
+      instances.push({
+        workspaceId,
+        status: readyReplicas > 0 ? 'running' : 'pending',
+        createdAt: dep.metadata?.creationTimestamp?.toISOString() || '',
+      })
+    }
+
+    return instances
+  }
+
+  /** Scale K8s deployment (0 = stopped, 1 = running) */
+  private async scaleInstance(workspaceId: string, replicas: number): Promise<boolean> {
+    const name = this.getResourceName(workspaceId)
+
+    try {
+      await this.appsApi.patchNamespacedDeploymentScale(
+        name,
+        this.cfg.namespace,
+        { spec: { replicas } },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      )
+      return true
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) {
+        return false
+      }
+      throw e
+    }
+  }
+
+  /** Stop instance (scale to 0) */
+  async stopInstance(workspaceId: string): Promise<boolean> {
+    return this.scaleInstance(workspaceId, 0)
+  }
+
+  /** Start/resume instance (scale to 1) */
+  async startInstance(workspaceId: string): Promise<boolean> {
+    return this.scaleInstance(workspaceId, 1)
+  }
+
+  /**
+   * Roll the instance's pods without changing the Deployment spec — the
+   * equivalent of `kubectl rollout restart`. Stamps a template annotation so
+   * the Deployment controller recreates the pod (e.g. to re-pull a moving
+   * `:latest` tag). Returns false when the Deployment doesn't exist.
+   */
+  async restartInstance(workspaceId: string): Promise<boolean> {
+    const name = this.getResourceName(workspaceId)
+    try {
+      await this.appsApi.patchNamespacedDeployment(
+        name,
+        this.cfg.namespace,
+        {
+          spec: {
+            template: {
+              metadata: {
+                annotations: {
+                  'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
+                },
+              },
+            },
+          },
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      )
+      return true
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return false
+      throw e
+    }
+  }
+
+  /**
+   * Read the markers needed to decide whether a Deployment is in sync with the
+   * desired spec: template_version (from annotation), agent image (from the
+   * `agent` container), and memory-fuse sidecar presence (from container list).
+   * Returns null when no Deployment exists for the workspace.
+   */
+  async getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
+    const name = this.getResourceName(workspaceId)
+    try {
+      const res = await this.appsApi.readNamespacedDeployment(name, this.cfg.namespace)
+      const dep = res.body
+      const containers = dep.spec?.template?.spec?.containers ?? []
+      const agent = containers.find((c) => c.name === 'agent')
+      const ver = dep.metadata?.annotations?.[TEMPLATE_VERSION_ANNOTATION]
+      return {
+        templateVersion: ver ? Number(ver) : null,
+        agentImage: agent?.image ?? null,
+        hasMemoryFuseSidecar: containers.some((c) => c.name === MEMORY_FUSE_CONTAINER_NAME),
+      }
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return null
+      throw e
+    }
+  }
+
+  /**
+   * Rebuild a workspace deployment with a new agent type.
+   * Deletes only the Deployment and recreates it, preserving PVC and Service.
+   */
+  async rebuildInstance(
+    workspaceId: string,
+    agentType: string,
+    resources?: ComputeResources,
+  ): Promise<void> {
+    const name = this.getResourceName(workspaceId)
+    const labels = this.getLabels(workspaceId)
+    const pvcName = `${name}-workspace`
+
+    // Delete existing deployment
+    try {
+      await this.appsApi.deleteNamespacedDeployment(name, this.cfg.namespace)
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e
+    }
+
+    // Recreate deployment with new agent type
+    await this.appsApi.createNamespacedDeployment(
+      this.cfg.namespace,
+      buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
+    )
+  }
+
+  /** Update Deployment CPU/memory resources (triggers rolling restart) */
+  async updateInstanceResources(
+    workspaceId: string,
+    resources: ComputeResources,
+  ): Promise<boolean> {
+    const name = this.getResourceName(workspaceId)
+
+    try {
+      await this.appsApi.patchNamespacedDeployment(
+        name,
+        this.cfg.namespace,
+        {
+          spec: {
+            template: {
+              spec: {
+                containers: [
+                  {
+                    name: 'agent',
+                    resources: {
+                      requests: {
+                        cpu: resources.cpu_request || '100m',
+                        memory: resources.memory_request || '256Mi',
+                      },
+                      limits: {
+                        cpu: resources.cpu_limit || '500m',
+                        memory: resources.memory_limit || '1Gi',
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      )
+      return true
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return false
+      throw e
+    }
+  }
+
+  /** Expand PVC storage (only increases, requires StorageClass support) */
+  async expandInstanceStorage(workspaceId: string, newSize: string): Promise<boolean> {
+    const name = this.getResourceName(workspaceId)
+    const pvcName = `${name}-workspace`
+
+    try {
+      await this.coreApi.patchNamespacedPersistentVolumeClaim(
+        pvcName,
+        this.cfg.namespace,
+        { spec: { resources: { requests: { storage: newSize } } } },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      )
+      return true
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return false
+      throw e
+    }
+  }
+
+  /** Get detailed K8s resource status for a workspace */
+  async getInstanceStatus(workspaceId: string): Promise<K8sResourceStatus> {
+    const name = this.getResourceName(workspaceId)
+    const labelSelector = `app=${this.cfg.namePrefix},workspace-id=${workspaceId}`
+
+    const result: K8sResourceStatus = {
+      deployment: { exists: false, ready: false, replicas: 0, readyReplicas: 0 },
+      service: { exists: false },
+      pvc: { exists: false },
+      pods: { total: 0, ready: 0 },
+      warnings: [],
+      conditions: [],
+    }
+
+    const pvcName = `${name}-workspace`
+
+    // Query all resources concurrently
+    const [depResult, svcResult, pvcResult, podsResult] = await Promise.allSettled([
+      this.appsApi.readNamespacedDeployment(name, this.cfg.namespace),
+      this.coreApi.readNamespacedService(name, this.cfg.namespace),
+      this.coreApi.readNamespacedPersistentVolumeClaim(pvcName, this.cfg.namespace),
+      this.coreApi.listNamespacedPod(
+        this.cfg.namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        labelSelector,
+      ),
+    ])
+
+    // Process Deployment
+    if (depResult.status === 'fulfilled') {
+      const dep = depResult.value.body
+      const replicas = dep.spec?.replicas || 0
+      const readyReplicas = dep.status?.readyReplicas || 0
+
+      result.deployment = {
+        exists: true,
+        ready: readyReplicas >= replicas && replicas > 0,
+        replicas,
+        readyReplicas,
+      }
+
+      // Extract conditions. Skip Available=False with reason MinimumReplicasUnavailable —
+      // this is the transient state during a rolling update (e.g. resize) where old pods
+      // are terminating and new pods are not yet ready. Surfacing it as a failure makes
+      // the Settings page flash red during routine scale-up/down.
+      if (dep.status?.conditions) {
+        for (const c of dep.status.conditions) {
+          if (c.type === 'Available' || c.type === 'Progressing') {
+            if (
+              c.type === 'Available' &&
+              c.status !== 'True' &&
+              c.reason === 'MinimumReplicasUnavailable'
+            ) {
+              continue
+            }
+            result.conditions.push({
+              type: c.type,
+              status: c.status === 'True',
+              message: c.message,
+            })
+          }
+        }
+      }
+    } else if ((depResult.reason as any)?.response?.statusCode !== 404) {
+      result.conditions.push({
+        type: 'DeploymentError',
+        status: false,
+        message: depResult.reason?.message,
+      })
+    }
+
+    // Process Service
+    if (svcResult.status === 'fulfilled') {
+      result.service = { exists: true }
+    } else if ((svcResult.reason as any)?.response?.statusCode !== 404) {
+      result.conditions.push({
+        type: 'ServiceError',
+        status: false,
+        message: svcResult.reason?.message,
+      })
+    }
+
+    // Process PVC
+    if (pvcResult.status === 'fulfilled') {
+      const pvc = pvcResult.value.body
+      result.pvc = {
+        exists: true,
+        phase: pvc.status?.phase,
+        capacity: pvc.status?.capacity?.storage,
+      }
+    } else if ((pvcResult.reason as any)?.response?.statusCode !== 404) {
+      result.conditions.push({
+        type: 'PVCError',
+        status: false,
+        message: pvcResult.reason?.message,
+      })
+    }
+
+    // Process Pods and fetch events
+    if (podsResult.status === 'fulfilled') {
+      const pods = podsResult.value.body.items
+      const podNames: string[] = []
+
+      for (const pod of pods) {
+        const podName = pod.metadata?.name || ''
+        podNames.push(podName)
+
+        const containerStatuses = pod.status?.containerStatuses || []
+        const allReady = containerStatuses.length > 0 && containerStatuses.every((c) => c.ready)
+
+        result.pods.total++
+        if (allReady) result.pods.ready++
+      }
+
+      // Fetch events for all pods concurrently
+      if (podNames.length > 0) {
+        const eventResults = await Promise.allSettled(
+          podNames.map((podName) =>
+            this.coreApi.listNamespacedEvent(
+              this.cfg.namespace,
+              undefined,
+              undefined,
+              undefined,
+              `involvedObject.name=${podName},involvedObject.kind=Pod`,
+            ),
+          ),
+        )
+
+        // Deduplicate warnings by reason+message
+        const seen = new Set<string>()
+        for (const eventResult of eventResults) {
+          if (eventResult.status === 'fulfilled') {
+            for (const event of eventResult.value.body.items) {
+              if (event.type !== 'Warning') continue
+              const key = `${event.reason}:${event.message}`
+              if (seen.has(key)) continue
+              seen.add(key)
+              result.warnings.push({
+                reason: event.reason || '',
+                message: event.message || '',
+              })
+            }
+          }
+        }
+        // Limit to 5 warnings
+        result.warnings = result.warnings.slice(0, 5)
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * Full list of all workspace deployments. Returns deployments indexed by
+   * workspace-id plus the response resourceVersion for starting a watch.
+   */
+  async listWorkspaceDeployments(timeoutMs = 30_000): Promise<{
+    deployments: Map<string, k8s.V1Deployment>
+    resourceVersion: string
+  }> {
+    const response = await Promise.race([
+      this.appsApi.listNamespacedDeployment(
+        this.cfg.namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        `app=${this.cfg.namePrefix},component=workspace`,
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`listWorkspaceDeployments timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        ),
+      ),
+    ])
+
+    const deployments = new Map<string, k8s.V1Deployment>()
+    for (const dep of response.body.items) {
+      const wsId = dep.metadata?.labels?.['workspace-id']
+      if (wsId) deployments.set(wsId, dep)
+    }
+
+    const resourceVersion = response.body.metadata?.resourceVersion ?? ''
+    return { deployments, resourceVersion }
+  }
+
+  /**
+   * Watch workspace deployments for changes starting from a resourceVersion.
+   * Calls `onUpdate(workspaceId, status)` for each change.
+   * Returns an abort function to stop the watch.
+   */
+  watchDeployments(
+    resourceVersion: string,
+    onUpdate: (workspaceId: string, status: ReconciledStatus) => void,
+    onError: (err: unknown) => void,
+  ): () => void {
+    const watch = new k8s.Watch(this.kc)
+    let aborted = false
+
+    const path = `/apis/apps/v1/namespaces/${this.cfg.namespace}/deployments`
+    const params = {
+      labelSelector: `app=${this.cfg.namePrefix},component=workspace`,
+      resourceVersion,
+    }
+
+    const req: ReturnType<typeof watch.watch> = watch.watch(
+      path,
+      params,
+      (type, dep: k8s.V1Deployment) => {
+        const wsId = dep.metadata?.labels?.['workspace-id']
+        if (!wsId) return
+        const status = type === 'DELETED' ? ('stopped' as const) : resolveDeploymentStatus(dep)
+        onUpdate(wsId, status)
+      },
+      (err) => {
+        if (!aborted) onError(err)
+      },
+    )
+
+    return () => {
+      aborted = true
+      req?.then((r) => r.destroy()).catch(() => {})
+    }
+  }
+
+  /** Delete K8s resources for a workspace */
+  async deleteInstance(workspaceId: string): Promise<boolean> {
+    const name = this.getResourceName(workspaceId)
+
+    try {
+      await Promise.all([
+        this.appsApi.deleteNamespacedDeployment(name, this.cfg.namespace),
+        this.coreApi.deleteNamespacedService(name, this.cfg.namespace),
+        this.coreApi.deleteNamespacedPersistentVolumeClaim(`${name}-workspace`, this.cfg.namespace),
+      ])
+      return true
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) {
+        return false
+      }
+      throw e
+    }
+  }
+}
+
+/** Build the built-in environment's provider from process.env (loads kubeconfig). */
+function makeDefaultProvider(): KubernetesProvider {
+  const kc = new k8s.KubeConfig()
+  if (process.env.KUBECONFIG) {
+    kc.loadFromFile(process.env.KUBECONFIG)
+  } else if (process.env.KUBERNETES_SERVICE_HOST) {
+    kc.loadFromCluster()
+  } else {
+    kc.loadFromDefault()
+  }
+  return new KubernetesProvider(
+    kc.makeApiClient(k8s.AppsV1Api),
+    kc.makeApiClient(k8s.CoreV1Api),
+    kc,
+    defaultCfg,
+  )
+}
+
+/** The built-in environment's provider instance (today's only environment). */
+const defaultProvider = makeDefaultProvider()
+
+// ── Backward-compatible function exports ──
+// Thin wrappers over defaultProvider so existing call sites stay unchanged.
+// New code (the in-process runner) should use a KubernetesProvider instance.
+
+export function createInstance(
+  workspaceId: string,
+  agentType?: string,
+  resources?: ComputeResources,
+): Promise<K8sInstance> {
+  return defaultProvider.createInstance(workspaceId, agentType, resources)
+}
+
+export function getInstance(workspaceId: string): Promise<K8sInstance | null> {
+  return defaultProvider.getInstance(workspaceId)
+}
+
+export function listInstances(): Promise<K8sInstance[]> {
+  return defaultProvider.listInstances()
+}
+
+export function stopInstance(workspaceId: string): Promise<boolean> {
+  return defaultProvider.stopInstance(workspaceId)
+}
+
+export function startInstance(workspaceId: string): Promise<boolean> {
+  return defaultProvider.startInstance(workspaceId)
+}
+
+export function restartInstance(workspaceId: string): Promise<boolean> {
+  return defaultProvider.restartInstance(workspaceId)
+}
+
+export function getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
+  return defaultProvider.getInstanceSpecMarkers(workspaceId)
+}
+
+export function rebuildInstance(
+  workspaceId: string,
+  agentType: string,
+  resources?: ComputeResources,
+): Promise<void> {
+  return defaultProvider.rebuildInstance(workspaceId, agentType, resources)
+}
+
+export function updateInstanceResources(
+  workspaceId: string,
+  resources: ComputeResources,
+): Promise<boolean> {
+  return defaultProvider.updateInstanceResources(workspaceId, resources)
+}
+
+export function expandInstanceStorage(workspaceId: string, newSize: string): Promise<boolean> {
+  return defaultProvider.expandInstanceStorage(workspaceId, newSize)
+}
+
+export function getInstanceStatus(workspaceId: string): Promise<K8sResourceStatus> {
+  return defaultProvider.getInstanceStatus(workspaceId)
+}
+
+export function listWorkspaceDeployments(timeoutMs?: number): Promise<{
   deployments: Map<string, k8s.V1Deployment>
   resourceVersion: string
 }> {
-  const response = await Promise.race([
-    k8sAppsApi.listNamespacedDeployment(
-      NAMESPACE,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      `app=${NAME_PREFIX},component=workspace`,
-    ),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`listWorkspaceDeployments timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      ),
-    ),
-  ])
-
-  const deployments = new Map<string, k8s.V1Deployment>()
-  for (const dep of response.body.items) {
-    const wsId = dep.metadata?.labels?.['workspace-id']
-    if (wsId) deployments.set(wsId, dep)
-  }
-
-  const resourceVersion = response.body.metadata?.resourceVersion ?? ''
-  return { deployments, resourceVersion }
+  return defaultProvider.listWorkspaceDeployments(timeoutMs)
 }
 
-/**
- * Watch workspace deployments for changes starting from a resourceVersion.
- * Calls `onUpdate(workspaceId, status)` for each change.
- * Returns an abort function to stop the watch.
- */
 export function watchDeployments(
   resourceVersion: string,
   onUpdate: (workspaceId: string, status: ReconciledStatus) => void,
   onError: (err: unknown) => void,
 ): () => void {
-  const watch = new k8s.Watch(kc)
-  let aborted = false
-
-  const path = `/apis/apps/v1/namespaces/${NAMESPACE}/deployments`
-  const params = { labelSelector: `app=${NAME_PREFIX},component=workspace`, resourceVersion }
-
-  const req: ReturnType<typeof watch.watch> = watch.watch(
-    path,
-    params,
-    (type, dep: k8s.V1Deployment) => {
-      const wsId = dep.metadata?.labels?.['workspace-id']
-      if (!wsId) return
-      const status = type === 'DELETED' ? ('stopped' as const) : resolveDeploymentStatus(dep)
-      onUpdate(wsId, status)
-    },
-    (err) => {
-      if (!aborted) onError(err)
-    },
-  )
-
-  return () => {
-    aborted = true
-    req?.then((r) => r.destroy()).catch(() => {})
-  }
+  return defaultProvider.watchDeployments(resourceVersion, onUpdate, onError)
 }
 
-/**
- * Delete K8s resources for a workspace
- */
-export async function deleteInstance(workspaceId: string): Promise<boolean> {
-  const name = getResourceName(workspaceId)
-
-  try {
-    await Promise.all([
-      k8sAppsApi.deleteNamespacedDeployment(name, NAMESPACE),
-      k8sCoreApi.deleteNamespacedService(name, NAMESPACE),
-      k8sCoreApi.deleteNamespacedPersistentVolumeClaim(`${name}-workspace`, NAMESPACE),
-    ])
-    return true
-  } catch (e: any) {
-    if (e.response?.statusCode === 404) {
-      return false
-    }
-    throw e
-  }
+export function deleteInstance(workspaceId: string): Promise<boolean> {
+  return defaultProvider.deleteInstance(workspaceId)
 }
