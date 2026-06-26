@@ -1,8 +1,28 @@
 const NAMESPACE = process.env.K8S_NAMESPACE || 'default'
 const AGENT_PORT = 3001
 
-export function getWorkspaceAddress(workspaceId: string): string {
+/** Cluster-DNS address of a workspace on the built-in environment. */
+function builtinAddress(workspaceId: string): string {
   return `http://tos-${workspaceId}.${NAMESPACE}.svc.cluster.local:${AGENT_PORT}`
+}
+
+/**
+ * Resolve the base URL cp uses to reach a workspace's agent.
+ *
+ * This is the workspace data-plane routing seam (design §6). In v1 every
+ * workspace lives on the built-in environment and is reached via cluster DNS —
+ * so this stays a synchronous, zero-cost call, identical to before.
+ *
+ * When remote (BYOI) environments land (P2), a workspace on a remote env is
+ * reached through that environment's tunnel instead of cluster DNS. That
+ * dispatch (look up the placement's environment → if remote, return the tunnel
+ * route key reported in placement.endpoint) slots in HERE. It is intentionally
+ * NOT done now: there are no remote endpoints in v1, so querying placement on
+ * every call would only add hot-path DB load (chat/proxy/health) and a
+ * not-yet-observed race, for no behavior change. Keep built-in synchronous.
+ */
+export function getWorkspaceAddress(workspaceId: string): string {
+  return builtinAddress(workspaceId)
 }
 
 type ReloadScope = 'config' | 'skills' | 'credentials'
