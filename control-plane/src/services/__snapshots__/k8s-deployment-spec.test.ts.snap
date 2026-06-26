@@ -1,0 +1,778 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildDeploymentSpec golden master > afs enabled 1`] = `
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "annotations": {
+      "agent-platform/workspace-version": "6",
+    },
+    "labels": {
+      "app": "tos",
+      "component": "workspace",
+      "workspace-id": "ws1",
+    },
+    "name": "tos-ws1",
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "tos",
+        "component": "workspace",
+        "workspace-id": "ws1",
+      },
+    },
+    "strategy": {
+      "type": "Recreate",
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "tos",
+          "component": "workspace",
+          "workspace-id": "ws1",
+        },
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "WORKSPACE_DIR",
+                "value": "/workspace",
+              },
+              {
+                "name": "CP_URL",
+                "value": "http://nap-cp:3000",
+              },
+              {
+                "name": "WORKSPACE_ID",
+                "value": "ws1",
+              },
+              {
+                "name": "AFS_CONTROLLER",
+                "value": "afs-controller.nap.svc:9100",
+              },
+              {
+                "name": "AFS_FUSE_SERVER",
+                "value": "127.0.0.1:9101",
+              },
+            ],
+            "image": "nap-agent-claude-code:latest",
+            "livenessProbe": {
+              "failureThreshold": 6,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 30,
+              "timeoutSeconds": 5,
+            },
+            "name": "agent",
+            "ports": [
+              {
+                "containerPort": 3001,
+                "name": "http",
+              },
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 3,
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+            },
+            "resources": {
+              "limits": {
+                "cpu": "500m",
+                "memory": "1Gi",
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi",
+              },
+            },
+            "startupProbe": {
+              "failureThreshold": 120,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 5,
+              "timeoutSeconds": 3,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/workspace",
+                "name": "workspace",
+              },
+              {
+                "mountPath": "/mnt/afs",
+                "mountPropagation": "HostToContainer",
+                "name": "afs-mnt",
+              },
+            ],
+          },
+          {
+            "args": [
+              "/etc/afs/fuse-server.toml",
+            ],
+            "command": [
+              "afs-fuse",
+            ],
+            "env": [
+              {
+                "name": "AFS_BOOTSTRAP_URL",
+                "value": "http://nap-cp:3000/_cp/workspaces/ws1/afs-mounts",
+              },
+            ],
+            "image": "nap-afs-fuse:latest",
+            "name": "afs-fuse",
+            "securityContext": {
+              "privileged": true,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/mnt/afs",
+                "mountPropagation": "Bidirectional",
+                "name": "afs-mnt",
+              },
+              {
+                "mountPath": "/data/afs",
+                "name": "afs-storage",
+              },
+              {
+                "mountPath": "/etc/afs",
+                "name": "afs-fuse-config",
+              },
+              {
+                "mountPath": "/dev/fuse",
+                "name": "dev-fuse",
+              },
+            ],
+          },
+        ],
+        "nodeSelector": undefined,
+        "securityContext": {
+          "fsGroup": 1000,
+          "fsGroupChangePolicy": "OnRootMismatch",
+        },
+        "volumes": [
+          {
+            "name": "workspace",
+            "persistentVolumeClaim": {
+              "claimName": "tos-ws1-workspace",
+            },
+          },
+          {
+            "emptyDir": {},
+            "name": "afs-mnt",
+          },
+          {
+            "name": "afs-storage",
+            "persistentVolumeClaim": {
+              "claimName": "afs-shared-storage",
+            },
+          },
+          {
+            "configMap": {
+              "name": "afs-fuse-config",
+            },
+            "name": "afs-fuse-config",
+          },
+          {
+            "hostPath": {
+              "path": "/dev/fuse",
+            },
+            "name": "dev-fuse",
+          },
+        ],
+      },
+    },
+  },
+}
+`;
+
+exports[`buildDeploymentSpec golden master > full: afs + memory + resources + nodeselector + pullsecret 1`] = `
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "annotations": {
+      "agent-platform/workspace-version": "6",
+    },
+    "labels": {
+      "app": "tos",
+      "component": "workspace",
+      "workspace-id": "ws1",
+    },
+    "name": "tos-ws1",
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "tos",
+        "component": "workspace",
+        "workspace-id": "ws1",
+      },
+    },
+    "strategy": {
+      "type": "Recreate",
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "tos",
+          "component": "workspace",
+          "workspace-id": "ws1",
+        },
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "WORKSPACE_DIR",
+                "value": "/workspace",
+              },
+              {
+                "name": "CP_URL",
+                "value": "http://nap-cp:3000",
+              },
+              {
+                "name": "WORKSPACE_ID",
+                "value": "ws1",
+              },
+              {
+                "name": "AFS_CONTROLLER",
+                "value": "afs-controller.nap.svc:9100",
+              },
+              {
+                "name": "AFS_FUSE_SERVER",
+                "value": "127.0.0.1:9101",
+              },
+            ],
+            "image": "nap-agent-claude-code:latest",
+            "livenessProbe": {
+              "failureThreshold": 6,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 30,
+              "timeoutSeconds": 5,
+            },
+            "name": "agent",
+            "ports": [
+              {
+                "containerPort": 3001,
+                "name": "http",
+              },
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 3,
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+            },
+            "resources": {
+              "limits": {
+                "cpu": "2000m",
+                "memory": "4Gi",
+              },
+              "requests": {
+                "cpu": "500m",
+                "memory": "1Gi",
+              },
+            },
+            "startupProbe": {
+              "failureThreshold": 120,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 5,
+              "timeoutSeconds": 3,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/workspace",
+                "name": "workspace",
+              },
+              {
+                "mountPath": "/mnt/afs",
+                "mountPropagation": "HostToContainer",
+                "name": "afs-mnt",
+              },
+              {
+                "mountPath": "/mnt/memory",
+                "mountPropagation": "HostToContainer",
+                "name": "memory-mnt",
+              },
+            ],
+          },
+          {
+            "args": [
+              "/etc/afs/fuse-server.toml",
+            ],
+            "command": [
+              "afs-fuse",
+            ],
+            "env": [
+              {
+                "name": "AFS_BOOTSTRAP_URL",
+                "value": "http://nap-cp:3000/_cp/workspaces/ws1/afs-mounts",
+              },
+            ],
+            "image": "nap-afs-fuse:latest",
+            "name": "afs-fuse",
+            "securityContext": {
+              "privileged": true,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/mnt/afs",
+                "mountPropagation": "Bidirectional",
+                "name": "afs-mnt",
+              },
+              {
+                "mountPath": "/data/afs",
+                "name": "afs-storage",
+              },
+              {
+                "mountPath": "/etc/afs",
+                "name": "afs-fuse-config",
+              },
+              {
+                "mountPath": "/dev/fuse",
+                "name": "dev-fuse",
+              },
+            ],
+          },
+          {
+            "env": [
+              {
+                "name": "CP_URL",
+                "value": "http://nap-cp:3000",
+              },
+              {
+                "name": "WORKSPACE_ID",
+                "value": "ws1",
+              },
+              {
+                "name": "GRPC_LISTEN_ADDR",
+                "value": "0.0.0.0:9102",
+              },
+            ],
+            "image": "nap-memory-fuse:latest",
+            "name": "memory-fuse",
+            "ports": [
+              {
+                "containerPort": 9102,
+                "name": "memory-fuse",
+              },
+            ],
+            "securityContext": {
+              "privileged": true,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/mnt/memory",
+                "mountPropagation": "Bidirectional",
+                "name": "memory-mnt",
+              },
+              {
+                "mountPath": "/var/cache/memory-fuse",
+                "name": "memory-cache",
+              },
+              {
+                "mountPath": "/dev/fuse",
+                "name": "dev-fuse",
+              },
+            ],
+          },
+        ],
+        "imagePullSecrets": [
+          {
+            "name": "regcred",
+          },
+        ],
+        "nodeSelector": {
+          "node-group": "agent",
+        },
+        "securityContext": {
+          "fsGroup": 1000,
+          "fsGroupChangePolicy": "OnRootMismatch",
+        },
+        "volumes": [
+          {
+            "name": "workspace",
+            "persistentVolumeClaim": {
+              "claimName": "tos-ws1-workspace",
+            },
+          },
+          {
+            "emptyDir": {},
+            "name": "afs-mnt",
+          },
+          {
+            "name": "afs-storage",
+            "persistentVolumeClaim": {
+              "claimName": "afs-shared-storage",
+            },
+          },
+          {
+            "configMap": {
+              "name": "afs-fuse-config",
+            },
+            "name": "afs-fuse-config",
+          },
+          {
+            "emptyDir": {},
+            "name": "memory-mnt",
+          },
+          {
+            "emptyDir": {},
+            "name": "memory-cache",
+          },
+          {
+            "hostPath": {
+              "path": "/dev/fuse",
+            },
+            "name": "dev-fuse",
+          },
+        ],
+      },
+    },
+  },
+}
+`;
+
+exports[`buildDeploymentSpec golden master > memory-fuse enabled 1`] = `
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "annotations": {
+      "agent-platform/workspace-version": "6",
+    },
+    "labels": {
+      "app": "tos",
+      "component": "workspace",
+      "workspace-id": "ws1",
+    },
+    "name": "tos-ws1",
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "tos",
+        "component": "workspace",
+        "workspace-id": "ws1",
+      },
+    },
+    "strategy": {
+      "type": "Recreate",
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "tos",
+          "component": "workspace",
+          "workspace-id": "ws1",
+        },
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "WORKSPACE_DIR",
+                "value": "/workspace",
+              },
+              {
+                "name": "CP_URL",
+                "value": "http://nap-cp:3000",
+              },
+              {
+                "name": "WORKSPACE_ID",
+                "value": "ws1",
+              },
+            ],
+            "image": "nap-agent-claude-code:latest",
+            "livenessProbe": {
+              "failureThreshold": 6,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 30,
+              "timeoutSeconds": 5,
+            },
+            "name": "agent",
+            "ports": [
+              {
+                "containerPort": 3001,
+                "name": "http",
+              },
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 3,
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+            },
+            "resources": {
+              "limits": {
+                "cpu": "500m",
+                "memory": "1Gi",
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi",
+              },
+            },
+            "startupProbe": {
+              "failureThreshold": 120,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 5,
+              "timeoutSeconds": 3,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/workspace",
+                "name": "workspace",
+              },
+              {
+                "mountPath": "/mnt/memory",
+                "mountPropagation": "HostToContainer",
+                "name": "memory-mnt",
+              },
+            ],
+          },
+          {
+            "env": [
+              {
+                "name": "CP_URL",
+                "value": "http://nap-cp:3000",
+              },
+              {
+                "name": "WORKSPACE_ID",
+                "value": "ws1",
+              },
+              {
+                "name": "GRPC_LISTEN_ADDR",
+                "value": "0.0.0.0:9102",
+              },
+            ],
+            "image": "nap-memory-fuse:latest",
+            "name": "memory-fuse",
+            "ports": [
+              {
+                "containerPort": 9102,
+                "name": "memory-fuse",
+              },
+            ],
+            "securityContext": {
+              "privileged": true,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/mnt/memory",
+                "mountPropagation": "Bidirectional",
+                "name": "memory-mnt",
+              },
+              {
+                "mountPath": "/var/cache/memory-fuse",
+                "name": "memory-cache",
+              },
+              {
+                "mountPath": "/dev/fuse",
+                "name": "dev-fuse",
+              },
+            ],
+          },
+        ],
+        "nodeSelector": undefined,
+        "securityContext": {
+          "fsGroup": 1000,
+          "fsGroupChangePolicy": "OnRootMismatch",
+        },
+        "volumes": [
+          {
+            "name": "workspace",
+            "persistentVolumeClaim": {
+              "claimName": "tos-ws1-workspace",
+            },
+          },
+          {
+            "emptyDir": {},
+            "name": "memory-mnt",
+          },
+          {
+            "emptyDir": {},
+            "name": "memory-cache",
+          },
+          {
+            "hostPath": {
+              "path": "/dev/fuse",
+            },
+            "name": "dev-fuse",
+          },
+        ],
+      },
+    },
+  },
+}
+`;
+
+exports[`buildDeploymentSpec golden master > minimal: afs off, memory off, no nodeselector/pullsecret/resources 1`] = `
+{
+  "apiVersion": "apps/v1",
+  "kind": "Deployment",
+  "metadata": {
+    "annotations": {
+      "agent-platform/workspace-version": "6",
+    },
+    "labels": {
+      "app": "tos",
+      "component": "workspace",
+      "workspace-id": "ws1",
+    },
+    "name": "tos-ws1",
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "matchLabels": {
+        "app": "tos",
+        "component": "workspace",
+        "workspace-id": "ws1",
+      },
+    },
+    "strategy": {
+      "type": "Recreate",
+    },
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "tos",
+          "component": "workspace",
+          "workspace-id": "ws1",
+        },
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "WORKSPACE_DIR",
+                "value": "/workspace",
+              },
+              {
+                "name": "CP_URL",
+                "value": "http://nap-cp:3000",
+              },
+              {
+                "name": "WORKSPACE_ID",
+                "value": "ws1",
+              },
+            ],
+            "image": "nap-agent-claude-code:latest",
+            "livenessProbe": {
+              "failureThreshold": 6,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 30,
+              "timeoutSeconds": 5,
+            },
+            "name": "agent",
+            "ports": [
+              {
+                "containerPort": 3001,
+                "name": "http",
+              },
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 3,
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+            },
+            "resources": {
+              "limits": {
+                "cpu": "500m",
+                "memory": "1Gi",
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi",
+              },
+            },
+            "startupProbe": {
+              "failureThreshold": 120,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 5,
+              "timeoutSeconds": 3,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/workspace",
+                "name": "workspace",
+              },
+            ],
+          },
+        ],
+        "nodeSelector": undefined,
+        "securityContext": {
+          "fsGroup": 1000,
+          "fsGroupChangePolicy": "OnRootMismatch",
+        },
+        "volumes": [
+          {
+            "name": "workspace",
+            "persistentVolumeClaim": {
+              "claimName": "tos-ws1-workspace",
+            },
+          },
+        ],
+      },
+    },
+  },
+}
+`;
