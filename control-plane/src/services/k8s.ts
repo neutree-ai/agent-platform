@@ -76,6 +76,66 @@ export const CURRENT_TEMPLATE_VERSION = 6
 const TEMPLATE_VERSION_ANNOTATION = 'agent-platform/workspace-version'
 const MEMORY_FUSE_CONTAINER_NAME = 'memory-fuse'
 
+/**
+ * All infra config a {@link buildDeploymentSpec} / provider instance needs,
+ * captured explicitly instead of read from module-level env at call time. This
+ * is the seam that lets the built-in environment and (later) a remote runner
+ * share the same provider code with different config. {@link defaultK8sConfig}
+ * reproduces today's env-derived values verbatim, so behavior is unchanged.
+ */
+export interface K8sConfig {
+  namespace: string
+  namePrefix: string
+  agentImagePrefix: string
+  agentImageTag: string
+  storageClass: string
+  imagePullSecret: string
+  nodeSelector?: Record<string, string>
+  workspaceStorageSize: string
+  cpServiceUrl: string
+  memoryFuseImage: string
+  afs: {
+    enabled: boolean
+    image: string
+    controllerAddr: string
+    fuseServerAddr: string
+    storagePvc: string
+    configMap: string
+  }
+}
+
+/** The platform's built-in environment config, derived from process.env. */
+function defaultK8sConfig(): K8sConfig {
+  return {
+    namespace: NAMESPACE,
+    namePrefix: NAME_PREFIX,
+    agentImagePrefix: AGENT_IMAGE_PREFIX,
+    agentImageTag: AGENT_IMAGE_TAG,
+    storageClass: AGENT_STORAGE_CLASS,
+    imagePullSecret: IMAGE_PULL_SECRET,
+    nodeSelector: AGENT_NODE_SELECTOR,
+    workspaceStorageSize: WORKSPACE_STORAGE_SIZE,
+    cpServiceUrl: process.env.CP_SERVICE_URL || 'http://nap-cp:3000',
+    memoryFuseImage: MEMORY_FUSE_IMAGE,
+    afs: {
+      enabled: AFS_ENABLED,
+      image: AFS_IMAGE,
+      controllerAddr: AFS_CONTROLLER_ADDR,
+      fuseServerAddr: AFS_FUSE_SERVER_ADDR,
+      storagePvc: AFS_STORAGE_PVC,
+      configMap: AFS_CONFIGMAP,
+    },
+  }
+}
+
+/** Singleton config for the built-in environment (today's only environment). */
+const defaultCfg = defaultK8sConfig()
+
+/** Agent image resolution from explicit config (cf. {@link getAgentImage}). */
+function agentImageFor(cfg: K8sConfig, agentType: string): string {
+  return `${cfg.agentImagePrefix}-${agentType}:${cfg.agentImageTag}`
+}
+
 interface K8sInstance {
   workspaceId: string
   status: 'pending' | 'running' | 'failed'
@@ -108,38 +168,39 @@ function getLabels(workspaceId: string): Record<string, string> {
   }
 }
 
-function buildDeploymentSpec(
+export function buildDeploymentSpec(
   name: string,
   labels: Record<string, string>,
   workspaceId: string,
   agentType: string,
   pvcName: string,
   resources?: ComputeResources,
+  cfg: K8sConfig = defaultCfg,
 ): k8s.V1Deployment {
   // memory-fuse sidecar is unconditional on any cluster that ships the
   // image. The historical per-ws attachment gating was retired in template
   // v4 once every ws got a default store; keeping it would just be a no-op
   // (count is always >= 1).
-  const memoryFuseActive = MEMORY_FUSE_IMAGE !== ''
+  const memoryFuseActive = cfg.memoryFuseImage !== ''
 
   const agentContainer: k8s.V1Container = {
     name: 'agent',
-    image: getAgentImage(agentType),
+    image: agentImageFor(cfg, agentType),
     ports: [{ containerPort: 3001, name: 'http' }],
     env: [
       { name: 'WORKSPACE_DIR', value: '/workspace' },
-      { name: 'CP_URL', value: process.env.CP_SERVICE_URL || 'http://nap-cp:3000' },
+      { name: 'CP_URL', value: cfg.cpServiceUrl },
       { name: 'WORKSPACE_ID', value: workspaceId },
-      ...(AFS_ENABLED
+      ...(cfg.afs.enabled
         ? [
-            { name: 'AFS_CONTROLLER', value: AFS_CONTROLLER_ADDR },
-            { name: 'AFS_FUSE_SERVER', value: AFS_FUSE_SERVER_ADDR },
+            { name: 'AFS_CONTROLLER', value: cfg.afs.controllerAddr },
+            { name: 'AFS_FUSE_SERVER', value: cfg.afs.fuseServerAddr },
           ]
         : []),
     ],
     volumeMounts: [
       { name: 'workspace', mountPath: '/workspace' },
-      ...(AFS_ENABLED
+      ...(cfg.afs.enabled
         ? [{ name: 'afs-mnt', mountPath: '/mnt/afs', mountPropagation: 'HostToContainer' }]
         : []),
       ...(memoryFuseActive
@@ -192,10 +253,10 @@ function buildDeploymentSpec(
     },
   }
 
-  const afsSidecar: k8s.V1Container | undefined = AFS_ENABLED
+  const afsSidecar: k8s.V1Container | undefined = cfg.afs.enabled
     ? {
         name: 'afs-fuse',
-        image: AFS_IMAGE,
+        image: cfg.afs.image,
         command: ['afs-fuse'],
         args: ['/etc/afs/fuse-server.toml'],
         env: [
@@ -206,7 +267,7 @@ function buildDeploymentSpec(
           // is idempotent (ALREADY_EXISTS swallowed daemon-side).
           {
             name: 'AFS_BOOTSTRAP_URL',
-            value: `${process.env.CP_SERVICE_URL || 'http://nap-cp:3000'}/_cp/workspaces/${workspaceId}/afs-mounts`,
+            value: `${cfg.cpServiceUrl}/_cp/workspaces/${workspaceId}/afs-mounts`,
           },
         ],
         securityContext: { privileged: true },
@@ -222,9 +283,9 @@ function buildDeploymentSpec(
   const memoryFuseSidecar: k8s.V1Container | undefined = memoryFuseActive
     ? {
         name: MEMORY_FUSE_CONTAINER_NAME,
-        image: MEMORY_FUSE_IMAGE,
+        image: cfg.memoryFuseImage,
         env: [
-          { name: 'CP_URL', value: process.env.CP_SERVICE_URL || 'http://nap-cp:3000' },
+          { name: 'CP_URL', value: cfg.cpServiceUrl },
           { name: 'WORKSPACE_ID', value: workspaceId },
           // gRPC mount/unmount RPC: bind 0.0.0.0:9102 so cp can dial via the ws
           // Service (same pattern as afs-fuse on :9101). Trust cluster network.
@@ -247,15 +308,15 @@ function buildDeploymentSpec(
     : undefined
 
   // dev-fuse hostPath is shared by afs-fuse and memory-fuse; declare once if either enabled
-  const needsDevFuse = AFS_ENABLED || memoryFuseActive
+  const needsDevFuse = cfg.afs.enabled || memoryFuseActive
 
   const volumes: k8s.V1Volume[] = [
     { name: 'workspace', persistentVolumeClaim: { claimName: pvcName } },
-    ...(AFS_ENABLED
+    ...(cfg.afs.enabled
       ? [
           { name: 'afs-mnt', emptyDir: {} },
-          { name: 'afs-storage', persistentVolumeClaim: { claimName: AFS_STORAGE_PVC } },
-          { name: 'afs-fuse-config', configMap: { name: AFS_CONFIGMAP } },
+          { name: 'afs-storage', persistentVolumeClaim: { claimName: cfg.afs.storagePvc } },
+          { name: 'afs-fuse-config', configMap: { name: cfg.afs.configMap } },
         ]
       : []),
     ...(memoryFuseActive
@@ -300,8 +361,8 @@ function buildDeploymentSpec(
             fsGroup: 1000,
             fsGroupChangePolicy: 'OnRootMismatch',
           },
-          nodeSelector: AGENT_NODE_SELECTOR,
-          ...(IMAGE_PULL_SECRET ? { imagePullSecrets: [{ name: IMAGE_PULL_SECRET }] } : {}),
+          nodeSelector: cfg.nodeSelector,
+          ...(cfg.imagePullSecret ? { imagePullSecrets: [{ name: cfg.imagePullSecret }] } : {}),
           containers: [agentContainer, afsSidecar, memoryFuseSidecar].filter(
             (c): c is k8s.V1Container => !!c,
           ),
