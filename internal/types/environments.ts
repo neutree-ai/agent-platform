@@ -11,18 +11,18 @@
  * built-in environment via an in-process runner; remote-only fields are marked.
  */
 
+import type { ComputeResources } from './api.js'
+
 /** Provisioning backend kind. Open-ended; KubernetesProvider is the first. */
 export type EnvironmentKind = 'kubernetes' | 'docker' | 'nomad' | 'opensandbox'
 
 /** Reported liveness of an environment, driven by runner heartbeats. */
 export type EnvironmentStatus = 'pending' | 'online' | 'degraded' | 'offline'
 
-/** Infra-agnostic compute request for a workspace. */
-export interface ComputeResources {
-  cpuMilli: number
-  memMi: number
-  storageGi: number
-}
+// Compute sizing reuses the existing ComputeResources (quantity strings with
+// request/limit split) from ./api — it carries exactly what the k8s provider
+// needs and is portable enough (e.g. "1Gi"/"500m") for other backends to map.
+// A richer numeric form can replace it later if a backend needs one.
 
 /** What the control plane *wants* a workspace to be. */
 export type DesiredPhase = 'running' | 'stopped' | 'deleted'
@@ -63,12 +63,22 @@ export interface WorkspaceFeatures {
  * observed.
  */
 export interface WorkspaceSpec {
-  image: string
+  /**
+   * Which agent runs in the workspace. The k8s provider derives the container
+   * image from this (image = `<prefix>-<agentType>:<tag>`); this is the real
+   * per-workspace provisioning input today.
+   */
+  agentType: string
   resources: ComputeResources
-  env: Record<string, string>
-  ports: PortSpec[]
-  features: WorkspaceFeatures
+  /** Drift anchor; mirrors workspace_placements.spec_version. */
   version: number
+
+  // ── Reserved / forward-looking (unused by the v1 k8s provider) ──
+  /** Explicit container image, if a backend takes one directly instead of agentType. */
+  image?: string
+  env?: Record<string, string>
+  ports?: PortSpec[]
+  features?: WorkspaceFeatures
 }
 
 /**

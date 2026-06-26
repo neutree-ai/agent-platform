@@ -1,5 +1,11 @@
 import * as k8s from '@kubernetes/client-node'
 import type { ComputeResources } from '../../../internal/types/api'
+import type {
+  Capabilities,
+  EnvironmentProvider,
+  ObservedState,
+  WorkspaceSpec,
+} from '../../../internal/types/environments'
 
 const NAMESPACE = process.env.K8S_NAMESPACE || 'default'
 const AGENT_IMAGE_PREFIX = process.env.AGENT_IMAGE_PREFIX || 'nap-agent'
@@ -396,7 +402,7 @@ export function deploymentTemplateVersion(dep: k8s.V1Deployment | undefined): nu
  * functions — the exported functions below are thin wrappers over
  * {@link defaultProvider} so existing call sites stay unchanged.
  */
-class KubernetesProvider {
+class KubernetesProvider implements EnvironmentProvider {
   constructor(
     private readonly appsApi: k8s.AppsV1Api,
     private readonly coreApi: k8s.CoreV1Api,
@@ -960,6 +966,74 @@ class KubernetesProvider {
         return false
       }
       throw e
+    }
+  }
+
+  // ── EnvironmentProvider interface ──
+  // Infra-agnostic facade over the methods above, consumed by the runner. The
+  // legacy methods stay (their callers are unchanged); these adapt signatures
+  // to WorkspaceSpec / ObservedState. Lifecycle methods discard the legacy
+  // boolean return (false = "no such Deployment", which is a no-op for an
+  // idempotent converge).
+
+  /** Create if absent, else rebuild to converge (v1: cp bumps version → rebuild). */
+  async apply(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
+    const existing = await this.getInstance(workspaceId)
+    if (existing) {
+      await this.rebuildInstance(workspaceId, spec.agentType, spec.resources)
+    } else {
+      await this.createInstance(workspaceId, spec.agentType, spec.resources)
+    }
+  }
+
+  async start(workspaceId: string): Promise<void> {
+    await this.startInstance(workspaceId)
+  }
+
+  async stop(workspaceId: string): Promise<void> {
+    await this.stopInstance(workspaceId)
+  }
+
+  async destroy(workspaceId: string): Promise<void> {
+    await this.deleteInstance(workspaceId)
+  }
+
+  async resize(workspaceId: string, resources: ComputeResources): Promise<void> {
+    await this.updateInstanceResources(workspaceId, resources)
+  }
+
+  async expandStorage(workspaceId: string, sizeGi: number): Promise<void> {
+    await this.expandInstanceStorage(workspaceId, `${sizeGi}Gi`)
+  }
+
+  /**
+   * Point-in-time observation via a single Deployment read. `version` is left
+   * undefined: the spec-convergence version is a placement concept the runner
+   * tracks itself (NOT the pod-template version stamped on the Deployment).
+   */
+  async observe(workspaceId: string): Promise<ObservedState> {
+    const name = this.getResourceName(workspaceId)
+    try {
+      const res = await this.appsApi.readNamespacedDeployment(name, this.cfg.namespace)
+      return {
+        phase: resolveDeploymentStatus(res.body),
+        endpoint: {
+          address: `${name}.${this.cfg.namespace}.svc.cluster.local:3001`,
+        },
+      }
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) {
+        return { phase: 'unknown' }
+      }
+      throw e
+    }
+  }
+
+  capabilities(): Capabilities {
+    return {
+      sharedFs: this.cfg.afs.enabled,
+      persistentMemory: this.cfg.memoryFuseImage !== '',
+      gpu: false,
     }
   }
 }
