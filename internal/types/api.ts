@@ -1140,10 +1140,8 @@ export function skeletonToProfilePatch(
   layout_id: string
   slots: Record<string, { opened: { id: string; appId: string }[]; active: string | null }>
 } {
-  const slots: Record<
-    string,
-    { opened: { id: string; appId: string }[]; active: string | null }
-  > = {}
+  const slots: Record<string, { opened: { id: string; appId: string }[]; active: string | null }> =
+    {}
   for (const [slotId, apps] of Object.entries(skeleton.slots)) {
     const opened = apps.map((appId, i) => ({ id: mkId(slotId, appId, i), appId }))
     slots[slotId] = { opened, active: opened[0]?.id ?? null }
@@ -1832,3 +1830,64 @@ export const ApiEnvironmentSchema = z.object({
   created_at: z.string(),
 })
 export type ApiEnvironment = z.infer<typeof ApiEnvironmentSchema>
+
+export const EnvironmentPermissionSchema = z.enum(['viewer', 'editor'])
+
+export const EnvironmentGrantSchema = z.object({
+  team_id: z.string(),
+  permission: EnvironmentPermissionSchema,
+})
+
+export const EnvironmentGrantsBodySchema = z.object({
+  grants: z.array(EnvironmentGrantSchema),
+})
+
+export const ApiEnvironmentGrantSchema = z.object({
+  team_id: z.string(),
+  team_name: z.string(),
+  permission: EnvironmentPermissionSchema,
+  granted_at: z.string(),
+})
+export type ApiEnvironmentGrant = z.infer<typeof ApiEnvironmentGrantSchema>
+
+export const EnvironmentCreateBodySchema = z.object({
+  name: z.string().min(1),
+  // Only remote, non-builtin environments are created via the API; built-in is
+  // seeded by migration. kind selects the provider the runner will use.
+  kind: z.string().min(1).default('kubernetes'),
+  visibility: EnvironmentVisibilitySchema.optional(),
+  placement: z.record(z.string(), z.unknown()).optional(),
+  grants: z.array(EnvironmentGrantSchema).optional(),
+})
+
+export const EnvironmentUpdateBodySchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    visibility: EnvironmentVisibilitySchema.optional(),
+    placement: z.record(z.string(), z.unknown()).optional(),
+    grants: z.array(EnvironmentGrantSchema).optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'no fields to update' })
+
+// ── Environment tokens (runner credentials) ──
+
+export const EnvironmentTokenCreateBodySchema = z.object({
+  name: z.string().min(1),
+})
+
+/** Token metadata — never includes the secret. */
+export const ApiEnvironmentTokenSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  created_by: z.string(),
+  created_at: z.string(),
+  revoked_at: z.string().nullable(),
+})
+export type ApiEnvironmentToken = z.infer<typeof ApiEnvironmentTokenSchema>
+
+/** Returned exactly once on creation — carries the plaintext secret. */
+export const CreatedEnvironmentTokenSchema = z.object({
+  id: z.string(),
+  token: z.string(),
+  created_at: z.string(),
+})

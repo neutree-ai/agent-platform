@@ -140,6 +140,16 @@ export interface Environment {
   created_at: string
 }
 
+export interface EnvironmentToken {
+  id: string
+  environment_id: string
+  name: string
+  token_hash: string
+  created_by: string
+  created_at: string
+  revoked_at: string | null
+}
+
 export type PromptVisibility = 'private' | 'team' | 'public'
 
 export interface Prompt {

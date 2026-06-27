@@ -1,4 +1,4 @@
-import { pool } from './pool'
+import { generateId, pool } from './pool'
 import type { Environment } from './types'
 
 // Visibility-aware access for environments — mirrors prompts/templates/providers
@@ -106,6 +106,134 @@ export async function getEnvironmentForUser(
   const grantRank = Number(row.grant_rank) || 0
   if (!isOwner && !isPublic && grantRank === 0) return null
   return decorateEnvironment(row, userId)
+}
+
+// ── Write side (P2: register remote environments + share via teams) ──
+
+interface EnvironmentGrantInput {
+  team_id: string
+  permission: 'viewer' | 'editor'
+}
+
+interface EnvironmentGrantRow {
+  team_id: string
+  team_name: string
+  permission: 'viewer' | 'editor'
+  granted_at: string
+}
+
+/**
+ * Create a remote environment owned by `userId`. New environments start
+ * status='pending' (no runner has checked in yet) and is_builtin=false — the
+ * built-in row is seeded by migration and never created here.
+ */
+export async function createEnvironment(
+  userId: string,
+  name: string,
+  kind: string,
+  visibility: 'private' | 'team' | 'public',
+  placement: Record<string, unknown> = {},
+): Promise<Environment> {
+  const id = generateId()
+  const { rows } = await pool.query(
+    `INSERT INTO environments (id, user_id, name, visibility, kind, status, placement, is_builtin)
+     VALUES ($1, $2, $3, $4, $5, 'pending', $6, false)
+     RETURNING *`,
+    [id, userId, name, visibility, kind, JSON.stringify(placement)],
+  )
+  return rows[0] as Environment
+}
+
+export async function updateEnvironment(
+  id: string,
+  fields: {
+    name?: string
+    visibility?: 'private' | 'team' | 'public'
+    placement?: Record<string, unknown>
+  },
+): Promise<boolean> {
+  const sets: string[] = []
+  const vals: unknown[] = [id]
+  if (fields.name !== undefined) {
+    vals.push(fields.name)
+    sets.push(`name = $${vals.length}`)
+  }
+  if (fields.visibility !== undefined) {
+    vals.push(fields.visibility)
+    sets.push(`visibility = $${vals.length}`)
+  }
+  if (fields.placement !== undefined) {
+    vals.push(JSON.stringify(fields.placement))
+    sets.push(`placement = $${vals.length}`)
+  }
+  if (sets.length === 0) return false
+  // Never let the API mutate the built-in row.
+  const result = await pool.query(
+    `UPDATE environments SET ${sets.join(', ')} WHERE id = $1 AND is_builtin = false`,
+    vals,
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
+/** Delete a remote environment (owner only, never built-in). */
+export async function deleteEnvironment(id: string): Promise<boolean> {
+  const result = await pool.query('DELETE FROM environments WHERE id = $1 AND is_builtin = false', [
+    id,
+  ])
+  return (result.rowCount ?? 0) > 0
+}
+
+export async function listEnvironmentGrants(environmentId: string): Promise<EnvironmentGrantRow[]> {
+  const { rows } = await pool.query(
+    `SELECT eg.team_id, t.name AS team_name, eg.permission, eg.granted_at
+       FROM environment_grants eg
+       JOIN teams t ON t.id = eg.team_id
+      WHERE eg.environment_id = $1
+      ORDER BY eg.granted_at ASC`,
+    [environmentId],
+  )
+  return rows as EnvironmentGrantRow[]
+}
+
+/**
+ * Replace the full grant set for an environment — mirrors setPromptGrants:
+ * grants not in the list are removed, the rest upserted.
+ */
+export async function setEnvironmentGrants(
+  environmentId: string,
+  grants: EnvironmentGrantInput[],
+  grantedBy: string,
+): Promise<void> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    if (grants.length === 0) {
+      await client.query('DELETE FROM environment_grants WHERE environment_id = $1', [
+        environmentId,
+      ])
+    } else {
+      const teamIds = grants.map((g) => g.team_id)
+      await client.query(
+        'DELETE FROM environment_grants WHERE environment_id = $1 AND team_id <> ALL($2::text[])',
+        [environmentId, teamIds],
+      )
+      for (const g of grants) {
+        await client.query(
+          `INSERT INTO environment_grants (environment_id, team_id, permission, granted_by)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (environment_id, team_id)
+           DO UPDATE SET permission = EXCLUDED.permission, granted_by = EXCLUDED.granted_by`,
+          [environmentId, g.team_id, g.permission, grantedBy],
+        )
+      }
+    }
+    await client.query('COMMIT')
+  } catch (e) {
+    await client.query('ROLLBACK')
+    throw e
+  } finally {
+    client.release()
+  }
 }
 
 function decorateEnvironment(

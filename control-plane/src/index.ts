@@ -24,6 +24,7 @@ import authRoutes from './routes/auth'
 import batchRunRoutes from './routes/batch-runs'
 import cgProxy from './routes/cg-proxy'
 import credentialsRoutes from './routes/credentials'
+import envProtocolRoutes from './routes/env'
 import environmentsRoutes from './routes/environments'
 import internalRoutes from './routes/internal'
 import invitesRoutes from './routes/invites'
@@ -161,6 +162,7 @@ app.use('/*', async (c, next) => {
     path.startsWith('/api/docs') ||
     path.startsWith('/_cp/') ||
     path.startsWith('/_cg/') ||
+    path.startsWith('/env/v1/') ||
     path.startsWith('/static/') ||
     path.startsWith('/assets/') ||
     path.startsWith('/badges/') ||
@@ -315,6 +317,7 @@ app.route('/api/me', meUsageRoutes)
 app.route('/api/workspaces', jobRoutes)
 app.route('/api/credentials', credentialsRoutes)
 app.route('/api/environments', environmentsRoutes)
+app.route('/env', envProtocolRoutes)
 app.route('/api/workspace-layouts', workspaceLayoutsRoutes)
 app.route('/api/prompts', promptsReadRoutes)
 app.route('/api/prompts', promptsWriteRoutes)
