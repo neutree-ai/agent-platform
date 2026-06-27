@@ -23,6 +23,7 @@ import {
 import * as k8s from '../../services/k8s'
 import { isMemoryFuseAvailable } from '../../services/k8s'
 import { bumpWorkspaceSpec, placeWorkspace } from '../../services/placement'
+import { chooseEnvironment } from '../../services/placement-decision'
 import { skillRepo } from '../../services/skills-composition'
 import { materializeTemplateLayout } from '../../services/template-layout'
 import { materializeTemplateSchedules } from '../../services/template-schedules'
@@ -97,6 +98,22 @@ write.openapi(createRouteDef, async (c) => {
           resolvedComputeResources = templateVersion.compute_resources as Record<string, string>
         }
       }
+    }
+
+    // Placement decision (BYOI §8): pick + validate the target environment
+    // BEFORE creating the workspace, so an inaccessible/offline/incapable
+    // environment is rejected without leaving an orphan row. afs/memory are
+    // opportunistic at create (attached later / best-effort), so nothing is hard
+    // required here — access + liveness are the gates; `supports` drives the
+    // opportunistic memory attach below.
+    const placement = await chooseEnvironment({
+      userId: currentUser.sub,
+      isSystem,
+      requestedEnvironmentId: body.environment_id,
+      required: {},
+    })
+    if (!placement.ok) {
+      return c.json({ error: placement.error }, 400)
     }
 
     const ownerId = isSystem ? 'system' : currentUser.sub
@@ -178,7 +195,7 @@ write.openapi(createRouteDef, async (c) => {
     // for system workspaces (shared, no human owner to file the store under)
     // and when the cluster doesn't ship the memory-fuse image (sidecar
     // wouldn't be present — store would just be dead weight in the prompt).
-    if (!isSystem && isMemoryFuseAvailable()) {
+    if (!isSystem && isMemoryFuseAvailable() && placement.supports.persistentMemory) {
       try {
         // Reuse the workspace name verbatim so the store is identifiable from
         // the user's locale without cp needing an i18n layer. Description is
@@ -201,7 +218,7 @@ write.openapi(createRouteDef, async (c) => {
 
     // Control inversion (P1): record desired state; the env-runner creates the
     // pod. Optimistic 'starting' is corrected by cp's status reconcile watch.
-    await placeWorkspace(workspace.id)
+    await placeWorkspace(workspace.id, placement.environmentId)
     await updateWorkspace(workspace.id, { status: 'starting' })
 
     const updated = (await getWorkspace(workspace.id))!
