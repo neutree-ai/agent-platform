@@ -1,8 +1,11 @@
 import { startReconcileLoop } from '../../internal/env-runner-core'
+import type { Mux } from '../../internal/env-tunnel'
 import { makeDefaultProvider } from '../../internal/k8s-provider'
 import { pool } from './db'
 import { DbTransport } from './db-transport'
 import { HttpTransport } from './http-transport'
+import { connectTunnel } from './tunnel-client'
+import { forwardDial, startReverseListeners } from './tunnel-dataplane'
 
 // env-runner-k8s: the standalone runner for kind='kubernetes' environments. One
 // reconcile core (internal/env-runner-core), two shapes selected by RUNNER_MODE:
@@ -27,6 +30,41 @@ const MODE = process.env.RUNNER_MODE === 'remote' ? 'remote' : 'direct'
 // (set to the customer cluster in remote mode) → in-cluster → default.
 const provider = makeDefaultProvider()
 
+const TUNNEL_RECONNECT_MS = Number(process.env.TUNNEL_RECONNECT_MS) || 5_000
+
+/**
+ * Remote mode data plane: keep one tunnel to cp's env-gateway up. The reverse
+ * listeners bind once and read the current mux, so they survive reconnects.
+ */
+function startTunnel(cpUrl: string, token: string): void {
+  const gatewayUrl = `${cpUrl.replace(/^http/, 'ws').replace(/\/+$/, '')}/env-gateway`
+  let currentMux: Mux | null = null
+  startReverseListeners(() => currentMux)
+
+  const run = async () => {
+    for (;;) {
+      try {
+        const closed = new Promise<void>((resolve) => {
+          connectTunnel({ gatewayUrl, token, onStream: forwardDial, onClose: resolve })
+            .then((client) => {
+              currentMux = client.mux
+              console.log('[env-runner-k8s] tunnel data plane up')
+            })
+            .catch((err) => {
+              console.error('[env-runner-k8s] tunnel connect failed:', err)
+              resolve()
+            })
+        })
+        await closed
+      } finally {
+        currentMux = null
+      }
+      await new Promise((r) => setTimeout(r, TUNNEL_RECONNECT_MS))
+    }
+  }
+  void run()
+}
+
 let transport: DbTransport | HttpTransport
 if (MODE === 'remote') {
   const cpUrl = process.env.CP_URL
@@ -36,6 +74,7 @@ if (MODE === 'remote') {
     process.exit(1)
   }
   transport = new HttpTransport(cpUrl, token)
+  startTunnel(cpUrl, token)
 } else {
   transport = new DbTransport()
 }

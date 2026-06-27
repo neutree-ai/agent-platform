@@ -1,3 +1,5 @@
+import { getRemoteProxyPort } from './remote-proxy'
+
 const NAMESPACE = process.env.K8S_NAMESPACE || 'default'
 const AGENT_PORT = 3001
 
@@ -13,15 +15,16 @@ function builtinAddress(workspaceId: string): string {
  * workspace lives on the built-in environment and is reached via cluster DNS —
  * so this stays a synchronous, zero-cost call, identical to before.
  *
- * When remote (BYOI) environments land (P2), a workspace on a remote env is
- * reached through that environment's tunnel instead of cluster DNS. That
- * dispatch (look up the placement's environment → if remote, return the tunnel
- * route key reported in placement.endpoint) slots in HERE. It is intentionally
- * NOT done now: there are no remote endpoints in v1, so querying placement on
- * every call would only add hot-path DB load (chat/proxy/health) and a
- * not-yet-observed race, for no behavior change. Keep built-in synchronous.
+ * A workspace on a remote (BYOI) environment is reached through that
+ * environment's tunnel instead of cluster DNS. cp keeps a localhost forward
+ * proxy per reachable remote workspace (lib/remote-proxy); this stays a
+ * synchronous O(1) map lookup — built-in workspaces are never in the map, so
+ * their path is byte-identical (cluster DNS, zero extra cost). The proxy
+ * lifecycle (set up on observe-running, torn down on stop) is driven elsewhere.
  */
 export function getWorkspaceAddress(workspaceId: string): string {
+  const remotePort = getRemoteProxyPort(workspaceId)
+  if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
   return builtinAddress(workspaceId)
 }
 
