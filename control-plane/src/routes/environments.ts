@@ -1,15 +1,48 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
-import { type ApiEnvironment, ApiEnvironmentSchema } from '../../../internal/types/api'
+import {
+  type ApiEnvironment,
+  ApiEnvironmentGrantSchema,
+  ApiEnvironmentSchema,
+  ApiEnvironmentTokenSchema,
+  CreatedEnvironmentTokenSchema,
+  EnvironmentCreateBodySchema,
+  EnvironmentGrantsBodySchema,
+  EnvironmentTokenCreateBodySchema,
+  EnvironmentUpdateBodySchema,
+} from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
 import {
+  createEnvironmentToken,
+  listEnvironmentTokens,
+  revokeEnvironmentToken,
+} from '../services/db/environment-tokens'
+import {
   type EnvironmentWithAccess,
+  createEnvironment,
+  deleteEnvironment,
   getEnvironmentForUser,
+  listEnvironmentGrants,
   listVisibleToUser,
+  setEnvironmentGrants,
+  updateEnvironment,
 } from '../services/db/environments'
+import { getTeamMembership } from '../services/db/teams'
 
 const environments = new OpenAPIHono<AppEnv>()
 
 const ErrorSchema = z.object({ error: z.string() })
+const SuccessSchema = z.object({ success: z.boolean() })
+
+async function assertOwnTeams(
+  userId: string,
+  grants: { team_id: string; permission: 'viewer' | 'editor' }[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  for (const g of grants) {
+    const m = await getTeamMembership(g.team_id, userId)
+    if (!m) return { ok: false, error: `Team ${g.team_id} not accessible` }
+  }
+  return { ok: true }
+}
 
 const IdParam = z.object({
   id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
@@ -80,6 +113,320 @@ environments.openapi(getRoute, async (c) => {
   const env = await getEnvironmentForUser(id, user.sub)
   if (!env) return c.json({ error: 'Environment not found' }, 404)
   return c.json(toApi(env), 200)
+})
+
+// ── POST / — register a remote environment ──
+const createRouteDef = createRoute({
+  method: 'post',
+  path: '/',
+  tags: ['environments'],
+  summary: 'Register a remote environment',
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: { content: { 'application/json': { schema: EnvironmentCreateBodySchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created',
+      content: { 'application/json': { schema: ApiEnvironmentSchema } },
+    },
+    400: {
+      description: 'Invalid grants for visibility',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    409: {
+      description: 'Name already in use',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+environments.openapi(createRouteDef, async (c) => {
+  const user = c.get('user')
+  const body = c.req.valid('json')
+  const visibility = body.visibility ?? 'private'
+  const grants = body.grants ?? []
+  if (visibility === 'team' && grants.length === 0) {
+    return c.json({ error: 'visibility=team requires at least one grant' }, 400)
+  }
+  if (visibility !== 'team' && grants.length > 0) {
+    return c.json({ error: 'grants only allowed when visibility=team' }, 400)
+  }
+  const teamCheck = await assertOwnTeams(user.sub, grants)
+  if (!teamCheck.ok) return c.json({ error: teamCheck.error }, 400)
+
+  try {
+    const env = await createEnvironment(user.sub, body.name, body.kind, visibility, body.placement)
+    if (grants.length > 0) await setEnvironmentGrants(env.id, grants, user.sub)
+    const decorated = await getEnvironmentForUser(env.id, user.sub)
+    return c.json(toApi(decorated!), 201)
+  } catch (e) {
+    if ((e as { code?: string })?.code === '23505') {
+      return c.json({ error: 'An environment with this name already exists' }, 409)
+    }
+    throw e
+  }
+})
+
+// ── PUT /:id — owner only, never built-in ──
+const updateRouteDef = createRoute({
+  method: 'put',
+  path: '/{id}',
+  tags: ['environments'],
+  summary: 'Update a remote environment (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: IdParam,
+    body: { content: { 'application/json': { schema: EnvironmentUpdateBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Updated',
+      content: { 'application/json': { schema: ApiEnvironmentSchema } },
+    },
+    400: {
+      description: 'Invalid grants for visibility',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    404: {
+      description: 'Not found or not owner',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+environments.openapi(updateRouteDef, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const existing = await getEnvironmentForUser(id, user.sub)
+  if (!existing || !existing.is_owner || existing.is_builtin) {
+    return c.json({ error: 'Environment not found' }, 404)
+  }
+  const body = c.req.valid('json')
+  const nextVisibility = body.visibility ?? existing.visibility
+  const nextGrants = body.grants
+  if (nextGrants !== undefined) {
+    if (nextVisibility === 'team' && nextGrants.length === 0) {
+      return c.json({ error: 'visibility=team requires at least one grant' }, 400)
+    }
+    if (nextVisibility !== 'team' && nextGrants.length > 0) {
+      return c.json({ error: 'grants only allowed when visibility=team' }, 400)
+    }
+    const teamCheck = await assertOwnTeams(user.sub, nextGrants)
+    if (!teamCheck.ok) return c.json({ error: teamCheck.error }, 400)
+  } else if (body.visibility !== undefined && body.visibility !== 'team') {
+    await setEnvironmentGrants(id, [], user.sub)
+  }
+
+  await updateEnvironment(id, {
+    name: body.name,
+    visibility: body.visibility,
+    placement: body.placement,
+  })
+  if (nextGrants !== undefined) await setEnvironmentGrants(id, nextGrants, user.sub)
+  const decorated = await getEnvironmentForUser(id, user.sub)
+  return c.json(toApi(decorated!), 200)
+})
+
+// ── DELETE /:id — owner only, never built-in ──
+const deleteRouteDef = createRoute({
+  method: 'delete',
+  path: '/{id}',
+  tags: ['environments'],
+  summary: 'Delete a remote environment (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: { params: IdParam },
+  responses: {
+    200: { description: 'Deleted', content: { 'application/json': { schema: SuccessSchema } } },
+    404: {
+      description: 'Not found or not owner',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+environments.openapi(deleteRouteDef, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const existing = await getEnvironmentForUser(id, user.sub)
+  if (!existing || !existing.is_owner || existing.is_builtin) {
+    return c.json({ error: 'Environment not found' }, 404)
+  }
+  await deleteEnvironment(id)
+  return c.json({ success: true }, 200)
+})
+
+// ── GET /:id/grants ──
+const listGrantsRoute = createRoute({
+  method: 'get',
+  path: '/{id}/grants',
+  tags: ['environments'],
+  summary: 'List team grants (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: { params: IdParam },
+  responses: {
+    200: {
+      description: 'Grants',
+      content: { 'application/json': { schema: z.array(ApiEnvironmentGrantSchema) } },
+    },
+    404: {
+      description: 'Not found or not owner',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+environments.openapi(listGrantsRoute, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const existing = await getEnvironmentForUser(id, user.sub)
+  if (!existing || !existing.is_owner) return c.json({ error: 'Environment not found' }, 404)
+  return c.json(await listEnvironmentGrants(id), 200)
+})
+
+// ── PUT /:id/grants ──
+const setGrantsRoute = createRoute({
+  method: 'put',
+  path: '/{id}/grants',
+  tags: ['environments'],
+  summary: 'Replace team grants (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: IdParam,
+    body: { content: { 'application/json': { schema: EnvironmentGrantsBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Grants',
+      content: { 'application/json': { schema: z.array(ApiEnvironmentGrantSchema) } },
+    },
+    400: {
+      description: 'Invalid grants',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    404: {
+      description: 'Not found or not owner',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+environments.openapi(setGrantsRoute, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const existing = await getEnvironmentForUser(id, user.sub)
+  if (!existing || !existing.is_owner) return c.json({ error: 'Environment not found' }, 404)
+  const { grants } = c.req.valid('json')
+  if (existing.visibility !== 'team' && grants.length > 0) {
+    return c.json({ error: 'grants only allowed when visibility=team' }, 400)
+  }
+  const teamCheck = await assertOwnTeams(user.sub, grants)
+  if (!teamCheck.ok) return c.json({ error: teamCheck.error }, 400)
+  await setEnvironmentGrants(id, grants, user.sub)
+  return c.json(await listEnvironmentGrants(id), 200)
+})
+
+// ── POST /:id/tokens — issue a runner token (owner only). Plaintext once. ──
+const createTokenRoute = createRoute({
+  method: 'post',
+  path: '/{id}/tokens',
+  tags: ['environments'],
+  summary: 'Issue a runner token for an environment (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: IdParam,
+    body: { content: { 'application/json': { schema: EnvironmentTokenCreateBodySchema } } },
+  },
+  responses: {
+    201: {
+      description: 'Created token (plaintext shown once)',
+      content: { 'application/json': { schema: CreatedEnvironmentTokenSchema } },
+    },
+    404: {
+      description: 'Not found or not owner',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+environments.openapi(createTokenRoute, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const existing = await getEnvironmentForUser(id, user.sub)
+  // Built-in is served by the direct-DB runner and must never get a token.
+  if (!existing || !existing.is_owner || existing.is_builtin) {
+    return c.json({ error: 'Environment not found' }, 404)
+  }
+  const { name } = c.req.valid('json')
+  const token = await createEnvironmentToken(id, name, user.sub)
+  return c.json(token, 201)
+})
+
+// ── GET /:id/tokens — list active tokens (metadata only, owner only) ──
+const listTokensRoute = createRoute({
+  method: 'get',
+  path: '/{id}/tokens',
+  tags: ['environments'],
+  summary: 'List active runner tokens (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: { params: IdParam },
+  responses: {
+    200: {
+      description: 'Tokens',
+      content: { 'application/json': { schema: z.array(ApiEnvironmentTokenSchema) } },
+    },
+    404: {
+      description: 'Not found or not owner',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+environments.openapi(listTokensRoute, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const existing = await getEnvironmentForUser(id, user.sub)
+  if (!existing || !existing.is_owner) return c.json({ error: 'Environment not found' }, 404)
+  const tokens = await listEnvironmentTokens(id)
+  return c.json(
+    tokens.map((t) => ({
+      id: t.id,
+      name: t.name,
+      created_by: t.created_by,
+      created_at: t.created_at,
+      revoked_at: t.revoked_at,
+    })),
+    200,
+  )
+})
+
+// ── DELETE /:id/tokens/:tokenId — revoke (owner only) ──
+const TokenIdParam = z.object({
+  id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
+  tokenId: z.string().openapi({ param: { name: 'tokenId', in: 'path' } }),
+})
+
+const revokeTokenRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/tokens/{tokenId}',
+  tags: ['environments'],
+  summary: 'Revoke a runner token (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: { params: TokenIdParam },
+  responses: {
+    200: { description: 'Revoked', content: { 'application/json': { schema: SuccessSchema } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+environments.openapi(revokeTokenRoute, async (c) => {
+  const user = c.get('user')
+  const { id, tokenId } = c.req.valid('param')
+  const existing = await getEnvironmentForUser(id, user.sub)
+  if (!existing || !existing.is_owner) return c.json({ error: 'Environment not found' }, 404)
+  const ok = await revokeEnvironmentToken(tokenId, id)
+  if (!ok) return c.json({ error: 'Token not found' }, 404)
+  return c.json({ success: true }, 200)
 })
 
 export default environments
