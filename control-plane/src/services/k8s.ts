@@ -14,7 +14,6 @@ import {
   type ReconciledStatus,
   makeDefaultProvider,
 } from '../../../internal/k8s-provider'
-import type { ComputeResources } from '../../../internal/types/api'
 
 export {
   CURRENT_TEMPLATE_VERSION,
@@ -30,17 +29,12 @@ export {
 /** The built-in environment's provider instance (today's only environment). */
 const defaultProvider: KubernetesProvider = makeDefaultProvider()
 
-// ── Backward-compatible function exports ──
-// Thin wrappers over defaultProvider so existing call sites stay unchanged.
-// New code (the env-runner) constructs its own KubernetesProvider.
-
-export function createInstance(
-  workspaceId: string,
-  agentType?: string,
-  resources?: ComputeResources,
-) {
-  return defaultProvider.createInstance(workspaceId, agentType, resources)
-}
+// ── Backward-compatible read/observe wrappers ──
+// Thin wrappers over defaultProvider for the cp paths that still talk to k8s
+// (status reads, the delete teardown, the reconcile watch). The mutation
+// wrappers (create/start/stop/restart/rebuild/resize/expand) were removed in the
+// P1 control inversion — those actions now go through workspace_placements and
+// the env-runner.
 
 export function getInstance(workspaceId: string) {
   return defaultProvider.getInstance(workspaceId)
@@ -50,36 +44,8 @@ export function listInstances() {
   return defaultProvider.listInstances()
 }
 
-export function stopInstance(workspaceId: string) {
-  return defaultProvider.stopInstance(workspaceId)
-}
-
-export function startInstance(workspaceId: string) {
-  return defaultProvider.startInstance(workspaceId)
-}
-
-export function restartInstance(workspaceId: string) {
-  return defaultProvider.restartInstance(workspaceId)
-}
-
 export function getInstanceSpecMarkers(workspaceId: string) {
   return defaultProvider.getInstanceSpecMarkers(workspaceId)
-}
-
-export function rebuildInstance(
-  workspaceId: string,
-  agentType: string,
-  resources?: ComputeResources,
-) {
-  return defaultProvider.rebuildInstance(workspaceId, agentType, resources)
-}
-
-export function updateInstanceResources(workspaceId: string, resources: ComputeResources) {
-  return defaultProvider.updateInstanceResources(workspaceId, resources)
-}
-
-export function expandInstanceStorage(workspaceId: string, newSize: string) {
-  return defaultProvider.expandInstanceStorage(workspaceId, newSize)
 }
 
 export function getInstanceStatus(workspaceId: string) {

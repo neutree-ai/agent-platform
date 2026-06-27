@@ -17,12 +17,12 @@ import {
   createWorkspace,
   deleteWorkspace,
   getWorkspace,
-  getWorkspaceConfig,
   updateWorkspace,
   updateWorkspaceConfig,
 } from '../../services/db/workspaces'
 import * as k8s from '../../services/k8s'
 import { isMemoryFuseAvailable } from '../../services/k8s'
+import { bumpWorkspaceSpec, placeWorkspace } from '../../services/placement'
 import { skillRepo } from '../../services/skills-composition'
 import { materializeTemplateLayout } from '../../services/template-layout'
 import { materializeTemplateSchedules } from '../../services/template-schedules'
@@ -199,8 +199,9 @@ write.openapi(createRouteDef, async (c) => {
       }
     }
 
-    const config = await getWorkspaceConfig(workspace.id)
-    await k8s.createInstance(workspace.id, agentType, config?.compute_resources)
+    // Control inversion (P1): record desired state; the env-runner creates the
+    // pod. Optimistic 'starting' is corrected by cp's status reconcile watch.
+    await placeWorkspace(workspace.id)
     await updateWorkspace(workspace.id, { status: 'starting' })
 
     const updated = (await getWorkspace(workspace.id))!
@@ -377,12 +378,12 @@ write.openapi(putConfigRoute, async (c) => {
   if (body.compute_resources && workspace.status === 'running') {
     const cr = body.compute_resources
     try {
-      if (cr.cpu_request || cr.cpu_limit || cr.memory_request || cr.memory_limit) {
-        await k8s.updateInstanceResources(id, cr)
+      // Control inversion (P1): bump the spec; the env-runner re-applies with the
+      // new resources. (One spec covers cpu/mem and storage — the runner rebuilds
+      // the Deployment and resizes the PVC together.)
+      if (cr.cpu_request || cr.cpu_limit || cr.memory_request || cr.memory_limit || cr.storage) {
+        await bumpWorkspaceSpec(id)
         await updateWorkspace(id, { status: 'starting' })
-      }
-      if (cr.storage) {
-        await k8s.expandInstanceStorage(id, cr.storage)
       }
     } catch (e: any) {
       console.error(`[config] Failed to apply compute resources for workspace=${id}:`, e.message)

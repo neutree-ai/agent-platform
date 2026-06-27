@@ -1,6 +1,6 @@
 import { resetAllSessionsIdle } from './db/sessions'
 import { getWorkspace, listIdleRunningWorkspaces, updateWorkspace } from './db/workspaces'
-import * as k8s from './k8s'
+import { setDesiredPhase } from './placement'
 
 const DAY_MS = 86_400_000
 
@@ -48,7 +48,7 @@ export async function runIdleWorkspaceGC(idleDays: number): Promise<void> {
         )
         continue
       }
-      await k8s.stopInstance(ws.id)
+      await setDesiredPhase(ws.id, 'stopped')
       await resetAllSessionsIdle(ws.id)
       await updateWorkspace(ws.id, { status: 'stopped' })
       stopped++

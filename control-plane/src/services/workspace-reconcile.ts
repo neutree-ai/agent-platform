@@ -1,6 +1,7 @@
 import type { ComputeResources } from '../../../internal/types/api'
 import { getWorkspaceConfig, updateWorkspace } from './db/workspaces'
 import * as k8s from './k8s'
+import { bumpWorkspaceSpec, setDesiredPhase } from './placement'
 
 interface DesiredSpec {
   agentType: string
@@ -79,9 +80,11 @@ export async function reconcileWorkspacePod(
   const drift = await computeWorkspaceDrift(workspaceId)
   if (!drift.hasInstance || drift.reasons.length === 0) return { rebuilt: false }
 
-  const desired = await getDesiredSpec(workspaceId)
-  await k8s.rebuildInstance(workspaceId, desired.agentType, desired.resources)
-  // Cache the now-deployed version so the "update available" prompt clears
+  // Control inversion (P1): bump the placement spec; the env-runner re-applies
+  // (rebuilds the Deployment) when the ws is running. Detection stays here (cp
+  // can still read the built-in cluster's markers); the action moves to the runner.
+  await bumpWorkspaceSpec(workspaceId)
+  // Cache the now-desired version so the "update available" prompt clears
   // immediately, without waiting for the reconcile loop's next annotation sync.
   await updateWorkspace(workspaceId, { runtime_version: k8s.CURRENT_TEMPLATE_VERSION })
   return { rebuilt: true, reason: drift.reasons.join('; ') }
@@ -99,22 +102,16 @@ export async function reconcileWorkspacePod(
 export async function startWorkspaceInstance(
   workspaceId: string,
 ): Promise<{ rebuilt: boolean; reason?: string }> {
+  // Control inversion (P1): bump spec on template drift, then set desired=running.
+  // The env-runner converges: spec drift → apply (rebuild, picks up the latest
+  // config/resources baked into the spec); otherwise scale the Deployment up.
+  // No separate resize call here — resource changes are folded into the spec at
+  // config-edit time (PUT /config bumps the spec).
   const reconciled = await reconcileWorkspacePod(workspaceId)
   if (reconciled.rebuilt) {
     console.log(`[start ${workspaceId}] rebuilt: ${reconciled.reason}`)
-    await updateWorkspace(workspaceId, { status: 'starting' })
-    return reconciled
   }
-
-  const config = await getWorkspaceConfig(workspaceId)
-  const cr = config?.compute_resources
-  if (cr && Object.keys(cr).length > 0) {
-    await k8s.updateInstanceResources(workspaceId, cr)
-    if (cr.storage) {
-      await k8s.expandInstanceStorage(workspaceId, cr.storage)
-    }
-  }
-  await k8s.startInstance(workspaceId)
+  await setDesiredPhase(workspaceId, 'running')
   await updateWorkspace(workspaceId, { status: 'starting' })
-  return { rebuilt: false }
+  return reconciled
 }

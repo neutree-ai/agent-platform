@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
 import { resetAllSessionsIdle } from '../../services/db/sessions'
 import { getWorkspace, updateWorkspace } from '../../services/db/workspaces'
-import * as k8s from '../../services/k8s'
+import { setDesiredPhase } from '../../services/placement'
 import { reconcileWorkspacePod, startWorkspaceInstance } from '../../services/workspace-reconcile'
 import { canManage, interruptAllSessions } from './_shared'
 
@@ -109,7 +109,8 @@ lifecycle.openapi(stopRoute, async (c) => {
   try {
     console.log(`[Stop] Request workspace=${id}`)
     await interruptAllSessions(workspace, 'Stop')
-    await k8s.stopInstance(workspace.id)
+    // Control inversion (P1): record desired=stopped; the env-runner scales down.
+    await setDesiredPhase(workspace.id, 'stopped')
     await resetAllSessionsIdle(id)
     await updateWorkspace(id, { status: 'stopped' })
     return c.json({ success: true }, 200)
