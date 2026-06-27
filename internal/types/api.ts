@@ -59,6 +59,9 @@ export const WorkspaceCreateBodySchema = z.object({
   name: z.string().min(1),
   template_id: z.string().optional(),
   is_system: z.boolean().optional(),
+  // Target environment for placement (BYOI). Omitted → built-in. Must be an
+  // environment the user can see; capability/liveness are checked server-side.
+  environment_id: z.string().optional(),
   agent_type: z.string().optional(),
   compute_resources: z.record(z.string(), z.string()).optional(),
   provider_id: z.string().optional(),
