@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../../lib/types'
 import { listStreamingWorkspaceIds } from '../../services/db/sessions'
 import * as k8sService from '../../services/k8s'
+import { bumpWorkspaceSpec } from '../../services/placement'
 import { computeWorkspaceDrift, reconcileWorkspacePod } from '../../services/workspace-reconcile'
 
 const cluster = new Hono<AppEnv>()
@@ -234,7 +235,10 @@ cluster.post('/rebuild-stale', async (c) => {
           result.inSync++
         } else {
           // In sync, but roll the pod so a moving :latest tag is re-pulled.
-          await k8sService.restartInstance(wsId)
+          // Control inversion (P1): bump the spec; the env-runner re-applies
+          // (rebuild re-pulls the image). Targets here are non-stopped, so
+          // desired=running and the runner acts.
+          await bumpWorkspaceSpec(wsId)
           result.restarted.push(wsId)
         }
       } catch (e: any) {

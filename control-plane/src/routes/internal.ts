@@ -19,6 +19,7 @@ import { getWorkspace, getWorkspaceConfig, updateWorkspace } from '../services/d
 import * as k8s from '../services/k8s'
 import { getToken, serverOriginFromUrl } from '../services/mcp-oauth'
 import { broadcastStoreInvalidate } from '../services/memory-fuse'
+import { bumpWorkspaceSpec } from '../services/placement'
 import { skillRepo, skillsService } from '../services/skills-composition'
 import { skillsContentFetch, skillsContentUrl } from '../services/skills-content'
 import { ConflictError, NotAllowedError, SkillNotFoundError } from '../services/skills-errors'
@@ -382,14 +383,11 @@ internal.put('/workspaces/:id/config', async (c) => {
   if (body.compute_resources && workspace?.status === 'running') {
     const cr = body.compute_resources
     try {
-      // Update CPU/memory (triggers rolling restart)
-      if (cr.cpu_request || cr.cpu_limit || cr.memory_request || cr.memory_limit) {
-        await k8s.updateInstanceResources(id, cr)
+      // Control inversion (P1): bump the spec; the env-runner re-applies with the
+      // new cpu/mem and resizes the PVC (one spec covers both).
+      if (cr.cpu_request || cr.cpu_limit || cr.memory_request || cr.memory_limit || cr.storage) {
+        await bumpWorkspaceSpec(id)
         await updateWorkspace(id, { status: 'starting' })
-      }
-      // Expand storage if specified
-      if (cr.storage) {
-        await k8s.expandInstanceStorage(id, cr.storage)
       }
     } catch (e: any) {
       console.error(`[config] Failed to apply compute resources for workspace=${id}:`, e.message)

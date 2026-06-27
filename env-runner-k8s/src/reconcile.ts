@@ -28,6 +28,22 @@ async function reconcilePlacement(
   const current = await provider.observe(p.workspace_id)
   const exists = current.phase !== 'unknown'
 
+  // desired=stopped: ensure scaled down. Spec drift is intentionally NOT applied
+  // while stopped — a config change to a stopped ws stays dormant until its next
+  // start (when desired flips to running), avoiding waking a ws the user stopped.
+  if (p.desired_phase === 'stopped') {
+    if (current.phase !== 'stopped' && exists) {
+      await provider.stop(p.workspace_id)
+      const after = await provider.observe(p.workspace_id)
+      await writeObserved(p.workspace_id, { phase: after.phase, endpoint: after.endpoint })
+      return 'stop'
+    }
+    await writeObserved(p.workspace_id, { phase: current.phase, endpoint: current.endpoint })
+    return 'none'
+  }
+
+  // desired=running below.
+
   // spec drift: cp bumped the spec — (re)apply, then record convergence.
   if (p.spec_version > (p.observed_version ?? 0)) {
     await provider.apply(p.workspace_id, p.spec as WorkspaceSpec)
@@ -40,32 +56,28 @@ async function reconcilePlacement(
     return 'apply'
   }
 
-  // lifecycle drift.
-  if (p.desired_phase === 'running' && current.phase !== 'running') {
-    // No object yet → create from spec; otherwise just scale back up.
+  // lifecycle drift: should be running but isn't.
+  if (current.phase !== 'running') {
     if (!exists) {
+      // No object yet → create from spec (records convergence).
       await provider.apply(p.workspace_id, p.spec as WorkspaceSpec)
-    } else if (current.phase === 'stopped') {
-      await provider.start(p.workspace_id)
-    } else {
-      // starting/error/pending — in-flight, leave it; just record below.
-      await writeObserved(p.workspace_id, { phase: current.phase, endpoint: current.endpoint })
-      return 'none'
+      const after = await provider.observe(p.workspace_id)
+      await writeObserved(p.workspace_id, {
+        phase: after.phase,
+        endpoint: after.endpoint,
+        version: p.spec_version,
+      })
+      return 'apply'
     }
-    const after = await provider.observe(p.workspace_id)
-    await writeObserved(p.workspace_id, {
-      phase: after.phase,
-      endpoint: after.endpoint,
-      version: exists ? undefined : p.spec_version,
-    })
-    return exists ? 'start' : 'apply'
-  }
-
-  if (p.desired_phase === 'stopped' && current.phase !== 'stopped') {
-    await provider.stop(p.workspace_id)
-    const after = await provider.observe(p.workspace_id)
-    await writeObserved(p.workspace_id, { phase: after.phase, endpoint: after.endpoint })
-    return 'stop'
+    if (current.phase === 'stopped') {
+      await provider.start(p.workspace_id)
+      const after = await provider.observe(p.workspace_id)
+      await writeObserved(p.workspace_id, { phase: after.phase, endpoint: after.endpoint })
+      return 'start'
+    }
+    // starting/error/pending — in-flight, just record.
+    await writeObserved(p.workspace_id, { phase: current.phase, endpoint: current.endpoint })
+    return 'none'
   }
 
   // Converged — just record what we see.

@@ -980,7 +980,13 @@ export class KubernetesProvider implements EnvironmentProvider {
   async apply(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
     const existing = await this.getInstance(workspaceId)
     if (existing) {
+      // rebuild swaps the Deployment (new container resources/image) but
+      // preserves the PVC, so grow storage separately when the spec asks for it
+      // (expand only ever increases; same-size is a no-op).
       await this.rebuildInstance(workspaceId, spec.agentType, spec.resources)
+      if (spec.resources?.storage) {
+        await this.expandInstanceStorage(workspaceId, spec.resources.storage)
+      }
     } else {
       await this.createInstance(workspaceId, spec.agentType, spec.resources)
     }
