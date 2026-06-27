@@ -1,0 +1,12 @@
+{
+  "name": "@neutree-ai/env-tunnel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "multiplex": "^6.7.0"
+  }
+}

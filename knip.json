@@ -3,7 +3,7 @@
     "control-plane": {
       "entry": ["scripts/*.ts", "src/services/db/mcp-catalog.ts"],
       "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
-      "ignoreDependencies": ["tsx"]
+      "ignoreDependencies": ["tsx", "multiplex"]
     },
     "web": {
       "entry": [
@@ -28,7 +28,7 @@
     },
     "env-runner-k8s": {
       "project": ["src/**/*.ts"],
-      "ignoreDependencies": ["@kubernetes/client-node"]
+      "ignoreDependencies": ["@kubernetes/client-node", "multiplex"]
     },
     "skills-content-service": {
       "project": ["src/**/*.ts"]

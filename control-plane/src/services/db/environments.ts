@@ -108,6 +108,72 @@ export async function getEnvironmentForUser(
   return decorateEnvironment(row, userId)
 }
 
+// ── Remote projection (P2-D): drive workspaces.status from runner reports ──
+
+/**
+ * Workspace ids placed on a remote (non-builtin) environment. The built-in
+ * watch-k8s reconcile skips these — they have no Deployment in cp's cluster, so
+ * their status comes from the projection below, not from k8s.
+ */
+export async function getRemoteWorkspaceIds(): Promise<Set<string>> {
+  const { rows } = await pool.query(
+    `SELECT p.workspace_id
+       FROM workspace_placements p
+       JOIN environments e ON e.id = p.environment_id
+      WHERE e.is_builtin = false`,
+  )
+  return new Set(rows.map((r) => r.workspace_id as string))
+}
+
+interface RemoteObservation {
+  workspace_id: string
+  environment_id: string
+  observed_phase: string | null
+  /** True when the environment has no live runner (offline/pending/stale beat). */
+  env_offline: boolean
+}
+
+/**
+ * Observed state for every remote-environment workspace, with an offline flag
+ * derived from the environment's heartbeat freshness. `thresholdSec` is how long
+ * without a heartbeat counts as offline.
+ */
+export async function listRemoteWorkspaceObservations(
+  thresholdSec: number,
+): Promise<RemoteObservation[]> {
+  const { rows } = await pool.query(
+    `SELECT p.workspace_id, p.environment_id, p.observed_phase,
+            NOT (
+              e.status = 'online'
+              AND e.last_heartbeat_at IS NOT NULL
+              AND e.last_heartbeat_at >= now() - make_interval(secs => $1)
+            ) AS env_offline
+       FROM workspace_placements p
+       JOIN environments e ON e.id = p.environment_id
+      WHERE e.is_builtin = false`,
+    [thresholdSec],
+  )
+  return rows as RemoteObservation[]
+}
+
+/**
+ * Flip online environments to offline once their heartbeat goes stale. Only
+ * 'online' → 'offline' (a never-connected environment stays 'pending'). Returns
+ * the ids that transitioned, for logging.
+ */
+export async function markStaleEnvironmentsOffline(thresholdSec: number): Promise<string[]> {
+  const { rows } = await pool.query(
+    `UPDATE environments
+        SET status = 'offline'
+      WHERE is_builtin = false
+        AND status = 'online'
+        AND (last_heartbeat_at IS NULL OR last_heartbeat_at < now() - make_interval(secs => $1))
+      RETURNING id`,
+    [thresholdSec],
+  )
+  return rows.map((r) => r.id as string)
+}
+
 // ── Write side (P2: register remote environments + share via teams) ──
 
 interface EnvironmentGrantInput {

@@ -5,38 +5,20 @@ import {
   listAllUserCredentials,
   listUsersWithDeletingCredentials,
 } from '../services/db/credentials'
-import { resetAllSessionsIdle } from '../services/db/sessions'
+import { getRemoteWorkspaceIds } from '../services/db/environments'
 import { getWorkspace, listAllWorkspaces, updateWorkspace } from '../services/db/workspaces'
+import { runEnvProjection } from '../services/env-projection'
 import { runIdleWorkspaceGC } from '../services/idle-workspace-gc'
 import * as k8s from '../services/k8s'
 import { sweepRunningWorkspaces } from '../services/usage/pull'
+import { applyStatusChange } from './workspace-status'
 
 const WATCH_CYCLE_MS = 10 * 60 * 1000 // 10 minutes
 
-/**
- * Handle a workspace status change: update DB and reset chat_status if needed.
- * Used by both the full list reconcile and the watch callback.
- */
-async function applyStatusChange(
-  workspaceId: string,
-  resolved: k8s.ReconciledStatus,
-  dbStatus?: string,
-) {
-  // If we have prior DB state, skip no-ops
-  if (dbStatus !== undefined && resolved === dbStatus) return
-
-  await updateWorkspace(workspaceId, { status: resolved })
-  console.log(`[Reconcile] workspace=${workspaceId} ${dbStatus ?? '?'} → ${resolved}`)
-
-  // Reset stale chat_status for stopped/error workspaces. The session-level
-  // update is no-op when nothing is non-idle, so we don't need to gate it.
-  if (resolved === 'stopped' || resolved === 'error') {
-    await resetAllSessionsIdle(workspaceId)
-  }
-  // AFS remount is handled by the afs-fuse sidecar's boot-pull
-  // (AFS_BOOTSTRAP_URL), which is the correct event source: it fires on
-  // every pod start regardless of whether cp observed the transition.
-}
+// How often to project remote placements → workspaces.status, and how long
+// without a runner heartbeat before an environment is considered offline.
+const ENV_PROJECTION_INTERVAL = '*/15 * * * * *'
+const ENV_HEARTBEAT_TIMEOUT_SEC = Number(process.env.ENV_HEARTBEAT_TIMEOUT_SEC) || 60
 
 /**
  * Full list reconcile: fetch all workspaces from DB and all deployments from
@@ -57,7 +39,14 @@ async function fullReconcile(): Promise<string> {
     const { deployments, resourceVersion } = await k8s.listWorkspaceDeployments()
     t2 = Date.now()
 
+    // Workspaces on remote environments have no Deployment in cp's cluster —
+    // their status is driven by the env projection (observed + heartbeat), not
+    // this watch-k8s path. Skip them so resolveDeploymentStatus(undefined) never
+    // clobbers a remote workspace to 'stopped'.
+    const remoteIds = await getRemoteWorkspaceIds()
+
     for (const ws of allWorkspaces) {
+      if (remoteIds.has(ws.id)) continue
       const dep = deployments.get(ws.id)
       const resolved = k8s.resolveDeploymentStatus(dep)
       if (resolved !== ws.status) {
@@ -185,6 +174,16 @@ export function startReconcileLoop() {
     new Cron('0 * * * *', () => runIdleWorkspaceGC(gcDays))
     console.log(`[Reconcile] idle-workspace GC enabled — hourly sweep, threshold ${gcDays}d`)
   }
+
+  // Remote env projection: derive workspaces.status from runner-reported
+  // observed state + heartbeat freshness, and keep the forward proxies in step.
+  // Cheap no-op while there are no remote environments. protect:true so a slow
+  // pass never stacks.
+  new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
+    runEnvProjection(ENV_HEARTBEAT_TIMEOUT_SEC).catch((e) =>
+      console.error('[Reconcile] env projection error:', e instanceof Error ? e.message : e),
+    ),
+  )
 
   // List+watch loop: runs continuously, each cycle is ~10 minutes
   const run = async () => {
