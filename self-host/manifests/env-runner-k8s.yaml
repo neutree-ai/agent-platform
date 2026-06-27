@@ -43,6 +43,10 @@ metadata:
     app: ${APP_PREFIX}-env-runner-k8s
 spec:
   replicas: 1
+  # Recreate (not RollingUpdate): the runner mutates cluster state, so two
+  # overlapping pods during a deploy could double-apply. Kill the old one first.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: ${APP_PREFIX}-env-runner-k8s

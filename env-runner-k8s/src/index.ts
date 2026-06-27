@@ -1,10 +1,11 @@
 import { makeDefaultProvider } from '../../internal/k8s-provider'
 import { pool } from './db'
-import { startObserveLoop } from './reconcile'
+import { startReconcileLoop } from './reconcile'
 
 // env-runner-k8s: the standalone runner for kind='kubernetes' environments.
 // v1 = the built-in (platform) cluster, reached in-cluster (same DB, same k8s),
-// no protocol/tunnel. P0 scope is a read-only observe loop (see reconcile.ts).
+// no protocol/tunnel. It reconciles actual → desired for each placement (see
+// reconcile.ts); cp writes desired, the runner converges.
 
 process.on('uncaughtException', (err) => {
   console.error('[fatal] Uncaught exception (process kept alive):', err)
@@ -16,8 +17,8 @@ process.on('unhandledRejection', (reason) => {
 const INTERVAL_MS = Number(process.env.ENV_RUNNER_INTERVAL_MS) || 15_000
 
 const provider = makeDefaultProvider()
-console.log(`[env-runner-k8s] starting (P0 read-only observe loop, interval ${INTERVAL_MS}ms)`)
-const stop = startObserveLoop(provider, INTERVAL_MS)
+console.log(`[env-runner-k8s] starting (reconcile loop, interval ${INTERVAL_MS}ms)`)
+const stop = startReconcileLoop(provider, INTERVAL_MS)
 
 const shutdown = async (sig: string) => {
   console.log(`[env-runner-k8s] ${sig} received, shutting down`)

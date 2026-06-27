@@ -5,7 +5,7 @@ export const pool = new pg.Pool({
   max: Number(process.env.PG_POOL_MAX) || 20,
 })
 
-interface PlacementRow {
+export interface PlacementRow {
   workspace_id: string
   environment_id: string
   desired_phase: string
@@ -35,12 +35,14 @@ interface ObservedUpdate {
   phase: string
   endpoint?: unknown
   message?: string | null
+  /** Set only after the runner has converged to a spec version (post-apply). */
+  version?: number | null
 }
 
 /**
- * Write back the observed phase. P0 deliberately does NOT touch observed_version
- * — that is the spec-convergence marker the runner sets only after it applies a
- * spec (P1). Here we only record what we see.
+ * Write back observed state. observed_version is set only when provided (after
+ * an apply converges to spec_version); otherwise it is left untouched so a plain
+ * observe never clears the convergence marker.
  */
 export async function writeObserved(workspaceId: string, o: ObservedUpdate): Promise<void> {
   await pool.query(
@@ -48,6 +50,7 @@ export async function writeObserved(workspaceId: string, o: ObservedUpdate): Pro
         SET observed_phase = $2,
             endpoint = $3,
             message = $4,
+            observed_version = COALESCE($5, observed_version),
             reported_at = now()
       WHERE workspace_id = $1`,
     [
@@ -55,6 +58,12 @@ export async function writeObserved(workspaceId: string, o: ObservedUpdate): Pro
       o.phase,
       o.endpoint != null ? JSON.stringify(o.endpoint) : null,
       o.message ?? null,
+      o.version ?? null,
     ],
   )
+}
+
+/** Remove a placement row after its workspace has been destroyed. */
+export async function deletePlacement(workspaceId: string): Promise<void> {
+  await pool.query('DELETE FROM workspace_placements WHERE workspace_id = $1', [workspaceId])
 }
