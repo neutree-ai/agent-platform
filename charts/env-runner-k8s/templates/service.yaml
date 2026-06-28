@@ -1,0 +1,19 @@
+# Reverse-tunnel Service: workspace sidecars in this cluster reach the control
+# plane through the runner's local listeners (CP_URL / AFS_CONTROLLER point here).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "env-runner-k8s.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "env-runner-k8s.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: cp-proxy
+      port: {{ .Values.tunnel.cpProxyPort }}
+      targetPort: cp-proxy
+    - name: afs-proxy
+      port: {{ .Values.tunnel.afsProxyPort }}
+      targetPort: afs-proxy

@@ -1,0 +1,60 @@
+# Remote env-runner-k8s — values.
+#
+# Minimum you must set: controlPlane.url, the env token (token or
+# existingSecret), and the agent image settings for your cluster.
+
+image:
+  repository: ghcr.io/neutree-ai/env-runner-k8s
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Image pull secret(s) for the images above (optional).
+imagePullSecrets: []
+
+controlPlane:
+  # Public base URL of the control plane, e.g. https://platform.example.com.
+  # The runner derives the gateway WS endpoint as <url>/env-gateway and the
+  # protocol endpoints as <url>/env/v1/*.
+  url: ""
+
+# Per-environment token (issued via the platform: Environments → Tokens). Either
+# set `token` here (a Secret is created for you) or point `existingSecret` at a
+# Secret you manage with key `token`.
+envToken:
+  token: ""
+  existingSecret: ""
+  secretKey: token
+
+# How the runner provisions workspace pods in THIS cluster. These must match the
+# images/config your platform expects (ask your platform operator). afs is not
+# supported on remote environments yet, so it is intentionally absent → the
+# runner advertises sharedFs=false; persistentMemory is advertised when
+# memoryFuseImage is set (memory tunnels back to the control plane).
+provider:
+  namespace: default
+  agentImagePrefix: ghcr.io/neutree-ai/agent
+  agentImageTag: latest
+  storageClass: ""
+  memoryFuseImage: ghcr.io/neutree-ai/memory-fuse:latest
+  # "" → no nodeSelector; "k=v,k2=v2" → that selector (matches provider parsing).
+  nodeSelector: ""
+
+# Reverse tunnel listeners on the runner pod; a sidecar in a workspace reaches
+# the control plane through these (fronted by the chart's Service).
+tunnel:
+  cpProxyPort: 38000
+  afsProxyPort: 39100
+
+reconcileIntervalMs: 15000
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: env-runner-k8s
+description: >-
+  Remote BYOI runner for the agent platform. Deploy this in your own Kubernetes
+  cluster to host workspaces there: it pulls desired state from the control
+  plane over an outbound, token-authenticated connection, reconciles workspace
+  pods in your cluster, and tunnels control-plane traffic — no inbound access to
+  your cluster is required.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - byoi
+  - agent-platform
+  - env-runner
