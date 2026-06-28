@@ -91,6 +91,11 @@ COPY internal/types /internal/types
 # and ../../../../internal/sse-consumer/src from /app/src/mcp/tools/agent.ts — both resolve
 # to /internal/sse-consumer relative to the /app build context.
 COPY internal/sse-consumer /internal/sse-consumer
+# env-tunnel (byte-level mux) is imported via ../../../internal/env-tunnel from
+# /app/src/routes/env-gateway.ts; k8s-provider via ../../../internal/k8s-provider
+# from /app/src/services/k8s.ts. Both resolve to /internal/* from /app/src/*.
+COPY internal/env-tunnel /internal/env-tunnel
+COPY internal/k8s-provider /internal/k8s-provider
 
 RUN npm run build
 
