@@ -28,13 +28,7 @@ export type EnvironmentStatus = 'pending' | 'online' | 'degraded' | 'offline'
 export type DesiredPhase = 'running' | 'stopped' | 'deleted'
 
 /** What the runner *observes* a workspace to be. */
-export type ObservedPhase =
-  | 'pending'
-  | 'starting'
-  | 'running'
-  | 'stopped'
-  | 'error'
-  | 'unknown'
+export type ObservedPhase = 'pending' | 'starting' | 'running' | 'stopped' | 'error' | 'unknown'
 
 export interface PortSpec {
   name: string
@@ -137,6 +131,14 @@ export interface EnvironmentProvider {
 
   /** Point-in-time observation. */
   observe(workspaceId: string): Promise<ObservedState>
+  /**
+   * Optional batch observation: one round-trip for every workspace the provider
+   * currently has (e.g. a single k8s LIST). The map is keyed by workspace id;
+   * ids absent from it are unprovisioned (phase 'unknown'). When present, the
+   * reconcile loop uses this once per pass instead of N× {@link observe} —
+   * O(1) round-trips instead of O(N). Absent → callers fall back to observe().
+   */
+  observeAll?(): Promise<Map<string, ObservedState>>
   /** Optional change stream; absent → callers fall back to polling observe(). */
   watch?(onChange: (workspaceId: string, state: ObservedState) => void): Closable
 

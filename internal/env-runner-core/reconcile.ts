@@ -1,4 +1,4 @@
-import type { EnvironmentProvider, WorkspaceSpec } from '../types/environments'
+import type { EnvironmentProvider, ObservedState, WorkspaceSpec } from '../types/environments'
 import type { PlacementRow, PlacementTransport } from './transport'
 
 // Provider- and transport-agnostic reconcile core. It depends only on
@@ -16,10 +16,34 @@ import type { PlacementRow, PlacementTransport } from './transport'
 
 type ReconcileAction = 'apply' | 'start' | 'stop' | 'destroy' | 'none'
 
+/**
+ * Write observed state back only when the phase actually moved. A steady-state
+ * pass over N converged placements would otherwise issue N DB writes per pass
+ * for no change; this keeps it to writes that carry information. endpoint is
+ * derived deterministically per workspace (cluster DNS / route key), so phase
+ * is the only mutable field on the no-op path.
+ */
+async function recordIfChanged(
+  transport: PlacementTransport,
+  p: PlacementRow,
+  current: ObservedState,
+): Promise<void> {
+  if (current.phase !== p.observed_phase) {
+    await transport.writeObserved(p.workspace_id, {
+      phase: current.phase,
+      endpoint: current.endpoint,
+    })
+  }
+}
+
 async function reconcilePlacement(
   provider: EnvironmentProvider,
   transport: PlacementTransport,
   p: PlacementRow,
+  // Pre-fetched observation for this workspace (from the per-pass batch observe,
+  // or a per-id observe() when the provider has no batch). Avoids an observe()
+  // round-trip per placement.
+  current: ObservedState,
 ): Promise<ReconcileAction> {
   // desired=deleted: tear down and drop the row (terminal).
   if (p.desired_phase === 'deleted') {
@@ -28,7 +52,6 @@ async function reconcilePlacement(
     return 'destroy'
   }
 
-  const current = await provider.observe(p.workspace_id)
   const exists = current.phase !== 'unknown'
 
   // desired=stopped: ensure scaled down. Spec drift is intentionally NOT applied
@@ -44,10 +67,7 @@ async function reconcilePlacement(
       })
       return 'stop'
     }
-    await transport.writeObserved(p.workspace_id, {
-      phase: current.phase,
-      endpoint: current.endpoint,
-    })
+    await recordIfChanged(transport, p, current)
     return 'none'
   }
 
@@ -88,18 +108,12 @@ async function reconcilePlacement(
       return 'start'
     }
     // starting/error/pending — in-flight, just record.
-    await transport.writeObserved(p.workspace_id, {
-      phase: current.phase,
-      endpoint: current.endpoint,
-    })
+    await recordIfChanged(transport, p, current)
     return 'none'
   }
 
   // Converged — just record what we see.
-  await transport.writeObserved(p.workspace_id, {
-    phase: current.phase,
-    endpoint: current.endpoint,
-  })
+  await recordIfChanged(transport, p, current)
   return 'none'
 }
 
@@ -109,12 +123,19 @@ async function reconcileOnce(
   transport: PlacementTransport,
 ): Promise<{ acted: number; noop: number; failed: number }> {
   const placements = await transport.listPlacements()
+  // Observe everything in one round-trip when the provider supports it (k8s: a
+  // single LIST), so a pass is O(1) infra calls instead of O(N) observe()s.
+  // Providers without observeAll fall back to a per-placement observe().
+  const observedAll = provider.observeAll ? await provider.observeAll() : null
   let acted = 0
   let noop = 0
   let failed = 0
   for (const p of placements) {
     try {
-      const action = await reconcilePlacement(provider, transport, p)
+      const current = observedAll
+        ? (observedAll.get(p.workspace_id) ?? { phase: 'unknown' as const })
+        : await provider.observe(p.workspace_id)
+      const action = await reconcilePlacement(provider, transport, p, current)
       if (action === 'none') noop++
       else acted++
     } catch (err) {

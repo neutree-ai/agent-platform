@@ -1035,6 +1035,28 @@ export class KubernetesProvider implements EnvironmentProvider {
     }
   }
 
+  /**
+   * Batch counterpart to {@link observe}: a single LIST over all workspace
+   * deployments instead of one GET per workspace. Mirrors observe()'s shape
+   * (status + cluster-DNS endpoint); workspaces with no deployment are simply
+   * absent from the map (the reconcile loop treats them as 'unknown', exactly
+   * as observe()'s 404 path does).
+   */
+  async observeAll(): Promise<Map<string, ObservedState>> {
+    const { deployments } = await this.listWorkspaceDeployments()
+    const out = new Map<string, ObservedState>()
+    for (const [wsId, dep] of deployments) {
+      const name = this.getResourceName(wsId)
+      out.set(wsId, {
+        phase: resolveDeploymentStatus(dep),
+        endpoint: {
+          address: `${name}.${this.cfg.namespace}.svc.cluster.local:3001`,
+        },
+      })
+    }
+    return out
+  }
+
   capabilities(): Capabilities {
     return {
       sharedFs: this.cfg.afs.enabled,
