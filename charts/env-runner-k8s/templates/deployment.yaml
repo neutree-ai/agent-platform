@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "env-runner-k8s.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: the runner mutates cluster state, so two
+  # overlapping pods during a deploy could double-apply. Kill the old one first.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "env-runner-k8s.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "env-runner-k8s.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "env-runner-k8s.fullname" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: env-runner-k8s
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: cp-proxy
+              containerPort: {{ .Values.tunnel.cpProxyPort }}
+            - name: afs-proxy
+              containerPort: {{ .Values.tunnel.afsProxyPort }}
+          env:
+            - name: RUNNER_MODE
+              value: "remote"
+            {{- if not .Values.controlPlane.url }}
+            {{- fail "controlPlane.url is required" }}
+            {{- end }}
+            - name: CP_URL
+              value: {{ .Values.controlPlane.url | quote }}
+            - name: ENV_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "env-runner-k8s.tokenSecret" . }}
+                  key: {{ .Values.envToken.secretKey }}
+            # Sidecars reach the control plane back through the runner's reverse
+            # tunnel listeners (this chart's Service).
+            - name: CP_SERVICE_URL
+              value: "http://{{ include "env-runner-k8s.fullname" . }}:{{ .Values.tunnel.cpProxyPort }}"
+            - name: TUNNEL_CP_PROXY_PORT
+              value: {{ .Values.tunnel.cpProxyPort | quote }}
+            - name: TUNNEL_AFS_PROXY_PORT
+              value: {{ .Values.tunnel.afsProxyPort | quote }}
+            - name: ENV_RUNNER_INTERVAL_MS
+              value: {{ .Values.reconcileIntervalMs | quote }}
+            # Provider config for THIS cluster. No AFS_ENABLED → sharedFs=false;
+            # MEMORY_FUSE_IMAGE set → persistentMemory=true (tunnels to cp).
+            - name: K8S_NAMESPACE
+              value: {{ .Values.provider.namespace | quote }}
+            - name: AGENT_IMAGE_PREFIX
+              value: {{ .Values.provider.agentImagePrefix | quote }}
+            - name: AGENT_IMAGE_TAG
+              value: {{ .Values.provider.agentImageTag | quote }}
+            - name: MEMORY_FUSE_IMAGE
+              value: {{ .Values.provider.memoryFuseImage | quote }}
+            {{- if .Values.provider.storageClass }}
+            - name: AGENT_STORAGE_CLASS
+              value: {{ .Values.provider.storageClass | quote }}
+            {{- end }}
+            # Always set (empty string = no nodeSelector) so a customer cluster
+            # never inherits the platform's default node-group selector.
+            - name: AGENT_NODE_SELECTOR
+              value: {{ .Values.provider.nodeSelector | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
