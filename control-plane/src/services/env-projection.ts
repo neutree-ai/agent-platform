@@ -1,7 +1,11 @@
 import { dropRemoteProxy, ensureRemoteProxy } from '../lib/remote-proxy'
 import { type WorkspaceStatus, applyStatusChange } from '../lib/workspace-status'
-import { listRemoteWorkspaceObservations, markStaleEnvironmentsOffline } from './db/environments'
-import { getWorkspace } from './db/workspaces'
+import {
+  listReapableWorkspaces,
+  listRemoteWorkspaceObservations,
+  markStaleEnvironmentsOffline,
+} from './db/environments'
+import { deleteWorkspace, getWorkspace } from './db/workspaces'
 
 // Remote environment projection (design §5.3, §7). cp can't watch a remote
 // cluster's k8s, so a remote workspace's status is derived from what its runner
@@ -36,6 +40,15 @@ export async function runEnvProjection(thresholdSec: number): Promise<void> {
   const offlined = await markStaleEnvironmentsOffline(thresholdSec)
   if (offlined.length > 0) {
     console.log(`[EnvProjection] environments offline (stale heartbeat): ${offlined.join(', ')}`)
+  }
+
+  // Reap inverted remote deletes: the runner has destroyed the pod and removed
+  // the placement, so finalize the workspace row (CASCADE-removes config /
+  // sessions / schedules). Delete hooks already fired at the delete request.
+  for (const wsId of await listReapableWorkspaces()) {
+    dropRemoteProxy(wsId)
+    await deleteWorkspace(wsId)
+    console.log(`[EnvProjection] reaped deleted workspace ${wsId}`)
   }
 
   const observations = await listRemoteWorkspaceObservations(thresholdSec)

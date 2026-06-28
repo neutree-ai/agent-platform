@@ -47,6 +47,10 @@ async function fullReconcile(): Promise<string> {
 
     for (const ws of allWorkspaces) {
       if (remoteIds.has(ws.id)) continue
+      // A workspace mid-delete (inverted remote delete) is being reaped by the
+      // projection once its placement clears — don't let watch-k8s clobber its
+      // 'deleting' status to 'stopped' (which would strand it unreaped).
+      if (ws.status === 'deleting') continue
       const dep = deployments.get(ws.id)
       const resolved = k8s.resolveDeploymentStatus(dep)
       if (resolved !== ws.status) {

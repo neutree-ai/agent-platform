@@ -9,6 +9,7 @@ import * as jobs from '../../lib/jobs'
 import { fireDeleteHooks } from '../../lib/service-hooks'
 import type { AppEnv } from '../../lib/types'
 import { getWorkspaceAddress } from '../../lib/workspace-address'
+import { getWorkspacePlacementEnv } from '../../services/db/environments'
 import { attachStore, createStore } from '../../services/db/memory'
 import { listSchedulesByWorkspace } from '../../services/db/schedules'
 import { listActiveSessionIds } from '../../services/db/sessions'
@@ -22,7 +23,7 @@ import {
 } from '../../services/db/workspaces'
 import * as k8s from '../../services/k8s'
 import { isMemoryFuseAvailable } from '../../services/k8s'
-import { bumpWorkspaceSpec, placeWorkspace } from '../../services/placement'
+import { bumpWorkspaceSpec, placeWorkspace, setDesiredPhase } from '../../services/placement'
 import { chooseEnvironment } from '../../services/placement-decision'
 import { skillRepo } from '../../services/skills-composition'
 import { materializeTemplateLayout } from '../../services/template-layout'
@@ -333,8 +334,21 @@ write.openapi(deleteRouteDef, async (c) => {
     await jobs.cancelScheduleTimer(s).catch(() => {})
   }
 
-  await k8s.deleteInstance(workspace.id)
   await fireDeleteHooks(id)
+
+  // Remote environments: cp can't reach the cluster to tear the pod down, and
+  // deleting the row now would CASCADE away the placement before the runner ever
+  // sees desired=deleted (orphan pod). Instead invert: mark desired=deleted and
+  // status=deleting; the runner destroys the pod + removes the placement, then
+  // the env projection reaps the workspace row. Built-in stays synchronous.
+  const placementEnv = await getWorkspacePlacementEnv(id)
+  if (placementEnv && !placementEnv.isBuiltin) {
+    await setDesiredPhase(id, 'deleted')
+    await updateWorkspace(id, { status: 'deleting' })
+    return c.json({ success: true }, 200)
+  }
+
+  await k8s.deleteInstance(workspace.id)
   await deleteWorkspace(id)
   return c.json({ success: true }, 200)
 })
