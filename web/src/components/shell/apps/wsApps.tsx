@@ -78,6 +78,11 @@ const ApplicationsSection = lazy(() =>
     default: m.ApplicationsSection,
   })),
 )
+const EnvironmentsSection = lazy(() =>
+  import('@/components/management/EnvironmentsSection').then((m) => ({
+    default: m.EnvironmentsSection,
+  })),
+)
 const ProvidersSection = lazy(() =>
   import('@/components/management/ProvidersSection').then((m) => ({
     default: m.ProvidersSection,
@@ -269,6 +274,14 @@ export function ServiceTokensApp({ instanceId }: AppComponentProps) {
   return (
     <Suspense fallback={<AppFallback />}>
       <ServiceTokensSection instanceId={instanceId} />
+    </Suspense>
+  )
+}
+
+export function EnvironmentsApp({ instanceId }: AppComponentProps) {
+  return (
+    <Suspense fallback={<AppFallback />}>
+      <EnvironmentsSection instanceId={instanceId} />
     </Suspense>
   )
 }

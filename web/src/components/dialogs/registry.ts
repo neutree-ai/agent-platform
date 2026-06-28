@@ -2,6 +2,7 @@ import { PreferencesDialog } from '@/components/PreferencesDialog'
 import { registerDialog } from '@/contexts/DialogStackContext'
 import CreateConnectorDialog from './CreateConnectorDialog'
 import CreateCredentialDialog from './CreateCredentialDialog'
+import CreateEnvironmentDialog from './CreateEnvironmentDialog'
 import CreateProviderDialog from './CreateProviderDialog'
 import CreateSkillDialog from './CreateSkillDialog'
 import CreateTemplateDialog from './CreateTemplateDialog'
@@ -18,6 +19,7 @@ import CreateWorkspaceDialog from './CreateWorkspaceDialog'
  */
 registerDialog('create-provider', CreateProviderDialog)
 registerDialog('create-credential', CreateCredentialDialog)
+registerDialog('create-environment', CreateEnvironmentDialog)
 registerDialog('create-token', CreateTokenDialog)
 registerDialog('create-connector', CreateConnectorDialog)
 registerDialog('create-skill', CreateSkillDialog)

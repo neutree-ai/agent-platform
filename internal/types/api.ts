@@ -1840,6 +1840,7 @@ export const EnvironmentGrantSchema = z.object({
   team_id: z.string(),
   permission: EnvironmentPermissionSchema,
 })
+export type EnvironmentGrant = z.infer<typeof EnvironmentGrantSchema>
 
 export const EnvironmentGrantsBodySchema = z.object({
   grants: z.array(EnvironmentGrantSchema),
@@ -1894,3 +1895,4 @@ export const CreatedEnvironmentTokenSchema = z.object({
   token: z.string(),
   created_at: z.string(),
 })
+export type CreatedEnvironmentToken = z.infer<typeof CreatedEnvironmentTokenSchema>

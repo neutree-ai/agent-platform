@@ -162,6 +162,8 @@ function WorkspaceCard({
 }) {
   const { t } = useTranslation()
   const running = ws.status === 'running'
+  // 'unknown' = the workspace's (remote) environment is offline / heartbeat lost.
+  const offline = ws.status === 'unknown'
   const needsReply = ws.active_human_sessions > 0
 
   const sessionWord =
@@ -181,9 +183,11 @@ function WorkspaceCard({
         <span className="flex items-center gap-2">
           <span
             className={`inline-flex h-1.5 w-1.5 shrink-0 rounded-full ${
-              running ? 'bg-success' : 'bg-muted-foreground/30'
+              running ? 'bg-success' : offline ? 'bg-warning' : 'bg-muted-foreground/30'
             }`}
-            aria-hidden
+            aria-label={offline ? t('components.shell.workspacesApp.envOffline') : undefined}
+            title={offline ? t('components.shell.workspacesApp.envOffline') : undefined}
+            aria-hidden={offline ? undefined : true}
           />
           <span className="min-w-0 truncate">{ws.name}</span>
           {needsReply && (

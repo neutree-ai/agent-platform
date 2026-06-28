@@ -260,7 +260,8 @@
         "activity": "Activity",
         "tags": "Tags",
         "teams": "Teams",
-        "teamwork": "Teamwork"
+        "teamwork": "Teamwork",
+        "environments": "Environments"
       },
       "empty": {
         "selectWorkspace": "Select a workspace from the sidebar to view chat, memory, and review.",
@@ -1103,7 +1104,8 @@
         "name": "Name",
         "systemWorkspace": "System workspace",
         "mode": "Mode",
-        "template": "Template"
+        "template": "Template",
+        "environment": "Environment"
       },
       "placeholders": {
         "name": "my-workspace"
@@ -1130,6 +1132,10 @@
       },
       "errors": {
         "createFailed": "Failed to create workspace"
+      },
+      "environment": {
+        "builtin": "Built-in",
+        "offline": "Offline"
       }
     },
     "modelFields": {
@@ -2870,7 +2876,8 @@
         "noResults": "No workspaces match.",
         "sessionCount_one": "{{count}} active",
         "sessionCount_other": "{{count}} active",
-        "needsReply": "Needs reply"
+        "needsReply": "Needs reply",
+        "envOffline": "Environment offline"
       },
       "activityApp": {
         "appLabel": "Stats",
@@ -3269,6 +3276,44 @@
           "deleteFailed": "Failed to delete application",
           "rotateFailed": "Failed to rotate secret"
         }
+      },
+      "environments": {
+        "actions": {
+          "new": "New",
+          "edit": "Edit environment",
+          "delete": "Delete environment",
+          "tokens": "Manage tokens"
+        },
+        "labels": {
+          "builtin": "Built-in"
+        },
+        "status": {
+          "online": "Online",
+          "offline": "Offline",
+          "degraded": "Degraded",
+          "pending": "Pending"
+        },
+        "dialogs": {
+          "editTitle": "Edit Environment"
+        },
+        "empty": {
+          "noEnvironments": {
+            "title": "No environments yet",
+            "description": "Register a remote environment to run workspaces in your own infrastructure."
+          }
+        },
+        "errors": {
+          "saveFailed": "Failed to save",
+          "deleteFailed": "Failed to delete"
+        },
+        "tokens": {
+          "title": "Runner tokens — {{name}}",
+          "namePlaceholder": "Token name",
+          "issue": "Issue",
+          "empty": "No active tokens.",
+          "createdAt": "Created {{value}}",
+          "revoke": "Revoke token"
+        }
       }
     },
     "askUserQuestion": {
@@ -3649,6 +3694,55 @@
             "off": "Off"
           }
         }
+      }
+    },
+    "secretReveal": {
+      "saveNow": "Copy this now — it will not be shown again.",
+      "copy": "Copy"
+    },
+    "environmentForm": {
+      "fields": {
+        "name": "Name",
+        "visibility": "Visibility",
+        "teams": "Shared with teams"
+      },
+      "placeholders": {
+        "name": "my-cluster"
+      },
+      "visibility": {
+        "private": "Private",
+        "team": "Team",
+        "public": "Public"
+      },
+      "visibilityDesc": {
+        "private": "Only you can place workspaces on this environment.",
+        "team": "Selected teams can place workspaces on this environment.",
+        "public": "Everyone can place workspaces on this environment."
+      },
+      "teamsEmpty": "You don't belong to any teams yet.",
+      "noTeamsShared": "Not shared with any team yet.",
+      "addTeam": "Add a team…",
+      "removeTeam": "Remove team",
+      "errors": {
+        "nameRequired": "Name is required",
+        "teamRequired": "Select at least one team"
+      }
+    },
+    "createEnvironment": {
+      "title": "Register Environment",
+      "createdTitle": "Environment Registered",
+      "defaultTokenName": "Default runner token",
+      "revealIntro": "Use this runner token to connect your environment. Install the runner in your cluster with the command below.",
+      "helmTitle": "Install the runner",
+      "revealDocsHint": "",
+      "actions": {
+        "done": "Done"
+      },
+      "toasts": {
+        "created": "Environment registered"
+      },
+      "errors": {
+        "createFailed": "Failed to register environment"
       }
     }
   }
