@@ -12,12 +12,13 @@ RUN npm ci
 COPY env-runner-k8s/tsconfig.json ./
 COPY env-runner-k8s/src ./src
 
-# internal/{env-runner-core,k8s-provider} (and the internal/types they pull in)
-# are referenced via relative imports from src/. esbuild bundles them into
-# dist/index.js, so the runtime stage doesn't need them. @kubernetes/client-node
-# stays external.
+# internal/{env-runner-core,k8s-provider,env-tunnel} (and the internal/types
+# they pull in) are referenced via relative imports from src/. esbuild bundles
+# them into dist/index.js, so the runtime stage doesn't need them.
+# @kubernetes/client-node and multiplex stay external.
 COPY internal/env-runner-core /app/internal/env-runner-core
 COPY internal/k8s-provider/package.json internal/k8s-provider/index.ts /app/internal/k8s-provider/
+COPY internal/env-tunnel /app/internal/env-tunnel
 COPY internal/types /app/internal/types
 
 RUN npm run build
