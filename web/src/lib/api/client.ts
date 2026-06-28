@@ -17,6 +17,9 @@ import type {
   ApiApplication,
   ApiApplicationSecret,
   ApiCredentialMeta,
+  ApiEnvironment,
+  ApiEnvironmentGrant,
+  ApiEnvironmentToken,
   ApiMemory,
   ApiMemoryLite,
   ApiMemoryStore,
@@ -57,6 +60,9 @@ import type {
   BrowserSession,
   CallableAgent,
   ComputeResources,
+  CreatedEnvironmentToken,
+  EnvironmentGrant,
+  EnvironmentVisibility,
   K8sResourceStatus,
   LayoutSkeleton,
   McpCatalogEntry,
@@ -227,6 +233,8 @@ class ApiClient {
     skill_ids?: string[]
     /** Recipient consent for template-provided schedules (name → enabled). */
     schedule_overrides?: Record<string, boolean>
+    /** Target environment (BYOI). Omit / 'builtin' = the built-in environment. */
+    environment_id?: string
   }): Promise<Workspace> {
     return this.request<Workspace>('/workspaces', {
       method: 'POST',
@@ -1298,6 +1306,64 @@ class ApiClient {
     return this.request<ApiProviderGrant[]>(`/providers/${providerId}/grants`, {
       method: 'PUT',
       body: JSON.stringify({ grants }),
+    })
+  }
+
+  // Environments (BYOI)
+  async listEnvironments(): Promise<ApiEnvironment[]> {
+    return this.request<ApiEnvironment[]>('/environments')
+  }
+
+  async createEnvironment(data: {
+    name: string
+    kind?: string
+    visibility?: EnvironmentVisibility
+    placement?: Record<string, unknown>
+    grants?: EnvironmentGrant[]
+  }): Promise<ApiEnvironment> {
+    return this.request<ApiEnvironment>('/environments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateEnvironment(
+    id: string,
+    data: Partial<{
+      name: string
+      visibility: EnvironmentVisibility
+      placement: Record<string, unknown>
+      grants: EnvironmentGrant[]
+    }>,
+  ): Promise<ApiEnvironment> {
+    return this.request<ApiEnvironment>(`/environments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteEnvironment(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/environments/${id}`, { method: 'DELETE' })
+  }
+
+  async listEnvironmentGrants(id: string): Promise<ApiEnvironmentGrant[]> {
+    return this.request<ApiEnvironmentGrant[]>(`/environments/${id}/grants`)
+  }
+
+  async listEnvironmentTokens(id: string): Promise<ApiEnvironmentToken[]> {
+    return this.request<ApiEnvironmentToken[]>(`/environments/${id}/tokens`)
+  }
+
+  async createEnvironmentToken(id: string, name: string): Promise<CreatedEnvironmentToken> {
+    return this.request<CreatedEnvironmentToken>(`/environments/${id}/tokens`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  }
+
+  async revokeEnvironmentToken(id: string, tokenId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/environments/${id}/tokens/${tokenId}`, {
+      method: 'DELETE',
     })
   }
 

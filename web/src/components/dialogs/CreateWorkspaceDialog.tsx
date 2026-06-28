@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Combobox } from '@/components/ui/combobox'
 import {
   Command,
   CommandEmpty,
@@ -26,6 +27,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import type { DialogProps } from '@/contexts/DialogStackContext'
 import { type AgentConfigSection, joinAgentConfigDocs } from '@/docs/inline-help/agent-config-docs'
+import { useEnvironments } from '@/hooks/useEnvironments'
 import { useTemplates } from '@/hooks/useTemplates'
 import { useCreateWorkspace } from '@/hooks/useWorkspaces'
 import { api } from '@/lib/api/client'
@@ -163,6 +165,8 @@ interface FormState {
   mode: Mode
   selectedTemplate: string
   isSystem: boolean
+  /** Target environment id; 'builtin' = the built-in environment (default). */
+  environmentId: string
   config: ConfigFormValues
 }
 
@@ -171,6 +175,7 @@ const INITIAL_FORM: FormState = {
   mode: 'template',
   selectedTemplate: '',
   isSystem: false,
+  environmentId: 'builtin',
   config: { ...INITIAL_CONFIG_VALUES },
 }
 
@@ -186,6 +191,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
   const { user } = useAuth()
   const createMutation = useCreateWorkspace()
   const { templates } = useTemplates()
+  const { data: environments = [] } = useEnvironments()
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [visibleSections, setVisibleSections] = useState<AgentConfigSection[]>(['model'])
 
@@ -219,7 +225,9 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const { name, mode, selectedTemplate, isSystem, config } = form
+    const { name, mode, selectedTemplate, isSystem, environmentId, config } = form
+    // 'builtin' is the implicit default — omit it so the backend picks built-in.
+    const environment_id = environmentId && environmentId !== 'builtin' ? environmentId : undefined
     try {
       const ws = await createMutation.mutateAsync(
         mode === 'template'
@@ -227,6 +235,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
               name,
               template_id: selectedTemplate || undefined,
               is_system: isSystem || undefined,
+              environment_id,
               schedule_overrides:
                 consentSchedules.length > 0
                   ? resolveScheduleOverrides(consentSchedules, scheduleOverrides)
@@ -235,6 +244,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
           : {
               name,
               is_system: isSystem || undefined,
+              environment_id,
               agent_type: config.agent_type,
               compute_resources: config.compute_resources,
               provider_id: config.provider_id || undefined,
@@ -310,6 +320,32 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
             </span>
           </label>
         )}
+
+        <div className="space-y-2">
+          <Label className="text-xs">{t('components.createWorkspace.fields.environment')}</Label>
+          {form.isSystem ? (
+            // System workspaces always run on the built-in environment.
+            <p className="text-xs text-muted-foreground">
+              {t('components.createWorkspace.environment.builtin')}
+            </p>
+          ) : (
+            <Combobox
+              value={form.environmentId}
+              onValueChange={(environmentId) =>
+                setForm((f) => ({ ...f, environmentId: environmentId || 'builtin' }))
+              }
+              options={environments.map((e) => ({
+                value: e.id,
+                label: e.is_builtin ? t('components.createWorkspace.environment.builtin') : e.name,
+                description:
+                  !e.is_builtin && e.status !== 'online'
+                    ? t('components.createWorkspace.environment.offline')
+                    : undefined,
+                disabled: !e.is_builtin && e.status !== 'online',
+              }))}
+            />
+          )}
+        </div>
 
         <div className="flex items-center justify-between gap-3">
           <Label className="text-xs">{t('components.createWorkspace.fields.mode')}</Label>

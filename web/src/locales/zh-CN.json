@@ -260,7 +260,8 @@
         "activity": "活动",
         "tags": "标签",
         "teams": "团队",
-        "teamwork": "Teamwork"
+        "teamwork": "Teamwork",
+        "environments": "运行环境"
       },
       "empty": {
         "selectWorkspace": "请从侧边栏选择一个工作空间，以查看对话、记忆和审校内容。",
@@ -1128,7 +1129,8 @@
         "name": "名称",
         "systemWorkspace": "系统工作空间",
         "mode": "模式",
-        "template": "模板"
+        "template": "模板",
+        "environment": "运行环境"
       },
       "placeholders": {
         "name": "my-workspace"
@@ -1155,6 +1157,10 @@
       },
       "errors": {
         "createFailed": "创建工作空间失败"
+      },
+      "environment": {
+        "builtin": "内置环境",
+        "offline": "离线"
       }
     },
     "modelFields": {
@@ -2894,7 +2900,8 @@
         "noResults": "没有匹配的工作空间。",
         "sessionCount_one": "{{count}} 个会话",
         "sessionCount_other": "{{count}} 个会话",
-        "needsReply": "待回复"
+        "needsReply": "待回复",
+        "envOffline": "运行环境离线"
       },
       "activityApp": {
         "appLabel": "统计信息",
@@ -3293,6 +3300,44 @@
           "deleteFailed": "删除应用失败",
           "rotateFailed": "轮换密钥失败"
         }
+      },
+      "environments": {
+        "actions": {
+          "new": "新建",
+          "edit": "编辑运行环境",
+          "delete": "删除运行环境",
+          "tokens": "管理 token"
+        },
+        "labels": {
+          "builtin": "内置环境"
+        },
+        "status": {
+          "online": "在线",
+          "offline": "离线",
+          "degraded": "降级",
+          "pending": "等待中"
+        },
+        "dialogs": {
+          "editTitle": "编辑运行环境"
+        },
+        "empty": {
+          "noEnvironments": {
+            "title": "还没有运行环境",
+            "description": "注册一个远程运行环境，即可在你自己的基础设施中运行工作空间。"
+          }
+        },
+        "errors": {
+          "saveFailed": "保存失败",
+          "deleteFailed": "删除失败"
+        },
+        "tokens": {
+          "title": "Runner token — {{name}}",
+          "namePlaceholder": "Token 名称",
+          "issue": "签发",
+          "empty": "没有有效的 token。",
+          "createdAt": "创建于 {{value}}",
+          "revoke": "吊销 token"
+        }
       }
     },
     "askUserQuestion": {
@@ -3673,6 +3718,55 @@
             "off": "关闭"
           }
         }
+      }
+    },
+    "secretReveal": {
+      "saveNow": "请立即复制，离开后将无法再次查看。",
+      "copy": "复制"
+    },
+    "environmentForm": {
+      "fields": {
+        "name": "名称",
+        "visibility": "可见性",
+        "teams": "共享给团队"
+      },
+      "placeholders": {
+        "name": "my-cluster"
+      },
+      "visibility": {
+        "private": "私有",
+        "team": "团队",
+        "public": "公开"
+      },
+      "visibilityDesc": {
+        "private": "仅你可以在该环境上创建工作空间。",
+        "team": "所选团队可以在该环境上创建工作空间。",
+        "public": "所有人都可以在该环境上创建工作空间。"
+      },
+      "teamsEmpty": "你还没有加入任何团队。",
+      "noTeamsShared": "尚未共享给任何团队。",
+      "addTeam": "添加团队…",
+      "removeTeam": "移除团队",
+      "errors": {
+        "nameRequired": "名称不能为空",
+        "teamRequired": "至少选择一个团队"
+      }
+    },
+    "createEnvironment": {
+      "title": "注册运行环境",
+      "createdTitle": "运行环境已注册",
+      "defaultTokenName": "默认 runner token",
+      "revealIntro": "用此 runner token 连接你的环境。使用下面的命令在你的集群中安装 runner。",
+      "helmTitle": "安装 runner",
+      "revealDocsHint": "",
+      "actions": {
+        "done": "完成"
+      },
+      "toasts": {
+        "created": "运行环境已注册"
+      },
+      "errors": {
+        "createFailed": "注册运行环境失败"
       }
     }
   }

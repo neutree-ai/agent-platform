@@ -4,6 +4,7 @@ import {
   AdminApp,
   ConnectorsApp,
   CredentialsApp,
+  EnvironmentsApp,
   LibraryApp,
   MemoryStoresApp,
   ModelsApp,
@@ -90,6 +91,12 @@ export function useFleetApps(): AppDefinition[] {
       id: 'credentials',
       label: t('pages.workspace.tabs.credentials'),
       Component: CredentialsApp,
+      group: 'connection',
+    })
+    apps.push({
+      id: 'environments',
+      label: t('pages.workspace.tabs.environments'),
+      Component: EnvironmentsApp,
       group: 'connection',
     })
 

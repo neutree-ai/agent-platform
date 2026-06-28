@@ -63,6 +63,15 @@ export type {
 } from '@neutree-ai/types'
 
 export type {
+  ApiEnvironment,
+  ApiEnvironmentGrant,
+  ApiEnvironmentToken,
+  CreatedEnvironmentToken,
+  EnvironmentGrant,
+  EnvironmentVisibility,
+} from '@neutree-ai/types'
+
+export type {
   ApiPrompt,
   ApiPromptGrant,
   ApiPromptVersion,
