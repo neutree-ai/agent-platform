@@ -5,11 +5,13 @@ import type {
 } from '../../internal/env-runner-core'
 import { pool } from './db'
 
-// Direct-DB transport for the built-in / same-cluster runner: it reads and
-// writes workspace_placements over the pg pool. Scoped by kind='kubernetes' so
-// this k8s runner picks up the built-in environment and any additional k8s
-// environments automatically (the per-environment scoping that the env-token
-// enforces for remote runners is, here, the cluster boundary itself).
+// Direct-DB transport for the built-in runner: it reads and writes
+// workspace_placements over the pg pool. Scoped to the BUILT-IN environment
+// only (is_builtin = true). A remote BYOI environment is also kind='kubernetes'
+// but lives in the customer's cluster and is served exclusively by its own
+// HttpTransport runner (scoped by env-token); the direct runner must never pick
+// up a remote placement, or it would provision a remote workspace in cp's own
+// cluster and double-reconcile against the remote runner.
 export class DbTransport implements PlacementTransport {
   async listPlacements(): Promise<PlacementRow[]> {
     const { rows } = await pool.query(
@@ -17,7 +19,7 @@ export class DbTransport implements PlacementTransport {
               p.spec_version, p.observed_phase, p.observed_version
          FROM workspace_placements p
          JOIN environments e ON e.id = p.environment_id
-        WHERE e.kind = 'kubernetes'`,
+        WHERE e.is_builtin = true`,
     )
     return rows
   }
