@@ -150,10 +150,45 @@ export async function listRemoteWorkspaceObservations(
             ) AS env_offline
        FROM workspace_placements p
        JOIN environments e ON e.id = p.environment_id
-      WHERE e.is_builtin = false`,
+      WHERE e.is_builtin = false
+        AND p.desired_phase <> 'deleted'`,
     [thresholdSec],
   )
   return rows as RemoteObservation[]
+}
+
+/**
+ * The environment a workspace is placed on, or null if it has no placement
+ * (legacy → treat as built-in). Used by delete to pick the synchronous built-in
+ * path vs the inverted remote path.
+ */
+export async function getWorkspacePlacementEnv(
+  workspaceId: string,
+): Promise<{ environmentId: string; isBuiltin: boolean } | null> {
+  const { rows } = await pool.query(
+    `SELECT p.environment_id, e.is_builtin
+       FROM workspace_placements p
+       JOIN environments e ON e.id = p.environment_id
+      WHERE p.workspace_id = $1`,
+    [workspaceId],
+  )
+  return rows[0] ? { environmentId: rows[0].environment_id, isBuiltin: rows[0].is_builtin } : null
+}
+
+/**
+ * Workspaces stuck in 'deleting' whose placement the runner has already removed
+ * (remote destroy confirmed) — safe for cp to finalize (delete the row). The
+ * built-in path never enters 'deleting' (it deletes synchronously), so this only
+ * reaps inverted remote deletes.
+ */
+export async function listReapableWorkspaces(): Promise<string[]> {
+  const { rows } = await pool.query(
+    `SELECT w.id
+       FROM workspaces w
+      WHERE w.status = 'deleting'
+        AND NOT EXISTS (SELECT 1 FROM workspace_placements p WHERE p.workspace_id = w.id)`,
+  )
+  return rows.map((r) => r.id as string)
 }
 
 /**
