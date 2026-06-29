@@ -963,8 +963,14 @@ export function WorkspaceFilesPanel({
       externalDragCounter.current = 0
       setIsExternalDragging(false)
       setInternalDropTarget(null)
-      if (!writeAllowed || !isDir(entry)) return
-      const destDir = `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${entry.name}/`
+      if (!writeAllowed) return
+      // Folder rows upload into that subdirectory; file rows fall back to the
+      // current directory (same as the container's handleDrop). Without this
+      // fallback, dropping onto a file row early-returns and the upload is
+      // swallowed — which is all that's reachable once the list fills the panel.
+      const destDir = isDir(entry)
+        ? `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${entry.name}/`
+        : currentPath
       await uploadDataTransfer(e.dataTransfer, destDir)
       return
     }
