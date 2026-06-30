@@ -3,6 +3,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { useAuth } from '@/contexts/AuthContext'
 import { api } from '@/lib/api/client'
 import type { ApiTeam, EnvironmentVisibility } from '@/lib/api/types'
 import { useQuery } from '@tanstack/react-query'
@@ -30,6 +31,12 @@ interface EnvironmentFormFieldsProps {
 
 export function EnvironmentFormFields({ form, setForm, errors }: EnvironmentFormFieldsProps) {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  // A public environment shares infrastructure instance-wide, so creating one is
+  // an operator decision — admin-only (enforced server-side; hidden here so
+  // non-admins don't pick an option that would 403). Still surface the option
+  // when editing an already-public env so its current value renders correctly.
+  const canPublish = user?.role === 'admin' || form.visibility === 'public'
 
   const { data: teams = [] } = useQuery<ApiTeam[]>({
     queryKey: ['teams'],
@@ -80,10 +87,14 @@ export function EnvironmentFormFields({ form, setForm, errors }: EnvironmentForm
                 label: t('components.environmentForm.visibility.team'),
                 icon: Users,
               },
-              {
-                value: 'public',
-                label: t('components.environmentForm.visibility.public'),
-              },
+              ...(canPublish
+                ? [
+                    {
+                      value: 'public' as const,
+                      label: t('components.environmentForm.visibility.public'),
+                    },
+                  ]
+                : []),
             ]}
           />
           <div className="text-tiny text-muted-foreground">

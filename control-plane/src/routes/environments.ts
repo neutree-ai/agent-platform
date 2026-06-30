@@ -134,6 +134,10 @@ const createRouteDef = createRoute({
       description: 'Invalid grants for visibility',
       content: { 'application/json': { schema: ErrorSchema } },
     },
+    403: {
+      description: 'Non-admin attempting to create a public environment',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
     409: {
       description: 'Name already in use',
       content: { 'application/json': { schema: ErrorSchema } },
@@ -146,6 +150,14 @@ environments.openapi(createRouteDef, async (c) => {
   const body = c.req.valid('json')
   const visibility = body.visibility ?? 'private'
   const grants = body.grants ?? []
+  // Unlike content resources (prompts/skills/templates/providers), a public
+  // environment shares *infrastructure*: any user on the instance can schedule
+  // workspace pods onto the owner's cluster (their cost, capacity, and security
+  // blast radius). Offering an instance-wide shared environment is an operator
+  // decision, so creating one is admin-only; regular users get private + team.
+  if (visibility === 'public' && user.role !== 'admin') {
+    return c.json({ error: 'Only admins can create public environments' }, 403)
+  }
   if (visibility === 'team' && grants.length === 0) {
     return c.json({ error: 'visibility=team requires at least one grant' }, 400)
   }
@@ -188,6 +200,10 @@ const updateRouteDef = createRoute({
       description: 'Invalid grants for visibility',
       content: { 'application/json': { schema: ErrorSchema } },
     },
+    403: {
+      description: 'Non-admin attempting to make an environment public',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
     404: {
       description: 'Not found or not owner',
       content: { 'application/json': { schema: ErrorSchema } },
@@ -203,6 +219,11 @@ environments.openapi(updateRouteDef, async (c) => {
     return c.json({ error: 'Environment not found' }, 404)
   }
   const body = c.req.valid('json')
+  // Same guard as create, but only on *promotion*: a non-admin owner of an
+  // already-public environment can still rename it without tripping this.
+  if (body.visibility === 'public' && existing.visibility !== 'public' && user.role !== 'admin') {
+    return c.json({ error: 'Only admins can make an environment public' }, 403)
+  }
   const nextVisibility = body.visibility ?? existing.visibility
   const nextGrants = body.grants
   if (nextGrants !== undefined) {
