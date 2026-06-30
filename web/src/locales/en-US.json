@@ -785,6 +785,10 @@
         "badges": {
           "yours": "Yours"
         },
+        "teamFilter": {
+          "label": "Team",
+          "all": "All teams"
+        },
         "categories": {
           "title": "Categories",
           "coding": "Coding",
