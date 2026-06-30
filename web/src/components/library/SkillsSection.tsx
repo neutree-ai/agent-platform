@@ -68,6 +68,7 @@ import { toast } from 'sonner'
 import { EditSourceDialog } from './EditSourceDialog'
 import { SkillCategoryChips } from './SkillCategoryChips'
 import { SkillDetailView } from './SkillDetailView'
+import { SkillTeamFilter } from './SkillTeamFilter'
 
 export function SkillsSection({ instanceId }: { instanceId: string }) {
   const { t, i18n } = useTranslation()
@@ -101,6 +102,15 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
   const selectedCategories = useMemo(
     () => new Set<SkillCategoryChip>(selectedCategoryList),
     [selectedCategoryList],
+  )
+  // Team filter for the "Shared with me" group — narrows to skills granted
+  // via one team. Persistent so a returning user keeps their drill-in.
+  // Applied client-side (off `shared_via_teams`); the server query is
+  // unaware of it.
+  const [selectedTeamId, setSelectedTeamId] = useInstancePersistentState<string | null>(
+    instanceId,
+    'skillsTeamFilter',
+    () => null,
   )
   const [search, setSearch] = useState('')
   // 300ms debounce — fires the server query after the user pauses typing
@@ -464,10 +474,38 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
     )
   }
 
-  // Server-filtered grid data. Local-side we only sort for stable order
-  // (server already orders by name, but tanstack-query may hand us a
-  // previous-filter snapshot during refetch — keep it deterministic).
-  const visibleSkills = filteredSkills
+  // Teams that have shared something with the user, derived from the
+  // server-filtered list (i.e. before the team filter is applied) so the
+  // options stay stable no matter which team is currently selected. Empty
+  // when nothing is team-shared — the filter control then hides itself.
+  const teamOptions = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const skill of filteredSkills) {
+      for (const tm of skill.shared_via_teams) {
+        if (!byId.has(tm.id)) byId.set(tm.id, tm.name)
+      }
+    }
+    return [...byId]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [filteredSkills])
+
+  // Effective selection: ignore a stale id that no longer matches any
+  // available team (e.g. after a category/search change dropped it), but
+  // keep it in storage so it re-applies once the team reappears.
+  const activeTeamId =
+    selectedTeamId && teamOptions.some((tm) => tm.id === selectedTeamId) ? selectedTeamId : null
+
+  // Server-filtered grid data, then the client-side team filter. Narrowing
+  // to one team naturally collapses the owned groups (their skills carry no
+  // `shared_via_teams`), leaving just that team's shared skills.
+  const visibleSkills = useMemo(
+    () =>
+      activeTeamId
+        ? filteredSkills.filter((s) => s.shared_via_teams.some((tm) => tm.id === activeTeamId))
+        : filteredSkills,
+    [filteredSkills, activeTeamId],
+  )
 
   // Group skills into Library sections so source-level actions (Sync /
   // Edit / Delete source) live on a single header row instead of dangling
@@ -590,7 +628,10 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
   // when a filter is active we show the "no match" message instead of the
   // first-run empty hero.
   const isFiltered =
-    !!debouncedSearch.trim() || selectedCategoryList.length > 0 || scopeFilter !== 'all'
+    !!debouncedSearch.trim() ||
+    selectedCategoryList.length > 0 ||
+    scopeFilter !== 'all' ||
+    activeTeamId !== null
 
   return (
     <>
@@ -622,6 +663,11 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
             <div className="min-w-0 flex-1">
               <SkillCategoryChips selected={selectedCategories} onToggle={toggleCategory} />
             </div>
+            <SkillTeamFilter
+              teams={teamOptions}
+              value={activeTeamId}
+              onChange={setSelectedTeamId}
+            />
             <AppHeaderSearch value={search} onChange={setSearch} width="md" />
           </div>
         </div>

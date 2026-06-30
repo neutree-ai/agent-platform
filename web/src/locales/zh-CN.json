@@ -815,6 +815,10 @@
         "badges": {
           "yours": "您的"
         },
+        "teamFilter": {
+          "label": "团队",
+          "all": "全部团队"
+        },
         "categories": {
           "title": "分类",
           "coding": "编码",
