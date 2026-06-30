@@ -23,6 +23,7 @@ function toApiSession(s: SessionWithPreview) {
     name: s.name,
     status: s.status,
     chat_status: s.chat_status,
+    source: s.source,
     created_at: s.created_at,
     last_active_at: s.last_active_at,
     message_count: s.message_count,

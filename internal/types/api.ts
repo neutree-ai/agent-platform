@@ -196,6 +196,8 @@ export const ApiSessionSchema = z.object({
   name: z.string(),
   status: z.string(),
   chat_status: z.string(),
+  /** How the session was created: 'web' | 'agent' | 'schedule' | 'slack' | 'wecom' | 'webhook'. New connector types may add values, so kept as a free string. */
+  source: z.string(),
   created_at: z.string(),
   last_active_at: z.string(),
   message_count: z.number().int(),

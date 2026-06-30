@@ -10,12 +10,30 @@ import { useMarkSeen, useUnreadCount } from '@/hooks/useUnread'
 import { api } from '@/lib/api/client'
 import type { Session } from '@/lib/api/types'
 import { isCommitEnter } from '@/lib/keyboard'
+import { formatFullTime, formatRelativeTime } from '@/lib/relative-time'
 import { cleanSessionPreview } from '@/lib/session-utils'
 import { cn } from '@/lib/utils'
 import { useActiveSession } from '@/stores/active-session-store'
 import { useInstanceState } from '@/stores/instance-state-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, CheckCheck, Pencil, Search, Share2, SquarePen, Star, Trash2, X } from 'lucide-react'
+import {
+  Bot,
+  CalendarClock,
+  Check,
+  CheckCheck,
+  Globe,
+  type LucideIcon,
+  MessageCircle,
+  Pencil,
+  Search,
+  Share2,
+  Slack,
+  SquarePen,
+  Star,
+  Trash2,
+  Webhook,
+  X,
+} from 'lucide-react'
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -31,6 +49,27 @@ function classifyStatus(chatStatus: string): SessionStatus {
   if (s === 'agent') return 'running'
   if (s.includes('error') || s.includes('fail')) return 'error'
   return 'idle'
+}
+
+// Per-source leading icon. Every row carries one so titles stay left-aligned.
+// Literal switch (not `icons[source]`) keeps each source greppable and lets
+// new connector types fail loudly into the muted fallback.
+function sourceVisual(source: string): { Icon: LucideIcon; labelKey: string } {
+  switch (source) {
+    case 'schedule':
+      return { Icon: CalendarClock, labelKey: 'schedule' }
+    case 'slack':
+      return { Icon: Slack, labelKey: 'slack' }
+    case 'wecom':
+      return { Icon: MessageCircle, labelKey: 'wecom' }
+    case 'webhook':
+      return { Icon: Webhook, labelKey: 'webhook' }
+    case 'agent':
+      return { Icon: Bot, labelKey: 'agent' }
+    default:
+      // 'web' (manual) and any unknown source.
+      return { Icon: Globe, labelKey: 'web' }
+  }
 }
 
 type Bucket = 'today' | 'week' | 'month' | 'earlier'
@@ -77,9 +116,19 @@ function SessionRow({
   onMarkSeen,
   onToggleStar,
 }: SessionRowProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const status = classifyStatus(session.chat_status)
   const starred = !!session.starred_at
+  const { Icon: SourceIcon, labelKey: sourceLabelKey } = sourceVisual(session.source)
+  const sourceLabel = t(`components.sessions.source.${sourceLabelKey}`)
+  const relTime = useMemo(
+    () => formatRelativeTime(session.created_at, i18n.language),
+    [session.created_at, i18n.language],
+  )
+  const fullTime = useMemo(
+    () => formatFullTime(session.created_at, i18n.language),
+    [session.created_at, i18n.language],
+  )
   const previewTitle = useMemo(
     () => (session.preview ? cleanSessionPreview(session.preview) : ''),
     [session.preview],
@@ -198,6 +247,13 @@ function SessionRow({
 
   const inner = (
     <>
+      <SourceIcon
+        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50"
+        strokeWidth={2}
+        aria-label={sourceLabel}
+      >
+        <title>{sourceLabel}</title>
+      </SourceIcon>
       <div className="min-w-0 flex-1">{titleNode}</div>
       {starred && (
         <Star
@@ -235,12 +291,24 @@ function SessionRow({
       {inner}
       <div
         className={cn(
-          'absolute right-0 top-0 bottom-0 flex items-center gap-0 pl-3 pr-2',
+          'absolute right-0 top-0 bottom-0 flex items-center gap-0 pl-2 pr-2',
           'opacity-0 transition-opacity duration-150',
           'group-hover:opacity-100 focus-within:opacity-100',
-          'bg-gradient-to-l from-card from-85% to-transparent',
+          // Solid card behind the date + actions so the date stays legible, with
+          // a short gradient lead-in strip to the left so it doesn't hard-cut
+          // the title underneath.
+          'bg-card',
+          'before:pointer-events-none before:absolute before:right-full before:inset-y-0 before:w-8 before:bg-gradient-to-l before:from-card before:to-transparent',
         )}
       >
+        {relTime && (
+          <span
+            className="mr-1.5 shrink-0 whitespace-nowrap text-mini text-muted-foreground/70"
+            title={fullTime}
+          >
+            {relTime}
+          </span>
+        )}
         {status === 'needs-you' && (
           <button
             type="button"
