@@ -3368,6 +3368,14 @@
         "needsYou": "Needs you",
         "running": "Running",
         "error": "Error"
+      },
+      "source": {
+        "web": "Manual",
+        "agent": "Agent-initiated",
+        "schedule": "Scheduled",
+        "slack": "Slack",
+        "wecom": "WeCom",
+        "webhook": "Webhook"
       }
     },
     "automation": {

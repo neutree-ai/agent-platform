@@ -55,6 +55,8 @@ export interface Session {
   name: string
   status: string
   chat_status: string
+  /** How the session was created: 'web' | 'agent' | 'schedule' | 'slack' | 'wecom' | 'webhook'. */
+  source: string
   created_at: string
   last_active_at: string
   last_turn_stats: SessionTurnStats | null

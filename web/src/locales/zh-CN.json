@@ -3392,6 +3392,14 @@
         "needsYou": "待你回复",
         "running": "运行中",
         "error": "出错"
+      },
+      "source": {
+        "web": "手动创建",
+        "agent": "Agent 发起",
+        "schedule": "计划任务",
+        "slack": "Slack",
+        "wecom": "企业微信",
+        "webhook": "Webhook"
       }
     },
     "automation": {
