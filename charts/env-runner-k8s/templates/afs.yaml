@@ -58,9 +58,11 @@ spec:
       app: afs-controller
   template:
     metadata:
+      # Only `app: afs-controller` — NOT the chart selectorLabels: the runner
+      # Deployment selects on those, so tagging afs-controller pods with them
+      # would make the runner's ReplicaSet adopt/evict this pod.
       labels:
         app: afs-controller
-        {{- include "env-runner-k8s.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
