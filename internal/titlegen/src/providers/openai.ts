@@ -13,6 +13,11 @@ interface Config {
   model: string
   base_url?: string
   max_tokens: number
+  // Extra fields merged into the /chat/completions request body — the escape
+  // hatch for provider-specific params (temperature, top_p, presence_penalty,
+  // and OpenAI-compatible gateway extras like top_k or chat_template_kwargs).
+  // Mirrors the OpenAI SDK's `extra_body`, which likewise flattens into the body.
+  extra_body?: Record<string, unknown>
 }
 
 // Hand-rolled validator (no zod, to keep this shared package dependency-free).
@@ -60,6 +65,17 @@ const configSchema: TitleGenProviderModule<Config>['configSchema'] = {
         },
       }
     }
+    if (
+      raw.extra_body !== undefined &&
+      (typeof raw.extra_body !== 'object' ||
+        raw.extra_body === null ||
+        Array.isArray(raw.extra_body))
+    ) {
+      return {
+        success: false,
+        error: { issues: [{ path: ['extra_body'], message: 'extra_body must be an object' }] },
+      }
+    }
     return {
       success: true,
       data: {
@@ -67,6 +83,7 @@ const configSchema: TitleGenProviderModule<Config>['configSchema'] = {
         model: typeof raw.model === 'string' && raw.model ? raw.model : DEFAULT_MODEL,
         base_url: typeof raw.base_url === 'string' ? raw.base_url : undefined,
         max_tokens: typeof raw.max_tokens === 'number' ? raw.max_tokens : DEFAULT_MAX_TOKENS,
+        extra_body: (raw.extra_body as Record<string, unknown> | undefined) ?? undefined,
       },
     }
   },
@@ -83,8 +100,14 @@ function create(config: Config): TitleGenProvider {
       ]
 
       // Omit the token param entirely when max_tokens is 0 (unlimited).
+      // extra_body is spread first so structural fields (model/messages/token)
+      // always win and can't be clobbered by user config.
       const post = (tokenParam?: 'max_tokens' | 'max_completion_tokens') => {
-        const body: Record<string, unknown> = { model: config.model, messages }
+        const body: Record<string, unknown> = {
+          ...config.extra_body,
+          model: config.model,
+          messages,
+        }
         if (tokenParam) body[tokenParam] = config.max_tokens
         return fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
