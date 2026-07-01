@@ -25,16 +25,39 @@ const QUEUE_NAME = 'session-titlegen'
 // (sub-minute is not honored by its clock), so '*/1 * * * *' is the floor.
 const SWEEP_CRON = process.env.TITLEGEN_CRON || '*/1 * * * *'
 
+// Env-overridable integer knob with a positive-default fallback.
+function intEnv(name: string, fallback: number): number {
+  const n = Number(process.env[name])
+  return Number.isInteger(n) && n > 0 ? n : fallback
+}
+
 // How many untitled sessions to title per sweep. Bounds LLM fan-out and
 // wall-clock; the next tick picks up the remainder.
-const BATCH_SIZE = (() => {
-  const n = Number(process.env.TITLEGEN_BATCH_SIZE)
-  return Number.isInteger(n) && n > 0 ? n : 30
-})()
+const BATCH_SIZE = intEnv('TITLEGEN_BATCH_SIZE', 30)
+
+// How many titles to generate concurrently within a sweep. Titles are cheap and
+// independent; a small pool cuts sweep wall-clock without hammering the provider.
+const CONCURRENCY = intEnv('TITLEGEN_CONCURRENCY', 3)
 
 // Only title sessions quiet for this long, so we don't race an in-flight first
 // turn and title a half-finished exchange.
 const QUIET_SECONDS = 30
+
+// Run `worker` over `items` with at most `concurrency` in flight at once.
+async function runPool<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++]
+      await worker(item)
+    }
+  })
+  await Promise.all(runners)
+}
 
 async function sweepSessionTitles(): Promise<void> {
   const { activeProvider, providers } = await getTitleGenSettings()
@@ -42,17 +65,17 @@ async function sweepSessionTitles(): Promise<void> {
   if (!provider) return // feature not configured — no-op
 
   const candidates = await getTitleGenCandidates(BATCH_SIZE, QUIET_SECONDS)
-  for (const row of candidates) {
-    if (!row.first_user_message.trim()) continue
+  await runPool(candidates, CONCURRENCY, async (row) => {
+    if (!row.first_user_message.trim()) return
     try {
       const title = await generateTitle(provider, row.first_user_message)
-      if (!title) continue
+      if (!title) return
       // Write guarded by name='' — idempotent against a concurrent user rename.
       await setSessionTitleIfEmpty(row.id, title)
     } catch (e) {
       console.error(`[TitleGen] failed for session=${row.id}:`, e instanceof Error ? e.message : e)
     }
-  }
+  })
 }
 
 export async function registerTitleGenWorker(boss: PgBoss): Promise<void> {
@@ -63,16 +86,20 @@ export async function registerTitleGenWorker(boss: PgBoss): Promise<void> {
     return
   }
 
-  await boss
-    .createQueue(QUEUE_NAME, {
-      // Only one sweep active at a time — a slow sweep never overlaps the next tick.
-      policy: 'singleton',
-      // A failed or skipped sweep just waits for the next tick; no retry needed.
-      retryLimit: 0,
-      expireInSeconds: 5 * 60,
-      retentionSeconds: 24 * 3600,
-    })
-    .catch(() => {})
+  const queueOptions = {
+    // 'stately': at most one job in created OR active at a time. While a sweep
+    // is queued or running, the next cron tick's send is dropped (skipped)
+    // rather than piling up — no backlog of redundant sweep jobs.
+    policy: 'stately' as const,
+    // A failed or skipped sweep just waits for the next tick; no retry needed.
+    retryLimit: 0,
+    expireInSeconds: 5 * 60,
+    retentionSeconds: 24 * 3600,
+  }
+  // createQueue no-ops on an existing queue, so updateQueue is needed to apply
+  // config changes (e.g. the policy switch) to a queue created by a prior boot.
+  await boss.createQueue(QUEUE_NAME, queueOptions).catch(() => {})
+  await boss.updateQueue(QUEUE_NAME, queueOptions).catch(() => {})
 
   // Idempotent upsert keyed by queue name; re-registering on each boot is safe.
   await boss.schedule(QUEUE_NAME, SWEEP_CRON)
@@ -81,5 +108,7 @@ export async function registerTitleGenWorker(boss: PgBoss): Promise<void> {
     await sweepSessionTitles()
   })
 
-  console.log('[TitleGen] Worker registered (cron */5m)')
+  console.log(
+    `[TitleGen] Worker registered (cron ${SWEEP_CRON}, batch ${BATCH_SIZE}, concurrency ${CONCURRENCY})`,
+  )
 }
