@@ -87,20 +87,17 @@ RUN case "$TARGETARCH" in amd64) AB_ARCH=x64 ;; arm64) AB_ARCH=arm64 ;; \
     && chmod +x /usr/local/bin/agent-browser \
     && rm -rf /tmp/agent-browser-* /tmp/package
 
-# Install codex-acp globally (pre-install to avoid npx cold start)
-# Fork of https://github.com/zed-industries/codex-acp on upstream v0.14.0 (codex
-# 0.129) with the collab subagent tool_call patch plus a bridge for codex 0.129's
-# new turn-item events: ItemStarted/Completed(TurnItem::ImageGeneration) are
-# remapped to the legacy ImageGenerationBegin/End handlers so the web UI keeps
-# rendering image generation tool calls. Upstream v0.14.0 ships the
-# exec_command_output_delta O(N²) memory fix.
-# arm64 package is built + published separately (see codex-acp fork).
-RUN case "$TARGETARCH" in \
-        amd64) PKG=nap-codex-acp@0.14.0-nap.5 ;; \
-        arm64) PKG=nap-codex-acp-arm64@0.14.0-nap.5 ;; \
-        *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
-    esac \
-    && npm install -g --registry=https://registry.npmjs.org "$PKG"
+# Install codex-acp globally (pre-install to avoid npx cold start).
+# Upstream rewrite: github.com/agentclientprotocol/codex-acp — a TypeScript ACP
+# server that drives codex over its app-server JSON-RPC protocol (codex 0.142+)
+# and bundles the codex binary through @openai/codex (per-arch native dep, npm
+# resolves the host arch — no TARGETARCH switch needed, no glibc constraint).
+# Replaces the previous Rust-based codex-acp fork: its collab-subagent and
+# image-generation event patches are subsumed by codex 0.142's first-class
+# ItemStarted/ItemCompleted lifecycle (collabAgentToolCall / imageGeneration
+# items), so they no longer need to be carried here. bin name `codex-acp`
+# and no-arg stdio-server invocation match the bridge's BRIDGE_OPTS.
+RUN npm install -g --registry=https://registry.npmjs.org @agentclientprotocol/codex-acp@1.0.2
 
 WORKDIR /app
 

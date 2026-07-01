@@ -85,12 +85,13 @@ export class AcpBridge {
    * Spawn the ACP child process and perform the `initialize` handshake.
    */
   async start(): Promise<void> {
-    // Set RUST_LOG so codex-acp emits McpStartupComplete on stderr (WARN level).
-    // Default to 'warn' which captures MCP startup events without the per-token
-    // INFO noise from codex_acp::thread and codex_otel.
-    const existingRustLog = this.options.env?.RUST_LOG ?? process.env.RUST_LOG ?? ''
-    const rustLog = existingRustLog || 'warn'
-    const env = { ...process.env, ...this.options.env, RUST_LOG: rustLog }
+    // The TypeScript codex-acp (app-server protocol) has no global stderr
+    // startup marker: MCP servers start per-session and only *failures* surface,
+    // as tool_call_update notifications routed through the normal session
+    // handler. So we don't set RUST_LOG (a Rust-only knob) and don't gate the
+    // first turn on a stderr line that never arrives — see waitForMcpReady,
+    // which now resolves once `initialize` succeeds.
+    const env = { ...process.env, ...this.options.env }
 
     this.child = spawn(this.options.program, this.options.args, {
       cwd: this.options.cwd,
@@ -102,19 +103,17 @@ export class AcpBridge {
       console.error(`[acp-bridge] Process error: ${err.message}`)
     })
 
-    // Track MCP startup completion via stderr parsing
-    let mcpReadyResolve: (() => void) | null = null
+    // Readiness gate (see waitForMcpReady). Non-null no-op default so it's
+    // always callable; resolving a Promise more than once is a harmless no-op.
+    let resolveReady: () => void = () => {}
     this.mcpReadyPromise = new Promise<void>((resolve) => {
-      mcpReadyResolve = resolve
+      resolveReady = resolve
     })
 
     this.child.on('exit', (code, signal) => {
       console.warn(`[acp-bridge] Process exited: code=${code} signal=${signal}`)
-      // Resolve MCP ready if process exits before startup completes
-      if (mcpReadyResolve) {
-        mcpReadyResolve()
-        mcpReadyResolve = null
-      }
+      // Resolve MCP ready if the process exits before the handshake unblocks it.
+      resolveReady()
       // Reject any in-flight prompt promises so the awaiting /chat handler
       // doesn't hang forever. Skip if destroy() was called intentionally —
       // those rejections are issued explicitly below.
@@ -126,17 +125,13 @@ export class AcpBridge {
       }
     })
 
-    // Capture stderr: forward to console and detect McpStartupComplete
+    // Capture stderr: forward to console for diagnostics. (Readiness is no
+    // longer derived from stderr — see start()'s comment and waitForMcpReady.)
     const stderrRl = createInterface({ input: this.child.stderr! })
     stderrRl.on('line', (line) => {
       // Strip ANSI escape codes for cleaner log output
       const clean = line.replace(/\x1b\[[0-9;]*m/g, '')
       console.error(`[codex-acp] ${clean}`)
-      if (mcpReadyResolve && /McpStartupComplete/.test(line)) {
-        console.log('[acp-bridge] MCP startup complete detected')
-        mcpReadyResolve()
-        mcpReadyResolve = null
-      }
     })
 
     const input = Writable.toWeb(this.child.stdin!) as WritableStream<Uint8Array>
@@ -173,12 +168,23 @@ export class AcpBridge {
     })
 
     console.log('[acp-bridge] Initialized')
+
+    // The new codex-acp manages MCP startup per-session internally and emits no
+    // positive "ready" signal (only per-server failures, as tool_call_update
+    // notifications). There is nothing to wait for, so unblock waitForMcpReady
+    // now that the handshake is up; MCP failures still surface through the
+    // normal session handler.
+    resolveReady()
   }
 
   /**
-   * Wait for MCP servers to finish startup (ready or failed).
-   * Resolves when codex-acp emits McpStartupComplete on stderr,
-   * or after timeoutMs if the event is never seen.
+   * Legacy hook from the Rust codex-acp era, where the first turn was gated on
+   * a global `McpStartupComplete` stderr marker. The TypeScript codex-acp has
+   * no such marker — MCP servers start per-session and only failures are
+   * reported — so this now resolves as soon as the `initialize` handshake
+   * completes. Kept (rather than removed at the call sites) so the orchestration
+   * in acp-server.ts stays untouched and a future readiness signal can re-hook
+   * here. `timeoutMs` is retained as a backstop for the pre-handshake window.
    */
   async waitForMcpReady(timeoutMs = 35_000): Promise<void> {
     if (!this.mcpReadyPromise) return
