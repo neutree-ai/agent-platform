@@ -62,6 +62,7 @@ export class AcpEventTranslator {
       rawInput: unknown
       lastStatus: 'pending' | 'in_progress' | 'completed' | 'failed'
       terminalEmitted: boolean
+      isImageGen: boolean
     }
   >()
   /** Last usage_update received (for stats extraction) */
@@ -172,6 +173,13 @@ export class AcpEventTranslator {
       }
 
       case 'tool_call': {
+        // Suppress codex-acp's MCP-startup pseudo-tool-calls (id `mcp_startup.*`,
+        // kind "other", already-terminal). They are infra diagnostics, not tools
+        // the agent invoked; the old Rust codex-acp never surfaced them, and the
+        // adapter's start handler would render them as a stuck "other" spinner
+        // that never persists. Route MCP health elsewhere, not the chat stream.
+        if (update.toolCallId.startsWith('mcp_startup.')) break
+
         // Finalize any in-progress text message before the tool call
         if (this.currentMessageItem) {
           this.currentMessageItem.status = 'completed'
@@ -197,12 +205,19 @@ export class AcpEventTranslator {
         // `title` as `name` causes the same string to render twice.
         const itemId = nextItemId()
         const stableName = update.kind ?? update.title
+        // codex's built-in image-generation tool surfaces as a tool_call with
+        // kind "other" / title "Image generation" and a call id prefixed `ig_`.
+        // Flag it so the completion compensation below can fire — see the
+        // tool_call_update handler.
+        const isImageGen =
+          update.title === 'Image generation' || update.toolCallId.startsWith('ig_')
         this.activeToolCalls.set(update.toolCallId, {
           itemId,
           title: stableName,
           rawInput: update.rawInput,
           lastStatus: update.status ?? 'pending',
           terminalEmitted: false,
+          isImageGen,
         })
 
         const toolItem: UniversalItem = {
@@ -225,6 +240,18 @@ export class AcpEventTranslator {
           session_id: this.sessionId,
           item: toolItem,
         })
+
+        // Terminal-on-start: codex-acp can deliver a tool_call that already
+        // carries a terminal status with no follow-up tool_call_update. Without
+        // this the card spins forever and never persists (cp writes tool_calls
+        // only on item.completed). Synthesize the completion by replaying this
+        // event through the tool_call_update path (the tracked entry is set
+        // above), which reuses all the terminal/output handling.
+        if (update.status === 'completed' || update.status === 'failed') {
+          events.push(
+            ...this.translateUpdate({ ...update, sessionUpdate: 'tool_call_update' } as SessionUpdate),
+          )
+        }
         break
       }
 
@@ -240,7 +267,25 @@ export class AcpEventTranslator {
         // from the tracked state and only emit once on the real transition
         // into a terminal state.
         const tracked = this.activeToolCalls.get(update.toolCallId)
-        const effectiveStatus = update.status ?? tracked?.lastStatus ?? 'in_progress'
+        let effectiveStatus = update.status ?? tracked?.lastStatus ?? 'in_progress'
+
+        // codex reports the image-generation item's status as "generating" even
+        // on its item/completed event, so codex-acp maps the completion to a
+        // tool_call_update that stays "in_progress" while already carrying the
+        // finished image in `content`. Without compensation the terminal
+        // transition never fires, cp never persists the tool_call, and the image
+        // never renders (cp only writes tool_calls on item.completed). When an
+        // image-generation call delivers image content, treat it as completed.
+        // (Upstream fix belongs in codex-acp's createImageGenerationCompleteUpdate.)
+        if (
+          tracked?.isImageGen &&
+          effectiveStatus !== 'failed' &&
+          ((update as any).content ?? []).some(
+            (tc: any) => tc?.type === 'image' || tc?.content?.type === 'image',
+          )
+        ) {
+          effectiveStatus = 'completed'
+        }
 
         if (tracked) {
           if (update.rawInput !== undefined) tracked.rawInput = update.rawInput
@@ -315,6 +360,22 @@ export class AcpEventTranslator {
               )
               return ''
             })
+            .filter(Boolean)
+            .join('\n')
+        }
+
+        // Image generation: codex-acp's raw output carries the full base64 image
+        // under `result` (megabytes). Dumping it as tool_result text would bloat
+        // the model context and the DB, so replace the output with a concise
+        // summary that points the model at the saved file. (Inline thumbnail
+        // rendering is a separate follow-up: ContentPart only carries base64
+        // `data`, so showing the image in-chat would mean persisting MBs per
+        // generation — that needs a uri-based design + cp/UI work.)
+        if (tracked?.isImageGen) {
+          const ro = (update.rawOutput ?? {}) as Record<string, unknown>
+          const saved = typeof ro.savedPath === 'string' ? ro.savedPath : undefined
+          const revised = typeof ro.revisedPrompt === 'string' ? ro.revisedPrompt : undefined
+          output = ['Image generated.', revised && `Revised prompt: ${revised}`, saved && `Saved to: ${saved}`]
             .filter(Boolean)
             .join('\n')
         }
