@@ -18,11 +18,19 @@ import { generateTitle, resolveTitleGenProvider } from '../../internal/titlegen/
 import { getTitleGenCandidates, getTitleGenSettings, setSessionTitleIfEmpty } from './db'
 
 const QUEUE_NAME = 'session-titlegen'
-const SWEEP_CRON = '*/5 * * * *' // every 5 minutes
+
+// Cron + batch are env-overridable so the temporary backlog drain (fast/large)
+// can be dialed back to steady state without a rebuild — just change the env on
+// the scheduler deployment and restart. pg-boss cron granularity is 1 minute
+// (sub-minute is not honored by its clock), so '*/1 * * * *' is the floor.
+const SWEEP_CRON = process.env.TITLEGEN_CRON || '*/1 * * * *'
 
 // How many untitled sessions to title per sweep. Bounds LLM fan-out and
 // wall-clock; the next tick picks up the remainder.
-const BATCH_SIZE = 10
+const BATCH_SIZE = (() => {
+  const n = Number(process.env.TITLEGEN_BATCH_SIZE)
+  return Number.isInteger(n) && n > 0 ? n : 30
+})()
 
 // Only title sessions quiet for this long, so we don't race an in-flight first
 // turn and title a half-finished exchange.
