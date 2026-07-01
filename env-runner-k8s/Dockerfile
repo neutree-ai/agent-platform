@@ -33,5 +33,8 @@ COPY env-runner-k8s/package.json env-runner-k8s/package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/env-runner-k8s/dist ./dist
+# afs.proto is read at runtime by @grpc/proto-loader (afs-control.ts) — resolved
+# from cwd (/app/env-runner-k8s) as ./proto/afs.proto.
+COPY env-runner-k8s/proto ./proto
 
 CMD ["node", "dist/index.js"]

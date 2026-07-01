@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
 import {
+  afsEnvForWorkspace,
   createDir,
   ensureDefaultFs,
   mountAtWorkspace,
@@ -161,10 +162,11 @@ afsShares.openapi(
     try {
       let share = await getAfsShareByName(id, name)
       if (!share) {
-        await ensureDefaultFs()
-        const dir = await createDir()
+        const afsEnv = await afsEnvForWorkspace(id)
+        await ensureDefaultFs(afsEnv)
+        const dir = await createDir(afsEnv)
         share = await createAfsShare(id, name, dir.id, dir.accessKey)
-        await mountAtWorkspace(id, dir.id, dir.accessKey, name, false)
+        await mountAtWorkspace(afsEnv, id, dir.id, dir.accessKey, name, false)
         await addAfsShareMember(share.id, id, 'read_write')
       }
       return c.json(
@@ -220,15 +222,16 @@ afsShares.openapi(
     if (!share) return c.json({ error: 'Share not found' }, 404)
     if (share.owner_workspace_id !== id) return c.json({ error: 'Not owner' }, 403)
 
+    const afsEnv = await afsEnvForWorkspace(id)
     const members = await listAfsShareMembers(share.id)
     try {
-      await revokeDir(share.afs_dir_id, share.access_key)
+      await revokeDir(afsEnv, share.afs_dir_id, share.access_key)
     } catch {
       // Best-effort: still clean up DB + local mounts below.
     }
     for (const m of members) {
       try {
-        await unmountAtWorkspace(m.workspace_id, share.name)
+        await unmountAtWorkspace(afsEnv, m.workspace_id, share.name)
       } catch {
         // Mount may already be gone after revoke.
       }
@@ -307,6 +310,10 @@ afsShares.openapi(
         description: 'Granted',
         content: { 'application/json': { schema: AfsShareMemberSchema } },
       },
+      400: {
+        description: 'Target on a different environment',
+        content: { 'application/json': { schema: ErrorSchema } },
+      },
       403: {
         description: 'Not owner',
         content: { 'application/json': { schema: ErrorSchema } },
@@ -336,6 +343,14 @@ afsShares.openapi(
       // Keep the same scope rule as grant_access MCP tool: same-user only.
       return c.json({ error: 'Target workspace belongs to another user' }, 403)
     }
+    // afs sharing scope is one environment: a share's dir + storage live in the
+    // owner's environment, so a member on a different environment could never
+    // mount it. Reject cross-environment grants with a clear reason.
+    const afsEnv = await afsEnvForWorkspace(id)
+    const targetEnv = await afsEnvForWorkspace(targetId)
+    if (targetEnv.environmentId !== afsEnv.environmentId) {
+      return c.json({ error: 'Target workspace is on a different environment' }, 400)
+    }
 
     try {
       // If target is already a member, re-mount with the (possibly changed)
@@ -344,12 +359,19 @@ afsShares.openapi(
       const existing = await listAfsShareMembers(share.id)
       if (existing.some((m) => m.workspace_id === targetId)) {
         try {
-          await unmountAtWorkspace(targetId, share.name)
+          await unmountAtWorkspace(afsEnv, targetId, share.name)
         } catch {
           // Best-effort — continue even if stale unmount fails.
         }
       }
-      await mountAtWorkspace(targetId, share.afs_dir_id, share.access_key, share.name, readonly)
+      await mountAtWorkspace(
+        afsEnv,
+        targetId,
+        share.afs_dir_id,
+        share.access_key,
+        share.name,
+        readonly,
+      )
       await addAfsShareMember(share.id, targetId, readonly ? 'read_only' : 'read_write')
     } catch (e) {
       return c.json({ error: `afs mount failed: ${(e as Error).message}` }, 502)
@@ -410,7 +432,7 @@ afsShares.openapi(
     const removed = await removeAfsShareMember(share.id, memberWorkspaceId)
     if (removed) {
       try {
-        await unmountAtWorkspace(memberWorkspaceId, share.name)
+        await unmountAtWorkspace(await afsEnvForWorkspace(id), memberWorkspaceId, share.name)
       } catch {
         // Best-effort.
       }

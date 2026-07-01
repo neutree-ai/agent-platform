@@ -1,6 +1,39 @@
 import path from 'node:path'
 import * as grpc from '@grpc/grpc-js'
 import * as protoLoader from '@grpc/proto-loader'
+import { callControl } from '../../../internal/env-tunnel'
+import { getWorkspacePlacementEnv } from './db/environments'
+import { openControlStream } from './env-gateway/registry'
+
+// Which environment an afs op runs against. Built-in uses the platform-local
+// gRPC path below (controller in cp's cluster, fuse via cluster DNS). A remote
+// (BYOI) environment's afs data plane lives in the customer cluster, so the op
+// is shipped over the tunnel and executed by that environment's runner (option
+// A) — see env-runner-k8s/src/afs-control.ts.
+interface AfsEnv {
+  environmentId: string
+  isBuiltin: boolean
+}
+
+/**
+ * Resolve which environment a workspace's afs ops run against. A workspace with
+ * no placement row (shouldn't happen post-backfill) is treated as built-in.
+ */
+export async function afsEnvForWorkspace(workspaceId: string): Promise<AfsEnv> {
+  const p = await getWorkspacePlacementEnv(workspaceId)
+  return p
+    ? { environmentId: p.environmentId, isBuiltin: p.isBuiltin }
+    : { environmentId: 'builtin', isBuiltin: true }
+}
+
+/** Run an afs op on a remote environment's runner via the afsctl control stream. */
+async function callRemote(env: AfsEnv, req: Record<string, unknown>): Promise<any> {
+  const stream = openControlStream(env.environmentId, 'afsctl')
+  if (!stream) throw new Error(`environment '${env.environmentId}' has no live runner`)
+  const res = await callControl<{ error?: string } & Record<string, unknown>>(stream, req)
+  if (res?.error) throw new Error(res.error)
+  return res
+}
 
 const AFS_CONTROLLER_ADDR = process.env.AFS_CONTROLLER_ADDR || 'afs-controller.default.svc:9100'
 const AFS_DEFAULT_FS = process.env.AFS_DEFAULT_FS || 'shared'
@@ -51,7 +84,11 @@ interface AfsDir {
   permission: Permission
 }
 
-export async function createDir(fsName = AFS_DEFAULT_FS): Promise<AfsDir> {
+export async function createDir(env: AfsEnv, fsName = AFS_DEFAULT_FS): Promise<AfsDir> {
+  if (!env.isBuiltin) {
+    const r = await callRemote(env, { op: 'createDir', fsName })
+    return { id: r.id, accessKey: r.accessKey, permission: r.permission }
+  }
   const res = await unary<
     { fs_name: string },
     { id: string; access_key: string; permission: Permission }
@@ -59,7 +96,11 @@ export async function createDir(fsName = AFS_DEFAULT_FS): Promise<AfsDir> {
   return { id: res.id, accessKey: res.access_key, permission: res.permission }
 }
 
-export async function revokeDir(id: string, accessKey: string): Promise<number> {
+export async function revokeDir(env: AfsEnv, id: string, accessKey: string): Promise<number> {
+  if (!env.isBuiltin) {
+    const r = await callRemote(env, { op: 'revokeDir', id, accessKey })
+    return r.sessionsRevoked ?? 0
+  }
   const res = await unary<
     { id: string; access_key: string },
     { sessions_revoked: number; errors: number }
@@ -73,12 +114,24 @@ export async function revokeDir(id: string, accessKey: string): Promise<number> 
  * with the controller and mounts at /mnt/afs/<name>.
  */
 export async function mountAtWorkspace(
+  env: AfsEnv,
   workspaceId: string,
   dirId: string,
   accessKey: string,
   name: string,
   readonly = false,
 ): Promise<void> {
+  if (!env.isBuiltin) {
+    await callRemote(env, {
+      op: 'mount',
+      workspaceId,
+      dirId,
+      accessKey,
+      name,
+      readonly,
+    })
+    return
+  }
   const mountpoint = `/mnt/afs/${name}`
   await unary<
     {
@@ -98,7 +151,15 @@ export async function mountAtWorkspace(
   })
 }
 
-export async function unmountAtWorkspace(workspaceId: string, name: string): Promise<void> {
+export async function unmountAtWorkspace(
+  env: AfsEnv,
+  workspaceId: string,
+  name: string,
+): Promise<void> {
+  if (!env.isBuiltin) {
+    await callRemote(env, { op: 'unmount', workspaceId, name })
+    return
+  }
   const mountpoint = `/mnt/afs/${name}`
   await unary<{ mountpoint: string }, Record<string, never>>(
     getFuseClient(workspaceId),
@@ -108,7 +169,11 @@ export async function unmountAtWorkspace(workspaceId: string, name: string): Pro
 }
 
 /** Register the default fs once. Safe to call repeatedly. */
-export async function ensureDefaultFs(): Promise<void> {
+export async function ensureDefaultFs(env: AfsEnv): Promise<void> {
+  if (!env.isBuiltin) {
+    await callRemote(env, { op: 'ensureDefaultFs' })
+    return
+  }
   try {
     await unary(controllerClient, 'RegisterFs', {
       name: AFS_DEFAULT_FS,

@@ -1,0 +1,131 @@
+{{- if .Values.afs.enabled }}
+{{- if not .Values.afs.storageClass }}
+{{- fail "afs.enabled requires afs.storageClass — it MUST be a ReadWriteMany-capable class (NFS/CephFS/…); RWO provisioners like local-path will leave pods Pending" }}
+{{- end }}
+# AgentFS (afs) data service, deployed into this cluster so the environment can
+# advertise sharedFs=true. afs is a *shared* filesystem: every workspace pod
+# mounting it shares one RWX volume, so the sharing scope is this environment.
+# The afs-fuse sidecar (injected by the runner's KubernetesProvider) mounts the
+# `afs-shared-storage` PVC and `afs-fuse-config` ConfigMap by name and reaches
+# `afs-controller` over cluster DNS — no tunnel is involved for afs.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: afs-shared-storage
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: {{ .Values.afs.storageClass | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.afs.sharedStorageSize | quote }}
+---
+# Controller metadata DB (controller.db, SQLite). MUST persist across restarts:
+# if lost, every dir's id → base_path mapping disappears and all mounts fail
+# even though the data on afs-shared-storage is intact. Small (grows with #dirs).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: afs-controller-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: {{ .Values.afs.storageClass | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.afs.controllerDbSize | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: afs-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: SQLite single-writer on an RWX PVC means two
+  # pods writing controller.db concurrently is a corruption risk.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: afs-controller
+  template:
+    metadata:
+      labels:
+        app: afs-controller
+        {{- include "env-runner-k8s.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: afs-controller
+          image: {{ .Values.afs.image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["afs-controller"]
+          args: ["/etc/afs/controller.toml"]
+          ports:
+            - containerPort: 9100
+          volumeMounts:
+            - name: config
+              mountPath: /etc/afs
+            - name: data
+              mountPath: /var/lib/afs
+      volumes:
+        - name: config
+          configMap:
+            name: afs-controller-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: afs-controller-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: afs-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: afs-controller
+  ports:
+    - port: 9100
+      targetPort: 9100
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: afs-controller-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+data:
+  controller.toml: |
+    [server]
+    listen = "0.0.0.0:9100"
+
+    [storage]
+    db_path = "/var/lib/afs/controller.db"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: afs-fuse-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "env-runner-k8s.labels" . | nindent 4 }}
+data:
+  fuse-server.toml: |
+    [server]
+    listen = "0.0.0.0:9101"
+    controller_addr = "afs-controller.{{ .Release.Namespace }}.svc:9100"
+{{- end }}

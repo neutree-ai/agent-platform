@@ -5,7 +5,7 @@ import { pool } from './db'
 import { DbTransport } from './db-transport'
 import { HttpTransport } from './http-transport'
 import { connectTunnel } from './tunnel-client'
-import { forwardDial, startReverseListeners } from './tunnel-dataplane'
+import { onTunnelStream, startReverseListeners } from './tunnel-dataplane'
 
 // env-runner-k8s: the standalone runner for kind='kubernetes' environments. One
 // reconcile core (internal/env-runner-core), two shapes selected by RUNNER_MODE:
@@ -45,7 +45,7 @@ function startTunnel(cpUrl: string, token: string): void {
     for (;;) {
       try {
         const closed = new Promise<void>((resolve) => {
-          connectTunnel({ gatewayUrl, token, onStream: forwardDial, onClose: resolve })
+          connectTunnel({ gatewayUrl, token, onStream: onTunnelStream, onClose: resolve })
             .then((client) => {
               currentMux = client.mux
               console.log('[env-runner-k8s] tunnel data plane up')

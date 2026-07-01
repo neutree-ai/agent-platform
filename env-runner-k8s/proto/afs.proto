@@ -1,0 +1,198 @@
+syntax = "proto3";
+package afs;
+
+// --- Controller Service ---
+
+service ControllerService {
+  // Filesystem management
+  rpc RegisterFs(RegisterFsRequest) returns (RegisterFsResponse);
+  rpc UnregisterFs(UnregisterFsRequest) returns (UnregisterFsResponse);
+  rpc ListFs(ListFsRequest) returns (ListFsResponse);
+
+  // Directory management
+  rpc CreateDir(CreateDirRequest) returns (CreateDirResponse);
+  rpc DeleteDir(DeleteDirRequest) returns (DeleteDirResponse);
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc ListDirs(ListDirsRequest) returns (ListDirsResponse);
+
+  // Session management
+  rpc RegisterSession(RegisterSessionRequest) returns (RegisterSessionResponse);
+  rpc DeregisterSession(DeregisterSessionRequest) returns (DeregisterSessionResponse);
+  rpc RevokeDir(RevokeDirRequest) returns (RevokeDirResponse);
+  rpc SessionStream(stream Heartbeat) returns (stream SessionCommand);
+}
+
+// --- FUSE Service ---
+
+service FuseService {
+  rpc Mount(MountRequest) returns (MountResponse);
+  rpc Unmount(UnmountRequest) returns (UnmountResponse);
+  rpc ListMounts(ListMountsRequest) returns (ListMountsResponse);
+}
+
+// --- Enums ---
+
+enum Permission {
+  READ_ONLY = 0;
+  READ_WRITE = 1;
+}
+
+// --- Filesystem messages ---
+
+message RegisterFsRequest {
+  string name = 1;
+  string fs_type = 2;
+  map<string, string> config = 3;
+}
+
+message RegisterFsResponse {
+  string name = 1;
+}
+
+message UnregisterFsRequest {
+  string name = 1;
+}
+
+message UnregisterFsResponse {}
+
+message ListFsRequest {}
+
+message ListFsResponse {
+  repeated FsInfo filesystems = 1;
+}
+
+message FsInfo {
+  string name = 1;
+  string fs_type = 2;
+  map<string, string> config = 3;
+  string created_at = 4;
+}
+
+// --- Directory messages ---
+
+message CreateDirRequest {
+  string fs_name = 1;
+}
+
+message CreateDirResponse {
+  string id = 1;
+  string access_key = 2;
+  Permission permission = 3;
+}
+
+message DeleteDirRequest {
+  string id = 1;
+  string access_key = 2;
+}
+
+message DeleteDirResponse {}
+
+message ValidateTokenRequest {
+  string id = 1;
+  string access_key = 2;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  Permission permission = 2;
+  string fs_type = 3;
+  map<string, string> fs_config = 4;
+}
+
+message ListDirsRequest {
+  string fs_name = 1;
+}
+
+message ListDirsResponse {
+  repeated DirInfo dirs = 1;
+}
+
+message DirInfo {
+  string id = 1;
+  string fs_name = 2;
+  Permission permission = 3;
+  string status = 4;
+  string created_at = 5;
+}
+
+// --- Mount messages ---
+
+message MountRequest {
+  string id = 1;
+  string access_key = 2;
+  string mountpoint = 3;
+  string controller_addr = 4;
+  bool readonly = 5;
+}
+
+message MountResponse {
+  string mountpoint = 1;
+}
+
+message UnmountRequest {
+  string mountpoint = 1;
+}
+
+message UnmountResponse {}
+
+message ListMountsRequest {}
+
+message ListMountsResponse {
+  repeated MountInfo mounts = 1;
+}
+
+message MountInfo {
+  string id = 1;
+  string mountpoint = 2;
+  Permission permission = 3;
+}
+
+// --- Session messages ---
+
+message RegisterSessionRequest {
+  string dir_id = 1;
+  string mountpoint = 2;
+  string stream_id = 3;
+}
+
+message RegisterSessionResponse {
+  string session_id = 1;
+}
+
+message DeregisterSessionRequest {
+  string session_id = 1;
+}
+
+message DeregisterSessionResponse {}
+
+message RevokeDirRequest {
+  string id = 1;
+  string access_key = 2;
+}
+
+message RevokeDirResponse {
+  int32 sessions_revoked = 1;
+  int32 errors = 2;
+}
+
+// --- Session stream messages ---
+
+message Heartbeat {
+  string stream_id = 1;
+  repeated MountStatus mounts = 2;
+}
+
+message MountStatus {
+  string dir_id = 1;
+  string mountpoint = 2;
+}
+
+message SessionCommand {
+  oneof command {
+    ForceUnmount force_unmount = 1;
+  }
+}
+
+message ForceUnmount {
+  string mountpoint = 1;
+}

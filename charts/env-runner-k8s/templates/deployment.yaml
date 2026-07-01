@@ -56,8 +56,9 @@ spec:
               value: {{ .Values.tunnel.afsProxyPort | quote }}
             - name: ENV_RUNNER_INTERVAL_MS
               value: {{ .Values.reconcileIntervalMs | quote }}
-            # Provider config for THIS cluster. No AFS_ENABLED → sharedFs=false;
-            # MEMORY_FUSE_IMAGE set → persistentMemory=true (tunnels to cp).
+            # Provider config for THIS cluster. sharedFs follows afs.enabled
+            # (AFS_ENABLED below); MEMORY_FUSE_IMAGE set → persistentMemory=true
+            # (tunnels to cp).
             - name: K8S_NAMESPACE
               value: {{ .Values.provider.namespace | quote }}
             - name: AGENT_IMAGE_PREFIX
@@ -74,6 +75,24 @@ spec:
             # never inherits the platform's default node-group selector.
             - name: AGENT_NODE_SELECTOR
               value: {{ .Values.provider.nodeSelector | quote }}
+            {{- if .Values.afs.enabled }}
+            # AgentFS (afs) — a *shared* RWX filesystem, deployed into THIS
+            # cluster (see templates/afs.yaml). afs-fuse reaches the local
+            # afs-controller via cluster DNS (no tunnel; the data plane is
+            # RWX-PVC-local and cannot cross the WAN). Enabling this flips the
+            # advertised capability to sharedFs=true; sharing scope is this
+            # environment only.
+            - name: AFS_ENABLED
+              value: "true"
+            - name: AFS_IMAGE
+              value: {{ .Values.afs.image | quote }}
+            - name: AFS_CONTROLLER_ADDR
+              value: "afs-controller.{{ .Release.Namespace }}.svc:9100"
+            - name: AFS_STORAGE_PVC
+              value: "afs-shared-storage"
+            - name: AFS_CONFIGMAP
+              value: "afs-fuse-config"
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

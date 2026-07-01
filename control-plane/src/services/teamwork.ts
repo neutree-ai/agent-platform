@@ -1,4 +1,11 @@
-import { createDir, ensureDefaultFs, mountAtWorkspace, revokeDir, unmountAtWorkspace } from './afs'
+import {
+  afsEnvForWorkspace,
+  createDir,
+  ensureDefaultFs,
+  mountAtWorkspace,
+  revokeDir,
+  unmountAtWorkspace,
+} from './afs'
 import {
   addAfsShareMember,
   createAfsShare,
@@ -22,11 +29,12 @@ function teamworkShareName(taskId: string): string {
  * the coordinator. The task row is updated in-place with `afs_share_id`.
  */
 export async function provisionTeamworkShare(task: TeamworkTask): Promise<string> {
-  await ensureDefaultFs()
-  const dir = await createDir()
+  const afsEnv = await afsEnvForWorkspace(task.coordinator_workspace_id)
+  await ensureDefaultFs(afsEnv)
+  const dir = await createDir(afsEnv)
   const name = teamworkShareName(task.id)
   const share = await createAfsShare(task.coordinator_workspace_id, name, dir.id, dir.accessKey)
-  await mountAtWorkspace(task.coordinator_workspace_id, dir.id, dir.accessKey, name, false)
+  await mountAtWorkspace(afsEnv, task.coordinator_workspace_id, dir.id, dir.accessKey, name, false)
   await addAfsShareMember(share.id, task.coordinator_workspace_id, 'read_write')
   await updateTeamworkTask(task.id, { afs_share_id: share.id })
   return share.id
@@ -41,7 +49,10 @@ export async function mountTeamworkShareForMember(
 ): Promise<void> {
   const share = await getAfsShareById(shareId)
   if (!share) throw new Error(`Teamwork share ${shareId} not found`)
+  // The mount targets this member's pod, so use its environment (which for a
+  // teamwork roster is the same as the coordinator's — afs sharing is env-local).
   await mountAtWorkspace(
+    await afsEnvForWorkspace(workspaceId),
     workspaceId,
     share.afs_dir_id,
     share.access_key,
@@ -59,7 +70,11 @@ export async function unmountTeamworkShareForMember(
 ): Promise<void> {
   await removeAfsShareMember(shareId, workspaceId)
   try {
-    await unmountAtWorkspace(workspaceId, teamworkShareName(taskId))
+    await unmountAtWorkspace(
+      await afsEnvForWorkspace(workspaceId),
+      workspaceId,
+      teamworkShareName(taskId),
+    )
   } catch {
     // Mount may already be gone (workspace stopped, manual unmount, etc.).
     // Membership row removal above is the source of truth.
@@ -74,7 +89,11 @@ export async function teardownTeamworkShare(shareId: string): Promise<void> {
   const share = await getAfsShareById(shareId)
   if (!share) return
   try {
-    await revokeDir(share.afs_dir_id, share.access_key)
+    await revokeDir(
+      await afsEnvForWorkspace(share.owner_workspace_id),
+      share.afs_dir_id,
+      share.access_key,
+    )
   } catch {
     // Even if the controller errors, drop the DB row so we don't leak it.
   }

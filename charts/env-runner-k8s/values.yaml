@@ -39,6 +39,26 @@ provider:
   # "" → no nodeSelector; "k=v,k2=v2" → that selector (matches provider parsing).
   nodeSelector: ""
 
+# Optional AgentFS (afs) data service. When enabled, the chart deploys an
+# afs-controller + shared storage INTO this cluster (templates/afs.yaml) and the
+# runner advertises sharedFs=true; workspaces on this environment can then share
+# a filesystem. Sharing scope is this environment only (afs data is RWX-PVC-local
+# and cannot cross the WAN, so it is not tunneled back to the control plane like
+# memory is). Leave disabled → sharedFs=false, no afs resources are created.
+#
+# REQUIREMENT: afs is a *shared* filesystem and needs a ReadWriteMany-capable
+# storageClass (NFS, CephFS, …). RWO provisioners (local-path, hostPath) will
+# leave the afs pods Pending — enabling afs without an RWX class is a mistake the
+# chart fails fast on.
+afs:
+  enabled: false
+  image: ghcr.io/neutree-ai/afs:latest
+  # RWX-capable storageClass for both the shared FS and the controller DB.
+  # Required when afs.enabled.
+  storageClass: ""
+  sharedStorageSize: 50Gi
+  controllerDbSize: 1Gi
+
 # Reverse tunnel listeners on the runner pod; a sidecar in a workspace reaches
 # the control plane through these (fronted by the chart's Service).
 tunnel:
