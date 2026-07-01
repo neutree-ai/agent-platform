@@ -127,6 +127,21 @@ const BUILTIN_COMMANDS: WorkspaceCommand[] = [
     created_at: '',
     updated_at: '',
   },
+  {
+    id: '__builtin_goal__',
+    workspace_id: '',
+    user_id: '',
+    name: 'goal',
+    type: 'struct',
+    prompt_id: null,
+    prompt_content: null,
+    content: '/goal {{condition}}',
+    sort_order: -1,
+    source: 'local',
+    disabled: false,
+    created_at: '',
+    updated_at: '',
+  },
 ]
 
 export const RESERVED_COMMAND_NAMES = new Set(BUILTIN_COMMANDS.map((c) => c.name))
