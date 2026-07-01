@@ -83,8 +83,6 @@ export interface WorkspaceSpec {
 export interface Capabilities {
   sharedFs: boolean
   persistentMemory: boolean
-  gpu: boolean
-  maxStorageGi?: number
   [key: string]: boolean | number | string | undefined
 }
 

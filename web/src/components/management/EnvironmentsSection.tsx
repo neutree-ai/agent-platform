@@ -11,6 +11,7 @@ import { ResourceGrid } from '@/components/resource/ResourceGrid'
 import type { ResourceScope } from '@/components/resource/ScopeBadge'
 import { AppHeaderButton } from '@/components/shell/windows/AppHeaderButton'
 import { useAppHeaderSlot } from '@/components/shell/windows/AppWindow'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmButton } from '@/components/ui/confirm-button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -33,7 +34,7 @@ import {
 import type { ApiEnvironment } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import { useInstancePersistentState } from '@/stores/instance-state-store'
-import { KeyRound, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Brain, FolderSymlink, KeyRound, type LucideIcon, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -184,7 +185,6 @@ export function EnvironmentsSection({ instanceId }: { instanceId: string }) {
             <ResourceGrid>
               {filtered.map((e) => {
                 const scope: ResourceScope = e.visibility
-                const caps = capabilityLabels(e)
                 return (
                   <ResourceCard
                     key={e.id}
@@ -197,14 +197,21 @@ export function EnvironmentsSection({ instanceId }: { instanceId: string }) {
                           )}
                         />
                         <span className="min-w-0 truncate">{e.name}</span>
+                        {e.is_builtin && (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 px-1.5 py-0 text-tiny font-normal"
+                          >
+                            {t('components.management.environments.labels.builtin')}
+                          </Badge>
+                        )}
                       </span>
                     }
-                    type={
-                      e.is_builtin
-                        ? t('components.management.environments.labels.builtin')
-                        : t(`components.management.environments.status.${e.status}`, e.status)
-                    }
-                    meta={caps.length > 0 ? caps.join(' · ') : e.kind}
+                    // Consistent across every card: liveness · provisioning kind.
+                    // Advertised capabilities render as their own chips (body).
+                    type={t(`components.management.environments.status.${e.status}`, e.status)}
+                    meta={e.kind}
+                    body={<CapabilityChips env={e} />}
                     scope={scope}
                     owned={e.is_own && !e.is_builtin}
                     actions={
@@ -280,13 +287,33 @@ export function EnvironmentsSection({ instanceId }: { instanceId: string }) {
   )
 }
 
-/** Short capability labels (only advertised/truthy ones). */
-function capabilityLabels(e: ApiEnvironment): string[] {
-  const caps = e.capabilities ?? {}
-  const labels: string[] = []
-  if (caps.persistentMemory) labels.push('memory')
-  if (caps.sharedFs) labels.push('afs')
-  return labels
+// The capabilities a k8s environment actually advertises today (sharedFs via
+// afs, persistentMemory via memory-fuse). Rendered as chips so the card's meta
+// line can stay a consistent status · kind.
+const CAPABILITY_CHIPS: {
+  key: 'sharedFs' | 'persistentMemory'
+  label: string
+  Icon: LucideIcon
+}[] = [
+  { key: 'sharedFs', label: 'afs', Icon: FolderSymlink },
+  { key: 'persistentMemory', label: 'memory', Icon: Brain },
+]
+
+/** Chips for the advertised capabilities (only truthy ones); null when none. */
+function CapabilityChips({ env }: { env: ApiEnvironment }) {
+  const caps = env.capabilities ?? {}
+  const present = CAPABILITY_CHIPS.filter((c) => caps[c.key])
+  if (present.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {present.map(({ key, label, Icon }) => (
+        <Badge key={key} variant="muted-soft" className="gap-1 px-2 py-0 text-tiny font-normal">
+          <Icon className="h-3 w-3 shrink-0" strokeWidth={2} />
+          {label}
+        </Badge>
+      ))}
+    </div>
+  )
 }
 
 function ManageTokensDialog({
