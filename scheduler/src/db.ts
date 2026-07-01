@@ -319,3 +319,66 @@ export async function cleanupOldThreadSessions(olderThanDays = 7): Promise<numbe
   )
   return rowCount ?? 0
 }
+
+// --- Session Title Generation ---
+
+/** Read the system-level title-gen config from the single system_settings row. */
+export async function getTitleGenSettings(): Promise<{
+  activeProvider: string | null
+  providers: Record<string, unknown>
+}> {
+  const { rows } = await pool.query(
+    'SELECT titlegen_active_provider, titlegen_providers FROM system_settings WHERE id = 1',
+  )
+  const row = rows[0] ?? {}
+  return {
+    activeProvider: row.titlegen_active_provider ?? null,
+    providers: row.titlegen_providers ?? {},
+  }
+}
+
+interface TitleGenCandidate {
+  id: string
+  first_user_message: string
+}
+
+/**
+ * Active sessions that still have an empty name but already contain a completed
+ * exchange (a first user message and at least one assistant reply). Restricted
+ * to sessions quiet for `quietSeconds` so we don't title a half-finished first
+ * turn. Returns the session id plus its first user message (the title source).
+ */
+export async function getTitleGenCandidates(
+  limit: number,
+  quietSeconds: number,
+): Promise<TitleGenCandidate[]> {
+  const { rows } = await pool.query(
+    `SELECT s.id, fm.content AS first_user_message
+       FROM sessions s
+       JOIN LATERAL (
+         SELECT content FROM messages m
+         WHERE m.session_id = s.id AND m.role = 'user'
+         ORDER BY m.created_at ASC LIMIT 1
+       ) fm ON true
+      WHERE s.name = ''
+        AND s.status = 'active'
+        AND s.last_active_at < now() - make_interval(secs => $1)
+        AND EXISTS (
+          SELECT 1 FROM messages m
+          WHERE m.session_id = s.id AND m.role = 'assistant'
+        )
+      ORDER BY s.last_active_at DESC
+      LIMIT $2`,
+    [quietSeconds, limit],
+  )
+  return rows as TitleGenCandidate[]
+}
+
+/**
+ * Set a session's title, but only if it is still empty. The `name = ''` guard
+ * makes concurrent titling (another scheduler replica, or a user rename)
+ * idempotent — a late writer is a no-op.
+ */
+export async function setSessionTitleIfEmpty(sessionId: string, title: string): Promise<void> {
+  await pool.query(`UPDATE sessions SET name = $1 WHERE id = $2 AND name = ''`, [title, sessionId])
+}

@@ -96,6 +96,10 @@ COPY internal/sse-consumer /internal/sse-consumer
 # from /app/src/services/k8s.ts. Both resolve to /internal/* from /app/src/*.
 COPY internal/env-tunnel /internal/env-tunnel
 COPY internal/k8s-provider /internal/k8s-provider
+# titlegen registry is imported via ../../../../internal/titlegen/src from
+# /app/src/routes/admin/system-settings.ts (used to validate admin config and
+# list available providers; the periodic sweep itself runs in the scheduler).
+COPY internal/titlegen /internal/titlegen
 
 RUN npm run build
 

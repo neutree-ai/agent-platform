@@ -3095,11 +3095,20 @@
       },
       "systemSettingsSection": {
         "sections": {
-          "asr": "语音识别（ASR）"
+          "asr": "语音识别（ASR）",
+          "titlegen": "会话标题生成"
         },
         "asr": {
           "description": "配置所有客户端使用的语音转文字 provider。设置全局生效，仅 admin 可改。",
           "noProviders": "尚未注册 ASR provider。接入第一个 provider 后，可选项会自动出现在下拉框中。",
+          "activeProvider": "当前 provider",
+          "activeProviderNone": "（无 — 功能未启用）",
+          "providersConfig": "Provider 配置",
+          "providersConfigHint": "JSON 对象，key 为 provider 名。每个 provider 自己校验配置形状，具体字段见 provider 源码。"
+        },
+        "titlegen": {
+          "description": "配置用于自动生成会话标题的 LLM。后台任务会定期用会话首条消息为未命名会话生成标题。设置全局生效，仅 admin 可改；当前 provider 留空即关闭该功能。",
+          "noProviders": "尚未注册标题生成 provider。接入第一个 provider 后，可选项会自动出现在下拉框中。",
           "activeProvider": "当前 provider",
           "activeProviderNone": "（无 — 功能未启用）",
           "providersConfig": "Provider 配置",

@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api/client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@tremor/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -18,26 +18,31 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   )
 }
 
-// instanceId reserved for future per-instance UI state — currently unused.
-export function SystemSettingsSection(_: { instanceId: string }) {
+type UpdatePatch = Parameters<typeof api.updateSystemSettings>[0]
+
+// One provider-registry feature (ASR, title-gen, …): an active-provider select
+// plus a JSON config editor. Owns its own local form state and save, and PUTs
+// only its own slice via `buildPatch` so features stay independent.
+function ProviderConfigCard(props: {
+  labelPrefix: string
+  activeProvider: string | null
+  providers: Record<string, unknown>
+  available: string[]
+  buildPatch: (activeProvider: string | null, providers: Record<string, unknown>) => UpdatePatch
+}) {
   const { t } = useTranslation()
   const qc = useQueryClient()
-
-  const settings = useQuery({
-    queryKey: ['admin', 'system-settings'],
-    queryFn: () => api.getSystemSettings(),
-  })
+  const fieldId = useId()
 
   const [activeProvider, setActiveProvider] = useState<string>('')
   const [providersJson, setProvidersJson] = useState<string>('')
   const [jsonError, setJsonError] = useState<string | null>(null)
 
-  // Hydrate local form state once data arrives.
+  // Hydrate local form state whenever the upstream query data changes.
   useEffect(() => {
-    if (!settings.data) return
-    setActiveProvider(settings.data.asr_active_provider ?? '')
-    setProvidersJson(JSON.stringify(settings.data.asr_providers ?? {}, null, 2))
-  }, [settings.data])
+    setActiveProvider(props.activeProvider ?? '')
+    setProvidersJson(JSON.stringify(props.providers ?? {}, null, 2))
+  }, [props.activeProvider, props.providers])
 
   const save = useMutation({
     mutationFn: async () => {
@@ -47,10 +52,7 @@ export function SystemSettingsSection(_: { instanceId: string }) {
       } catch (e) {
         throw new Error(`Invalid JSON: ${(e as Error).message}`)
       }
-      return api.updateSystemSettings({
-        asr_active_provider: activeProvider || null,
-        asr_providers: parsed,
-      })
+      return api.updateSystemSettings(props.buildPatch(activeProvider || null, parsed))
     },
     onSuccess: () => {
       setJsonError(null)
@@ -59,6 +61,95 @@ export function SystemSettingsSection(_: { instanceId: string }) {
     onError: (e: Error) => {
       setJsonError(e.message)
     },
+  })
+
+  const tp = (key: string) =>
+    t(`components.admin.systemSettingsSection.${props.labelPrefix}.${key}`)
+  const noProviders = props.available.length === 0
+
+  return (
+    <Card className="!bg-card !ring-border !p-4">
+      <p className="text-xs text-muted-foreground">{tp('description')}</p>
+
+      {noProviders && (
+        <Alert className="mt-3">
+          <AlertDescription className="text-xs">{tp('noProviders')}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="mt-4 space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-active`} className="text-xs">
+            {tp('activeProvider')}
+          </Label>
+          <select
+            id={`${fieldId}-active`}
+            value={activeProvider}
+            onChange={(e) => setActiveProvider(e.target.value)}
+            disabled={noProviders}
+            className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">{tp('activeProviderNone')}</option>
+            {props.available.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-json`} className="text-xs">
+            {tp('providersConfig')}
+          </Label>
+          <Textarea
+            id={`${fieldId}-json`}
+            value={providersJson}
+            onChange={(e) => setProvidersJson(e.target.value)}
+            rows={12}
+            className="font-mono text-xs"
+            spellCheck={false}
+          />
+          <p className="text-tiny text-muted-foreground">{tp('providersConfigHint')}</p>
+        </div>
+
+        {jsonError && (
+          <Alert variant="destructive">
+            <AlertDescription className="text-xs">{jsonError}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setActiveProvider(props.activeProvider ?? '')
+              setProvidersJson(JSON.stringify(props.providers ?? {}, null, 2))
+              setJsonError(null)
+            }}
+            disabled={save.isPending}
+          >
+            {t('components.admin.systemSettingsSection.actions.reset')}
+          </Button>
+          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending
+              ? t('components.admin.systemSettingsSection.actions.saving')
+              : t('components.admin.systemSettingsSection.actions.save')}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+// instanceId reserved for future per-instance UI state — currently unused.
+export function SystemSettingsSection(_: { instanceId: string }) {
+  const { t } = useTranslation()
+
+  const settings = useQuery({
+    queryKey: ['admin', 'system-settings'],
+    queryFn: () => api.getSystemSettings(),
   })
 
   if (settings.isLoading) {
@@ -78,92 +169,32 @@ export function SystemSettingsSection(_: { instanceId: string }) {
   }
 
   const data = settings.data
-  const available = data.asr_available_providers
-  const noProviders = available.length === 0
 
   return (
     <div className="space-y-3 p-1">
       <SectionTitle>{t('components.admin.systemSettingsSection.sections.asr')}</SectionTitle>
-      <Card className="!bg-card !ring-border !p-4">
-        <p className="text-xs text-muted-foreground">
-          {t('components.admin.systemSettingsSection.asr.description')}
-        </p>
+      <ProviderConfigCard
+        labelPrefix="asr"
+        activeProvider={data.asr_active_provider}
+        providers={data.asr_providers}
+        available={data.asr_available_providers}
+        buildPatch={(activeProvider, providers) => ({
+          asr_active_provider: activeProvider,
+          asr_providers: providers,
+        })}
+      />
 
-        {noProviders && (
-          <Alert className="mt-3">
-            <AlertDescription className="text-xs">
-              {t('components.admin.systemSettingsSection.asr.noProviders')}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <div className="mt-4 space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="asr-active-provider" className="text-xs">
-              {t('components.admin.systemSettingsSection.asr.activeProvider')}
-            </Label>
-            <select
-              id="asr-active-provider"
-              value={activeProvider}
-              onChange={(e) => setActiveProvider(e.target.value)}
-              disabled={noProviders}
-              className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">
-                {t('components.admin.systemSettingsSection.asr.activeProviderNone')}
-              </option>
-              {available.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="asr-providers-json" className="text-xs">
-              {t('components.admin.systemSettingsSection.asr.providersConfig')}
-            </Label>
-            <Textarea
-              id="asr-providers-json"
-              value={providersJson}
-              onChange={(e) => setProvidersJson(e.target.value)}
-              rows={12}
-              className="font-mono text-xs"
-              spellCheck={false}
-            />
-            <p className="text-tiny text-muted-foreground">
-              {t('components.admin.systemSettingsSection.asr.providersConfigHint')}
-            </p>
-          </div>
-
-          {jsonError && (
-            <Alert variant="destructive">
-              <AlertDescription className="text-xs">{jsonError}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setActiveProvider(data.asr_active_provider ?? '')
-                setProvidersJson(JSON.stringify(data.asr_providers ?? {}, null, 2))
-                setJsonError(null)
-              }}
-              disabled={save.isPending}
-            >
-              {t('components.admin.systemSettingsSection.actions.reset')}
-            </Button>
-            <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
-              {save.isPending
-                ? t('components.admin.systemSettingsSection.actions.saving')
-                : t('components.admin.systemSettingsSection.actions.save')}
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <SectionTitle>{t('components.admin.systemSettingsSection.sections.titlegen')}</SectionTitle>
+      <ProviderConfigCard
+        labelPrefix="titlegen"
+        activeProvider={data.titlegen_active_provider}
+        providers={data.titlegen_providers}
+        available={data.titlegen_available_providers}
+        buildPatch={(activeProvider, providers) => ({
+          titlegen_active_provider: activeProvider,
+          titlegen_providers: providers,
+        })}
+      />
     </div>
   )
 }
