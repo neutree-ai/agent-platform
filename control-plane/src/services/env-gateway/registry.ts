@@ -36,3 +36,13 @@ export function openForwardStream(environmentId: string, meta: string): Duplex |
   const session = sessions.get(environmentId)
   return session ? session.mux.openStream(meta) : null
 }
+
+/**
+ * Open a control stream (request/response, e.g. `afsctl`) to a remote
+ * environment's runner. Same mux, different intent from a forward byte pipe:
+ * the caller drives it with callControl(). Returns null if no live runner.
+ */
+export function openControlStream(environmentId: string, meta: string): Duplex | null {
+  const session = sessions.get(environmentId)
+  return session ? session.mux.openStream(meta) : null
+}

@@ -35,8 +35,35 @@ you can create workspaces on it.
 
 - **persistentMemory** — yes (set `provider.memoryFuseImage`); memory tunnels
   back to the control plane, no extra infra in your cluster.
-- **sharedFs (afs)** — not yet on remote environments; the runner advertises
-  `sharedFs=false` and the platform won't place afs-requiring workspaces here.
+- **sharedFs (afs)** — optional (set `afs.enabled=true`, see below). When off,
+  the runner advertises `sharedFs=false` and the platform won't place
+  afs-requiring workspaces here.
+
+## Shared filesystem (afs)
+
+afs is a **shared** filesystem: enabling it deploys an afs-controller + shared
+storage **into your cluster**, and every workspace on this environment can mount
+the same volume. Unlike memory, afs data does **not** tunnel back to the control
+plane (bulk RWX I/O can't cross the WAN) — it stays local, so the sharing scope
+is **this environment only**.
+
+**Requires a ReadWriteMany-capable `storageClass`** (NFS, CephFS, …). RWO
+provisioners like `local-path`/`hostPath` will leave the afs pods `Pending`; the
+chart fails fast if `afs.enabled` is set without `afs.storageClass`.
+
+```bash
+helm install my-env ./charts/env-runner-k8s \
+  --namespace agent-runner --create-namespace \
+  --set controlPlane.url=https://platform.example.com \
+  --set envToken.token=env_xxxxxxxx \
+  --set provider.storageClass=standard \
+  --set afs.enabled=true \
+  --set afs.image=ghcr.io/neutree-ai/afs:latest \
+  --set afs.storageClass=nfs-csi
+```
+
+The environment then advertises `sharedFs=true` and can host afs-sharing
+workspaces.
 
 ## Notes
 

@@ -11,6 +11,8 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0",
     "@kubernetes/client-node": "0.22.3",
     "multiplex": "^6.7.0",
     "pg": "^8.13.0",

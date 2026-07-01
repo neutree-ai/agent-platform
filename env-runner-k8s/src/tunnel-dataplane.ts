@@ -1,6 +1,7 @@
 import type { Server } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { type Mux, listenAndTunnel, pipeToTcp } from '../../internal/env-tunnel'
+import { handleAfsControl } from './afs-control'
 
 // Runner-side data plane. Two directions over the tunnel mux:
 //   - forward (cp→workspace): cp opens `fwd:<wsId>:<port>`; we dial the pod's
@@ -28,13 +29,26 @@ function resolveForwardTarget(meta: string): { host: string; port: number } | nu
 }
 
 /** Handle a forward stream cp opened: validate, dial the pod, pipe. */
-export function forwardDial(stream: Duplex, meta: string): void {
+function forwardDial(stream: Duplex, meta: string): void {
   const target = resolveForwardTarget(meta)
   if (!target) {
     stream.destroy()
     return
   }
   pipeToTcp(stream, target.host, target.port)
+}
+
+/**
+ * Dispatch an incoming tunnel stream by its meta tag. `afsctl` is a control
+ * stream (request/response afs op executed locally); everything else is a
+ * forward byte pipe to a workspace pod.
+ */
+export function onTunnelStream(stream: Duplex, meta: string): void {
+  if (meta === 'afsctl') {
+    handleAfsControl(stream)
+    return
+  }
+  forwardDial(stream, meta)
 }
 
 /**

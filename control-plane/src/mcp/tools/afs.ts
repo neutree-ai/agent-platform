@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import {
+  afsEnvForWorkspace,
   createDir,
   ensureDefaultFs,
   mountAtWorkspace,
@@ -22,10 +23,11 @@ const NAME_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
 async function ensureLocalShare(workspaceId: string, name: string) {
   let share = await getAfsShareByName(workspaceId, name)
   if (share) return share
-  await ensureDefaultFs()
-  const dir = await createDir()
+  const afsEnv = await afsEnvForWorkspace(workspaceId)
+  await ensureDefaultFs(afsEnv)
+  const dir = await createDir(afsEnv)
   share = await createAfsShare(workspaceId, name, dir.id, dir.accessKey)
-  await mountAtWorkspace(workspaceId, dir.id, dir.accessKey, name, false)
+  await mountAtWorkspace(afsEnv, workspaceId, dir.id, dir.accessKey, name, false)
   await addAfsShareMember(share.id, workspaceId, 'read_write')
   return share
 }
@@ -101,7 +103,21 @@ Default readonly=true is correct for most hand-off cases. Only pass readonly=fal
         const share = await getAfsShareByName(workspaceId, name)
         if (!share) return textResult(`Error: no folder named "${name}" — call share_folder first`)
 
-        await mountAtWorkspace(target.id, share.afs_dir_id, share.access_key, name, readonly)
+        // afs sharing scope is one environment; a cross-environment target could
+        // never mount this share's dir.
+        const afsEnv = await afsEnvForWorkspace(workspaceId)
+        const targetEnv = await afsEnvForWorkspace(target.id)
+        if (targetEnv.environmentId !== afsEnv.environmentId) {
+          return textResult('Error: target agent is on a different environment')
+        }
+        await mountAtWorkspace(
+          afsEnv,
+          target.id,
+          share.afs_dir_id,
+          share.access_key,
+          name,
+          readonly,
+        )
         await addAfsShareMember(share.id, target.id, readonly ? 'read_only' : 'read_write')
 
         return textResult(JSON.stringify({ path: `/mnt/afs/${name}`, target: slug, readonly }))
@@ -126,11 +142,12 @@ Default readonly=true is correct for most hand-off cases. Only pass readonly=fal
         const share = await getAfsShareByName(workspaceId, name)
         if (!share) return textResult(`Error: no share named "${name}"`)
 
+        const afsEnv = await afsEnvForWorkspace(workspaceId)
         const members = await listAfsShareMembers(share.id)
-        await revokeDir(share.afs_dir_id, share.access_key)
+        await revokeDir(afsEnv, share.afs_dir_id, share.access_key)
         for (const m of members) {
           try {
-            await unmountAtWorkspace(m.workspace_id, name)
+            await unmountAtWorkspace(afsEnv, m.workspace_id, name)
           } catch {
             // Best-effort: mount may already be gone after revoke.
           }
