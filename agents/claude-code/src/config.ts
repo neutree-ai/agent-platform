@@ -326,7 +326,14 @@ export function applyProviderEnv(rc: RuntimeConfig): void {
   } else if (rc.provider_type === 'claude-code-oauth') {
     process.env.CLAUDE_CODE_OAUTH_TOKEN = rc.api_key || ''
   }
-  // openai → not supported by claude-code, no env vars set
+
+  // Route the workspace's configured model onto Claude Code's opus/sonnet tier
+  // aliases so BYO / custom-base_url workspaces run their configured model
+  // regardless of which tier Claude Code requests internally.
+  if (rc.model) {
+    process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = rc.model
+    process.env.ANTHROPIC_DEFAULT_SONNET_MODEL = rc.model
+  }
 
   if (rc.small_model) {
     process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = rc.small_model
@@ -334,4 +341,7 @@ export function applyProviderEnv(rc: RuntimeConfig): void {
     // biome-ignore lint/performance/noDelete: env vars must be removed, not set to "undefined"
     delete process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL
   }
+
+  // Suppress telemetry / update-check traffic in isolated workspace pods.
+  process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
 }
