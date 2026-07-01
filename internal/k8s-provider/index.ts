@@ -1061,7 +1061,6 @@ export class KubernetesProvider implements EnvironmentProvider {
     return {
       sharedFs: this.cfg.afs.enabled,
       persistentMemory: this.cfg.memoryFuseImage !== '',
-      gpu: false,
     }
   }
 }
