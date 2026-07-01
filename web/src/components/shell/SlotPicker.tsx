@@ -11,7 +11,7 @@ import { useRequiredSlotContext } from '@/contexts/SlotContext'
 import type { AppDefinition, AppInstance } from '@/lib/app-registry'
 import { cn } from '@/lib/utils'
 import { useWorkspaceProfile } from '@/stores/workspace-profile-store'
-import { ChevronRight, Plus } from 'lucide-react'
+import { ChevronRight, ExternalLink, Plus } from 'lucide-react'
 import { type ReactNode, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -52,7 +52,7 @@ interface SlotPickerProps {
 export function SlotPicker({ slotId, children, side = 'top', align = 'end' }: SlotPickerProps) {
   const { t } = useTranslation()
   const ctx = useRequiredSlotContext()
-  const { apps, open, activate, getState, workspaceId } = ctx
+  const { apps, open, activate, openInPopout, getState, workspaceId } = ctx
   const [openPopover, setOpenPopover] = useState(false)
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null)
   const [flyoutAnchor, setFlyoutAnchor] = useState<{ top: number; right: number } | null>(null)
@@ -93,6 +93,11 @@ export function SlotPicker({ slotId, children, side = 'top', align = 'end' }: Sl
 
   function handleNew(appId: string) {
     open(slotId, appId)
+    closeAll()
+  }
+
+  function handlePopout(appId: string) {
+    openInPopout(appId)
     closeAll()
   }
 
@@ -239,39 +244,61 @@ export function SlotPicker({ slotId, children, side = 'top', align = 'end' }: Sl
                               {app.badge}
                             </span>
                           )}
-                          {/* Trailing `+` to force a new instance. Shown on
-                              hover when at least one instance exists; for
-                              multi-instance items the submenu also offers it,
-                              but keeping it on the row makes "open another"
-                              one click regardless of submenu state. */}
-                          {hasInstances && !hasMultiple && (
+                          {/* Trailing hover toolbar. The pop-out affordance is
+                              always available so any app can be launched into
+                              the floating window; the `+` (force new instance)
+                              and the multi-instance chevron sit alongside it. */}
+                          <span className="ml-auto flex shrink-0 items-center gap-0.5">
                             <button
                               type="button"
-                              aria-label={t('components.shell.slot.newInstance')}
-                              title={t('components.shell.slot.newInstance')}
+                              aria-label={t('components.shell.slot.openInPopout')}
+                              title={t('components.shell.slot.openInPopout')}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleNew(app.id)
+                                handlePopout(app.id)
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
                               className={cn(
-                                'ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded',
+                                'inline-flex h-5 w-5 items-center justify-center rounded',
                                 'opacity-0 transition-opacity duration-100 group-hover/item:opacity-100 focus-visible:opacity-100',
                                 'text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground',
                                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
                               )}
                             >
-                              <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+                              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} />
                             </button>
-                          )}
-                          {hasMultiple && (
-                            <span
-                              aria-hidden
-                              className="ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground/60"
-                            >
-                              <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.25} />
-                            </span>
-                          )}
+                            {/* `+` forces a new instance. Shown on hover when at
+                                least one instance exists; multi-instance items
+                                offer it in the submenu instead. */}
+                            {hasInstances && !hasMultiple && (
+                              <button
+                                type="button"
+                                aria-label={t('components.shell.slot.newInstance')}
+                                title={t('components.shell.slot.newInstance')}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleNew(app.id)
+                                }}
+                                onPointerDown={(e) => e.stopPropagation()}
+                                className={cn(
+                                  'inline-flex h-5 w-5 items-center justify-center rounded',
+                                  'opacity-0 transition-opacity duration-100 group-hover/item:opacity-100 focus-visible:opacity-100',
+                                  'text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground',
+                                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+                                )}
+                              >
+                                <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
+                              </button>
+                            )}
+                            {hasMultiple && (
+                              <span
+                                aria-hidden
+                                className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground/60"
+                              >
+                                <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.25} />
+                              </span>
+                            )}
+                          </span>
                         </CommandItem>
                       )
                     })}
@@ -341,6 +368,18 @@ export function SlotPicker({ slotId, children, side = 'top', align = 'end' }: Sl
                 >
                   <Plus className="h-3.5 w-3.5" strokeWidth={2.25} />
                   <span>{t('components.shell.slot.newInstance')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePopout(expandedApp.id)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm',
+                    'text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground',
+                    'focus-visible:outline-none focus-visible:bg-foreground/[0.06]',
+                  )}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  <span>{t('components.shell.slot.openInPopout')}</span>
                 </button>
               </div>,
               document.body,

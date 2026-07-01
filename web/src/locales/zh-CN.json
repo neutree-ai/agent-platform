@@ -2861,6 +2861,7 @@
         "noResults": "没有匹配的应用",
         "emptyHint": "点击打开应用",
         "newInstance": "新建实例",
+        "openInPopout": "在弹出窗口打开",
         "overflowLabel_one": "另有 {{count}} 个应用",
         "overflowLabel_other": "另有 {{count}} 个应用"
       },
