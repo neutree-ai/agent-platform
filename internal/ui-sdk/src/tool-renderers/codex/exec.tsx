@@ -134,7 +134,9 @@ export const codexExecRenderer: ToolRendererDef = {
     }
     if (!parsed || typeof parsed !== 'object') return <div />
 
-    const stdout = parsed.stdout ?? parsed.aggregated_output ?? ''
+    // `formatted_output` is the field name the current codex-acp uses for a
+    // command's combined output (older shapes used stdout / aggregated_output).
+    const stdout = parsed.stdout ?? parsed.aggregated_output ?? parsed.formatted_output ?? ''
     const stderr = parsed.stderr ?? ''
 
     return (
