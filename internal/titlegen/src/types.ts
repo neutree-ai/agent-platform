@@ -3,8 +3,6 @@ export interface TitleGenChatInput {
   system: string
   /** User content — the session's first user message (already truncated). */
   user: string
-  /** Upper bound on generated tokens. Titles are short; keep this small. */
-  maxTokens?: number
 }
 
 export interface TitleGenProvider {
