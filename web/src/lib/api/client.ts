@@ -2017,6 +2017,9 @@ class ApiClient {
     asr_active_provider: string | null
     asr_providers: Record<string, unknown>
     asr_available_providers: string[]
+    titlegen_active_provider: string | null
+    titlegen_providers: Record<string, unknown>
+    titlegen_available_providers: string[]
   }> {
     return this.request('/admin/system-settings')
   }
@@ -2024,9 +2027,13 @@ class ApiClient {
   async updateSystemSettings(patch: {
     asr_active_provider?: string | null
     asr_providers?: Record<string, unknown>
+    titlegen_active_provider?: string | null
+    titlegen_providers?: Record<string, unknown>
   }): Promise<{
     asr_active_provider: string | null
     asr_providers: Record<string, unknown>
+    titlegen_active_provider: string | null
+    titlegen_providers: Record<string, unknown>
   }> {
     return this.request('/admin/system-settings', {
       method: 'PUT',

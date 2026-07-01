@@ -10,6 +10,7 @@ import { registerDeadLetterWorker } from './dead-letter'
 import { type JobData, handleJob } from './handler'
 import { registerNotificationWorker } from './notifications'
 import { registerSkillReloadWorker } from './skill-reload'
+import { registerTitleGenWorker } from './title-gen'
 
 process.on('uncaughtException', (err) => {
   console.error('[fatal] Uncaught exception (process kept alive):', err)
@@ -106,6 +107,9 @@ await registerNotificationWorker(boss)
 // Register the shared dead-letter sink + the skill-reload fanout worker.
 await registerDeadLetterWorker(boss)
 await registerSkillReloadWorker(boss)
+
+// Register the session title-generation cron worker.
+await registerTitleGenWorker(boss)
 
 console.log('[Scheduler] Worker registered, waiting for jobs...')
 

@@ -3071,11 +3071,20 @@
       },
       "systemSettingsSection": {
         "sections": {
-          "asr": "Speech Recognition (ASR)"
+          "asr": "Speech Recognition (ASR)",
+          "titlegen": "Session Title Generation"
         },
         "asr": {
           "description": "Configure the speech-to-text provider used by all clients. Settings are global and admin-only.",
           "noProviders": "No ASR providers are registered yet. The active provider dropdown will populate once a provider is wired in.",
+          "activeProvider": "Active provider",
+          "activeProviderNone": "(none — feature disabled)",
+          "providersConfig": "Provider configuration",
+          "providersConfigHint": "JSON keyed by provider name. Each provider validates its own config — see the provider's source for the expected schema."
+        },
+        "titlegen": {
+          "description": "Configure the LLM used to auto-generate titles for untitled sessions. A background job periodically titles sessions from their first message. Global and admin-only; leaving the active provider empty disables it.",
+          "noProviders": "No title-generation providers are registered yet. The active provider dropdown will populate once a provider is wired in.",
           "activeProvider": "Active provider",
           "activeProviderNone": "(none — feature disabled)",
           "providersConfig": "Provider configuration",

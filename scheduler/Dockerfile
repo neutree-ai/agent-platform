@@ -16,6 +16,9 @@ COPY scheduler/src ./src
 # stage doesn't need them.
 COPY internal/sse-consumer/src /app/internal/sse-consumer/src
 COPY internal/types /app/internal/types
+# titlegen (LLM session-title generation) is imported via ../../internal/titlegen/src
+# from src/title-gen.ts; esbuild bundles it. It has no external deps of its own.
+COPY internal/titlegen/src /app/internal/titlegen/src
 
 RUN npm run build
 
