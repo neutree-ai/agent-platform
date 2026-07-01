@@ -2837,6 +2837,7 @@
         "noResults": "No matching apps",
         "emptyHint": "Click to open an app",
         "newInstance": "New instance",
+        "openInPopout": "Open in floating window",
         "overflowLabel_one": "{{count}} more app",
         "overflowLabel_other": "{{count}} more apps"
       },
