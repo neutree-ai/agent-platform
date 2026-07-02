@@ -284,6 +284,15 @@ export async function deleteEnvironment(id: string): Promise<boolean> {
   return (result.rowCount ?? 0) > 0
 }
 
+/** How many workspaces are currently placed on an environment. */
+export async function countPlacementsInEnvironment(id: string): Promise<number> {
+  const { rows } = await pool.query(
+    'SELECT count(*)::int AS n FROM workspace_placements WHERE environment_id = $1',
+    [id],
+  )
+  return rows[0].n as number
+}
+
 export async function listEnvironmentGrants(environmentId: string): Promise<EnvironmentGrantRow[]> {
   const { rows } = await pool.query(
     `SELECT eg.team_id, t.name AS team_name, eg.permission, eg.granted_at
