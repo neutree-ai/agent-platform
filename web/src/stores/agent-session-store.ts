@@ -30,7 +30,7 @@ import {
   transcriptI18n,
 } from '@neutree-ai/ui-sdk'
 import { type StoreApi, createStore } from 'zustand/vanilla'
-import { clearDraftFor, getDraftFor } from './draft-store'
+import { clearDraftFor, getDraftFor, migrateDraft } from './draft-store'
 
 // ── UI types ──
 // Re-exported from the UI SDK so existing importers of this module keep working.
@@ -348,6 +348,14 @@ export function createAgentSessionStore(
       chatEndpoint: options?.chatEndpoint,
 
       onSessionStarted: guard((sessionId) => {
+        // A brand-new session had no id until now, so any composer draft typed
+        // during the first turn (e.g. a queued follow-up) landed under the
+        // `__new__` slot. Re-key it to the real session slot *before* flipping
+        // `activeSessionId` — the composer reads the draft reactively off that
+        // id, so migrating first keeps the text visible continuously (no blank
+        // flash) and lets the drain-time clear, which keys off the real id,
+        // actually reach it.
+        migrateDraft(workspaceId, undefined, sessionId)
         store.setState({ activeSessionId: sessionId, loadedSessionId: sessionId })
         deps.effects.onSessionCreated(sessionId)
         deps.effects.invalidateSessions(workspaceId)
