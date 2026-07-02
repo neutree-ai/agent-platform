@@ -18,6 +18,7 @@ import {
 } from '../services/db/environment-tokens'
 import {
   type EnvironmentWithAccess,
+  countPlacementsInEnvironment,
   createEnvironment,
   deleteEnvironment,
   getEnvironmentForUser,
@@ -263,6 +264,10 @@ const deleteRouteDef = createRoute({
       description: 'Not found or not owner',
       content: { 'application/json': { schema: ErrorSchema } },
     },
+    409: {
+      description: 'Environment still has workspaces',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
   },
 })
 
@@ -273,7 +278,26 @@ environments.openapi(deleteRouteDef, async (c) => {
   if (!existing || !existing.is_owner || existing.is_builtin) {
     return c.json({ error: 'Environment not found' }, 404)
   }
-  await deleteEnvironment(id)
+  // Refuse to delete an environment that still hosts workspaces — their pods
+  // live in the customer cluster and would be orphaned. (The workspace_placements
+  // FK also blocks this at the DB, but as a raw 500; pre-check for a clean 409.)
+  const inUse = await countPlacementsInEnvironment(id)
+  if (inUse > 0) {
+    return c.json(
+      { error: `Environment still has ${inUse} workspace(s); delete or move them first` },
+      409,
+    )
+  }
+  try {
+    await deleteEnvironment(id)
+  } catch (e) {
+    // Concurrency backstop: a workspace placed between the check and the delete
+    // trips the FK (23503). Surface the same clean 409, not the raw pg error.
+    if ((e as { code?: string })?.code === '23503') {
+      return c.json({ error: 'Environment still has workspaces; delete or move them first' }, 409)
+    }
+    throw e
+  }
   return c.json({ success: true }, 200)
 })
 
