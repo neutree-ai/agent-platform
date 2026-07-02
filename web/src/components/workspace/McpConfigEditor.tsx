@@ -572,14 +572,18 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
     setEnabled(state.enabled)
     setParamValues(state.paramValues)
     setCustoms(state.customs)
-    // Auto-open groups that have enabled servers or required servers
-    const openState: Record<string, boolean> = {}
-    for (const { group, servers } of catalog.groups) {
-      const hasRequired = servers.some(([, d]) => d.required)
-      const hasEnabled = servers.some(([k]) => state.enabled[k])
-      openState[group] = hasRequired || hasEnabled
-    }
-    setGroupOpen(openState)
+    // Auto-open groups that have enabled servers or required servers.
+    // Only ever open, never close: OR against prev so unchecking the last
+    // server (or a manual expand) doesn't collapse a group the user is using.
+    setGroupOpen((prev) => {
+      const openState: Record<string, boolean> = { ...prev }
+      for (const { group, servers } of catalog.groups) {
+        const hasRequired = servers.some(([, d]) => d.required)
+        const hasEnabled = servers.some(([k]) => state.enabled[k])
+        openState[group] = (prev[group] ?? false) || hasRequired || hasEnabled
+      }
+      return openState
+    })
   }, [value, catalog])
 
   function emitChange(
