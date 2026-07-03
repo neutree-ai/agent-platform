@@ -40,20 +40,31 @@ interface PluginManifestEntry {
   owns?: PluginOwnsManifest | null
 }
 
-async function fetchManifest(): Promise<PluginManifestEntry[]> {
+/**
+ * Fetches the cp-published manifest. Returns the entry array on success
+ * (possibly empty when no plugins are enabled), or `null` when the fetch
+ * couldn't authenticate / failed transiently. The `null` case matters:
+ * `/api/plugins` requires a session, and boot runs before auth, so a
+ * first-of-day load with an expired cookie 401s here. Returning `null`
+ * (vs `[]`) lets `loadExternalPlugins` avoid caching an empty result and
+ * retry once the user authenticates — otherwise plugin apps stay missing
+ * until a full page reload.
+ */
+async function fetchManifest(): Promise<PluginManifestEntry[] | null> {
   try {
     const res = await fetch('/api/plugins', { credentials: 'include' })
     if (!res.ok) {
-      if (res.status !== 404) {
-        console.warn(`[plugins] manifest fetch returned ${res.status}`)
-      }
-      return []
+      // 404 = endpoint/manifest genuinely absent → treat as empty (final).
+      // Everything else (401/403/5xx) is a retryable failure → null.
+      if (res.status === 404) return []
+      console.warn(`[plugins] manifest fetch returned ${res.status}`)
+      return null
     }
     const body = (await res.json()) as PluginManifestEntry[]
     return Array.isArray(body) ? body : []
   } catch (err) {
     console.warn('[plugins] manifest fetch failed', err)
-    return []
+    return null
   }
 }
 
@@ -115,10 +126,33 @@ export function ensurePluginLoaded(pluginId: string): Promise<void> {
   return p
 }
 
-export async function loadExternalPlugins(): Promise<void> {
+// Boot runs `loadExternalPlugins` before auth (main.tsx), so its manifest
+// fetch can 401 on a first-of-day load with an expired cookie. We therefore
+// keep this callable again after the user authenticates (AuthProvider). These
+// guards make re-invocation safe and cheap:
+//  - `manifestLoaded` flips true only once a manifest actually resolved, so a
+//    successful boot load makes the post-auth call a no-op.
+//  - `inflight` dedupes overlapping calls (boot + auth effect racing).
+let manifestLoaded = false
+let inflight: Promise<void> | null = null
+
+export function loadExternalPlugins(): Promise<void> {
+  if (manifestLoaded) return Promise.resolve()
+  if (inflight) return inflight
+  inflight = doLoadExternalPlugins().finally(() => {
+    inflight = null
+  })
+  return inflight
+}
+
+async function doLoadExternalPlugins(): Promise<void> {
   const [published, dev] = await Promise.all([fetchManifest(), fetchDevManifest()])
+  // Manifest fetch failed to authenticate and no dev override to fall back on:
+  // leave `manifestLoaded` false so the post-auth retry re-fetches. Caching an
+  // empty list here is exactly the bug that hid plugin apps until reload.
+  if (published === null && dev.length === 0) return
   const byId = new Map<string, PluginManifestEntry>()
-  for (const e of published) byId.set(e.id, e)
+  for (const e of published ?? []) byId.set(e.id, e)
   for (const e of dev) byId.set(e.id, e) // dev wins on conflict; new ids added
   if (dev.length > 0) {
     console.info(`[plugins] dev override active: ${dev.map((e) => e.id).join(', ')}`)
@@ -127,7 +161,8 @@ export async function loadExternalPlugins(): Promise<void> {
     bundleUrlById.set(entry.id, entry.bundleUrl)
     if (entry.lazy) {
       registerLazyDescriptors(entry)
-    } else {
+    } else if (!loaded.has(entry.id)) {
+      // Guard against double-injection when this runs a second time post-auth.
       try {
         await injectScript(entry.bundleUrl)
         loaded.add(entry.id)
@@ -137,6 +172,7 @@ export async function loadExternalPlugins(): Promise<void> {
       }
     }
   }
+  manifestLoaded = true
 }
 
 function registerLazyDescriptors(entry: PluginManifestEntry): void {

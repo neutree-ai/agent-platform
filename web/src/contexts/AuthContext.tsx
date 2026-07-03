@@ -1,6 +1,7 @@
 import { api } from '@/lib/api/client'
 import type { User } from '@/lib/api/types'
 import { i18n } from '@/lib/i18n'
+import { loadExternalPlugins } from '@/lib/plugin-loader'
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react'
 
 interface AuthContextType {
@@ -24,6 +25,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => setUser(null))
       .finally(() => setIsLoading(false))
   }, [])
+
+  // Boot loads plugins before auth, so a first-of-day load with an expired
+  // cookie 401s the manifest fetch and external plugin apps go missing until
+  // a full page reload. Retry once we have an authenticated user;
+  // loadExternalPlugins no-ops if the boot load already succeeded.
+  useEffect(() => {
+    if (user) void loadExternalPlugins()
+  }, [user])
 
   const login = useCallback(async (username: string, password: string) => {
     const user = await api.login(username, password)
