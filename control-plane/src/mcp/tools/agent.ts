@@ -15,7 +15,7 @@ import {
   setupActiveStream,
 } from '../../lib/sse'
 import { truncateToolOutput } from '../../lib/truncate-tool-output'
-import { getWorkspaceAddress } from '../../lib/workspace-address'
+import { resolveAgentAddress } from '../../lib/workspace-address'
 import {
   addMessage,
   getLastAssistantMessage,
@@ -614,7 +614,7 @@ Examples:
           }
         }
 
-        const address = getWorkspaceAddress(target.id)
+        const address = resolveAgentAddress(target.id, { sessionId: session_id ?? null })
 
         // Mint or reuse a session_token scoped to the *sub-agent's* workspace.
         // The sub-agent threads this into its own MCP calls, so its tools

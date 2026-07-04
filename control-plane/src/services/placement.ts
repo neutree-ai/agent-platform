@@ -8,9 +8,21 @@ import { getWorkspaceConfig } from './db/workspaces'
 
 const BUILTIN_ENV = 'builtin'
 
-/** Build the infra-agnostic spec the runner applies, from workspace_config. */
-function specFrom(agentType: string, resources: unknown, version: number) {
-  return { agentType, resources: resources ?? {}, version }
+/**
+ * Build the infra-agnostic spec the runner applies, from a workspace_config
+ * row (null → platform defaults). Pure — this is the single place where
+ * config columns are projected into the placement spec, so growing the spec
+ * means adding a field here (and a column migration), not editing callers.
+ */
+export function buildWorkspaceSpec(
+  config: { agent_type?: string | null; compute_resources?: unknown } | null,
+  version: number,
+): { agentType: string; resources: unknown; version: number } {
+  return {
+    agentType: config?.agent_type || 'claude-code',
+    resources: config?.compute_resources ?? {},
+    version,
+  }
 }
 
 /**
@@ -24,7 +36,7 @@ export async function placeWorkspace(
   environmentId: string = BUILTIN_ENV,
 ): Promise<void> {
   const config = await getWorkspaceConfig(workspaceId)
-  const spec = specFrom(config?.agent_type || 'claude-code', config?.compute_resources, 1)
+  const spec = buildWorkspaceSpec(config, 1)
   await pool.query(
     `INSERT INTO workspace_placements
        (workspace_id, environment_id, desired_phase, spec, spec_version, observed_version)
@@ -64,7 +76,7 @@ export async function setDesiredPhase(
  */
 export async function bumpWorkspaceSpec(workspaceId: string): Promise<void> {
   const config = await getWorkspaceConfig(workspaceId)
-  const spec = specFrom(config?.agent_type || 'claude-code', config?.compute_resources, 0)
+  const spec = buildWorkspaceSpec(config, 0)
   await pool.query(
     `UPDATE workspace_placements
         SET spec_version = spec_version + 1,

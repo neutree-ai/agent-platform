@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { createInterceptedSSEResponse, createReconnectSSEResponse } from '../lib/sse'
 import type { AppEnv } from '../lib/types'
-import { getWorkspaceAddress } from '../lib/workspace-address'
+import { resolveAgentAddress } from '../lib/workspace-address'
 import { transitionSessionStatus } from '../services/db/sessions'
 import type { Workspace } from '../services/db/types'
 import { getWorkspace } from '../services/db/workspaces'
@@ -55,7 +55,12 @@ export function createProxyRoutes() {
     if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
       body = await c.req.text()
     }
-    const address = getWorkspaceAddress(workspace.id)
+    // Most proxied paths act on a session (/sessions/:sid/reconnect, /respond,
+    // /pending-question); skills/* and the like are workspace-scoped (null).
+    const sessionMatch = agentPath.match(/^\/sessions\/([^/]+)(?:\/|$)/)
+    const address = resolveAgentAddress(workspace.id, {
+      sessionId: sessionMatch ? decodeURIComponent(sessionMatch[1]) : null,
+    })
     const reqUrl = new URL(c.req.url)
     const targetUrl = `${address}${agentPath}${reqUrl.search}`
 
@@ -86,7 +91,11 @@ export function createProxyRoutes() {
       if (reconnectMatch) {
         const reconnectSessionId = decodeURIComponent(reconnectMatch[1])
         await transitionSessionStatus(reconnectSessionId, 'agent')
-        return createInterceptedSSEResponse(response, workspaceId, null, reconnectSessionId)
+        return createInterceptedSSEResponse(response, {
+          workspaceId,
+          userMessageText: null,
+          existingSessionId: reconnectSessionId,
+        })
       }
       return new Response(response.body, {
         status: response.status,

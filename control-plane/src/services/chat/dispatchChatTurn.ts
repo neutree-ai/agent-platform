@@ -1,23 +1,9 @@
-import type { ApiMessage, ChatBody, ChatMode } from '../../../../internal/types/api'
+import type { ApiMessage, ChatBody } from '../../../../internal/types/api'
 import { aggregateChatStream, awaitSessionId } from '../../lib/sse-aggregate'
 import { getMessages } from '../db/messages'
 import type { Workspace } from '../db/types'
 import { executeChat } from './executeChat'
-
-/**
- * Resolve the chat delivery mode in this order:
- *   1. `body.mode` if present (`stream` | `sync` | `async`)
- *   2. legacy `body.stream`: `false` → sync, `true` → stream
- *   3. `Accept: application/json` → sync
- *   4. otherwise (default) → stream
- */
-function resolveChatMode(body: ChatBody, acceptHeader: string | undefined): ChatMode {
-  if (body.mode) return body.mode
-  if (body.stream === false) return 'sync'
-  if (body.stream === true) return 'stream'
-  if (acceptHeader?.includes('application/json')) return 'sync'
-  return 'stream'
-}
+import { resolveChatMode } from './request'
 
 interface DispatchChatTurnOpts {
   workspace: Workspace

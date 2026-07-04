@@ -333,14 +333,15 @@ export function createReconnectSSEResponse(
  * Step 2 of the migration will split persistence and broadcast into two
  * distinct plugins.
  */
-export function createInterceptedSSEResponse(
-  response: Response,
-  workspaceId: string,
-  userMessageText: string | null,
-  existingSessionId: string | null,
-  userImages?: Array<{ data: string; media_type: string }> | null,
-  callerUserId?: string,
-  source = 'web',
+interface InterceptedSSEOptions {
+  workspaceId: string
+  /** User prompt to persist once the session id is known; null when already persisted (or none). */
+  userMessageText: string | null
+  /** Session being resumed, or null when the agent will create a new one. */
+  existingSessionId: string | null
+  userImages?: Array<{ data: string; media_type: string }> | null
+  callerUserId?: string
+  source?: string
   /**
    * Optional reconnect factory. When provided and the primary agent
    * stream ends before `session.ended`, `runTurn` calls this with the
@@ -352,7 +353,7 @@ export function createInterceptedSSEResponse(
    * and the broadcast plugin keeps fanning out to live clients, all
    * transparently.
    */
-  reconnectFactory?: (sessionId: string) => Promise<Response | null>,
+  reconnectFactory?: (sessionId: string) => Promise<Response | null>
   /**
    * Optional pre-existing assistant message to resume. Used by the
    * session-recovery path so replayed events append to the row already
@@ -362,21 +363,38 @@ export function createInterceptedSSEResponse(
     id: string
     content: string
     blocks: InterceptContentPart[]
-  },
+  }
   /**
    * Token the dispatcher passed to the agent in `/chat` body. The persist
    * plugin binds it to the SDK-revealed `session_id` on `session.started`
    * so MCP requests can reverse-resolve. Omit on reconnect-only paths
    * where dispatch already happened and the bind is already in place.
    */
-  sessionToken?: string | null,
+  sessionToken?: string | null
   /**
    * Fired once when a brand-new session is created. Used by teamwork to
    * register the coordinator session into `teamwork_sessions` so MCP-time
    * session→task reverse lookup can succeed on the very first tool call.
    */
-  onNewSession?: (sessionId: string) => Promise<void>,
+  onNewSession?: (sessionId: string) => Promise<void>
+}
+
+export function createInterceptedSSEResponse(
+  response: Response,
+  opts: InterceptedSSEOptions,
 ): Response {
+  const {
+    workspaceId,
+    userMessageText,
+    existingSessionId,
+    userImages,
+    callerUserId,
+    source = 'web',
+    reconnectFactory,
+    initialAssistant,
+    sessionToken,
+    onNewSession,
+  } = opts
   if (!response.body) {
     return new Response(response.body, {
       status: response.status,

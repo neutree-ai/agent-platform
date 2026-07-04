@@ -28,6 +28,33 @@ export function getWorkspaceAddress(workspaceId: string): string {
   return builtinAddress(workspaceId)
 }
 
+/**
+ * Why a request is being routed to the workspace's agent. A workspace runs
+ * exactly one replica today, so every context resolves to the same address —
+ * but call sites that act on behalf of a session declare it here, so that the
+ * day a workspace runs more than one replica, session-affine routing is a
+ * change to this function only, not to its callers.
+ */
+interface AgentRouteContext {
+  /**
+   * The session this request serves (a turn, a reconnect, an interrupt). null
+   * / undefined means "no session yet" (new-session chat) or a genuinely
+   * workspace-scoped call — both route to the workspace's default address.
+   */
+  sessionId?: string | null
+}
+
+/**
+ * Resolve the agent base URL for a request made in `ctx`. Session-scoped
+ * callers (chat turns, reconnects, interrupts, recovery) use this; purely
+ * workspace-scoped callers (health, config reload, file service) may keep
+ * calling {@link getWorkspaceAddress} directly — it is this function's
+ * zero-context form.
+ */
+export function resolveAgentAddress(workspaceId: string, _ctx: AgentRouteContext = {}): string {
+  return getWorkspaceAddress(workspaceId)
+}
+
 type ReloadScope = 'config' | 'skills' | 'credentials'
 
 // A reload triggers the agent's full loadSkills(), which round-trips to scs +
