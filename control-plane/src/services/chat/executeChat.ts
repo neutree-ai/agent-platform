@@ -1,6 +1,6 @@
 import { ensureTokenForSession, mintToken } from '../../lib/session-token'
 import { createInterceptedSSEResponse } from '../../lib/sse'
-import { getWorkspaceAddress } from '../../lib/workspace-address'
+import { resolveAgentAddress } from '../../lib/workspace-address'
 import { addMessage, insertUserMessageBlocks } from '../db/messages'
 import {
   getSession,
@@ -12,11 +12,7 @@ import { addTeamworkSession } from '../db/teamwork'
 import type { Workspace } from '../db/types'
 import { getWorkspace } from '../db/workspaces'
 import { WorkspaceStartError, ensureWorkspaceRunning } from '../workspace-autostart'
-
-interface ChatImage {
-  data: string
-  media_type: string
-}
+import { type ChatImage, buildAgentChatBody, buildUserMessageBlocks } from './request'
 
 interface ExecuteChatOpts {
   workspace: Workspace
@@ -92,7 +88,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     }
   }
 
-  const address = getWorkspaceAddress(workspaceId)
+  const address = resolveAgentAddress(workspaceId, { sessionId })
 
   // Mint (or look up) the session_token before dispatching. For a resume
   // the same token follows the session across turns; for a new session we
@@ -103,13 +99,15 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     ? await ensureTokenForSession(workspaceId, sessionId)
     : await mintToken({ workspaceId })
 
-  const agentBody = JSON.stringify({
-    message: userMessageText,
-    ...(sessionId ? { session_id: sessionId } : {}),
-    ...(images?.length ? { images } : {}),
-    source,
-    session_token: sessionToken,
-  })
+  const agentBody = JSON.stringify(
+    buildAgentChatBody({
+      message: userMessageText,
+      sessionId,
+      images,
+      source,
+      sessionToken,
+    }),
+  )
 
   // 24-hour hard cap. Deliberately decoupled from the client's signal —
   // see `createInterceptedSSEResponse` for why: the agent turn is
@@ -156,16 +154,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     // `createInterceptedSSEResponse`, which stores the message once
     // `session.started` assigns an id.
     if (userMessageText) {
-      const blocks: Array<Record<string, unknown>> = [{ type: 'text', text: userMessageText }]
-      if (images?.length) {
-        for (const img of images) {
-          blocks.push({
-            type: 'image',
-            data: img.data,
-            media_type: img.media_type,
-          })
-        }
-      }
+      const blocks = buildUserMessageBlocks(userMessageText, images)
       const msg = await addMessage(workspaceId, sessionId, 'user', userMessageText)
       await insertUserMessageBlocks(msg.id, sessionId, blocks)
       userMessageText = null // prevent the interceptor from persisting a duplicate
@@ -192,15 +181,14 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
       }
     : undefined
 
-  return createInterceptedSSEResponse(
-    response,
+  return createInterceptedSSEResponse(response, {
     workspaceId,
     userMessageText,
-    sessionId,
-    images,
+    existingSessionId: sessionId,
+    userImages: images,
     callerUserId,
     source,
-    async (sid) => {
+    reconnectFactory: async (sid) => {
       try {
         const resp = await fetch(`${address}/sessions/${encodeURIComponent(sid)}/reconnect`, {
           method: 'POST',
@@ -212,10 +200,9 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
         return null
       }
     },
-    undefined,
     sessionToken,
     onNewSession,
-  )
+  })
 }
 
 /**

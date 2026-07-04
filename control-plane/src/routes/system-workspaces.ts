@@ -3,7 +3,8 @@ import type { ApiMessage, ApiSession } from '../../../internal/types/api'
 import { ensureTokenForSession, mintToken } from '../lib/session-token'
 import { createInterceptedSSEResponse } from '../lib/sse'
 import type { AppEnv } from '../lib/types'
-import { getWorkspaceAddress } from '../lib/workspace-address'
+import { resolveAgentAddress } from '../lib/workspace-address'
+import { buildUserMessageBlocks } from '../services/chat/request'
 import { addMessage, getMessagesWithBlocks, insertUserMessageBlocks } from '../services/db/messages'
 import { getSession, listSessionsByCaller, transitionSessionStatus } from '../services/db/sessions'
 import { getWorkspace, listSystemWorkspaces } from '../services/db/workspaces'
@@ -88,7 +89,6 @@ systemWorkspaces.post('/:id/chat', async (c) => {
     return c.json({ error: 'System workspace not running' }, 503)
   }
 
-  const address = getWorkspaceAddress(workspace.id)
   const body = await c.req.text()
   const userId = c.get('user').sub
 
@@ -102,6 +102,8 @@ systemWorkspaces.post('/:id/chat', async (c) => {
     userMessageText = parsed.message || null
     requestImages = parsed.images || null
   } catch {}
+
+  const address = resolveAgentAddress(workspace.id, { sessionId: requestSessionId })
 
   // If continuing a session, verify ownership
   if (requestSessionId) {
@@ -154,32 +156,22 @@ systemWorkspaces.post('/:id/chat', async (c) => {
 
   // Persist user message for existing sessions
   if (userMessageText && requestSessionId) {
-    const blocks: Array<Record<string, unknown>> = [{ type: 'text', text: userMessageText }]
-    if (requestImages?.length) {
-      for (const img of requestImages) {
-        blocks.push({
-          type: 'image',
-          data: img.data,
-          media_type: img.media_type,
-        })
-      }
-    }
+    const blocks = buildUserMessageBlocks(userMessageText, requestImages ?? null)
     const msg = await addMessage(workspace.id, requestSessionId, 'user', userMessageText)
     await insertUserMessageBlocks(msg.id, requestSessionId, blocks)
     userMessageText = null
   }
 
-  return createInterceptedSSEResponse(
-    response,
-    workspace.id,
+  return createInterceptedSSEResponse(response, {
+    workspaceId: workspace.id,
     userMessageText,
-    requestSessionId,
-    requestImages,
-    userId, // caller_user_id — set on new sessions
-    'web',
+    existingSessionId: requestSessionId,
+    userImages: requestImages,
+    callerUserId: userId, // set on new sessions
+    source: 'web',
     // Reconnect factory: if the primary stream dies before `session.ended`,
     // re-open the agent's buffered sink via `/sessions/:id/reconnect`.
-    async (sid) => {
+    reconnectFactory: async (sid) => {
       try {
         const resp = await fetch(`${address}/sessions/${encodeURIComponent(sid)}/reconnect`, {
           method: 'POST',
@@ -194,9 +186,8 @@ systemWorkspaces.post('/:id/chat', async (c) => {
         return null
       }
     },
-    undefined,
     sessionToken,
-  )
+  })
 })
 
 function toApiSession(s: any): ApiSession {

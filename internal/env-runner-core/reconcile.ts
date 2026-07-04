@@ -117,8 +117,13 @@ async function reconcilePlacement(
   return 'none'
 }
 
-/** One reconcile pass over every placement this runner is responsible for. */
-async function reconcileOnce(
+/**
+ * One reconcile pass over every placement this runner is responsible for.
+ * Exported for standalone use / testing: callers that want a single pass
+ * (rather than the interval loop of {@link startReconcileLoop}) can invoke it
+ * directly and inspect the returned action counts.
+ */
+export async function reconcileOnce(
   provider: EnvironmentProvider,
   transport: PlacementTransport,
 ): Promise<{ acted: number; noop: number; failed: number }> {

@@ -4,7 +4,7 @@ import { pool } from '../services/db/pool'
 import { transitionSessionStatus } from '../services/db/sessions'
 import { getWorkspace } from '../services/db/workspaces'
 import { activeStreams, createInterceptedSSEResponse, streamKey } from './sse'
-import { getWorkspaceAddress } from './workspace-address'
+import { resolveAgentAddress } from './workspace-address'
 
 /**
  * Recover orphaned sessions that are stuck in chat_status='agent' after a CP restart.
@@ -39,7 +39,7 @@ export async function recoverOrphanedSessions() {
         continue
       }
 
-      const address = getWorkspaceAddress(workspaceId)
+      const address = resolveAgentAddress(workspaceId, { sessionId })
       // The timeout applies to the *connection*, not the subsequent SSE
       // stream. `fetch`'s signal stays attached to the response body, so
       // if we passed `AbortSignal.timeout(10_000)` directly the body
@@ -109,17 +109,13 @@ export async function recoverOrphanedSessions() {
       console.log(
         `[Recovery] workspace=${workspaceId} session=${sessionId} reconnecting to agent stream`,
       )
-      createInterceptedSSEResponse(
-        response,
+      createInterceptedSSEResponse(response, {
         workspaceId,
-        null,
-        sessionId,
-        undefined,
-        undefined,
-        'recovery',
-        undefined,
+        userMessageText: null,
+        existingSessionId: sessionId,
+        source: 'recovery',
         initialAssistant,
-      )
+      })
     } catch (e: any) {
       console.error(`[Recovery] workspace=${workspaceId} session=${sessionId} error:`, e.message)
       await transitionSessionStatus(sessionId, 'idle')

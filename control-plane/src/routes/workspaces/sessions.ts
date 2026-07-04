@@ -1,7 +1,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { ApiPendingMessageSchema, ApiSessionLiteSchema } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
-import { getWorkspaceAddress } from '../../lib/workspace-address'
+import { resolveAgentAddress } from '../../lib/workspace-address'
 import { pool } from '../../services/db/pool'
 import {
   clearPendingMessage,
@@ -164,7 +164,7 @@ sessions.openapi(deleteSessionRoute, async (c) => {
   console.log(`[DeleteSession] Request workspace=${id} session=${sessionId}`)
 
   if (workspace.status === 'running') {
-    const address = getWorkspaceAddress(workspace.id)
+    const address = resolveAgentAddress(workspace.id, { sessionId })
     await interruptAgentSession(address, sessionId, 'DeleteSession')
   }
 
@@ -254,7 +254,7 @@ sessions.openapi(interruptSessionRoute, async (c) => {
   if (workspace.status !== 'running') {
     return c.json({ error: 'Workspace not running' }, 503)
   }
-  const address = getWorkspaceAddress(workspace.id)
+  const address = resolveAgentAddress(workspace.id, { sessionId })
 
   const { delivered, interrupted } = await interruptAgentSession(address, sessionId, 'Interrupt')
   return c.json({ success: delivered, interrupted }, 200)
