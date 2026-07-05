@@ -32,9 +32,33 @@ A 1-node k3s that pulls every image straight from the public registry — same a
 
 > For fully air-gapped single-node sites, use the separate offline installer, which ships an image tarball, k3s binaries, and a host-prep step.
 
-## Deployment
+## One-line install
 
-Run this on a host that has a working k3s with its kubeconfig at `/etc/rancher/k3s/k3s.yaml` (the default in the single-node example).
+On a bare Linux host — k3s is **not** required, the script installs it — run as root:
+
+```bash
+curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
+```
+
+It installs k3s if missing, generates every secret, autodetects the node IP, creates a random admin password, and prints the login URL + credentials when it finishes. Configuration lands in `/opt/nap/values.env`; re-running the same line upgrades in place.
+
+Common overrides:
+
+```bash
+# choose the host IP / admin password yourself
+curl -sfL https://nap.docs.neutree.ai/get.sh \
+  | sudo NAP_HOST=192.168.1.10 NAP_ADMIN_PASSWORD=your-password sh -
+
+# generate values.env only — review/edit it, then re-run without the flag to install
+curl -sfL https://nap.docs.neutree.ai/get.sh \
+  | sudo sh -s -- --prepare-only
+```
+
+`get.sh --help` lists all flags (`--version=` to pin a release, `--dir=` to relocate, `--k8s` to target an existing cluster instead).
+
+## Manual deployment
+
+The same steps the one-liner automates, under your control. Run this on a host that has a working k3s with its kubeconfig at `/etc/rancher/k3s/k3s.yaml` (the default in the single-node example).
 
 ### 1. Prepare values.env
 

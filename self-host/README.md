@@ -13,6 +13,38 @@ The **minimal install** brings up the core platform only. The Code Sandbox and
 Remote Browser capabilities are **optional and off by default** — enable them
 later (see [Optional capabilities](#optional-capabilities)) without reinstalling.
 
+## One-line install
+
+`get.sh` wraps the whole flow below — download, secrets, values.env, install —
+into a single command. Configuration lands in `/opt/nap/values.env`; re-running
+the same line refreshes the installer and upgrades in place.
+
+**No Kubernetes yet** — a bare Linux host; installs k3s (plus helm / envsubst
+if missing), autodetects the node IP, generates the admin password and prints
+the login URL + credentials at the end:
+
+```bash
+curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
+```
+
+**Existing Kubernetes cluster** — uses your current kubeconfig; you must name
+the host users reach the platform at and an RWX storage backend (external NFS,
+or a pre-existing RWX StorageClass):
+
+```bash
+curl -sfL https://nap.docs.neutree.ai/get.sh \
+  | sh -s -- --k8s --host=<ip-or-hostname> --nfs-server=<ip> --nfs-path=</export/path>
+# or with an existing RWX StorageClass:
+#   ... | sh -s -- --k8s --host=<ip-or-hostname> --storage-class=<rwx-storageclass>
+```
+
+Useful knobs: `NAP_HOST` / `NAP_ADMIN_PASSWORD` env overrides,
+`--version=<tag>` to pin a release, `--dir=` to relocate the install dir, and
+`--prepare-only` to generate `values.env` for review and install on the next
+run. `get.sh --help` lists everything.
+
+Everything below is the manual path — the same steps, under your control.
+
 ## Prerequisites
 
 - A Kubernetes cluster (multi-node) **or** a single k3s node (single-node profile).
