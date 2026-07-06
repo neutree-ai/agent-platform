@@ -1,21 +1,19 @@
-OpenAI-compatible protocol with the broadest coverage. Besides the official OpenAI API, it also applies to all third-party services that provide OpenAI-compatible endpoints, such as OpenRouter, Azure OpenAI, and various domestic LLM gateways.
+The provider type for the Codex agent. Connects to the official OpenAI API, Azure OpenAI, or a gateway that implements the OpenAI protocol.
 
-- **Base URL**: `https://api.openai.com` or the API endpoint of a third-party service
-- **API Key**: The API Key for the corresponding service
+- **Base URL**: `https://api.openai.com` or the endpoint of a compatible service
+- **API Key**: the key for that service
 
-## Use cases
+## Requirements
 
-- Codex agent (**only this type is supported**)
-- OpenRouter free/paid models
-- Azure OpenAI deployments
-- Other OpenAI-compatible services
+- Codex talks the **Responses API** (`/v1/responses`), so the endpoint must implement it — services that only offer Chat Completions (`/v1/chat/completions`) do **not** work
+- Codex agents can only use this provider type; Claude Code agents use the Anthropic types instead
 
 ## Notes
 
-- OpenRouter free models require adding the `:free` suffix to the model name, such as `stepfun/step-3.5-flash:free`
-- Codex agent only supports openai-type Providers
+- OpenRouter free models require the `:free` suffix on the model name, such as `stepfun/step-3.5-flash:free`
 
 ## Visibility
 
-- **Public**: Visible and available to all platform users
-- **Private**: Visible only to yourself
+- **Private**: visible only to yourself
+- **Team**: shared with the teams you select
+- **Public**: visible and available to all platform users

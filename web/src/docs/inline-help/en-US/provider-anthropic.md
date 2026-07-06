@@ -1,14 +1,14 @@
-Connect directly to the official Anthropic API with static API Key authentication. Suitable for teams that centrally purchase API quota and share it with members.
+Connects directly to the official Anthropic API with a static API key. For Claude Code agents.
 
 - **Base URL**: `https://api.anthropic.com`
-- **API Key**: Obtain from [console.anthropic.com](https://console.anthropic.com)
+- **API Key**: obtain from [console.anthropic.com](https://console.anthropic.com)
 
 ## Use cases
 
-- The team has Anthropic API quota and needs centralized usage management
-- Supports Claude Code agent
+- Your team has Anthropic API quota and manages usage centrally
 
 ## Visibility
 
-- **Public**: Visible and available to all platform users
-- **Private**: Visible only to yourself
+- **Private**: visible only to yourself
+- **Team**: shared with the teams you select
+- **Public**: visible and available to all platform users

@@ -2031,15 +2031,15 @@
         },
         "anthropicOauth": {
           "label": "Anthropic OAuth",
-          "desc": "用 Anthropic 账号登录（兼容代理）"
+          "desc": "第三方 Anthropic 兼容 API —— 填 Base URL + key，无 OAuth 步骤"
         },
         "claudeCodeOauth": {
           "label": "Claude Code OAuth",
-          "desc": "使用 Claude Code 订阅账号"
+          "desc": "个人 Claude Pro / Team 订阅 —— claude setup-token 获取 token"
         },
         "openai": {
           "label": "OpenAI 兼容",
-          "desc": "OpenAI 协议 —— 适用于 OpenRouter 等兼容供应商"
+          "desc": "Codex 专用 —— 服务端必须支持 OpenAI Responses API"
         }
       },
       "actions": {
