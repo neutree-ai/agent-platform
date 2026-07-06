@@ -1,14 +1,19 @@
-For users with a personal Claude subscription (Pro/Team). Authorize through OAuth login without an API Key. After creation, follow the page guidance to complete login.
+Use your personal Claude subscription (Pro / Team) — no vendor API key and no Base URL. For Claude Code agents.
 
-- **Base URL**: No need to fill in
-- **API Key**: No need to fill in
+On your own machine (with the Claude Code CLI installed and logged in), run:
+
+```bash
+claude setup-token
+```
+
+Paste the token it prints into the **API Key** field.
 
 ## Use cases
 
-- Individual users want to use Claude Code agent but do not have a team API Key
-- Have a Claude Pro or Team subscription
+- You have a Claude Pro / Team subscription and no team API key
 
 ## Visibility
 
-- **Public**: Visible and available to all platform users
-- **Private**: Visible only to yourself
+- **Private**: visible only to yourself
+- **Team**: shared with the teams you select
+- **Public**: visible and available to all platform users

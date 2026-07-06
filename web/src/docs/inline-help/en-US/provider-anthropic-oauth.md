@@ -1,14 +1,16 @@
-For third-party services that provide Anthropic-compatible APIs and use OAuth authentication instead of a static API Key.
+For third-party services that expose an **Anthropic-compatible API** — most of them use this type. For Claude Code agents.
 
-- **Base URL**: The API endpoint of the third-party service
-- **API Key**: No need to fill in (token is obtained through the OAuth flow)
+Despite the name, there is **no OAuth sign-in step**: the type just reuses the same wire protocol. Fill in what your vendor gave you:
+
+- **Base URL**: the third-party service's endpoint
+- **API Key**: the key or token issued by that service
 
 ## Use cases
 
-- The third-party platform provides an Anthropic-compatible API and requires OAuth login
-- Supports Claude Code agent
+- A vendor or gateway serves Claude models over an Anthropic-compatible API
 
 ## Visibility
 
-- **Public**: Visible and available to all platform users
-- **Private**: Visible only to yourself
+- **Private**: visible only to yourself
+- **Team**: shared with the teams you select
+- **Public**: visible and available to all platform users

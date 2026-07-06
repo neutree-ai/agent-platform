@@ -1,21 +1,19 @@
-OpenAI 兼容协议，覆盖面最广。除了 OpenAI 官方 API，也适用于所有提供 OpenAI 兼容端点的第三方服务（OpenRouter、Azure OpenAI、各类国产大模型网关等）。
+Codex agent 使用的 provider 类型。接入 OpenAI 官方 API、Azure OpenAI，或实现了 OpenAI 协议的网关。
 
-- **Base URL**: `https://api.openai.com` 或第三方服务的 API 端点
+- **Base URL**: `https://api.openai.com` 或兼容服务的端点
 - **API Key**: 对应服务的 API Key
 
-## 适用场景
+## 要求
 
-- Codex agent（**仅支持此类型**）
-- OpenRouter 免费/付费模型
-- Azure OpenAI 部署
-- 其他 OpenAI 兼容服务
+- Codex 走 **Responses API**（`/v1/responses`），服务端必须实现它 —— 只提供 Chat Completions（`/v1/chat/completions`）的服务**不能用**
+- Codex agent 只能用这一类型；Claude Code agent 请用 Anthropic 系列类型
 
 ## 注意事项
 
 - OpenRouter 免费模型需在模型名后加 `:free` 后缀，如 `stepfun/step-3.5-flash:free`
-- Codex agent 仅支持 openai 类型的 provider
 
 ## Visibility
 
-- **Public**: 平台所有用户可见、可用
 - **Private**: 仅自己可见
+- **Team**: 共享给所选团队
+- **Public**: 平台所有用户可见、可用

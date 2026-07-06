@@ -1,14 +1,19 @@
-面向拥有 Claude 个人订阅（Pro/Team）的用户。通过 OAuth 登录授权，无需 API Key。创建后按照页面引导完成登录即可。
+使用你个人的 Claude 订阅（Pro / Team）—— 不需要服务商 API Key，也不需要 Base URL。供 Claude Code agent 使用。
 
-- **Base URL**: 无需填写
-- **API Key**: 无需填写
+在自己的机器上（已安装并登录 Claude Code CLI）执行：
+
+```bash
+claude setup-token
+```
+
+把输出的 token 粘贴到 **API Key** 输入框。
 
 ## 适用场景
 
-- 个人用户想使用 Claude Code agent，但没有团队 API Key
-- 拥有 Claude Pro 或 Team 订阅
+- 拥有 Claude Pro / Team 订阅，但没有团队 API Key
 
 ## Visibility
 
-- **Public**: 平台所有用户可见、可用
 - **Private**: 仅自己可见
+- **Team**: 共享给所选团队
+- **Public**: 平台所有用户可见、可用

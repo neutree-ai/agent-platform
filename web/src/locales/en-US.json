@@ -2006,15 +2006,15 @@
         },
         "anthropicOauth": {
           "label": "Anthropic OAuth",
-          "desc": "Sign in with an Anthropic account (works with proxies)"
+          "desc": "Third-party Anthropic-compatible API — Base URL + key, no OAuth step"
         },
         "claudeCodeOauth": {
           "label": "Claude Code OAuth",
-          "desc": "Use a Claude Code subscription account"
+          "desc": "Personal Claude Pro / Team subscription — token via claude setup-token"
         },
         "openai": {
           "label": "OpenAI compatible",
-          "desc": "OpenAI protocol — OpenRouter and other compatible providers"
+          "desc": "For Codex — endpoint must support the OpenAI Responses API"
         }
       },
       "actions": {
