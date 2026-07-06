@@ -152,7 +152,10 @@ export function ModelInput({
   placeholder?: string
   className?: string
 }) {
-  if (providerId) {
+  // Show combobox only when models are available or still loading; fall back to
+  // plain text input so the user can type a model ID manually when the list is
+  // empty (e.g. fetch failed or provider returns no models).
+  if (providerId && (modelsLoading || models.length > 0)) {
     return (
       <ModelCombobox
         value={value}
@@ -249,19 +252,28 @@ export function TestResult({ state, detail }: { state: TestState; detail: string
 export function useProviderModels(providerId: string) {
   const [models, setModels] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!providerId) {
       setModels([])
+      setError(null)
       return
     }
     setLoading(true)
+    setError(null)
     api
       .listProviderModels(providerId)
-      .then(setModels)
-      .catch(() => setModels([]))
+      .then(({ models, error }) => {
+        setModels(models)
+        setError(error ?? null)
+      })
+      .catch(() => {
+        setModels([])
+        setError('Failed to load models')
+      })
       .finally(() => setLoading(false))
   }, [providerId])
 
-  return { models, loading }
+  return { models, loading, error }
 }

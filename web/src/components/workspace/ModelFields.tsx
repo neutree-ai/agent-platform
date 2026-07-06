@@ -68,7 +68,7 @@ export function ModelFields({
 }: ModelFieldsProps) {
   const { t } = useTranslation()
   const [providers, setProviders] = useState<ApiModelProvider[]>([])
-  const { models, loading: modelsLoading } = useProviderModels(providerId)
+  const { models, loading: modelsLoading, error: modelsError } = useProviderModels(providerId)
   const test = useProviderTest(providerId, model)
 
   useEffect(() => {
@@ -165,6 +165,9 @@ export function ModelFields({
             />
           )}
         </div>
+        {modelsError && (
+          <p className="text-xs text-destructive">{modelsError}</p>
+        )}
         {providerId && <TestResult state={test.state} detail={test.detail} />}
       </div>
 

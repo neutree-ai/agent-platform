@@ -1367,11 +1367,13 @@ class ApiClient {
     })
   }
 
-  async listProviderModels(id: string): Promise<{ id: string; name: string }[]> {
+  async listProviderModels(
+    id: string,
+  ): Promise<{ models: { id: string; name: string }[]; error?: string }> {
     const res = await this.request<{ models: { id: string; name: string }[]; error?: string }>(
       `/providers/${id}/models`,
     )
-    return res.models ?? []
+    return { models: res.models ?? [], error: res.error }
   }
 
   async testProvider(
