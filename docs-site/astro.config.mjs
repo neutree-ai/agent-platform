@@ -20,7 +20,10 @@ export default defineConfig({
     starlight({
       title: 'Neutree Agent Platform Docs',
       favicon: '/favicon.svg',
-      customCss: ['./src/styles/print.css'],
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/neutree-ai/agent-platform' },
+      ],
+      customCss: ['./src/styles/print.css', './src/styles/landing.css'],
       components: {
         Head: './src/components/Head.astro',
         TableOfContents: './src/components/TocWithActions.astro',
@@ -31,6 +34,31 @@ export default defineConfig({
         'zh-cn': { label: '简体中文', lang: 'zh-CN' },
       },
       sidebar: [
+        // No hosted/SaaS offering yet, so installation is every new user's
+        // first step — it leads the sidebar, quickstart first.
+        {
+          label: 'Installation',
+          translations: { 'zh-CN': '安装部署' },
+          items: [
+            {
+              label: 'Single-Node (k3s) Quickstart',
+              translations: { 'zh-CN': '单节点 k3s 快速部署' },
+              slug: 'self-host/single-node',
+            },
+            {
+              label: 'Production Deployment (multi-node)',
+              translations: { 'zh-CN': '生产部署（多节点）' },
+              slug: 'self-host',
+            },
+            { label: 'Ingress', translations: { 'zh-CN': 'Ingress 接入' }, slug: 'self-host/ingress' },
+            { label: 'LDAP', translations: { 'zh-CN': 'LDAP 接入' }, slug: 'self-host/ldap' },
+            {
+              label: 'Sandbox & Browser',
+              translations: { 'zh-CN': '代码沙箱 / 远端浏览器' },
+              slug: 'self-host/sandbox-browser',
+            },
+          ],
+        },
         {
           label: 'Concepts',
           translations: { 'zh-CN': '概念' },
@@ -128,29 +156,6 @@ export default defineConfig({
               },
             ]
           : []),
-        {
-          label: 'Self-Host',
-          translations: { 'zh-CN': '自部署' },
-          items: [
-            {
-              label: 'Deployment Guide',
-              translations: { 'zh-CN': '部署指南' },
-              slug: 'self-host',
-            },
-            {
-              label: 'Single-Node (k3s) Quickstart',
-              translations: { 'zh-CN': '单节点 k3s 快速部署' },
-              slug: 'self-host/single-node',
-            },
-            { label: 'Ingress', translations: { 'zh-CN': 'Ingress 接入' }, slug: 'self-host/ingress' },
-            { label: 'LDAP', translations: { 'zh-CN': 'LDAP 接入' }, slug: 'self-host/ldap' },
-            {
-              label: 'Sandbox & Browser',
-              translations: { 'zh-CN': '代码沙箱 / 远端浏览器' },
-              slug: 'self-host/sandbox-browser',
-            },
-          ],
-        },
         {
           label: 'API Docs',
           translations: { 'zh-CN': 'API 文档' },

@@ -1,30 +1,31 @@
 ---
 title: Neutree Agent Platform Docs
-description: "Agent Cloud: build, distribute, and optimize your Agents in the cloud"
+description: "The open-source agent platform to build, distribute, and optimize AI agents — on infrastructure you own."
 template: splash
 hero:
-  tagline: "Agent Cloud: build, distribute, and optimize your Agents in the cloud"
-  actions:
-    - text: Start with the concepts
-      link: /concepts/overview/
-      icon: right-arrow
-      variant: primary
-    - text: Follow the guides
-      link: /guides/1-setup/
-      icon: rocket
-      variant: secondary
+  title: Neutree Agent Platform
+  tagline: The open-source agent platform to build, distribute, and optimize AI agents — on infrastructure you own.
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components'
+import LandingTerminal from '../../components/LandingTerminal.astro'
 
-<CardGrid stagger>
-  <Card title="Concepts" icon="open-book">
-    Get acquainted first: what an agent, workspace, skill, provider, and route are. Once you've read this section, every feature that follows has somewhere to hang.
-  </Card>
-  <Card title="Guides" icon="rocket">
-    Get an agent running from scratch, then progressively extend its behavior, wire up triggers, collaborate, and scale. The main path for new users.
-  </Card>
-  <Card title="Self-hosting" icon="setting">
-    Install Neutree Agent Platform on your own Kubernetes cluster, with full support for offline deployment.
-  </Card>
-</CardGrid>
+<LandingTerminal
+  copyLabel="Copy"
+  copiedLabel="Copied ✓"
+  runningLine="... installing k3s + platform, ~5 minutes ..."
+/>
+
+<p class="nap-note">A single Linux machine is all it takes. Overrides and the existing-cluster install: <a href="/self-host/single-node/">single-node quickstart</a>.</p>
+
+<div class="nap-paths">
+  <a class="nap-next" href="/guides/1-setup/">
+    <em>Next step</em>
+    <strong>Run your first agent</strong>
+    <span>Set up a provider, finish your first conversation — about 10 minutes once the platform is up</span>
+  </a>
+  <a class="nap-ref" href="/concepts/overview/">
+    <em>Reference</em>
+    <strong>Concepts</strong>
+    <span>The mental model: agents, workspaces, providers, routes</span>
+  </a>
+</div>

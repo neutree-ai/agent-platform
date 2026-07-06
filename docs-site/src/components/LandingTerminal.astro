@@ -1,0 +1,37 @@
+---
+// Landing hero centerpiece: the install one-liner rendered as a terminal
+// that already shows its result — one line in, a running platform out.
+// The copy button copies exactly the command (not the output), which is why
+// this is custom markup instead of an expressive-code fence.
+interface Props {
+  copyLabel: string
+  copiedLabel: string
+  runningLine: string
+}
+const { copyLabel, copiedLabel, runningLine } = Astro.props
+const command = 'curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -'
+---
+
+<div class="nap-terminal">
+  <div class="nap-term-cmd">
+    <pre><span class="nap-prompt">&#36; </span>{command}</pre>
+    <button class="nap-copy" data-copy={command} data-copied-label={copiedLabel}>{copyLabel}</button>
+  </div>
+  {/* real newlines inside <pre>; `{'\n'}` expressions trip an astro-compiler codegen bug */}
+  <pre class="nap-term-out"><span class="nap-dim">{runningLine}</span>
+<span class="nap-ok">==&gt; URL:    http://&lt;node-ip&gt;:30080</span>
+<span class="nap-ok">==&gt; Login:  admin / &lt;random-password&gt;</span><span class="nap-cursor"></span></pre>
+</div>
+
+<script>
+  for (const btn of document.querySelectorAll('.nap-copy')) {
+    btn.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(btn.dataset.copy || '')
+      const original = btn.textContent
+      btn.textContent = btn.dataset.copiedLabel || original
+      setTimeout(() => {
+        btn.textContent = original
+      }, 1500)
+    })
+  }
+</script>

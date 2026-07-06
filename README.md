@@ -1,8 +1,8 @@
 <h1 align="center">Neutree Agent Platform</h1>
 
 <p align="center">
-  Turn your expertise into agents — available anytime, anywhere, to anyone.<br/>
-  An open platform to <strong>build</strong>, <strong>distribute</strong>, and <strong>optimize</strong> AI agents, on infrastructure your team can host.
+  <strong>Close your laptop. Your agents keep working.</strong><br/>
+  The open-source agent platform to <strong>build</strong>, <strong>distribute</strong>, and <strong>optimize</strong> AI agents — on infrastructure you own.
 </p>
 
 <p align="center">

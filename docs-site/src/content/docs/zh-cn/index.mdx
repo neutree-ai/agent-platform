@@ -1,30 +1,31 @@
 ---
 title: Neutree Agent Platform 文档
-description: Agent Cloud：在云上构建、分发、优化你的 Agent
+description: 开源 Agent 平台：构建、分发、持续优化 AI Agent —— 跑在你自己的基础设施上。
 template: splash
 hero:
-  tagline: Agent Cloud：在云上构建、分发、优化你的 Agent
-  actions:
-    - text: 从概念开始
-      link: /concepts/overview/
-      icon: right-arrow
-      variant: primary
-    - text: 跟着指南上手
-      link: /guides/1-setup/
-      icon: rocket
-      variant: secondary
+  title: Neutree Agent Platform
+  tagline: 开源 Agent 平台：构建、分发、持续优化 AI Agent —— 跑在你自己的基础设施上。
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components'
+import LandingTerminal from '../../../components/LandingTerminal.astro'
 
-<CardGrid stagger>
-  <Card title="概念" icon="open-book">
-    先认个脸：什么是 agent、workspace、skill、provider、route。读完这一节，后面的功能都能挂上去。
-  </Card>
-  <Card title="指南" icon="rocket">
-    从 0 到 1 跑通一个 agent，再一步步扩展行为、接入触发、协作和规模化。新用户的主路径。
-  </Card>
-  <Card title="自部署" icon="setting">
-    把 Neutree Agent Platform 装到自己的 Kubernetes 集群，支持完全离线部署。
-  </Card>
-</CardGrid>
+<LandingTerminal
+  copyLabel="复制"
+  copiedLabel="已复制 ✓"
+  runningLine="... 正在安装 k3s 与平台组件，约 5 分钟 ..."
+/>
+
+<p class="nap-note">一台 Linux 机器即可。可覆盖参数与已有集群的安装方式：<a href="/zh-cn/self-host/single-node/">单节点快速部署</a>。</p>
+
+<div class="nap-paths">
+  <a class="nap-next" href="/zh-cn/guides/1-setup/">
+    <em>下一步</em>
+    <strong>跑通第一个 Agent</strong>
+    <span>配置 Provider、完成第一次对话 —— 平台装好后约 10 分钟</span>
+  </a>
+  <a class="nap-ref" href="/zh-cn/concepts/overview/">
+    <em>参考</em>
+    <strong>概念</strong>
+    <span>心智模型：Agent、Workspace、Provider、Route</span>
+  </a>
+</div>
