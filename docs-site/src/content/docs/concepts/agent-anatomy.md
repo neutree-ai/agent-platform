@@ -9,7 +9,7 @@ There are five things you can tune to shape an Agent's behavior. These five don'
 
 The Model determines how smart the Agent is, what its style is like, and how expensive it is. With the same prompt and the same set of skills, swapping the model can make a big difference in performance.
 
-NAP isn't tied to a specific vendor. You connect a model API into the platform through a **Provider** — it can be the team's centrally procured API gateway, your own Anthropic / OpenAI key, OpenRouter, Azure OpenAI, or any OpenAI-compatible endpoint. An Agent picks one Provider and one specific model.
+NAP isn't tied to a specific vendor. You connect a model API into the platform through a **Provider** — it can be the team's centrally procured API gateway, your own Anthropic / OpenAI key, OpenRouter, Azure OpenAI, or another compatible endpoint — the [provider type must match the agent](/guides/1-setup/), so check the mapping there. An Agent picks one Provider and one specific model.
 
 Advanced: you can also configure a **Small Model** for an Agent — used for lightweight internal operations like file search and code indexing, to save money. The Agent itself decides when to use the big brain and when to use the small one.
 
@@ -19,7 +19,7 @@ The System Prompt is an Agent's most important configuration. It tells the Agent
 
 The Prompt can be written directly in the Workspace, or it can reference a shared one from the **Prompt Library**. When you use a reference, any update to the Prompt automatically syncs to all Agents that reference it — this is the foundation of operating at scale.
 
-Writing a good prompt is itself a sizable topic; [Guide 3](/guides/3-agent-behavior/) covers how to write one separately.
+Writing a good prompt is itself a sizable topic; [Defining Agent Behavior](/guides/3-agent-behavior/) covers how to write one separately.
 
 ## Skills: reusable sub-procedures
 

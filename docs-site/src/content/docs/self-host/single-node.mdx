@@ -1,40 +1,19 @@
 ---
 title: Single-Node k3s Quick Deploy
-description: Bring up Neutree Agent Platform on a single k3s node — for resource-constrained internal testing and demos, with no high availability. Pulls images from the public registry.
+description: Bring up the full Neutree Agent Platform on one machine with k3s — the quickest install path. Pulls images from the public registry.
 ---
 
-Install Neutree Agent Platform on a single-node k3s cluster, pulling every image straight from the public registry. **Only suitable** for quick trials, internal demos, and PoC validation in resource-constrained settings; **do not** use it in production — the control plane, data, and storage all collapse onto one machine, so the node going down stops everything.
+Install Neutree Agent Platform on a single-node k3s cluster — the quickest way to get the full platform running. The single-node profile matches the full one, just with a single PostgreSQL instance and an in-cluster NFS server for shared storage. Every image is pulled from the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`), so the node needs internet access.
 
-## When to use it
+Recommended spec: **8 vCPU / 32 GB / 200 GB disk** — comfortable for roughly **10 concurrent workspaces**. When you need HA or horizontal scale, use the [production deployment](/self-host/).
 
-- **PoC / demo** — give a stakeholder a quickly reachable instance to validate the platform's capabilities
-- **Internal testing / integration** — your team needs a stable shared environment but doesn't want to stand up multi-node k8s
-- **Resource-constrained deployment** — only one machine is available, but you still want the full flow working
-
-For real production needs (multiple users, SLA, disaster recovery), use the multi-node path in the standard [deployment guide](/self-host/).
-
-## What it does not provide
-
-| Dimension | Single-node k3s | Multi-node standard deploy |
-| --- | --- | --- |
-| Control-plane HA | No — single k3s server, node down stops everything | Yes — multiple masters |
-| Postgres HA | No — single instance (CNPG `instances: 1`) | Yes — 3 replicas + sync replication |
-| Shared storage | No — in-cluster NFS pod, unavailable if node is down | Yes — external NFS / enterprise CSI |
-| Workspace container disk | RWO `local-path`, bound to the node | RWX CSI, can move across nodes |
-| Horizontal scaling | No — adding a node means reinstalling | Yes — add workers |
-| Rolling upgrade | Brief interruption while images roll | Seamless with multiple replicas |
-
-Recommended spec: **8 vCPU / 32 GB / 200 GB disk**, supporting roughly **10 concurrent workspaces**. Below that, workspaces are easily OOMKilled from CPU / memory contention; more than that needs more machines on the multi-node path.
-
-## Connected single-node
-
-A 1-node k3s that pulls every image straight from the public registry — same as the full profile, just with `PG_INSTANCES=1` and an in-cluster NFS server for RWX storage (a single node has no external NFS). There is **no** in-cluster registry and **no** offline tarball; the node must be able to reach the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`).
-
-> For fully air-gapped single-node sites, use the separate offline installer, which ships an image tarball, k3s binaries, and a host-prep step.
+> Fully air-gapped (offline) installs are possible but not yet packaged for the open-source distribution — [open a GitHub issue](https://github.com/neutree-ai/agent-platform/issues) if you need one.
 
 ## One-line install
 
-On a bare Linux host — k3s is **not** required, the script installs it — run as root:
+### On a bare Linux machine (no Kubernetes)
+
+k3s is **not** required — the script installs it. Run as root:
 
 ```bash
 curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
@@ -54,7 +33,23 @@ curl -sfL https://nap.docs.neutree.ai/get.sh \
   | sudo sh -s -- --prepare-only
 ```
 
-`get.sh --help` lists all flags (`--version=` to pin a release, `--dir=` to relocate, `--k8s` to target an existing cluster instead).
+`get.sh --help` lists all flags (`--version=` to pin a release, `--dir=` to relocate the install dir).
+
+### Into an existing Kubernetes cluster
+
+Uses your current kubeconfig (`$KUBECONFIG`, default `~/.kube/config`). Two things can't be autodetected and must be named: the host users will reach the platform at, and RWX storage — either an external NFS export or an RWX-capable StorageClass that already exists in the cluster:
+
+```bash
+# with an external NFS server
+curl -sfL https://nap.docs.neutree.ai/get.sh \
+  | sh -s -- --k8s --host=<ip-or-hostname> --nfs-server=<ip> --nfs-path=</export/path>
+
+# with an existing RWX StorageClass
+curl -sfL https://nap.docs.neutree.ai/get.sh \
+  | sh -s -- --k8s --host=<ip-or-hostname> --storage-class=<rwx-storageclass>
+```
+
+This installs the full profile (3-replica PostgreSQL) with defaults; add `--prepare-only` to review `/opt/nap/values.env` before installing. For production-grade planning — architecture, ingress, sizing — use the [production deployment guide](/self-host/).
 
 ## Manual deployment
 
@@ -127,9 +122,15 @@ If `modprobe` reports `module not found`, the kernel lacks the NFS module packag
 
 ## Notes
 
-- **There really is no HA** — node reboots, kernel panics, and disk stalls are all user-visible interruptions. Check the machine is healthy before a demo
-- **`local-path` data is bound to the node** — deleting the node or reinstalling the system disk loses all PVC data. Backups depend on snapshots / application-level export
-- **AFS runs on the in-cluster NFS pod** — its data lives on a `local-path` PVC, bound to the node disk. If the machine dies or the disk fails, all agent shared files are gone with it
-- **`install.sh` must run on the node** — the single-node profile pulls images into the local cluster; the operator cannot run from a different machine
-- **Upgrades go through a rolling restart** — cp / browser / sandbox have a brief unavailability window while images update (a window the multi-node deploy doesn't have). The upgrade flow matches the [standard upgrade](/self-host/#upgrade): re-run `./install.sh --profile=single-node`
-- **Once production requirements appear** — don't try to patch a single node into HA; migrate to multi-node. The operational mindset differs more than the configuration does
+- **Data lives on the node** — PVCs (including AFS shared files) use `local-path`, bound to the node's disk. Back up externally if the data matters
+- **Run the installer on the node itself** — the single-node profile pulls images into the local cluster
+- **Upgrades restart pods** — expect a brief window while images roll; the flow matches the [standard upgrade](/self-host/#upgrade): re-run the one-liner or `./install.sh --profile=single-node`
+
+## What's next
+
+You're logged in as the admin of a fresh, empty platform. Two short guides take you from here to a working agent:
+
+1. **[Set up an API provider](/guides/1-setup/)** — connect a large-model API so agents can think. On a fresh install the provider list is empty; creating the first one takes a minute.
+2. **[Your first agent](/guides/2-first-agent/)** — create a workspace and finish your first conversation, in under 5 minutes.
+
+From there, [concepts](/concepts/overview/) explains the moving parts, and the remaining guides cover triggers, multi-agent collaboration, and operating at scale.

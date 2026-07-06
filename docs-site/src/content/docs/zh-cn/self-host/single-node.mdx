@@ -1,40 +1,19 @@
 ---
 title: 单节点 k3s 快速部署
-description: 在单个 k3s 节点上拉起 Neutree Agent Platform —— 面向资源受限的内部测试与演示，无高可用。镜像从公共 registry 拉取。
+description: 在一台机器上用 k3s 拉起完整的 Neutree Agent Platform —— 最快的安装路径。镜像从公共 registry 拉取。
 ---
 
-在单节点 k3s 集群上安装 Neutree Agent Platform，所有镜像都直接从公共 registry 拉取。**仅适用于**资源受限场景下的快速试用、内部演示和 PoC 验证；**请勿**用于生产环境 —— 控制面、数据和存储全部塌缩到一台机器上，节点宕机即全停。
+在单节点 k3s 集群上安装 Neutree Agent Platform —— 让完整平台跑起来的最快方式。单节点 profile 与完整 profile 一致，只是 PostgreSQL 为单实例、共享存储由集群内 NFS server 提供。所有镜像都从公共 registry（`ghcr.io` / `docker.io` / `registry.k8s.io`）拉取，节点需要能访问互联网。
 
-## 适用场景
+推荐配置：**8 vCPU / 32 GB / 200 GB 磁盘**，约可支撑 **10 个并发 workspace**。需要 HA 或横向扩展时，走[生产部署](/zh-cn/self-host/)。
 
-- **PoC / 演示** —— 给干系人一个能快速访问的实例，验证平台能力
-- **内部测试 / 集成** —— 团队需要一个稳定的共享环境，但不想搭多节点 k8s
-- **资源受限部署** —— 只有一台机器可用，但仍想跑通完整流程
-
-如果是真实的生产需求（多用户、SLA、容灾），请走标准[部署指南](/self-host/)中的多节点路径。
-
-## 不提供的能力
-
-| 维度 | 单节点 k3s | 多节点标准部署 |
-| --- | --- | --- |
-| 控制面 HA | 无 —— 单 k3s server，节点宕机即全停 | 有 —— 多 master |
-| Postgres HA | 无 —— 单实例（CNPG `instances: 1`） | 有 —— 3 副本 + 同步复制 |
-| 共享存储 | 无 —— 集群内 NFS pod，节点宕机即不可用 | 有 —— 外部 NFS / 企业级 CSI |
-| Workspace 容器磁盘 | RWO `local-path`，绑定到节点 | RWX CSI，可跨节点迁移 |
-| 横向扩展 | 无 —— 加节点意味着重装 | 有 —— 添加 worker |
-| 滚动升级 | 镜像滚动期间短暂中断 | 多副本下无缝升级 |
-
-推荐配置：**8 vCPU / 32 GB / 200 GB 磁盘**，约可支撑 **10 个并发 workspace**。低于此配置，workspace 容易因 CPU / 内存争用被 OOMKilled；高于此则需要更多机器，走多节点路径。
-
-## 联网单节点
-
-一个直接从公共 registry 拉取所有镜像的单节点 k3s —— 与完整 profile 一致，只是把 `PG_INSTANCES=1`，并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。**没有**集群内 registry，也**没有**离线 tarball；节点必须能访问公共 registry（`ghcr.io` / `docker.io` / `registry.k8s.io`）。
-
-> 对于完全隔离的单节点站点，请使用独立的离线安装器，它附带镜像 tarball、k3s 二进制以及主机预处理步骤。
+> 完全隔离（air-gapped）的离线安装是可行的，但尚未打包进开源发行版 —— 有需要请提 [GitHub issue](https://github.com/neutree-ai/agent-platform/issues)。
 
 ## 一行命令安装
 
-在一台裸 Linux 主机上以 root 执行即可 —— **不需要**预装 k3s，脚本会自动安装：
+### 裸 Linux 主机（无 Kubernetes）
+
+**不需要**预装 k3s，脚本会自动安装。以 root 执行：
 
 ```bash
 curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
@@ -54,7 +33,23 @@ curl -sfL https://nap.docs.neutree.ai/get.sh \
   | sudo sh -s -- --prepare-only
 ```
 
-`get.sh --help` 列出全部 flag（`--version=` 固定发布版本、`--dir=` 更换安装目录、`--k8s` 面向已有集群安装）。
+`get.sh --help` 列出全部 flag（`--version=` 固定发布版本、`--dir=` 更换安装目录）。
+
+### 已有 Kubernetes 集群
+
+使用当前 kubeconfig（`$KUBECONFIG`，默认 `~/.kube/config`）。有两样东西无法自动探测、必须显式给出：用户访问平台的 host，以及 RWX 存储 —— 外部 NFS export 或集群里已有的 RWX StorageClass，二选一：
+
+```bash
+# 使用外部 NFS server
+curl -sfL https://nap.docs.neutree.ai/get.sh \
+  | sh -s -- --k8s --host=<ip-or-hostname> --nfs-server=<ip> --nfs-path=</export/path>
+
+# 使用已有的 RWX StorageClass
+curl -sfL https://nap.docs.neutree.ai/get.sh \
+  | sh -s -- --k8s --host=<ip-or-hostname> --storage-class=<rwx-storageclass>
+```
+
+这会以默认配置安装完整 profile（3 副本 PostgreSQL）；加 `--prepare-only` 可先审阅 `/opt/nap/values.env` 再安装。生产级的规划 —— 架构、Ingress、容量 —— 请走[生产部署指南](/zh-cn/self-host/)。
 
 ## 手动部署
 
@@ -93,7 +88,7 @@ admin / <ADMIN_PASSWORD>
 
 ## 与标准部署的关键差异
 
-下表仅列出与[部署指南](/self-host/)默认值不同的配置；其余沿用标准默认：
+下表仅列出与[部署指南](/zh-cn/self-host/)默认值不同的配置；其余沿用标准默认：
 
 | 字段 | 标准默认 | 单节点 |
 | --- | --- | --- |
@@ -127,9 +122,15 @@ lsmod | grep -E 'nfs|nfsd'   # confirm loaded
 
 ## 注意事项
 
-- **确实没有 HA** —— 节点重启、内核 panic、磁盘卡顿都是用户可感知的中断。演示前先确认机器健康
-- **`local-path` 数据绑定到节点** —— 删除节点或重装系统盘会丢失所有 PVC 数据。备份需依赖快照 / 应用层导出
-- **AFS 跑在集群内 NFS pod 上** —— 其数据位于 `local-path` PVC，绑定到节点磁盘。机器损坏或磁盘故障，所有 agent 共享文件随之丢失
-- **`install.sh` 必须在节点上运行** —— 单节点 profile 把镜像拉到本地集群；operator 无法从另一台机器运行
-- **升级走滚动重启** —— cp / browser / sandbox 在镜像更新期间有短暂不可用窗口（多节点部署没有这个窗口）。升级流程与[标准升级](/self-host/#upgrade)一致：重新执行 `./install.sh --profile=single-node`
-- **一旦出现生产需求** —— 不要试图把单节点打补丁改成 HA；迁移到多节点。运维心智上的差异比配置上的差异更大
+- **数据在节点上** —— PVC（含 AFS 共享文件）使用 `local-path`，绑定节点磁盘；重要数据请做外部备份
+- **安装器在节点本机运行** —— 单节点 profile 把镜像拉到本地集群
+- **升级会重启 pod** —— 镜像滚动期间有短暂窗口；流程与[标准升级](/zh-cn/self-host/#upgrade)一致：重跑一行命令或 `./install.sh --profile=single-node`
+
+## 下一步
+
+你现在是一个全新空平台的 admin。两篇短指南带你走到第一个能干活的 Agent：
+
+1. **[配置 API 供应商](/zh-cn/guides/1-setup/)** —— 接入大模型 API，让 Agent 能「思考」。全新安装的供应商列表是空的，创建第一个只需一分钟。
+2. **[第一个 Agent](/zh-cn/guides/2-first-agent/)** —— 创建 Workspace 并完成第一次对话，5 分钟以内。
+
+之后可以读[概念](/zh-cn/concepts/overview/)理解各个组成部分，其余指南覆盖触发、多 Agent 协作和规模化运营。

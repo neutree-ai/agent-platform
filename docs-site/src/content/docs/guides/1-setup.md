@@ -1,62 +1,35 @@
 ---
 title: 1. Getting Ready
-description: API providers and credentials — the bare minimum to prepare before using Neutree Agent Platform
+description: Connect a large-model API provider — the one thing to set up before creating your first Agent
 ---
 
-Before you create your first Agent, there are two things to confirm:
+:::note[Don't have a running platform yet?]
+These guides assume a Neutree Agent Platform instance you can sign in to. Don't have one? [Install it in one line](/self-host/single-node/).
+:::
 
-1. **You have a working API provider** — once an Agent is running, it needs to call a large-model API
-2. **(Optional) Credentials for the resources your Agent will access are ready** — for example, to operate a private Git repository, call an internal API, or sign in to a third-party service
+Before you create your first Agent, you need exactly one thing: a working **API provider** — the large-model API your Agent's calls go through. Each Workspace picks one provider plus a specific model, and all model calls in every Session go through that channel.
 
-The second item is on-demand; the vast majority of new users only need to take care of the first.
+## Create an API provider
 
-## API Providers: Your Agent's gateway to large models
+Press `⌘K` (`Ctrl+K` on Windows / Linux), search for **API Providers** and open it, then click **New API Provider**. (On a team instance an administrator may already have shared **Public** providers — if one fits, pick it and go straight to [creating your first Agent](/guides/2-first-agent/).)
 
-An API provider is the large-model API gateway you configure for Neutree Agent Platform. It tells the platform where to call, which key to use, and what protocol to follow. Each Workspace picks one provider plus a specific model (for example `gpt-5.4`), and all model calls across every Session go through this channel.
+The Provider Type must match the agent you plan to run and the API you have:
 
-### Check the existing providers first
+| Provider Type | Agent | When to use |
+|---|---|---|
+| **OpenAI Compatible** | Codex | Endpoints implementing the OpenAI **Responses API** — the official OpenAI API, Azure OpenAI, or a gateway that supports Responses. **Chat Completions–only services do not work**: Codex requires the Responses API. |
+| **Anthropic** | Claude Code | The official Anthropic API, with a static API key. |
+| **Anthropic OAuth** | Claude Code | Third-party services exposing an Anthropic-compatible API — most of them go here. Fill in the vendor's Base URL and key. Despite the name, there is **no OAuth authorization step**; the type just reuses the same protocol. |
+| **Claude Code OAuth** | Claude Code | Your personal Claude Pro / Team subscription. Run `claude setup-token` locally and paste the resulting token — no Base URL needed. |
 
-Open **Manage → API Providers** in the sidebar. There are usually already providers shared by the team or the platform (marked **Public**). These are preconfigured by platform administrators, and you can use them directly.
+Rule of thumb: running Codex → the first row, and confirm the endpoint speaks Responses; running Claude Code → one of the other three, depending on where your access comes from (official key / third-party compatible API / personal subscription).
 
-If the list already has a suitable provider, you can jump straight to [Guide 2](/guides/2-first-agent/) and create an Agent.
+Fill in what the chosen type asks for and save — the provider is ready for Agents to use.
 
-### Create your own provider
+## Sharing scope
 
-If the shared providers don't meet your needs (you want to bill against your own API key, or connect a service the team hasn't), click **New API Provider** to create a Private provider. Pick one from Provider Type:
-
-| Protocol Type | When to use |
-|---|---|
-| **OpenAI Compatible** | The official OpenAI API, Azure OpenAI, OpenRouter, and various large-model gateways — anything compatible with the OpenAI protocol falls into this category. The Codex agent must use this type. |
-| **Anthropic** | Direct connection to the official Anthropic API using a static API Key. |
-| **Anthropic OAuth** | A third-party service that offers an Anthropic-compatible protocol and requires OAuth authorization. |
-| **Claude Code OAuth** | Authorize with your personal Claude Pro / Team subscription, no API Key required. |
-
-After filling in the Base URL and API Key and saving, the provider is ready to be used by an Agent.
-
-### Public or Private
-
-- **Private** — only you can use it; suitable for a personal API key or a gateway you don't want to share
-- **Public** — every user on the platform can use it; suitable for quotas the team procures centrally and wants everyone to access
-
-Regular users default to Private. Public providers are usually maintained by administrators.
-
-## Credentials: Your Agent's keys to resources
-
-A provider lets an Agent "think"; credentials let an Agent "do things" — access private Git repositories, call internal APIs, read cloud storage, sign in to databases, and so on. Every external resource that requires authentication relies on credentials.
-
-Credentials are managed under **Manage → Credentials** in the sidebar, with three injection methods:
-
-- **env** — write the value into an environment variable (such as `GITHUB_TOKEN`, `DATABASE_URL`)
-- **file** — write the value into a file inside the container (such as `~/.gitconfig`, `credentials.json`)
-- **SSH Key** — a shortcut for creating a private-key credential, automatically placed in the standard location (`~/.ssh/id_ed25519`)
-
-Once a credential is created, select which ones to use in a Workspace. When the Agent starts, it automatically injects these credentials into the container.
-
-### Do you need this step?
-
-- If your first Agent only uses a large model to answer questions (such as summarizing text or drafting emails), you don't need any credentials — go straight to the next chapter
-- If your Agent needs to access internal resources (Git, internal APIs, SaaS accounts), come back to configure this once you've thought through what you want to do
+Like every shareable resource on the platform, a provider has one of three scopes: **Private** (only you), **Team** (members of a team), or **Public** (everyone on the instance). Personal keys default to Private; Public providers are usually maintained by administrators.
 
 ## Ready to go
 
-It boils down to one sentence: as long as there's a usable provider under **Manage → API Providers**, you're set. Head over to [Guide 2: Your First Agent](/guides/2-first-agent/).
+As long as the **API Providers** list shows one usable provider, you're set — go [create your first Agent](/guides/2-first-agent/).

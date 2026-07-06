@@ -8,13 +8,13 @@ The previous six chapters were all about a single Agent—how to configure it, t
 - The Prompt you tuned—how do you let others use it too?
 - The 5 Agents on your team—how do you keep their configurations consistent?
 - An Agent went wrong—how do you send this session to a colleague to look at?
-- 100 Workspaces piled up in the sidebar—how do you find the one you want?
+- 100 Workspaces piled up in your list—how do you find the one you want?
 
 This chapter covers everything in Neutree Agent Platform (NAP) related to "reuse, sharing, and organization."
 
 ## The Library trio: Prompts, Skills, Templates
 
-Under **Library** in the sidebar there are three kinds of things, each solving one reuse problem.
+The **Library** app (`⌘K` → **Library**) holds three kinds of things, each solving one reuse problem.
 
 ### Prompts
 
@@ -33,9 +33,9 @@ If only one Workspace uses it, there's no need to extract it. Wait until there's
 
 ### Skills
 
-Skills are also stored in the Library, with a similar mechanism. [Guide 3](/guides/3-agent-behavior/#skills-reusable-capability-packages) covered how to **enable** a skill in a Workspace. Here we cover how to **create** one:
+Skills are also stored in the Library, with a similar mechanism. [Defining Agent Behavior](/guides/3-agent-behavior/#skills-reusable-capability-packages) covered how to **enable** a skill in a Workspace. Here we cover how to **create** one:
 
-Library → **Skills** → Create. You can choose two methods:
+In the **Library** app, switch to **Skills** and create one. You can choose two methods:
 
 - **Upload an archive** —package `SKILL.md` together with any tool scripts into a zip and upload it
 - **Import from a Git repository** —specify a repository address and path, and the platform pulls it down. You can re-sync after the repository is updated
@@ -61,7 +61,7 @@ When to extract a Workspace into a Template:
 - **You want to give new members a ready-to-use starting point** —they only need to create from the Template, not configure from scratch
 - **The configuration is being iterated** —after the Template is updated, Workspaces bound to it can be upgraded with one click
 
-From the Workspace's top menu → **Save as Template**. You can choose whether to **bind** the current Workspace to this new Template (binding lets it follow updates).
+In the Workspace's **Settings** app, under **General**, click **Save as Template**. You can choose whether to **bind** the current Workspace to this new Template (binding lets it follow updates).
 
 ### The relationship between Templates and Library Prompts
 
@@ -74,9 +74,9 @@ A common team practice is: the Prompt field in the Template references a Library
 
 ## Tags: organizing your Workspace list
 
-Once dozens of Workspaces are piled up in the sidebar, finding one starts to get hard. **Tags** are NAP's lightweight grouping tool.
+Once dozens of Workspaces pile up, finding one starts to get hard. **Tags** are NAP's lightweight grouping tool.
 
-In the sidebar → **Manage Tags** to create tags. Check the tags to apply from a Workspace's menu. The tag button at the top of the sidebar quickly filters the list.
+Create and manage tags in the **Tags** app on the home screen (`⌘K` → **Tags**). Assign them to a Workspace in its **Settings** → **General**. The workspace switcher in the top menu bar filters the list by tag.
 
 ### Tag design suggestions
 
@@ -90,7 +90,7 @@ Colors are for at-a-glance differentiation. Tag filtering is OR logic—when mul
 
 When debugging an Agent, you often need to send a session to a colleague to look at: you see the Agent took a wrong turn at some step and want a colleague to help diagnose it.
 
-From the Workspace's top menu → **Share Session**. This generates a public link that anyone can open to see the full conversation of this Session—messages, tool calls, file operations all visible.
+Use the share button on a session (available in **Chat** and **Session History**). This generates a public link that anyone can open to see the full conversation of this Session—messages, tool calls, file operations all visible.
 
 Suitable scenarios:
 
@@ -102,13 +102,13 @@ Note that what you share is **public**—don't share sessions containing sensiti
 
 ## Workspace visibility and team collaboration
 
-[Guide 6](/guides/6-compose-agents/#visibility) covered how a Workspace's Visibility affects **who can call it**. The same field also affects **who can see it in their own list**:
+[Composing Agents](/guides/6-compose-agents/#visibility) covered how a Workspace's Visibility affects **who can call it**. The same field also affects **who can see it in their own list**:
 
 - **Private** —only you can see it
 - **User** —you can see it (it doesn't appear in others' lists)
-- **Public** —it's visible in all users' Library
+- **Public** —visible to every user on the instance
 
-The Prompts, Skills, and Templates in the Library also have a similar Public/Private distinction. Public suits capabilities the team/platform wants to share; Private suits personal use or the experimental stage.
+The Prompts, Skills, and Templates in the Library follow the platform's unified three-level sharing scope — **Private** / **Team** / **Public**. Public suits capabilities the whole instance should share, Team scopes them to selected teams, and Private suits personal use or the experimental stage.
 
 ### A common team pattern
 

@@ -26,7 +26,7 @@ The new version's design goals are precisely to untangle these three things.
 
 ### The decoupled relationship between stores and Workspaces
 
-In "Global Management" there's a **Memory Store** entry. The left sidebar lists all memory stores under the current account.
+Open the **Memory** app on the home screen (`⌘K` → **Memory**). The left pane lists all memory stores under the current account.
 
 - When you create a new Workspace, the system automatically creates a memory store of the same name and mounts it—so by default what you see is "one-to-one correspondence"
 - But **the relationship is decoupled**: you can create a new store and manually mount it to one or more Workspaces; you can also mount the same store to multiple Workspaces to share it
@@ -145,5 +145,5 @@ Why not expose memory via MCP tools? Two reasons:
 
 ## Next
 
-- Hands-on: mount a memory store and write your first memory → [Guide 3: Defining Agent Behavior](/guides/3-agent-behavior/#memory-recall-across-sessions)
+- Hands-on: mount a memory store and write your first memory → [Defining Agent Behavior](/guides/3-agent-behavior/#memory-recall-across-sessions)
 - How this mechanism relates to the Agent's five core parts → [The Anatomy of an Agent](/concepts/agent-anatomy/#memory-long-term-memory-across-sessions)

@@ -31,7 +31,7 @@ The control plane ships a default schema oriented around `inetOrgPerson`. If you
 | `LDAP_ATTR_NAME` | `cn` | Pulled out as the display name inside the platform |
 | `LDAP_ATTR_EMAIL` | `mail` | Pulled out as the email; an empty value becomes "no email" |
 
-Example: a customer whose user DNs look like `cn=zhouhw2,ou=user,ou=cfzq,dc=cfzq,dc=com`, with the login name on `cn`, the real name on `sn`, and an objectClass that may not include `inetOrgPerson`. Configure it like this:
+Example: a directory whose user DNs look like `cn=jdoe,ou=user,ou=corp,dc=example,dc=com`, with the login name on `cn`, the real name on `sn`, and an objectClass that may not include `inetOrgPerson`. Configure it like this:
 
 ```bash
 LDAP_SEARCH_FILTER=(objectClass=person)

@@ -61,7 +61,7 @@ Teamwork uses this same underlying layer—it just automates "create directory, 
 
 ## Teamwork's Three Enhancements
 
-Teamwork doesn't replace the two capabilities above; it adds a layer of "**task**" semantics on top of them. Open "Apps" and find the **Teamwork** entry (marked as preview), create a team task, set a **coordinator** Agent, then add members. From that moment, the following three things take effect automatically.
+Teamwork doesn't replace the two capabilities above; it adds a layer of "**task**" semantics on top of them. On the home screen, press `⌘K` and open **Teamwork** (marked as preview), create a team task, set a **coordinator** Agent, then add members. From that moment, the following three things take effect automatically.
 
 ### 1. Task-scoped Agent visibility
 
@@ -127,5 +127,5 @@ For example, have a code-review Agent open three sessions to inspect the same pi
 
 ## Next
 
-- Want to know exactly how Agents call each other and how to configure Visibility → [Guide 6: Multi-Agent Collaboration](/guides/6-compose-agents/)
+- Want to know exactly how Agents call each other and how to configure Visibility → [Composing Agents](/guides/6-compose-agents/)
 - Want to understand the underpinnings of cross-Agent file sharing → [AFS: Cross-Agent File Sharing](/concepts/afs/)
