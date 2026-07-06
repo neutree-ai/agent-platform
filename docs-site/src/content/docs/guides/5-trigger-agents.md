@@ -13,7 +13,7 @@ The concepts, boundaries, and the "why it's split this way" behind these three t
 
 ## Schedules
 
-At the top of the Workspace, go to **Automation** → **Schedules** and create one. You need to fill in three things:
+Open the **Automation** app (`⌘K` → **Automation**), switch to **Schedules**, and create one. You need to fill in three things:
 
 - **Name** —used for list display and log identification (e.g. `daily-report`)
 - **Schedule** —a cron expression
@@ -53,13 +53,12 @@ The vast majority of SaaS products support Webhooks (GitLab, GitHub, PagerDuty, 
 
 **Step 1: Create a Webhook Connector**
 
-In the sidebar, go to **Integrations → Connectors** → New, and choose type **Webhook**. A Webhook Connector itself requires no extra credentials.
+Press `⌘K`, open **Connectors**, create a new one, and choose type **Webhook**. A Webhook Connector itself requires no extra credentials.
 
 **Step 2: Create a Route**
 
-In the sidebar, go to **Integrations → Routes** → New. Configure:
+Select the Connector you just created; in its **Routes** tab, click **New Route**. Configure:
 
-- **Connector** —the one you just created
 - **Endpoint Path** —the URL path to listen on (e.g. `/gitlab-ci`), combined with the Connector to form the full receiving address
 - **Workspace** —which Workspace handles events that match
 - **Secret** —the signing key. External pushes carry the same key; the platform processes them only after verifying it. Both Plain and HMAC-SHA256 are supported (GitHub uses the latter)
@@ -133,7 +132,7 @@ Things to note: passive replies have a 24-hour window and are rate-limited (30 m
 
 If you want a program to call the Agent directly—from a CI pipeline, an automation script, or a small tool you wrote yourself—you can use a **Service Token**.
 
-In the sidebar, go to **Integrations → Service Tokens** → New. The token is **shown only once** after creation, so save it immediately.
+Press `⌘K`, open **Service Tokens**, and create one. The token is **shown only once** after creation, so save it immediately.
 
 Afterwards, include it in the `Authorization` header of your HTTP requests:
 
@@ -141,7 +140,7 @@ Afterwards, include it in the `Authorization` header of your HTTP requests:
 Authorization: Bearer <token>
 ```
 
-For the full list of which endpoints you can call and their URLs, see the [API docs](https://nap.neutree.ai/api/docs).
+For the full list of endpoints and their URLs, open **API Docs** on your instance (`⌘K` → **API Docs**; served at `/api/docs`).
 
 ## A quick reference
 
@@ -155,4 +154,4 @@ For the full list of which endpoints you can call and their URLs, see the [API d
 
 ## Next
 
-Let Agents collaborate with each other → [Guide 6: Composing Agents](/guides/6-compose-agents/).
+Let Agents collaborate with each other → [Composing Agents](/guides/6-compose-agents/).

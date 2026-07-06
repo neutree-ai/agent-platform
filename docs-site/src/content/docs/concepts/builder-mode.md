@@ -29,7 +29,7 @@ A Workspace's configuration—system prompt, enabled skills, schedules, model ch
 
 ## When Not To Use
 
-- **Cross-Workspace editing**—for safety, Builder Mode by default can only change the current Workspace's own configuration (account-scoped profiles are a separate matter; see [Guide 3](/guides/3-agent-behavior/#enabling-builder-mode))
+- **Cross-Workspace editing**—for safety, the default **This workspace** capability only changes the current Workspace's own configuration; account-wide resources require enabling the separate **Account-wide** capability (see [Enabling Builder Mode](/guides/3-agent-behavior/#enabling-builder-mode))
 - **Fine-grained field tweaks**—for example, changing a single word in the prompt; the UI editor may be handier
 
 ## The Safety Guarantees of the Approval Model
@@ -68,4 +68,4 @@ Having the Agent review historical sessions and improve its own configuration is
 
 ---
 
-For specific setup steps and the capability list, see [Guide 3: Enabling Builder Mode](/guides/3-agent-behavior/#enabling-builder-mode).
+For specific setup steps and the capability list, see [Enabling Builder Mode](/guides/3-agent-behavior/#enabling-builder-mode).

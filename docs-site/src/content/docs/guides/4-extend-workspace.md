@@ -3,20 +3,21 @@ title: 4. Extending the Workspace
 description: Custom commands, Sandbox, MCP services, and custom UI tabs
 ---
 
-[Guide 3](/guides/3-agent-behavior/) covered tuning a single Agent with off-the-shelf means. This chapter takes a step further out — **expanding the Agent's range of activity** by connecting it to tools and capabilities it didn't originally have.
+[The previous chapter](/guides/3-agent-behavior/) covered tuning a single Agent with off-the-shelf means. This chapter takes a step further out — **expanding the Agent's range of activity** by connecting it to tools and capabilities it didn't originally have.
 
-Four things, from shallow to deep:
+Five things, from shallow to deep:
 
 1. **Custom commands** — package frequently used prompts into one-click shortcuts
-2. **Sandbox** — a temporary isolated container for the Agent to run code (this section is explanatory, to help you understand the "sandbox" panel you see in the product)
-3. **MCP services** — connect the Agent to an independently running tool service
-4. **Custom UI tabs** — embed the interface of a business system into the Workspace (an engineering-team topic)
+2. **Credentials** — give the Agent keys to external resources (Git, internal APIs, third-party services)
+3. **Sandbox** — a temporary isolated container for the Agent to run code (this section is explanatory, to help you understand the "sandbox" panel you see in the product)
+4. **MCP services** — connect the Agent to an independently running tool service
+5. **Custom UI tabs** — embed the interface of a business system into the Workspace (an engineering-team topic)
 
 Read on as needed; the further down you go, the more engineering-oriented it gets.
 
 ## Custom commands
 
-If you find yourself repeatedly sending the same kind of prompt to the Agent, you should turn it into a command. Open **Automation** → **Commands** at the top of the Workspace, create a new one, and name the command something like `/review`.
+If you find yourself repeatedly sending the same kind of prompt to the Agent, you should turn it into a command. Open the **Automation** app (`⌘K` → **Automation**), switch to **Commands**, create a new one, and name the command something like `/review`.
 
 ### Command types
 
@@ -38,6 +39,20 @@ When you type `/review` in the input box to trigger it, three input fields — `
 - **Library Prompt** — reference a shared Prompt from the library. When the Prompt is updated, all referencing parties sync automatically
 
 The latter is suitable when multiple Agents share the same set of commands.
+
+## Credentials: Keys to external resources
+
+A provider lets the Agent "think"; credentials let it "do things" — access private Git repositories, call internal APIs, sign in to third-party services. Any external resource that requires authentication goes through a credential.
+
+Press `⌘K`, open **Credentials**, and create one. Three injection methods:
+
+- **env** — the value lands in an environment variable (such as `GITHUB_TOKEN`, `DATABASE_URL`)
+- **file** — the value is written to a file inside the container (such as `~/.gitconfig`, `credentials.json`)
+- **SSH Key** — a shortcut for a private-key credential, placed at the standard location (`~/.ssh/id_ed25519`)
+
+Each credential also declares its **scope**: available to all your Workspaces, or only to selected ones. When an Agent container starts, everything in scope is injected automatically — the Agent just reads `$GITHUB_TOKEN` or the file, the same way it would on any machine.
+
+When you open the credential dialog, the right side shows the field descriptions for each injection method.
 
 ## Sandbox: A temporary container for the Agent to run code
 
@@ -121,7 +136,7 @@ After deploying, fill its URL into the Agent configuration and the Agent can use
 
 > This section is an engineering-team topic. Users who don't write code can skip it.
 
-The tab bar at the top of the Workspace (**Files / Terminal**, etc.) is extensible — you can register a standalone web interface as a tab of the Workspace, so that while the Agent works, users can directly see the real-time status of the relevant business.
+A Workspace's apps (**Files / Terminal**, etc.) are extensible — you can register a standalone web interface as an app of the Workspace, so that while the Agent works, users can directly see the real-time status of the relevant business.
 
 This integration pattern is called **Mini SaaS** — an independently deployed microservice integrated back into the platform through three standardized channels:
 
@@ -133,4 +148,4 @@ If your business scenario needs this kind of deep integration, it's best to cont
 
 ## Next
 
-At this point the Agent's "capability surface" has a complete set of extension means. The next chapter covers how to make the Agent **triggered by more than just manual conversation** — [Guide 5: Triggering Agents](/guides/5-trigger-agents/).
+At this point the Agent's "capability surface" has a complete set of extension means. The next chapter covers how to make the Agent **triggered by more than just manual conversation** — [Triggering Agents](/guides/5-trigger-agents/).

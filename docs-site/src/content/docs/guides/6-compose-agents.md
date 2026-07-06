@@ -14,7 +14,7 @@ Neutree Agent Platform (NAP) lets one Agent **call another Agent like a tool** w
 1. Give it a **recognizable Slug**
 2. Set its **Visibility**
 
-Open **Workspace Settings** and find the Slug and Visibility fields.
+Open the **Settings** app in the Workspace — both fields are in the **General** section.
 
 ### Slug
 
@@ -89,7 +89,7 @@ The above describes **long-lived, fixed** collaboration relationships—A has a 
 >
 > "I want to bring my private Agent in for a single use, without permanently promoting it to user/public visibility."
 
-For this scenario, NAP provides **Teamwork** (in preview). Find the Teamwork entry under "Apps" and create a team task:
+For this scenario, NAP provides **Teamwork** (in preview). On the home screen, press `⌘K`, open **Teamwork**, and create a team task:
 
 1. **Designate a coordinator Agent**—it's the main Agent, and all sub-agent calls are initiated by it
 2. **Add members**—the candidate list includes all public / user visible Agents, **plus your own private Agents** (if one doesn't have a slug yet, you can set it up right here). A private Agent added to a task is only visible within that task and doesn't affect other scenarios
@@ -116,4 +116,4 @@ For the full design motivation and how it works, see the [Teamwork concepts page
 
 ## Next
 
-By now you've covered both the Agent's "capability surface" and its "collaboration surface." The final chapter covers how to **reuse, share, and scale** these capabilities → [Guide 7: Operating at Scale](/guides/7-operate-at-scale/).
+By now you've covered both the Agent's "capability surface" and its "collaboration surface." The final chapter covers how to **reuse, share, and scale** these capabilities → [Operating at Scale](/guides/7-operate-at-scale/).
