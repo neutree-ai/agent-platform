@@ -145,14 +145,29 @@ export function getToolDisplayName(name: string | null | undefined): string {
 }
 
 /**
+ * Codex dispatches MCP calls as a literal `execute` tool_call carrying the
+ * real target at `input.tool` (paired with `input.server` / `input.arguments`
+ * — the same shape `unwrapMcpInput` unwraps for renderer input access).
+ * Renderer lookup needs the real tool name, not the `execute` wrapper name.
+ */
+export function unwrapExecuteDispatchName(name: string, input: unknown): string {
+  if (name !== 'execute' || typeof input !== 'object' || input === null) return name
+  const record = input as Record<string, unknown>
+  return typeof record.tool === 'string' && record.server ? record.tool : name
+}
+
+/**
  * Resolve the best renderer for a tool call.
  * 1. Built-in exact tool-name match (after stripping prefixes)
  * 2. Plugin-registered renderer (window.tos.registerToolRenderer)
  * 3. Agent-type fallback
  * 4. null (caller uses DefaultInput/DefaultResult)
  */
-export function resolveRenderer(toolName: string, agentType: string): ToolRendererDef | null {
-  const displayName = getToolDisplayName(toolName)
+export function resolveRenderer(
+  tool: { name: string; input?: unknown },
+  agentType: string,
+): ToolRendererDef | null {
+  const displayName = getToolDisplayName(unwrapExecuteDispatchName(tool.name, tool.input))
   return (
     toolRenderers[displayName] ??
     getPluginToolRenderer(displayName) ??

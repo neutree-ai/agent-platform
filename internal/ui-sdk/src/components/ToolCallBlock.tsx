@@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { useLazyToolRenderers } from '../lazy'
 import { getToolRenderersVersion, subscribeToolRenderers } from '../tool-renderers/plugin-registry'
 import { DefaultInput, DefaultResult } from '../tool-renderers/defaults'
-import { getToolDisplayName, resolveRenderer } from '../tool-renderers/registry'
+import {
+  getToolDisplayName,
+  resolveRenderer,
+  unwrapExecuteDispatchName,
+} from '../tool-renderers/registry'
 import { jsonPreview } from '../tool-renderers/types'
 import type { ToolCall } from '../types'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
@@ -43,11 +47,12 @@ function ToolCallBlockImpl({ tool }: { tool: ToolCall }) {
   // default to the real renderer the moment it lands.
   useSyncExternalStore(subscribeToolRenderers, getToolRenderersVersion)
   useSyncExternalStore(lazy?.subscribe ?? NOOP_SUBSCRIBE, lazy?.getVersion ?? ZERO)
-  const renderer = resolveRenderer(tool.name, agentType)
+  const effectiveName = unwrapExecuteDispatchName(tool.name, tool.input)
+  const renderer = resolveRenderer(tool, agentType)
   // No synchronous renderer yet — if a host-provided lazy source owns this tool,
   // show a skeleton and kick off the bundle load; the subscriptions above
   // re-render once it registers.
-  const lazyPluginId = renderer ? null : (lazy?.getPluginId(getToolDisplayName(tool.name)) ?? null)
+  const lazyPluginId = renderer ? null : (lazy?.getPluginId(getToolDisplayName(effectiveName)) ?? null)
   useEffect(() => {
     if (lazyPluginId && lazy) lazy.load(lazyPluginId).catch(() => {})
   }, [lazyPluginId, lazy])
@@ -76,9 +81,9 @@ function ToolCallBlockImpl({ tool }: { tool: ToolCall }) {
             )}
             <span
               className="shrink-0 truncate font-mono text-xs text-foreground/80"
-              title={getToolDisplayName(tool.name)}
+              title={getToolDisplayName(effectiveName)}
             >
-              {getToolDisplayName(tool.name)}
+              {getToolDisplayName(effectiveName)}
             </span>
             {preview && (
               <span
