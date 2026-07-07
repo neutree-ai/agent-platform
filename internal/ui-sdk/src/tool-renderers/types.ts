@@ -42,9 +42,11 @@ export function truncate(s: string, max = 120): string {
 
 /**
  * Extract text from MCP tool result.
- * Handles both formats:
- *  - CC MCP:    [{"type":"text","text":"..."}]
- *  - Codex MCP: {"content":[{"type":"text","text":"..."}]}
+ * Handles:
+ *  - CC MCP:      [{"type":"text","text":"..."}]
+ *  - Codex MCP:   {"content":[{"type":"text","text":"..."}]}
+ *  - Codex `execute(server, tool, arguments)` dispatcher: wraps the real
+ *    CallToolResult one level deeper, as {"result":{"content":[...]},"error":null}
  */
 export function getMcpText(result: string | object | undefined): string | null {
   const parsed = safeParseResult<unknown>(result)
@@ -56,9 +58,16 @@ export function getMcpText(result: string | object | undefined): string | null {
       return (first as { text: string }).text
     return null
   }
+  if (typeof parsed !== 'object') return null
+  const container =
+    'content' in parsed
+      ? parsed
+      : 'result' in parsed && typeof (parsed as { result: unknown }).result === 'object'
+        ? (parsed as { result: object }).result
+        : parsed
   // Wrapped: {"content":[{"type":"text","text":"..."}]}
-  if (typeof parsed === 'object' && 'content' in parsed) {
-    const content = (parsed as { content: unknown }).content
+  if (container && typeof container === 'object' && 'content' in container) {
+    const content = (container as { content: unknown }).content
     if (
       Array.isArray(content) &&
       content[0] &&
