@@ -1318,6 +1318,25 @@ export const ApiScheduleSchema = z.object({
 
 export type ApiSchedule = z.infer<typeof ApiScheduleSchema>
 
+// Per-field max value for a standard 5-field cron expression (minute, hour,
+// day-of-month, month, day-of-week). The `cron-parser` lib both the web
+// preview and pg-boss (server-side execution) run on doesn't reject a step
+// larger than a field's range — e.g. "0/120" in the minute field silently
+// walks 0,120,240,... within 0-59 and only ever matches minute 0, collapsing
+// "every 120 minutes" into "every hour" with no error, no matter which side
+// parses it. Reject that shape up front instead of letting it silently fire
+// at the wrong interval.
+const CRON_FIELD_MAX = [59, 23, 31, 12, 7]
+
+export function hasOutOfRangeCronStep(cron: string): boolean {
+  const parts = cron.trim().split(/\s+/)
+  if (parts.length !== 5) return false
+  return parts.some((field, i) => {
+    const step = field.match(/\/(\d+)$/)
+    return step ? Number(step[1]) > CRON_FIELD_MAX[i] : false
+  })
+}
+
 export const ScheduleCreateBodySchema = z
   .object({
     name: z.string().min(1),
@@ -1332,6 +1351,10 @@ export const ScheduleCreateBodySchema = z
   })
   .refine((v) => !!v.cron !== !!v.run_at, {
     message: 'Provide exactly one of cron or run_at',
+    path: ['cron'],
+  })
+  .refine((v) => !v.cron || !hasOutOfRangeCronStep(v.cron), {
+    message: 'cron step exceeds a field\'s valid range (e.g. minute step > 59)',
     path: ['cron'],
   })
 
@@ -1349,6 +1372,10 @@ export const ScheduleUpdateBodySchema = z
     enabled: z.boolean(),
   })
   .partial()
+  .refine((v) => !v.cron || !hasOutOfRangeCronStep(v.cron), {
+    message: 'cron step exceeds a field\'s valid range (e.g. minute step > 59)',
+    path: ['cron'],
+  })
 
 // ─── Chat ───────────────────────────────────────────────────────────
 

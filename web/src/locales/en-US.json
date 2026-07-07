@@ -1773,7 +1773,8 @@
       },
       "hints": {
         "standard": "Standard 5-field cron: minute hour day month weekday",
-        "invalid": "Invalid expression"
+        "invalid": "Invalid expression",
+        "outOfRangeStep": "Step exceeds this field's valid range — the actual interval will be truncated and won't fire as intended"
       }
     },
     "dialog": {
