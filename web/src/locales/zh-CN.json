@@ -1798,7 +1798,8 @@
       },
       "hints": {
         "standard": "标准 5 段 cron：分钟 小时 日 月 星期",
-        "invalid": "表达式无效"
+        "invalid": "表达式无效",
+        "outOfRangeStep": "步长超出该字段取值范围，实际触发间隔会被截断，不会按预期生效"
       }
     },
     "dialog": {

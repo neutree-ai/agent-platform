@@ -7,6 +7,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { describeCron } from "@/lib/cron-describe";
+import { hasOutOfRangeCronStep } from "@neutree-ai/types";
 import { CronExpressionParser } from "cron-parser";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -386,8 +387,15 @@ export function CronEditor({
       ? "custom"
       : parsed.period;
 
-  const description = useMemo(() => describeCron(value, i18n.language), [value, i18n.language]);
-  const nextFires = useMemo(() => computeNextFires(value, timezone, 3), [value, timezone]);
+  const outOfRangeStep = useMemo(() => hasOutOfRangeCronStep(value), [value]);
+  const description = useMemo(
+    () => (outOfRangeStep ? null : describeCron(value, i18n.language)),
+    [value, i18n.language, outOfRangeStep],
+  );
+  const nextFires = useMemo(
+    () => (outOfRangeStep ? null : computeNextFires(value, timezone, 3)),
+    [value, timezone, outOfRangeStep],
+  );
 
   return (
     <div className="space-y-3">
@@ -549,13 +557,17 @@ export function CronEditor({
       {/* Preview — natural-language description + next fires. Raw cron is
           intentionally absent from the preview: it only appears in the
           custom-mode input box where the user is typing it directly. */}
-      {(description || nextFires) && (
+      {(description || nextFires || outOfRangeStep) && (
         <div className="space-y-1 rounded-md border border-foreground/[0.08] bg-foreground/[0.02] px-2.5 py-2">
           {description ? (
             <div className="text-xs text-foreground">{description}</div>
           ) : (
             <div className="text-xs text-destructive">
-              {t("components.cronEditor.hints.invalid")}
+              {t(
+                outOfRangeStep
+                  ? "components.cronEditor.hints.outOfRangeStep"
+                  : "components.cronEditor.hints.invalid",
+              )}
             </div>
           )}
           {nextFires && nextFires.length > 0 && (
