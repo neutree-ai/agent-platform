@@ -17,7 +17,7 @@ import { streamSSE } from 'hono/streaming'
 import WebSocket from 'ws'
 import type { McpServer } from '@agentclientprotocol/sdk'
 import type { AgentCapabilities } from '../types/events.js'
-import type { AcpBridge } from './acp-bridge.js'
+import type { AcpBridge, AcpSessionHandler } from './acp-bridge.js'
 import type { ChatRequest } from './types.js'
 import { AcpEventTranslator } from './universal-events.js'
 
@@ -112,6 +112,11 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
     sessionBridges.delete(sessionId)
     bridgeLastActive.delete(sessionId)
     pendingDestroy.delete(sessionId)
+    // A destroyed bridge's in-flight-turn accounting is meaningless — the child
+    // is gone. Clear it so a leaked count (e.g. a turn that never ran exitTurn
+    // because its child died mid-turn) can't strand the next bridge for this
+    // session as permanently "busy", blocking eviction/reload forever.
+    busyTurns.delete(sessionId)
   }
 
   // Periodic bridge sweep: (0) drain reload/eviction-deferred destroys whose
@@ -312,6 +317,16 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
       const translator = new AcpEventTranslator(sessionId)
       let currentSessionId: string | undefined
       let currentBridge: AcpBridge | undefined
+      // True when this turn ran on a bridge pulled from the cache rather than a
+      // fresh spawn. Only reused bridges can be "process-alive but session-dead"
+      // (see the prompt rebuild path below); a just-loaded/created bridge that
+      // fails has a genuine cause, so we never blind-retry it.
+      let reusedBridge = false
+      // Set once the turn emits any translated event. Guards the rebuild-retry:
+      // we only auto-recover a prompt that failed producing *nothing* (the
+      // poisoned-session signature — instant reject, no output); a mid-turn
+      // failure after partial output must not be retried (would duplicate).
+      let turnProducedOutput = false
       const chatStartedAt = Date.now()
 
       try {
@@ -322,6 +337,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
             // Reuse existing bridge for this session
             currentBridge = existing
             currentSessionId = sessionId
+            reusedBridge = true
             activeSinks.set(sessionId, sink)
             touchBridge(sessionId)
             console.log(`[agent] Reusing bridge session=${sessionId} bridge_reuse=${Date.now() - chatStartedAt}ms`)
@@ -410,9 +426,10 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         if (!activeSinks.has(currentSessionId)) {
           activeSinks.set(currentSessionId, sink)
         }
-        currentBridge!.registerHandler(currentSessionId, {
+        const sessionHandler: AcpSessionHandler = {
           onUpdate(update) {
             for (const evt of translator.translateUpdate(update)) {
+              turnProducedOutput = true
               sink.write('message', JSON.stringify(evt))
             }
           },
@@ -420,7 +437,8 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
             const optionId = req.options?.[0]?.optionId ?? 'allow-once'
             return { outcome: { outcome: 'selected' as const, optionId } }
           },
-        })
+        }
+        currentBridge!.registerHandler(currentSessionId, sessionHandler)
 
         // Handle client disconnect. Only switch to buffer mode if we still
         // own `sink.write` — if a `/reconnect` handler has taken over, leave
@@ -431,17 +449,52 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           clearInterval(keepaliveTimer)
         })
 
+        // Run one turn on `bridge`, keeping the busy-turn count balanced.
+        async function runTurn(bridge: AcpBridge) {
+          enterTurn(currentSessionId!)
+          try {
+            return await bridge.prompt(currentSessionId!, message, images)
+          } finally {
+            exitTurn(currentSessionId!)
+            touchBridge(currentSessionId!)
+          }
+        }
+
         // Send prompt and wait for turn completion
         const initMs = Date.now() - chatStartedAt
         console.log(`[agent] Prompting session=${currentSessionId} init_total=${initMs}ms`)
         const promptStart = Date.now()
-        enterTurn(currentSessionId)
         let result
         try {
-          result = await currentBridge!.prompt(currentSessionId, message, images)
-        } finally {
-          exitTurn(currentSessionId)
+          result = await runTurn(currentBridge!)
+        } catch (promptErr: any) {
+          // A cached bridge can be alive at the OS-process level yet have a
+          // poisoned in-codex session (e.g. a prior turn's child died / was
+          // interrupted mid-flight), so every reused prompt rejects instantly
+          // with no output and the session is stranded — retry and "continue"
+          // both keep hitting the same dead session. isAlive() (process-level)
+          // can't see this. When a *reused* bridge fails having produced
+          // nothing, force-rebuild from the persisted rollout and retry the
+          // prompt once. A freshly loaded child that fails again means the
+          // cause is upstream/content (not a stuck bridge), so we let it throw.
+          if (!reusedBridge || turnProducedOutput) throw promptErr
+          console.warn(
+            `[agent] Reused bridge failed with no output, rebuilding session=${currentSessionId}: ${promptErr?.message ?? promptErr}`,
+          )
+          destroyBridge(currentSessionId)
+          const rebuilt = await bridgeFactory!()
+          await rebuilt.loadSession(currentSessionId, {
+            mcpServers: config.loadMcpServers(sessionToken),
+          })
+          currentBridge = rebuilt
+          reusedBridge = false
+          sessionBridges.set(currentSessionId, rebuilt)
+          activeSinks.set(currentSessionId, sink)
           touchBridge(currentSessionId)
+          rebuilt.registerHandler(currentSessionId, sessionHandler)
+          console.log(`[agent] Rebuilt bridge, retrying prompt session=${currentSessionId}`)
+          result = await runTurn(rebuilt)
+          console.log(`[agent] Rebuilt bridge recovered session=${currentSessionId}`)
         }
         console.log(`[agent] Prompt done session=${currentSessionId} prompt=${Date.now() - promptStart}ms total=${Date.now() - chatStartedAt}ms`)
 
