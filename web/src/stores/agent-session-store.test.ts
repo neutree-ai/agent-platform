@@ -660,6 +660,53 @@ describe('createAgentSessionStore', () => {
       expect(toolBlock!.type === 'tool' && toolBlock!.tool.input).toEqual({ path: '/a.ts' })
     })
 
+    test('SSE tool_call populates input from start-event args (no completion event)', () => {
+      // The Codex `execute` dispatcher's renderer is chosen by the (name, input)
+      // pair — the approval card only resolves once input reveals the wrapped
+      // {server, tool}. When a tool_call has no separate completion event (only
+      // a tool_result follows), input must be populated on start or the block is
+      // stranded on the generic renderer and the card never appears.
+      const deps = makeDeps({
+        sse: {
+          createAgentChat: vi.fn((_wid, _msg, _sid, handlers: SSEHandlers) => {
+            handlers.onItemStarted?.({
+              item_id: 'tc-1',
+              kind: 'tool_call',
+              role: null,
+              status: 'in_progress',
+              content: [
+                {
+                  type: 'tool_call',
+                  call_id: 'call-1',
+                  name: 'execute',
+                  arguments:
+                    '{"server":"tos-platform","tool":"prompt_update_propose","arguments":{}}',
+                },
+              ],
+            } as UniversalItem)
+            handlers.onItemCompleted?.({
+              item_id: 'tr-1',
+              kind: 'tool_result',
+              role: 'tool',
+              status: 'completed',
+              content: [{ type: 'tool_result', call_id: 'call-1', output: '{}' }],
+            } as UniversalItem)
+          }),
+        },
+      })
+      const { s } = make('ws-1', deps)
+
+      s.sendMessage('update the prompt')
+
+      const assistant = s.messages.find((m) => m.role === 'assistant')!
+      const toolBlock = assistant.blocks.find((b) => b.type === 'tool')!
+      expect(toolBlock.type === 'tool' && toolBlock.tool.input).toEqual({
+        server: 'tos-platform',
+        tool: 'prompt_update_propose',
+        arguments: {},
+      })
+    })
+
     test('SSE tool_result updates existing tool block', () => {
       const deps = makeDeps({
         sse: {

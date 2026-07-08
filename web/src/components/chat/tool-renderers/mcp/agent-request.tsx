@@ -123,21 +123,23 @@ function AgentRequestCardInteractive({ envelope }: { envelope: ProposeEnvelope }
   const workspaceId = useAgentSessionStore((s) => s.workspaceId)
   const isBusy = useAgentSessionStore((s) => s.isBusy)
   const actions = useAgentSessionActions()
-  const seeded: ApiAgentRequest | null =
-    envelope.payload !== undefined && envelope.status !== undefined
-      ? {
-          id: envelope.request_id,
-          workspace_id: workspaceId,
-          user_id: '',
-          kind: envelope.kind,
-          payload: envelope.payload as Record<string, unknown>,
-          status: envelope.status,
-          reject_reason: null,
-          applied_at: null,
-          created_at: new Date().toISOString(),
-          resolved_at: null,
-        }
-      : null
+  // Primitive so it's stable across renders (envelope identity is not) — safe
+  // to use as an effect dep and to gate the fetch-failure fallback below.
+  const hasSeed = envelope.payload !== undefined && envelope.status !== undefined
+  const seeded: ApiAgentRequest | null = hasSeed
+    ? {
+        id: envelope.request_id,
+        workspace_id: workspaceId,
+        user_id: '',
+        kind: envelope.kind,
+        payload: envelope.payload as Record<string, unknown>,
+        status: envelope.status as ApiAgentRequest['status'],
+        reject_reason: null,
+        applied_at: null,
+        created_at: new Date().toISOString(),
+        resolved_at: null,
+      }
+    : null
   const [req, setReq] = useState<ApiAgentRequest | null>(seeded)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -152,15 +154,21 @@ function AgentRequestCardInteractive({ envelope }: { envelope: ProposeEnvelope }
         if (!cancelled) setReq(r)
       })
       .catch((e: Error) => {
-        if (!cancelled) setLoadError(e.message)
+        // This fetch only refreshes the authoritative status. When the envelope
+        // already carried payload+status (so `seeded` rendered a card), a
+        // transient failure here — e.g. control-plane blips during cluster
+        // instability — must NOT blank the card; keep showing the seed. Only
+        // surface a fatal load error when there was nothing to fall back to.
+        if (!cancelled && !hasSeed) setLoadError(e.message)
       })
     return () => {
       cancelled = true
     }
-  }, [workspaceId, envelope.request_id])
+  }, [workspaceId, envelope.request_id, hasSeed])
 
   async function resolve(decision: 'approved' | 'rejected', rejectReason?: string) {
     setPending(true)
+    setLoadError(null)
     try {
       const updated = await api.resolveAgentRequest(
         workspaceId,
@@ -182,16 +190,15 @@ function AgentRequestCardInteractive({ envelope }: { envelope: ProposeEnvelope }
     }
   }
 
-  if (loadError) {
-    return (
+  // Only a fatal state (no card to show) replaces the whole renderer. A
+  // resolve() failure while a card is already on screen surfaces inline below,
+  // so the user keeps the card and can retry instead of losing it entirely.
+  if (!req) {
+    return loadError ? (
       <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-tiny text-destructive">
         {t('components.chat.toolRenderers.agentRequest.loadFailed')}: {loadError}
       </div>
-    )
-  }
-
-  if (!req) {
-    return (
+    ) : (
       <div className="rounded-md border bg-muted/30 p-3 text-tiny text-muted-foreground">
         {t('components.chat.toolRenderers.agentRequest.loading')}
       </div>
@@ -269,6 +276,12 @@ function AgentRequestCardInteractive({ envelope }: { envelope: ProposeEnvelope }
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {loadError && (
+        <div className="px-3 py-2 border-t border-destructive/20 bg-destructive/5 text-tiny text-destructive">
+          {t('components.chat.toolRenderers.agentRequest.loadFailed')}: {loadError}
         </div>
       )}
 

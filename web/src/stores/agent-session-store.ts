@@ -408,6 +408,19 @@ export function createAgentSessionStore(
         if (item.kind === 'tool_call') {
           const tc = item.content?.[0]
           if (tc?.type === 'tool_call') {
+            // Populate input from the args carried on the start event rather
+            // than deferring to onItemCompleted. A renderer is chosen by the
+            // (name, input) pair — e.g. the Codex `execute` dispatcher only
+            // resolves to the approval-card renderer once input reveals the
+            // wrapped `{server, tool}`. If a tool_call has no separate
+            // completion event (only a tool_result follows), leaving input
+            // empty here strands the block on the generic renderer forever and
+            // the approval card never appears. Parse defensively; missing/bad
+            // args fall back to {} exactly as before.
+            let input: Record<string, unknown> = {}
+            try {
+              input = JSON.parse(tc.arguments || '{}')
+            } catch {}
             store.setState((s) => ({
               messages: s.messages.map((m) =>
                 m.id === assistantId
@@ -422,7 +435,7 @@ export function createAgentSessionStore(
                             name:
                               tc.name ??
                               transcriptI18n.t('components.chat.toolRenderers.labels.unknown'),
-                            input: {},
+                            input,
                             startedAt: Date.now(),
                             parentToolUseId: item.parent_tool_use_id ?? null,
                           },
