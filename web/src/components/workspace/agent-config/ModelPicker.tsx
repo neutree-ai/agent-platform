@@ -250,6 +250,7 @@ export function TestResult({ state, detail }: { state: TestState; detail: string
 // ── Hook: fetch models for a provider ──
 
 export function useProviderModels(providerId: string) {
+  const { t } = useTranslation()
   const [models, setModels] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -270,10 +271,10 @@ export function useProviderModels(providerId: string) {
       })
       .catch(() => {
         setModels([])
-        setError('Failed to load models')
+        setError(t('components.modelFields.errors.loadModelsFailed'))
       })
       .finally(() => setLoading(false))
-  }, [providerId])
+  }, [providerId, t])
 
   return { models, loading, error }
 }

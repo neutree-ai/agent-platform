@@ -1157,6 +1157,9 @@
       },
       "empty": {
         "noProviders": "No providers found."
+      },
+      "errors": {
+        "loadModelsFailed": "Failed to load models"
       }
     },
     "agentConfigFieldHint": {
