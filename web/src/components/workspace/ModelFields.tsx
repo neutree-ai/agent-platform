@@ -165,9 +165,7 @@ export function ModelFields({
             />
           )}
         </div>
-        {modelsError && (
-          <p className="text-xs text-destructive">{modelsError}</p>
-        )}
+        {modelsError && <p className="text-xs text-destructive">{modelsError}</p>}
         {providerId && <TestResult state={test.state} detail={test.detail} />}
       </div>
 

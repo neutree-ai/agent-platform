@@ -1182,6 +1182,9 @@
       },
       "empty": {
         "noProviders": "未找到 API 供应商。"
+      },
+      "errors": {
+        "loadModelsFailed": "加载模型列表失败"
       }
     },
     "agentConfigFieldHint": {
