@@ -279,6 +279,12 @@ class ApiClient {
     })
   }
 
+  async restartWorkspace(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/workspaces/${id}/restart`, {
+      method: 'POST',
+    })
+  }
+
   async deleteWorkspace(id: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/workspaces/${id}`, {
       method: 'DELETE',
