@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
 import { resetAllSessionsIdle } from '../../services/db/sessions'
 import { getWorkspace, updateWorkspace } from '../../services/db/workspaces'
-import { setDesiredPhase } from '../../services/placement'
+import { bumpWorkspaceSpec, setDesiredPhase } from '../../services/placement'
 import { reconcileWorkspacePod, startWorkspaceInstance } from '../../services/workspace-reconcile'
 import { canManage, interruptAllSessions } from './_shared'
 
@@ -115,6 +115,64 @@ lifecycle.openapi(stopRoute, async (c) => {
     await updateWorkspace(id, { status: 'stopped' })
     return c.json({ success: true }, 200)
   } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// ── POST /:id/restart ──────────────────────────────────────────────────────
+const restartRoute = createRoute({
+  method: 'post',
+  path: '/{id}/restart',
+  tags: ['workspaces'],
+  summary: 'Restart a workspace — replace its pod, preserving state',
+  description:
+    "Recreates the workspace's pod (clearing in-pod ephemeral/agent state such " +
+    'as a stuck agent process) while keeping desired_phase=running, the PVC, ' +
+    'and persisted session history. Replaces the racy client-side stop+start: ' +
+    'bumps the placement spec so the env-runner rebuilds the Deployment in one ' +
+    'converge, so the pod is always actually replaced (a fast stop+start could ' +
+    'leave the old pod running because the stopped window was never observed).',
+  security: [{ bearerAuth: [] }],
+  request: { params: WorkspaceIdParam },
+  responses: {
+    200: {
+      description: 'Restart initiated',
+      content: { 'application/json': { schema: SuccessSchema } },
+    },
+    404: {
+      description: 'Workspace not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    500: {
+      description: 'Internal error',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+lifecycle.openapi(restartRoute, async (c) => {
+  const currentUser = c.get('user')
+  const { id } = c.req.valid('param')
+  const workspace = await getWorkspace(id)
+  if (!workspace || !canManage(workspace, currentUser)) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  try {
+    console.log(`[Restart] Request workspace=${id}`)
+    await interruptAllSessions(workspace, 'Restart')
+    // Force a pod replacement via the placement system rather than a client-side
+    // stop→start: bumping spec_version makes the env-runner re-apply (rebuild the
+    // Deployment → new pod) on its next converge. desired_phase stays 'running'
+    // throughout, so — unlike stop+start — there is no stopped window to race
+    // away, and the pod is reliably recreated. PVC + session history persist.
+    await bumpWorkspaceSpec(id)
+    await setDesiredPhase(id, 'running')
+    await resetAllSessionsIdle(id)
+    await updateWorkspace(id, { status: 'starting' })
+    return c.json({ success: true }, 200)
+  } catch (e: any) {
+    console.error('[Restart] Failed:', e)
     return c.json({ error: e.message }, 500)
   }
 })

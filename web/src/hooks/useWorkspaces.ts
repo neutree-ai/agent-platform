@@ -72,10 +72,11 @@ export function useRestartWorkspace() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async (id: string) => {
-      await api.stopWorkspace(id)
-      return api.startWorkspace(id)
-    },
+    // Single server-side restart (pod rebuild via the placement system). The old
+    // stop-then-start raced: the two desired-phase writes landed back-to-back so
+    // the env-runner never observed a durable "stopped", left the Deployment at
+    // one replica, and the same pod (with its stale in-pod agent state) survived.
+    mutationFn: (id: string) => api.restartWorkspace(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] })
     },
