@@ -17,7 +17,7 @@ COPY env-runner-k8s/src ./src
 # them into dist/index.js, so the runtime stage doesn't need them.
 # @kubernetes/client-node and multiplex stay external.
 COPY internal/env-runner-core /app/internal/env-runner-core
-COPY internal/k8s-provider/package.json internal/k8s-provider/index.ts /app/internal/k8s-provider/
+COPY internal/k8s-provider /app/internal/k8s-provider
 COPY internal/env-tunnel /app/internal/env-tunnel
 COPY internal/types /app/internal/types
 
