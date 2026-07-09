@@ -480,6 +480,11 @@ apply_manifests() {
   kapply -f "$RENDERED_DIR/channel-gateway.yaml"
   kapply -f "$RENDERED_DIR/scheduler.yaml"
   kapply -f "$RENDERED_DIR/skills-content-service.yaml"
+  # env-runner-k8s owns every workspace mutation since the P1 control inversion:
+  # control-plane only writes desired state to workspace_placements, the runner
+  # reconciles it into Deployments. Without it, workspaces never start. Apply it
+  # before control-plane so the runner is watching before placements are written.
+  kapply -f "$RENDERED_DIR/env-runner-k8s.yaml"
   kapply -f "$RENDERED_DIR/control-plane.yaml"
   if [ "$SANDBOX_ENABLED" = "true" ]; then
     kapply -f "$RENDERED_DIR/sandbox-service.yaml"
@@ -527,7 +532,7 @@ apply_manifests() {
   [ "$BROWSER_ENABLED" = true ] && browser_dep="nap-browser"
 
   log "Waiting for deployments to be ready ..."
-  for dep in nap-cp nap-cg nap-scheduler nap-skills $sandbox_dep $browser_dep afs-controller nap-office-converter; do
+  for dep in nap-cp nap-cg nap-scheduler nap-skills nap-env-runner-k8s $sandbox_dep $browser_dep afs-controller nap-office-converter; do
     kubectl -n "${NAMESPACE}" rollout status "deployment/$dep" --timeout=180s || {
       warn "$dep not ready within 180s"
     }
@@ -539,13 +544,13 @@ apply_manifests() {
   # on fresh installs (pods were just created). Excluded: nap-pg (operator-
   # managed via CNPG).
   log "Refreshing :latest-tag deployments to pick up new image digests ..."
-  for dep in nap-cp nap-cg nap-scheduler nap-skills afs-controller $sandbox_dep $browser_dep nap-office-converter; do
+  for dep in nap-cp nap-cg nap-scheduler nap-skills nap-env-runner-k8s afs-controller $sandbox_dep $browser_dep nap-office-converter; do
     kubectl -n "${NAMESPACE}" rollout restart "deployment/$dep" >/dev/null 2>&1 || true
   done
   if [ "$SANDBOX_ENABLED" = "true" ]; then
     kubectl -n "${NAMESPACE}" rollout restart daemonset/sandbox-image-warmer >/dev/null 2>&1 || true
   fi
-  for dep in nap-cp nap-cg nap-scheduler nap-skills afs-controller $sandbox_dep $browser_dep nap-office-converter; do
+  for dep in nap-cp nap-cg nap-scheduler nap-skills nap-env-runner-k8s afs-controller $sandbox_dep $browser_dep nap-office-converter; do
     kubectl -n "${NAMESPACE}" rollout status "deployment/$dep" --timeout=180s || {
       warn "$dep restart not ready within 180s"
     }
