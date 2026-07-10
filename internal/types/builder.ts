@@ -241,7 +241,7 @@ export const ConfigUpdatePayloadSchema = z
       .min(1)
       .optional()
       .describe(
-        'Agent runtime to use, e.g. "claude-code" / "codex" / "opencode". Changing this while the workspace is running triggers a container rebuild.',
+        'Agent runtime to use, e.g. "claude-code" / "codex" / "goose". Changing this while the workspace is running triggers a container rebuild.',
       ),
     provider_id: z
       .string()

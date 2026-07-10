@@ -58,7 +58,6 @@ const AGENT_SETTINGS_DEFAULTS: Record<string, Record<string, any>> = {
     permissions: { allow: [], deny: [] },
     enableAllProjectMcpServers: true,
   },
-  opencode: {},
   codex: {},
 }
 

@@ -146,7 +146,6 @@ const toolRenderers: Record<string, ToolRendererDef> = {
 const agentFallbacks: Record<string, ToolRendererDef> = {
   'claude-code': claudeFallback,
   codex: codexFallback,
-  opencode: codexFallback,
   // Goose shell calls sniff as codex exec (input.command + result.exit_code),
   // so the codex fallback renders them well; other builtins fall through to
   // the default renderer until dedicated goose renderers land.
