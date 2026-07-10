@@ -59,8 +59,8 @@ After seeding the admin, `install.sh` runs a `nap-seed-oauth-clients` Job that *
 
 | client_id | Default redirect_uri |
 | --- | --- |
-| `sandbox-service` | `http://<TOS_HOST>:<SANDBOX_NODE_PORT>/api/auth/callback` |
-| `browser-service` | `http://<TOS_HOST>:<BROWSER_NODE_PORT>/api/auth/callback` |
+| `sandbox-service` | `http://<NAP_HOST>:<SANDBOX_NODE_PORT>/api/auth/callback` |
+| `browser-service` | `http://<NAP_HOST>:<BROWSER_NODE_PORT>/api/auth/callback` |
 
 The Job is idempotent: after changing a NodePort or public URL, re-running `install.sh` (or `install.sh --seed-only`) syncs the `redirect_uris` automatically.
 

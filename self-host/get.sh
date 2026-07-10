@@ -247,7 +247,7 @@ prepare_values() {
     [ -n "$HOST" ] && log "Autodetected node IP: $HOST (override with --host= / NAP_HOST=)"
   fi
   [ -n "$HOST" ] || die "could not determine the host address — pass --host=<ip-or-hostname>"
-  set_kv TOS_HOST "$HOST"
+  set_kv NAP_HOST "$HOST"
 
   # Admin password: generated unless supplied; printed in the final summary.
   admin_password="$ADMIN_PASSWORD_OVERRIDE"
@@ -326,7 +326,7 @@ echo ""
 log "============================================================"
 log " Neutree Agent Platform is up."
 log ""
-log "   URL:      http://$(get_kv TOS_HOST):$(get_kv TOS_NODE_PORT)"
+log "   URL:      http://$(get_kv NAP_HOST):$(get_kv NAP_NODE_PORT)"
 log "   Login:    $(get_kv ADMIN_USERNAME) / $(get_kv ADMIN_PASSWORD)"
 log ""
 log " Next:    set up an API provider and run your first agent —"

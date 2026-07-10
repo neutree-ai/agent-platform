@@ -61,12 +61,12 @@ The same steps the one-liner automates, under your control. Run this on a host t
 cd self-host
 cp values.env.single-node.example values.env
 ./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
-vi values.env           # set TOS_HOST + ADMIN_PASSWORD
+vi values.env           # set NAP_HOST + ADMIN_PASSWORD
 ```
 
 `values.env.single-node.example` already has single-node defaults baked in, so you only need to change two things:
 
-- `TOS_HOST` — the node's externally reachable IP; pods and the login entry both use it
+- `NAP_HOST` — the node's externally reachable IP; pods and the login entry both use it
 - `ADMIN_PASSWORD` — the initial admin password
 
 Everything else (PG replica count, storage classes, NFS backend) is preset for the single-node shape.
@@ -82,7 +82,7 @@ Everything else (PG replica count, storage classes, NFS backend) is preset for t
 ### 3. Log in
 
 ```
-http://<TOS_HOST>:30080
+http://<NAP_HOST>:30080
 admin / <ADMIN_PASSWORD>
 ```
 
