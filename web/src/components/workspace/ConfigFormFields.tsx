@@ -63,7 +63,15 @@ const AGENT_SETTINGS_DEFAULTS: Record<string, Record<string, any>> = {
 }
 
 function defaultAgentSettings(agentType: string): string {
-  return JSON.stringify(AGENT_SETTINGS_DEFAULTS[agentType] ?? {}, null, 2)
+  switch (agentType) {
+    // Goose settings are YAML — an empty string means "no extra settings"
+    // (a JSON `{}` would be skipped agent-side but reads as the wrong dialect).
+    case 'goose':
+    case 'goose-dev':
+      return ''
+    default:
+      return JSON.stringify(AGENT_SETTINGS_DEFAULTS[agentType] ?? {}, null, 2)
+  }
 }
 
 export const INITIAL_CONFIG_VALUES: ConfigFormValues = {

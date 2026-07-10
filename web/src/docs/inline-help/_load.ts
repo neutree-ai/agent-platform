@@ -17,6 +17,7 @@ type InlineDocName =
   | 'agent-config-resources'
   | 'agent-config-settings-claude-code'
   | 'agent-config-settings-codex'
+  | 'agent-config-settings-goose'
   | 'agent-config-skills'
   | 'browser-launch'
   | 'command'

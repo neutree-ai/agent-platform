@@ -6,7 +6,12 @@ export type AgentConfigSection = 'model' | 'prompt' | 'mcp' | 'settings' | 'skil
 function getSettingsDoc(agentType: string): string {
   switch (agentType) {
     case 'codex':
+    case 'opencode':
       return loadDoc('agent-config-settings-codex')
+    // `goose-dev` is the canary alias of `goose` (dev-image rollout pattern).
+    case 'goose':
+    case 'goose-dev':
+      return loadDoc('agent-config-settings-goose')
     default:
       return loadDoc('agent-config-settings-claude-code')
   }
