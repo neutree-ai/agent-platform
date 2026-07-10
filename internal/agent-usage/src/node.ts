@@ -21,6 +21,7 @@ import {
   type UsageRecord,
   type UsageSweepResponse,
   type WarnFn,
+  parseAcpUsageLog,
   parseClaudeTranscript,
   parseCodexRollout,
 } from './index.js'
@@ -151,7 +152,11 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
     if (!fp) return
     const includeTrailing = now - fp.mtimeMs > settleGraceMs
     records.push(
-      ...parseClaudeTranscript(readLines(file), { sessionId, includeTrailing, onWarn: warn }),
+      ...parseClaudeTranscript(readLines(file), {
+        sessionId,
+        includeTrailing,
+        onWarn: warn,
+      }),
     )
     if (!includeTrailing) {
       // The parser may have deferred an in-flight trailing assistant entry
@@ -190,6 +195,20 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
     records.push(
       ...parseCodexRollout(readLines(file), {
         sessionId: fallbackId,
+        defaultModel: opts.fallbackModel,
+        onWarn: warn,
+      }),
+    )
+  }
+
+  // ── goose (ACP adapter usage log): .acp-usage/<sessionId>.jsonl ──
+  // Written by the goose agent's recordUsage hook (goose's own SQLite session
+  // store isn't parseable under the zero-dep rule). One line per prompt turn.
+  for (const file of listJsonl(join(opts.homeDir, '.acp-usage'))) {
+    if (claimChanged(file) === null) continue
+    records.push(
+      ...parseAcpUsageLog(readLines(file), {
+        sessionId: basename(file, '.jsonl'),
         defaultModel: opts.fallbackModel,
         onWarn: warn,
       }),

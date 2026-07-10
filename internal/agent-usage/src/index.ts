@@ -24,7 +24,7 @@
  *            the record is flagged `fieldsIncomplete`.
  */
 
-export type UsageSource = 'claude' | 'codex'
+export type UsageSource = 'claude' | 'codex' | 'goose'
 
 /**
  * One normalized usage record = one billable unit of consumption (a Claude API
@@ -393,6 +393,101 @@ export function parseCodexRollout(lines: string[], opts: CodexParseOpts = {}): U
       continue
     }
     records.push(rec)
+  }
+  return records
+}
+
+// ── goose (ACP adapter usage log) ──
+
+export interface AcpUsageParseOpts {
+  sessionId?: string
+  defaultModel?: string
+  onWarn?: WarnFn
+}
+
+/**
+ * Parse the ACP adapter's own usage log (`$HOME/.acp-usage/<sessionId>.jsonl`).
+ *
+ * Goose persists sessions in SQLite (not parseable here under the zero-dep
+ * rule), so the goose agent's acp-server appends one JSON line per completed
+ * prompt turn from `PromptResponse.usage`:
+ *
+ *   {"ts":"...","model":"...","input_tokens":n,"output_tokens":n,"total_tokens":n}
+ *
+ * Values are PER-TURN sums (each LLM request bills its full input context, so
+ * summing lines is the correct billing semantics — no cumulative/delta dance).
+ * Cache/reasoning splits aren't available on this path (goose only reports
+ * them via its gated custom MessageUsage notification), so records are
+ * flagged `fieldsIncomplete`.
+ *
+ * dedupKey uses the line index — stable across re-sweeps of the same
+ * append-only file, so ledger re-inserts are idempotent.
+ */
+export function parseAcpUsageLog(lines: string[], opts: AcpUsageParseOpts = {}): UsageRecord[] {
+  const warn = opts.onWarn ?? defaultWarn
+  const sessionId = opts.sessionId ?? ''
+  const records: UsageRecord[] = []
+  // Baseline for accumulated-counter lines (per file = per session).
+  let prevAccInput = 0
+  let prevAccOutput = 0
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (!line) continue
+    let obj: Record<string, unknown>
+    try {
+      obj = JSON.parse(line)
+    } catch {
+      continue // torn tail write — picked up complete on the next sweep
+    }
+    const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+    if (typeof obj.ts !== 'string') {
+      warn(`[agent-usage] acp-usage line ${i} missing ts (session=${sessionId})`)
+    }
+
+    // Two line shapes (see the goose agent's recordUsage):
+    //  - accumulated: {accumulated_input_tokens, accumulated_output_tokens}
+    //    session-cumulative → emit the per-line DELTA (codex pattern);
+    //    dedupKey = cumulative total, so re-sweeps stay idempotent.
+    //  - direct: {input_tokens, output_tokens} per-turn values (fallback when
+    //    the agent saw no accumulated counters) → emit as-is, line-index key.
+    const isAccumulated =
+      obj.accumulated_input_tokens != null || obj.accumulated_output_tokens != null
+    let input: number
+    let output: number
+    let dedupKey: string
+    if (isAccumulated) {
+      const accInput = num(obj.accumulated_input_tokens)
+      const accOutput = num(obj.accumulated_output_tokens)
+      input = Math.max(0, accInput - prevAccInput)
+      output = Math.max(0, accOutput - prevAccOutput)
+      prevAccInput = accInput
+      prevAccOutput = accOutput
+      dedupKey = `goose:${sessionId}:${accInput + accOutput}`
+    } else {
+      input = num(obj.input_tokens)
+      output = num(obj.output_tokens)
+      dedupKey = `goose:${sessionId}:${i}`
+    }
+    if (input === 0 && output === 0) continue
+
+    records.push({
+      source: 'goose',
+      sessionId,
+      model: (typeof obj.model === 'string' && obj.model) || opts.defaultModel || 'unknown',
+      ts: typeof obj.ts === 'string' ? obj.ts : new Date(0).toISOString(),
+      inputTokens: input,
+      outputTokens: output,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      cacheCreation5mTokens: 0,
+      cacheCreation1hTokens: 0,
+      reasoningTokens: 0,
+      webSearchRequests: 0,
+      speed: null,
+      // cache/reasoning splits genuinely unavailable on this path
+      fieldsIncomplete: true,
+      dedupKey,
+    })
   }
   return records
 }
