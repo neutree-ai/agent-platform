@@ -38,7 +38,7 @@ spec:
                   name: ${APP_PREFIX}-browser-secret
                   key: JWT_SECRET
             - name: NAP_OAUTH_URL
-              value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
+              value: "${WEB_PUBLIC_URL}"
             - name: NAP_INTERNAL_URL
               value: "http://${APP_PREFIX}-cp:3000"
             - name: OAUTH_CLIENT_ID
