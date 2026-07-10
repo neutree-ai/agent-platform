@@ -27,7 +27,6 @@ const AGENT_TYPES = [
 /** Provider types each agent supports — omit to allow all. */
 const AGENT_PROVIDER_TYPES: Record<string, string[] | null> = {
   'claude-code': ['anthropic', 'anthropic-oauth', 'claude-code-oauth'],
-  opencode: null,
   codex: ['openai'],
 }
 

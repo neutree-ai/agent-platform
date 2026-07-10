@@ -1,11 +1,11 @@
 /**
  * ACP bridge using the official @agentclientprotocol/sdk.
  *
- * Spawns an ACP-native agent (e.g. `opencode acp`) as a child process,
+ * Spawns an ACP-native agent (e.g. `goose acp`) as a child process,
  * creates a ClientSideConnection over nd-JSON stdio, and provides a
  * thin session-management API to the rest of the adapter.
  *
- * Reusable for any ACP agent (OpenCode, Codex, Goose, Gemini CLI, etc.).
+ * Reusable for any ACP agent (Codex, Goose, Gemini CLI, etc.).
  */
 
 import { type ChildProcess, spawn } from 'node:child_process'
@@ -60,7 +60,7 @@ const identityCodec: SessionIdCodec = {
 }
 
 export interface AcpBridgeOptions {
-  program: string // e.g. 'opencode'
+  program: string // e.g. 'goose'
   args: string[] // e.g. ['acp']
   cwd: string // workspace dir
   env?: Record<string, string>

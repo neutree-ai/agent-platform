@@ -19,7 +19,6 @@ function settingsKind(agentType?: string): SettingsKind | null {
     case 'claude-code':
       return 'claude-code'
     case 'codex':
-    case 'opencode':
       return 'codex'
     case 'goose':
     case 'goose-dev':

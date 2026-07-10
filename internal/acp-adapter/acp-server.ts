@@ -2,7 +2,7 @@
  * Shared ACP agent HTTP server skeleton.
  *
  * Provides all standard agent endpoints parameterized by an AcpAgentServerConfig.
- * Each ACP agent (opencode, codex, etc.) creates a thin wrapper that supplies
+ * Each ACP agent (codex, goose, etc.) creates a thin wrapper that supplies
  * its agent-specific config and exports the resulting app.
  */
 
