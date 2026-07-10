@@ -179,7 +179,7 @@ export async function loadConfig(): Promise<boolean> {
   if (isYamlAgentSettings) {
     yamlLines.push('')
     yamlLines.push('# agent_settings')
-    yamlLines.push(agentSettings)
+    yamlLines.push(stripPlatformManagedKeys(agentSettings))
   }
   writeFileSync(join(gooseDir, 'config.yaml'), `${yamlLines.join('\n')}\n`)
 
@@ -187,6 +187,35 @@ export async function loadConfig(): Promise<boolean> {
     `[agent] Config written: model=${config.model} provider=${config.provider_type} prompt=${prompt.length}chars`,
   )
   return true
+}
+
+/**
+ * Top-level config.yaml keys the platform writes itself. User agent_settings
+ * are appended after the platform block, so a same-name top-level key would
+ * either break the YAML parse (duplicate-key error) or silently override an
+ * enforced value (e.g. GOOSE_MODE=approve would hang headless turns on
+ * permission prompts). Drop those blocks — the whole key line plus its
+ * indented continuation lines — and log what was dropped.
+ */
+const PLATFORM_MANAGED_YAML_KEYS = new Set(['GOOSE_MODEL', 'GOOSE_MODE', 'extensions'])
+
+function stripPlatformManagedKeys(yaml: string): string {
+  const kept: string[] = []
+  const dropped: string[] = []
+  let skipping = false
+  for (const line of yaml.split('\n')) {
+    const topLevelKey = line.match(/^([A-Za-z_][\w.-]*)\s*:/)
+    if (topLevelKey) skipping = PLATFORM_MANAGED_YAML_KEYS.has(topLevelKey[1])
+    if (skipping) {
+      if (topLevelKey) dropped.push(topLevelKey[1])
+    } else {
+      kept.push(line)
+    }
+  }
+  if (dropped.length > 0) {
+    console.warn(`[agent] agent_settings: dropped platform-managed keys: ${dropped.join(', ')}`)
+  }
+  return kept.join('\n')
 }
 
 let _skillManager: SkillManager | null = null

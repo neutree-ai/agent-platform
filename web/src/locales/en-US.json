@@ -3560,7 +3560,8 @@
     "agentSettingsEditor": {
       "hints": {
         "claude-code": "JSON format - written to .claude/settings.json",
-        "codex": "TOML format - appended to ~/.codex/config.toml"
+        "codex": "TOML format - appended to ~/.codex/config.toml",
+        "goose": "YAML format - merged into ~/.config/goose/config.yaml (GOOSE_MODEL / GOOSE_MODE / extensions are platform-managed; same-name keys here are ignored)"
       }
     },
     "configFormFields": {

@@ -3584,7 +3584,8 @@
     "agentSettingsEditor": {
       "hints": {
         "claude-code": "JSON 格式，会写入 .claude/settings.json",
-        "codex": "TOML 格式，会追加到 ~/.codex/config.toml"
+        "codex": "TOML 格式，会追加到 ~/.codex/config.toml",
+        "goose": "YAML 格式，会合并到 ~/.config/goose/config.yaml（GOOSE_MODEL / GOOSE_MODE / extensions 由平台托管，此处同名配置会被忽略）"
       }
     },
     "configFormFields": {
