@@ -38,11 +38,47 @@ export type {
 
 // ── Bridge options ──
 
+/**
+ * Bidirectional mapping between the agent's native ACP session ids and the
+ * platform-facing ids stored by cp. cp's `sessions.id` is a global primary
+ * key, but some agents generate ids that are only unique per instance —
+ * goose uses `YYYYMMDD_<counter>` from its local SQLite, which collides
+ * across workspaces. A codec lets the agent package namespace its ids
+ * (e.g. `<workspaceId>-<nativeId>`) without touching the server layer:
+ * everything outside the bridge speaks platform ids exclusively.
+ */
+export interface SessionIdCodec {
+  /** native (agent) id → platform id */
+  encode(nativeId: string): string
+  /** platform id → native (agent) id */
+  decode(platformId: string): string
+}
+
+const identityCodec: SessionIdCodec = {
+  encode: (id) => id,
+  decode: (id) => id,
+}
+
 export interface AcpBridgeOptions {
   program: string // e.g. 'opencode'
   args: string[] // e.g. ['acp']
   cwd: string // workspace dir
   env?: Record<string, string>
+  /** Optional session-id namespacing; defaults to identity (codex). */
+  sessionIdCodec?: SessionIdCodec
+  /**
+   * Extra `clientCapabilities._meta` sent on initialize — vendor capability
+   * flags (e.g. goose's `{goose: {customNotifications: true}}` unlocks its
+   * `_goose/unstable/session/update` notifications with accumulated token
+   * counters).
+   */
+  clientCapabilitiesMeta?: Record<string, unknown>
+  /**
+   * Receiver for extension (non-spec) notifications the SDK would otherwise
+   * drop. Params carry NATIVE session ids — consumers translate via their
+   * codec if needed. Must not throw.
+   */
+  onExtNotification?: (method: string, params: Record<string, unknown>) => void
 }
 
 // ── Per-session handler ──
@@ -76,9 +112,11 @@ export class AcpBridge {
   private mcpReadyPromise: Promise<void> | null = null
   private pendingPromptRejects = new Map<string, (err: Error) => void>()
   private destroyed = false
+  private codec: SessionIdCodec
 
   constructor(options: AcpBridgeOptions) {
     this.options = options
+    this.codec = options.sessionIdCodec ?? identityCodec
   }
 
   /**
@@ -141,6 +179,11 @@ export class AcpBridge {
 
     const client: Client = {
       async sessionUpdate(params: SessionNotification) {
+        // Notifications carry native ids and the handler map is keyed by
+        // native ids (registerHandler decodes) — look up directly. Keying by
+        // platform ids would break for legacy sessions persisted before a
+        // codec landed: decode() tolerates their unprefixed form, but
+        // encode() can't reproduce it.
         const handler = self.sessionHandlers.get(params.sessionId)
         if (handler) {
           handler.onUpdate(params.update)
@@ -158,13 +201,23 @@ export class AcpBridge {
         const optionId = params.options?.[0]?.optionId ?? 'allow-once'
         return { outcome: { outcome: 'selected' as const, optionId } }
       },
+
+      async extNotification(method: string, params: Record<string, unknown>) {
+        try {
+          self.options.onExtNotification?.(method, params)
+        } catch (e) {
+          console.error(`[acp-bridge] onExtNotification failed (${method}):`, e)
+        }
+      },
     }
 
     this.connection = new ClientSideConnection(() => client, ndJsonStream(input, output))
 
     await this.connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
-      clientCapabilities: {},
+      clientCapabilities: this.options.clientCapabilitiesMeta
+        ? { _meta: this.options.clientCapabilitiesMeta }
+        : {},
     })
 
     console.log('[acp-bridge] Initialized')
@@ -211,7 +264,7 @@ export class AcpBridge {
       cwd: opts?.cwd ?? this.options.cwd,
       mcpServers: opts?.mcpServers ?? [],
     })
-    return result.sessionId
+    return this.codec.encode(result.sessionId)
   }
 
   /**
@@ -227,27 +280,29 @@ export class AcpBridge {
   ): Promise<string> {
     if (!this.connection) throw new Error('ACP bridge not started')
     await this.connection.loadSession({
-      sessionId,
+      sessionId: this.codec.decode(sessionId),
       cwd: opts?.cwd ?? this.options.cwd,
       mcpServers: opts?.mcpServers ?? [],
     })
     // LoadSessionResponse doesn't include sessionId — the loaded session
-    // keeps the same ID that was passed in.
+    // keeps the same ID that was passed in (platform form).
     return sessionId
   }
 
   /**
    * Register a handler for session updates and permission requests.
+   * Accepts the platform id; the map is keyed by the native id so incoming
+   * notifications (which carry native ids) resolve without re-encoding.
    */
   registerHandler(sessionId: string, handler: AcpSessionHandler): void {
-    this.sessionHandlers.set(sessionId, handler)
+    this.sessionHandlers.set(this.codec.decode(sessionId), handler)
   }
 
   /**
    * Unregister the handler for a session.
    */
   unregisterHandler(sessionId: string): void {
-    this.sessionHandlers.delete(sessionId)
+    this.sessionHandlers.delete(this.codec.decode(sessionId))
   }
 
   /**
@@ -264,12 +319,19 @@ export class AcpBridge {
     let promptText = text
     if (images?.length) {
       for (const img of images) {
-        contentBlocks.push({ type: 'image', data: img.data, mimeType: img.media_type })
+        contentBlocks.push({
+          type: 'image',
+          data: img.data,
+          mimeType: img.media_type,
+        })
       }
       // Also persist the images as files so the model can hand them to tools
       // that need a real file or URL — the ACP image block only feeds vision,
       // it does not expose a path the model can pass downstream.
-      const written = writeInputAttachments(images, { workspaceDir: this.options.cwd, sessionId })
+      const written = writeInputAttachments(images, {
+        workspaceDir: this.options.cwd,
+        sessionId,
+      })
       promptText += formatAttachmentNote(written)
     }
     contentBlocks.push({ type: 'text', text: promptText })
@@ -277,7 +339,10 @@ export class AcpBridge {
     // promise actually settles when codex-acp gets OOM-killed mid-turn.
     return new Promise<PromptResponse>((resolve, reject) => {
       this.pendingPromptRejects.set(sessionId, reject)
-      this.connection!.prompt({ sessionId, prompt: contentBlocks })
+      this.connection!.prompt({
+        sessionId: this.codec.decode(sessionId),
+        prompt: contentBlocks,
+      })
         .then(resolve, reject)
         .finally(() => {
           // Only clear our own entry — concurrent prompts on different
@@ -293,7 +358,7 @@ export class AcpBridge {
    */
   async cancel(sessionId: string): Promise<void> {
     if (!this.connection) throw new Error('ACP bridge not started')
-    await this.connection.cancel({ sessionId })
+    await this.connection.cancel({ sessionId: this.codec.decode(sessionId) })
   }
 
   /**
