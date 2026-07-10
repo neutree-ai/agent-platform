@@ -69,7 +69,7 @@ async function fetchManifest(): Promise<PluginManifestEntry[] | null> {
 }
 
 /**
- * Dev-only: when the host vite server has TOS_DEV_PLUGINS_DIR set, it
+ * Dev-only: when the host vite server has NAP_DEV_PLUGINS_DIR set, it
  * serves a local manifest at /dev-plugins/manifest.json scanned from disk.
  * Local entries override (or augment) the cp-published manifest by id.
  */

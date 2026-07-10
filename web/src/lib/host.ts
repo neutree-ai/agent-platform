@@ -38,7 +38,7 @@ import * as ReactJSXRuntime from 'react/jsx-runtime'
 import { events } from './host-events'
 import { type PluginPanel, registerPanel } from './panel-registry'
 
-interface TosHost {
+interface NapHost {
   version: string
   React: typeof React
   ReactDOM: typeof ReactDOM
@@ -74,12 +74,12 @@ interface TosHost {
 
 declare global {
   interface Window {
-    tos?: TosHost
+    tos?: NapHost
   }
 }
 
 export function installHost(): void {
-  const host: TosHost = {
+  const host: NapHost = {
     version: '1.0.0',
     React,
     ReactDOM,

@@ -44,7 +44,7 @@ export interface OAuthClientOptions {
   /** Public base URL of this service (used for the OAuth redirect_uri). */
   serviceUrl: string
   /** NAP control-plane base URL. Defaults to NAP_OAUTH_URL env. */
-  tosUrl?: string
+  napUrl?: string
   /** Cookie name for the session token. */
   cookieName: string
   /** HMAC secret for the session JWT. */
@@ -72,7 +72,7 @@ export interface OAuthClient {
   config: {
     clientId: string
     serviceUrl: string
-    tosUrl: string
+    napUrl: string
     cookieName: string
     callbackUrl: string
     authorizeUrl: string
@@ -124,19 +124,19 @@ function generateState(): string {
 }
 
 export function createOAuthClient(opts: OAuthClientOptions): OAuthClient {
-  const tosUrl = opts.tosUrl ?? process.env.NAP_OAUTH_URL ?? 'http://localhost:3000'
+  const napUrl = opts.napUrl ?? process.env.NAP_OAUTH_URL ?? 'http://localhost:3000'
   const expiresIn = opts.jwtExpiresIn ?? 60 * 60 * 24 * 7
   const cookieSecure = opts.cookieSecure ?? false
 
   const config = {
     clientId: opts.clientId,
     serviceUrl: opts.serviceUrl,
-    tosUrl,
+    napUrl,
     cookieName: opts.cookieName,
     callbackUrl: `${opts.serviceUrl}/api/auth/callback`,
-    authorizeUrl: `${tosUrl}/oauth/authorize`,
-    tokenUrl: `${tosUrl}/api/oauth/token`,
-    userinfoUrl: `${tosUrl}/api/oauth/userinfo`,
+    authorizeUrl: `${napUrl}/oauth/authorize`,
+    tokenUrl: `${napUrl}/api/oauth/token`,
+    userinfoUrl: `${napUrl}/api/oauth/userinfo`,
   }
 
   // PKCE state store. Per-client instance so multiple clients can coexist.

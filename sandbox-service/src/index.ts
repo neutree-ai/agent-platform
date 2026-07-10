@@ -54,7 +54,7 @@ app.get('/health', (c) => c.json({ status: 'ok' }))
 // Public config endpoint (no auth required, consumed by frontend)
 app.get('/api/config', (c) =>
   c.json({
-    tosUrl: process.env.NAP_OAUTH_URL || process.env.SANDBOX_SERVICE_URL || '',
+    napUrl: process.env.NAP_OAUTH_URL || process.env.SANDBOX_SERVICE_URL || '',
     sandboxDomain: SANDBOX_DOMAIN,
   }),
 )

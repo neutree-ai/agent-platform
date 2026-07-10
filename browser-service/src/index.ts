@@ -99,7 +99,7 @@ app.use('/api/*', async (c, next) => {
 // Public config endpoint (no auth required, consumed by frontend)
 app.get('/api/config', (c) =>
   c.json({
-    tosUrl: process.env.NAP_OAUTH_URL || process.env.BROWSER_SERVICE_URL || '',
+    napUrl: process.env.NAP_OAUTH_URL || process.env.BROWSER_SERVICE_URL || '',
   }),
 )
 

@@ -16,7 +16,7 @@ import {
 
 const baseCfg: K8sConfig = {
   namespace: 'nap',
-  namePrefix: 'tos',
+  namePrefix: 'nap',
   agentImagePrefix: 'nap-agent',
   agentImageTag: 'latest',
   storageClass: 'nfs-csi',
@@ -35,8 +35,8 @@ const baseCfg: K8sConfig = {
   },
 }
 
-const labels = { app: 'tos', component: 'workspace', 'workspace-id': 'ws1' }
-const args = ['tos-ws1', labels, 'ws1', 'claude-code', 'tos-ws1-workspace'] as const
+const labels = { app: 'nap', component: 'workspace', 'workspace-id': 'ws1' }
+const args = ['nap-ws1', labels, 'ws1', 'claude-code', 'nap-ws1-workspace'] as const
 
 describe('buildDeploymentSpec golden master', () => {
   it('minimal: afs off, memory off, no nodeselector/pullsecret/resources', () => {
@@ -93,7 +93,7 @@ describe('buildWorkspacePodTemplate', () => {
       labels,
       'ws1',
       'claude-code',
-      'tos-ws1-workspace',
+      'nap-ws1-workspace',
       resources,
       cfg,
     )
@@ -106,7 +106,7 @@ describe('buildWorkspacePodTemplate', () => {
       labels,
       'ws1',
       'claude-code',
-      'tos-ws1-workspace',
+      'nap-ws1-workspace',
       undefined,
       baseCfg,
     )

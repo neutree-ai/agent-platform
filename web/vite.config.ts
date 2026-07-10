@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 import { type Plugin, defineConfig, loadEnv } from 'vite'
 
 /**
- * Local plugin dev shortcut. Set `TOS_DEV_PLUGINS_DIR` to a folder whose
+ * Local plugin dev shortcut. Set `NAP_DEV_PLUGINS_DIR` to a folder whose
  * subdirectories follow the convention `<id>/dist/<id>.js`. The middleware
  * exposes `/dev-plugins/manifest.json` (scanned at request time) and serves
  * each bundle from disk, so `vite build --watch` in a plugin folder is the
@@ -17,7 +17,7 @@ function devPluginsMiddleware(): Plugin {
     name: 'tos-dev-plugins',
     apply: 'serve',
     configureServer(server) {
-      const root = process.env.TOS_DEV_PLUGINS_DIR
+      const root = process.env.NAP_DEV_PLUGINS_DIR
       if (!root) return
       const absRoot = path.resolve(root)
 

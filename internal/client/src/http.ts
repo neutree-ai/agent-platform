@@ -47,7 +47,7 @@ export class HttpClient {
       } catch {
         // non-JSON error response, use statusText
       }
-      throw new TosApiError(res.status, detail, path)
+      throw new NapApiError(res.status, detail, path)
     }
 
     return res
@@ -59,13 +59,13 @@ export class HttpClient {
   }
 }
 
-export class TosApiError extends Error {
+export class NapApiError extends Error {
   constructor(
     public status: number,
     public detail: string,
     public path: string,
   ) {
     super(`NAP API ${status}: ${detail} (${path})`)
-    this.name = 'TosApiError'
+    this.name = 'NapApiError'
   }
 }

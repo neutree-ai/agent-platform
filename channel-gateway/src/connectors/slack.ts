@@ -1,7 +1,7 @@
 import { SocketModeClient } from '@slack/socket-mode'
 import { WebClient } from '@slack/web-api'
 import pMap from 'p-map'
-import { TosClient } from '../../../internal/client/src/index'
+import { NapClient } from '../../../internal/client/src/index'
 import * as db from '../services/db'
 
 const NAP_API_URL = process.env.NAP_API_URL || 'http://localhost:3000'
@@ -89,7 +89,7 @@ export async function startOne(connectorId: string) {
     return
   }
 
-  const tosClient = new TosClient({
+  const napClient = new NapClient({
     baseUrl: NAP_API_URL,
     serviceToken: platformToken,
   })
@@ -286,7 +286,7 @@ Indexes are 1-based and match the attached images order.
       })
       if (!res.ok) return { text: null, error: `download failed: ${res.status}` }
       const buf = Buffer.from(await res.arrayBuffer())
-      const result = await tosClient.asr.transcribe(buf, {
+      const result = await napClient.asr.transcribe(buf, {
         filename: file.name || 'voice.m4a',
         contentType: file.mimetype || 'audio/mp4',
       })
@@ -415,7 +415,7 @@ Indexes are 1-based and match the attached images order.
     // route points at another user's workspace, calling cp as the connector
     // owner gets scoped out → 404 "Workspace not found". Reuse the connector
     // client when owners match to avoid an extra token lookup per message.
-    let jobClient = tosClient
+    let jobClient = napClient
     if (route.user_id !== connector.user_id) {
       const routeToken = await db.getPlatformToken(route.user_id)
       if (!routeToken) {
@@ -424,7 +424,7 @@ Indexes are 1-based and match the attached images order.
         )
         return
       }
-      jobClient = new TosClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
+      jobClient = new NapClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
     }
 
     try {

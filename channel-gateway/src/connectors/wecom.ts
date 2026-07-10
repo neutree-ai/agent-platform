@@ -1,6 +1,6 @@
 import crypto from 'node:crypto'
 import WebSocket from 'ws'
-import { TosClient } from '../../../internal/client/src/index'
+import { NapClient } from '../../../internal/client/src/index'
 import * as db from '../services/db'
 import { wecomSend, wecomSendStream } from './wecom-sender'
 
@@ -71,7 +71,7 @@ export async function startOne(connectorId: string) {
     return
   }
 
-  const tosClient = new TosClient({
+  const napClient = new NapClient({
     baseUrl: NAP_API_URL,
     serviceToken: platformToken,
   })
@@ -182,7 +182,7 @@ export async function startOne(connectorId: string) {
       }
 
       if (frame.cmd === 'aibot_msg_callback') {
-        handleMessage(connector, tosClient, ws, frame).catch((e) =>
+        handleMessage(connector, napClient, ws, frame).catch((e) =>
           console.error(`[WeCom] ${connector.name}: error handling message:`, e),
         )
       }
@@ -287,7 +287,7 @@ function sniffImageType(buf: Buffer): string | null {
 
 async function handleMessage(
   connector: db.Connector,
-  tosClient: TosClient,
+  napClient: NapClient,
   ws: WebSocket,
   frame: any,
 ) {
@@ -337,7 +337,7 @@ async function handleMessage(
   > => {
     try {
       const buf = await downloadMedia(ref.url, ref.aesKey)
-      const result = await tosClient.asr.transcribe(buf, { filename: 'voice.amr' })
+      const result = await napClient.asr.transcribe(buf, { filename: 'voice.amr' })
       const text = result.text?.trim() ?? ''
       if (!text) {
         voiceError = 'Empty transcript.'
@@ -528,14 +528,14 @@ async function handleMessage(
   // points at another user's workspace, calling cp as the connector owner gets
   // scoped out → 404 "Workspace not found". Reuse the connector client when
   // owners match to avoid an extra token lookup per message.
-  let jobClient = tosClient
+  let jobClient = napClient
   if (route.user_id !== connector.user_id) {
     const routeToken = await db.getPlatformToken(route.user_id)
     if (!routeToken) {
       console.error(`[WeCom] ${connector.name}: no platform token for route owner=${route.user_id}`)
       return
     }
-    jobClient = new TosClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
+    jobClient = new NapClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
   }
 
   try {
