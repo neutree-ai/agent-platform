@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 
 interface Config {
-  tosUrl: string
+  napUrl: string
   sandboxDomain: string
 }
 
-const defaultConfig: Config = { tosUrl: '', sandboxDomain: '' }
+const defaultConfig: Config = { napUrl: '', sandboxDomain: '' }
 
 let cached: Config | null = null
 

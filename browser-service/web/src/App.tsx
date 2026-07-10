@@ -501,7 +501,7 @@ function HomePage() {
                     <p className="text-xs text-gray-600">
                       {t('docs.auth.description')}{' '}
                       <a
-                        href={`${config.tosUrl}/integration/tokens`}
+                        href={`${config.napUrl}/integration/tokens`}
                         target="_blank"
                         rel="noreferrer noopener"
                         className="underline hover:text-gray-700 font-medium"

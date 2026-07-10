@@ -1,4 +1,4 @@
-import { HttpClient, TosApiError } from './http'
+import { HttpClient, NapApiError } from './http'
 import type { HttpClientOptions } from './http'
 import { AuthApi } from './auth'
 import { WorkspacesApi } from './workspaces'
@@ -16,9 +16,9 @@ import { InternalApi } from './internal'
 import { ChannelGatewayApi } from './channel-gateway'
 import { AsrApi } from './asr'
 
-export type { HttpClientOptions as TosClientOptions }
+export type { HttpClientOptions as NapClientOptions }
 
-export class TosClient {
+export class NapClient {
   readonly auth: AuthApi
   readonly workspaces: WorkspacesApi
   readonly sessions: SessionsApi
@@ -55,4 +55,4 @@ export class TosClient {
   }
 }
 
-export { TosApiError }
+export { NapApiError }

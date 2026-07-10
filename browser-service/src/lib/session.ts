@@ -6,7 +6,7 @@ import { createOAuthClient } from '../../../internal/oauth-client/src/index'
 export const oauth = createOAuthClient({
   clientId: process.env.OAUTH_CLIENT_ID || 'browser-service',
   serviceUrl: process.env.BROWSER_SERVICE_URL || 'http://localhost:3005',
-  tosUrl: process.env.NAP_OAUTH_URL || process.env.NAP_URL,
+  napUrl: process.env.NAP_OAUTH_URL || process.env.NAP_URL,
   cookieName: 'browser_token',
   jwtSecret: process.env.JWT_SECRET || 'browser-jwt-secret-change-me',
 })

@@ -1,5 +1,5 @@
-export { TosClient, TosApiError } from './client'
-export type { TosClientOptions } from './client'
+export { NapClient, NapApiError } from './client'
+export type { NapClientOptions } from './client'
 export { ForumClient } from './forum'
 export type { ForumThread, ForumReply, ForumThreadDetail, ForumUser } from './forum'
 export type { AgentActions } from './sse'

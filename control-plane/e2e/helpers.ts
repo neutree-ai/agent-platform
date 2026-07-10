@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pg from 'pg'
-import { TosClient } from '../../internal/client/src'
+import { NapClient } from '../../internal/client/src'
 import { hashToken } from '../src/lib/service-token'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -254,9 +254,9 @@ export async function stopCp(proc: ChildProcess) {
 // Client helper
 // ---------------------------------------------------------------------------
 
-/** Create a TosClient configured for the test CP instance. */
-export function createClient(): TosClient {
-  return new TosClient({
+/** Create a NapClient configured for the test CP instance. */
+export function createClient(): NapClient {
+  return new NapClient({
     baseUrl: CP_BASE_URL,
     serviceToken: TEST_SERVICE_TOKEN,
   })
