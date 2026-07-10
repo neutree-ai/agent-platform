@@ -41,6 +41,18 @@ import { codexFallback } from './fallbacks/codex-fallback'
 // Codex built-in tools with static names
 import { codexWebSearchRenderer } from './codex/web-search'
 
+// Goose builtin tools (developer extension and friends)
+import {
+  gooseDelegateRenderer,
+  gooseEditRenderer,
+  gooseLoadSkillRenderer,
+  gooseReadImageRenderer,
+  gooseShellRenderer,
+  gooseTodoWriteRenderer,
+  gooseTreeRenderer,
+  gooseWriteRenderer,
+} from './goose/developer'
+
 // ── Tool-name registry (priority 1) ──
 
 const toolRenderers: Record<string, ToolRendererDef> = {
@@ -115,6 +127,18 @@ const toolRenderers: Record<string, ToolRendererDef> = {
 
   // Codex built-in (static title)
   'Searching the Web': codexWebSearchRenderer,
+
+  // Goose builtins — lowercase canonical names from `_meta.goose.toolCall`
+  // (no clash with the capitalized Claude Code names above). `todo_write` is
+  // `todo__todo_write` after extension-prefix stripping.
+  shell: gooseShellRenderer,
+  edit: gooseEditRenderer,
+  write: gooseWriteRenderer,
+  tree: gooseTreeRenderer,
+  read_image: gooseReadImageRenderer,
+  todo_write: gooseTodoWriteRenderer,
+  delegate: gooseDelegateRenderer,
+  load_skill: gooseLoadSkillRenderer,
 }
 
 // ── Agent-type fallback registry (priority 2) ──
@@ -123,6 +147,11 @@ const agentFallbacks: Record<string, ToolRendererDef> = {
   'claude-code': claudeFallback,
   codex: codexFallback,
   opencode: codexFallback,
+  // Goose shell calls sniff as codex exec (input.command + result.exit_code),
+  // so the codex fallback renders them well; other builtins fall through to
+  // the default renderer until dedicated goose renderers land.
+  goose: codexFallback,
+  'goose-dev': codexFallback,
 }
 
 // ── Public API ──
@@ -132,6 +161,7 @@ const agentFallbacks: Record<string, ToolRendererDef> = {
  * Handles:
  *  - CC MCP format:    mcp__server__tool_name → tool_name
  *  - Codex MCP format: Tool: server/tool_name → tool_name
+ *  - Goose MCP/extension format: server__tool_name → tool_name
  */
 export function getToolDisplayName(name: string | null | undefined): string {
   if (!name) return i18n.t('components.chat.toolRenderers.labels.unknown')
@@ -141,6 +171,11 @@ export function getToolDisplayName(name: string | null | undefined): string {
   // Codex MCP: Tool: server/tool_name
   const codexMcpMatch = name.match(/^Tool:\s*.+\/(.+)$/)
   if (codexMcpMatch) return codexMcpMatch[1]
+  // Goose MCP/extension: server__tool_name (single `__` separator; goose
+  // builtins like `shell` carry no prefix and fall through unchanged).
+  // Must run after the `mcp__` check — that format also contains `__`.
+  const gooseMcpMatch = name.match(/^(.+?)__(.+)$/)
+  if (gooseMcpMatch) return gooseMcpMatch[2]
   return name
 }
 

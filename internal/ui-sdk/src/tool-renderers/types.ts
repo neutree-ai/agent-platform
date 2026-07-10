@@ -1,5 +1,5 @@
-import type { ToolCall } from '../types'
 import type { ReactNode } from 'react'
+import type { ToolCall } from '../types'
 
 export type { ToolCall }
 
@@ -47,10 +47,15 @@ export function truncate(s: string, max = 120): string {
  *  - Codex MCP:   {"content":[{"type":"text","text":"..."}]}
  *  - Codex `execute(server, tool, arguments)` dispatcher: wraps the real
  *    CallToolResult one level deeper, as {"result":{"content":[...]},"error":null}
+ *  - Goose MCP:   the acp-adapter stores the content text directly, so the
+ *    result is already the unwrapped payload (bare JSON or plain text) —
+ *    when no known wrapper matches, return the raw string as-is.
  */
 export function getMcpText(result: string | object | undefined): string | null {
   const parsed = safeParseResult<unknown>(result)
-  if (!parsed || typeof parsed === 'string') return null
+  if (!parsed) return null
+  // Plain text that isn't JSON — already the final payload (goose).
+  if (typeof parsed === 'string') return parsed
   // Direct array: [{"type":"text","text":"..."}]
   if (Array.isArray(parsed)) {
     const first = parsed[0]
@@ -77,7 +82,9 @@ export function getMcpText(result: string | object | undefined): string | null {
       return (content[0] as { text: string }).text
     }
   }
-  return null
+  // No recognized wrapper: the stored result is already the unwrapped
+  // payload (goose path — the acp-adapter persists the content text itself).
+  return typeof result === 'string' ? result : null
 }
 
 /**
