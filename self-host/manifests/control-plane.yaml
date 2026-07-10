@@ -110,11 +110,11 @@ spec:
             - name: BROWSER_SERVICE_URL
               value: "http://${APP_PREFIX}-browser:3005"
             - name: BROWSER_PUBLIC_URL
-              value: "http://${TOS_HOST}:${BROWSER_NODE_PORT}"
+              value: "${BROWSER_PUBLIC_URL}"
             - name: SANDBOX_SERVICE_URL
               value: "http://${APP_PREFIX}-sandbox:3006"
             - name: SANDBOX_PUBLIC_URL
-              value: "http://${TOS_HOST}:${SANDBOX_NODE_PORT}"
+              value: "${SANDBOX_PUBLIC_URL}"
             - name: AFS_ENABLED
               value: "true"
             - name: AFS_IMAGE
@@ -126,9 +126,9 @@ spec:
             - name: OFFICE_CONVERTER_URL
               value: "http://${APP_PREFIX}-office-converter:3007"
             - name: WEB_PUBLIC_URL
-              value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
+              value: "${WEB_PUBLIC_URL}"
             - name: FILES_PUBLIC_URL
-              value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
+              value: "${FILES_PUBLIC_URL}"
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
