@@ -19,7 +19,7 @@ Only `/workspace` persists across restarts; everything else (`/tmp`, `/etc`, sys
 
 ## User Prompt
 
-`/workspace/{{#claudeCode}}CLAUDE.md{{/claudeCode}}{{#codex}}AGENTS.md{{/codex}}` is platform-managed — overwritten on every config reload (UI edits, template switch, restart). Local edits don't sync back. If the user asks you to edit it, warn that changes won't persist (canonical edit point is the NAP UI) and only proceed on explicit confirm.
+`/workspace/{{#claudeCode}}CLAUDE.md{{/claudeCode}}{{#codex}}AGENTS.md{{/codex}}{{#goose}}AGENTS.md{{/goose}}` is platform-managed — overwritten on every config reload (UI edits, template switch, restart). Local edits don't sync back. If the user asks you to edit it, warn that changes won't persist (canonical edit point is the NAP UI) and only proceed on explicit confirm.
 {{#hasMemoryAttachments}}
 
 ## Memory Stores

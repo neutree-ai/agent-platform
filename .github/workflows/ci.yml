@@ -43,6 +43,7 @@ jobs:
           - { ws: skills-content-service, test: npm test }
           - { ws: agents/claude-code }
           - { ws: agents/codex }
+          - { ws: agents/goose }
     steps:
       - uses: actions/checkout@v4
         with:
