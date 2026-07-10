@@ -288,7 +288,7 @@ function sniffImageType(buf: Buffer): string | null {
 async function handleMessage(
   connector: db.Connector,
   napClient: NapClient,
-  ws: WebSocket,
+  _ws: WebSocket,
   frame: any,
 ) {
   const { body, headers } = frame

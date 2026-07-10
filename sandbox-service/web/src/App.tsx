@@ -496,7 +496,9 @@ function HomePage() {
                   <h3 className="text-sm font-semibold mb-2">{t('docs.sdk.heading')}</h3>
                   <p className="text-xs text-gray-600 mb-2">
                     {t('docs.sdk.install')}{' '}
-                    <code className="bg-gray-100 px-1 rounded">npm install @neutree-ai/sandbox</code>
+                    <code className="bg-gray-100 px-1 rounded">
+                      npm install @neutree-ai/sandbox
+                    </code>
                     {t('docs.sdk.installSuffix')}
                   </p>
                   <pre className="bg-gray-50 border rounded p-3 text-xs overflow-x-auto whitespace-pre">{`import { SandboxClient } from '@neutree-ai/sandbox'

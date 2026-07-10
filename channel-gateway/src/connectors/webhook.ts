@@ -25,7 +25,13 @@ function resolve(obj: unknown, path: string): unknown {
  */
 function applyTemplate(
   template: string,
-  ctx: { body: unknown; query: Record<string, string>; headers: Record<string, string>; method: string; path: string },
+  ctx: {
+    body: unknown
+    query: Record<string, string>
+    headers: Record<string, string>
+    method: string
+    path: string
+  },
 ): string {
   return template.replace(/\{([^}]+)\}/g, (match, key: string) => {
     if (key === 'body') return typeof ctx.body === 'string' ? ctx.body : JSON.stringify(ctx.body)
@@ -58,7 +64,13 @@ interface FilterRule {
 /** Resolve a filter field from the request context. */
 function resolveField(
   field: string,
-  ctx: { body: unknown; query: Record<string, string>; headers: Record<string, string>; method: string; path: string },
+  ctx: {
+    body: unknown
+    query: Record<string, string>
+    headers: Record<string, string>
+    method: string
+    path: string
+  },
 ): unknown {
   if (field === 'body') return ctx.body
   if (field === 'method') return ctx.method
@@ -81,7 +93,8 @@ function matchFilters(filters: FilterRule[], ctx: Parameters<typeof resolveField
         if (String(actual) === String(rule.value)) return false
         break
       case 'in':
-        if (!Array.isArray(rule.value) || !rule.value.map(String).includes(String(actual))) return false
+        if (!Array.isArray(rule.value) || !rule.value.map(String).includes(String(actual)))
+          return false
         break
       case 'contains':
         if (!String(actual).includes(String(rule.value))) return false
@@ -114,7 +127,7 @@ export async function handleWebhookPayload(opts: {
   const { connectorId, externalId, dedupKey } = opts
 
   // Idempotency check: skip if this message was already processed
-  if (dedupKey && await db.eventExistsByDedupKey(dedupKey)) {
+  if (dedupKey && (await db.eventExistsByDedupKey(dedupKey))) {
     console.log(`[Webhook] Dedup: already processed key=${dedupKey}`)
     return { ok: true }
   }
@@ -145,12 +158,14 @@ export async function handleWebhookPayload(opts: {
 
     let valid = false
     if (secretType === 'hmac-sha256') {
-      const raw = opts.rawBody ?? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body))
+      const raw =
+        opts.rawBody ?? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body))
       const expected = createHmac('sha256', secret).update(raw).digest('hex')
       const signature = provided.startsWith('sha256=') ? provided.slice(7) : provided
       try {
-        valid = signature.length === expected.length
-          && timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+        valid =
+          signature.length === expected.length &&
+          timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
       } catch {
         valid = false
       }
@@ -191,7 +206,9 @@ export async function handleWebhookPayload(opts: {
   const promptTemplate = routeConfig?.prompt as string | undefined
   const finalPrompt = promptTemplate
     ? applyTemplate(promptTemplate, templateCtx)
-    : typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body, null, 2)
+    : typeof opts.body === 'string'
+      ? opts.body
+      : JSON.stringify(opts.body, null, 2)
 
   // --- Get platform token and create job ---
   // Use the route owner's token (route.user_id), not the connector owner's.
@@ -224,7 +241,11 @@ export async function handleWebhookPayload(opts: {
       route_id: route.id,
       connector_id: connector.id,
       event_type: 'webhook',
-      payload: { path: externalId, method: opts.method, body: typeof opts.body === 'string' ? opts.body.slice(0, 4000) : opts.body },
+      payload: {
+        path: externalId,
+        method: opts.method,
+        body: typeof opts.body === 'string' ? opts.body.slice(0, 4000) : opts.body,
+      },
       job_id: result.id,
       status: 'success',
       dedup_key: dedupKey,
@@ -238,7 +259,11 @@ export async function handleWebhookPayload(opts: {
       route_id: route.id,
       connector_id: connector.id,
       event_type: 'webhook',
-      payload: { path: externalId, method: opts.method, body: typeof opts.body === 'string' ? opts.body.slice(0, 4000) : opts.body },
+      payload: {
+        path: externalId,
+        method: opts.method,
+        body: typeof opts.body === 'string' ? opts.body.slice(0, 4000) : opts.body,
+      },
       status: 'error',
       error: e instanceof Error ? e.message : String(e),
       dedup_key: dedupKey,
@@ -275,16 +300,29 @@ export function createWebhookRouter() {
       query[k] = v
     }
     const headers: Record<string, string> = {}
-    c.req.raw.headers.forEach((v, k) => { headers[k] = v })
+    c.req.raw.headers.forEach((v, k) => {
+      headers[k] = v
+    })
 
-    const result = await handleWebhookPayload({ connectorId, externalId, body, rawBody, headers, method: c.req.method, query })
+    const result = await handleWebhookPayload({
+      connectorId,
+      externalId,
+      body,
+      rawBody,
+      headers,
+      method: c.req.method,
+      query,
+    })
 
     if (result.error === 'not found') return c.json({ error: 'not found' }, 404)
     if (result.error === 'connector disabled') return c.json({ error: 'connector disabled' }, 403)
     if (result.error === 'unauthorized') return c.json({ error: 'unauthorized' }, 401)
-    if (result.error === 'no route for this path') return c.json({ error: 'no route for this path' }, 404)
-    if (result.error === 'connector not configured (missing platform token)') return c.json({ error: result.error }, 500)
-    if (result.error === 'failed to create job') return c.json({ error: 'failed to create job' }, 500)
+    if (result.error === 'no route for this path')
+      return c.json({ error: 'no route for this path' }, 404)
+    if (result.error === 'connector not configured (missing platform token)')
+      return c.json({ error: result.error }, 500)
+    if (result.error === 'failed to create job')
+      return c.json({ error: 'failed to create job' }, 500)
     if (result.filtered) return c.json({ ok: true, filtered: true })
     return c.json({ ok: true, job_id: result.job_id })
   })
