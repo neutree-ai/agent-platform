@@ -221,5 +221,5 @@ spec:
   ports:
     - port: 3000
       targetPort: 3000
-      nodePort: ${TOS_NODE_PORT}
+      nodePort: ${NAP_NODE_PORT}
       name: http

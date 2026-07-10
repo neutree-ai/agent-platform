@@ -100,7 +100,7 @@ const UI = {
     importHintPre: 'Paste an existing ',
     importHintPost:
       ' here. Recognized fields are filled back into the form; unrecognized fields are ignored and counted. Fields added in newer versions keep their defaults, so you can scan the * required fields and fill them in.',
-    importPlaceholder: '# paste an existing values.env\nREGISTRY=...\nTOS_HOST=...',
+    importPlaceholder: '# paste an existing values.env\nREGISTRY=...\nNAP_HOST=...',
     cancel: 'Cancel',
     apply: 'Apply',
     previewTitle: 'values.env preview',
@@ -138,7 +138,7 @@ const UI = {
     importHintPre: '在此粘贴已有的 ',
     importHintPost:
       ' 。可识别的字段会回填到表单；无法识别的字段会被忽略并计数。新版本新增的字段保留默认值，你可以重点检查标 * 的必填字段并补全。',
-    importPlaceholder: '# 粘贴已有的 values.env\nREGISTRY=...\nTOS_HOST=...',
+    importPlaceholder: '# 粘贴已有的 values.env\nREGISTRY=...\nNAP_HOST=...',
     cancel: '取消',
     apply: '应用',
     previewTitle: 'values.env 预览',
@@ -216,10 +216,10 @@ const SCHEMA_ZH: {
     IMAGE_TAG: {
       hint: '所有第一方镜像的 tag。固定到某个发布 tag 可获得可复现的安装',
     },
-    TOS_HOST: {
+    NAP_HOST: {
       hint: '用户访问平台所用的 IP 或主机名（某个 worker 节点）',
     },
-    TOS_NODE_PORT: {
+    NAP_NODE_PORT: {
       hint: 'Web UI + API。30000–32767。INGRESS_MODE=external 时仍会渲染但不对外暴露',
     },
     INGRESS_MODE: {
@@ -348,9 +348,9 @@ const SCHEMA: SectionDef[] = [
         default: './kubeconfig.yaml',
       },
       {
-        key: 'TOS_HOST',
+        key: 'NAP_HOST',
         kind: 'text',
-        label: 'TOS_HOST',
+        label: 'NAP_HOST',
         hint: 'IP or hostname users reach the platform at (one of the worker nodes)',
         placeholder: '10.0.0.100',
         required: true,
@@ -362,9 +362,9 @@ const SCHEMA: SectionDef[] = [
               : 'ipOrHost',
       },
       {
-        key: 'TOS_NODE_PORT',
+        key: 'NAP_NODE_PORT',
         kind: 'number',
-        label: 'TOS_NODE_PORT',
+        label: 'NAP_NODE_PORT',
         default: '30080',
         hint: 'Web UI + API. 30000–32767. Still rendered but not exposed when INGRESS_MODE=external',
         required: true,
@@ -771,7 +771,7 @@ const isSectionEnabled = (
 function crossValidate(values: Record<string, string>) {
   const errors: Record<string, VMsg> = {}
   const ports: Array<[string, string]> = [
-    ['TOS_NODE_PORT', values.TOS_NODE_PORT],
+    ['NAP_NODE_PORT', values.NAP_NODE_PORT],
   ]
   if (values.BROWSER_ENABLED === 'true')
     ports.push(['BROWSER_NODE_PORT', values.BROWSER_NODE_PORT])

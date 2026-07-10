@@ -58,7 +58,7 @@ Everything below is the manual path — the same steps, under your control.
 git clone <this-repo> && cd self-host        # or download + extract
 cp values.env.example values.env
 ./gen-secrets.sh                              # fills random machine secrets
-vi values.env                                 # set TOS_HOST, ADMIN_PASSWORD, storage, etc.
+vi values.env                                 # set NAP_HOST, ADMIN_PASSWORD, storage, etc.
 ./install.sh
 ```
 
@@ -69,7 +69,7 @@ vi values.env                                 # set TOS_HOST, ADMIN_PASSWORD, st
 2. Render the manifests with your `values.env` and apply them.
 3. Seed the admin user, OAuth clients, and the MCP catalog via one-shot Jobs.
 
-When it finishes, open `http://<TOS_HOST>:<TOS_NODE_PORT>` and log in with the
+When it finishes, open `http://<NAP_HOST>:<NAP_NODE_PORT>` and log in with the
 admin username / password from `values.env`.
 
 ## Single-node profile
@@ -82,7 +82,7 @@ in-cluster registry and does **not** load any tarball.
 ```bash
 cp values.env.single-node.example values.env
 ./gen-secrets.sh
-vi values.env                                 # set TOS_HOST + ADMIN_PASSWORD
+vi values.env                                 # set NAP_HOST + ADMIN_PASSWORD
 ./install.sh --profile=single-node
 ```
 
@@ -97,7 +97,7 @@ Everything is driven by `values.env`. Key knobs:
 | --- | --- |
 | `REGISTRY` | Public registry path that holds all first-party images (`${REGISTRY}/<svc>:<tag>`). Default points at the official public registry; override only to use a mirror. |
 | `IMAGE_TAG` | Tag for all first-party images. `latest` by default; pin to a release tag for reproducibility. |
-| `TOS_HOST` / `TOS_NODE_PORT` | Where users reach the web UI. |
+| `NAP_HOST` / `NAP_NODE_PORT` | Where users reach the web UI. |
 | `INGRESS_MODE` | `nodeport` (default) or `external` (your own ingress fronts the HTTP services; nodePort lines are stripped). |
 | `PG_*` / `NFS_*` | PostgreSQL and shared-storage settings. |
 | `SANDBOX_ENABLED` / `BROWSER_ENABLED` / `LDAP_ENABLED` | Optional capabilities, all off by default. |

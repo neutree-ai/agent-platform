@@ -165,10 +165,10 @@ export COTURN_NODE_SELECTOR="${COTURN_NODE_SELECTOR:-}"
 # The callback each service computes MUST equal the redirect_uri registered in
 # oauth_clients, or cp returns 400 invalid_client — so both derive from the
 # same value and can't drift.
-export WEB_PUBLIC_URL="${WEB_PUBLIC_URL:-http://${TOS_HOST}:${TOS_NODE_PORT}}"
+export WEB_PUBLIC_URL="${WEB_PUBLIC_URL:-http://${NAP_HOST}:${NAP_NODE_PORT}}"
 export FILES_PUBLIC_URL="${FILES_PUBLIC_URL:-$WEB_PUBLIC_URL}"
-export SANDBOX_PUBLIC_URL="${SANDBOX_PUBLIC_URL:-http://${TOS_HOST}:${SANDBOX_NODE_PORT}}"
-export BROWSER_PUBLIC_URL="${BROWSER_PUBLIC_URL:-http://${TOS_HOST}:${BROWSER_NODE_PORT}}"
+export SANDBOX_PUBLIC_URL="${SANDBOX_PUBLIC_URL:-http://${NAP_HOST}:${SANDBOX_NODE_PORT}}"
+export BROWSER_PUBLIC_URL="${BROWSER_PUBLIC_URL:-http://${NAP_HOST}:${BROWSER_NODE_PORT}}"
 
 export SANDBOX_SERVICE_URL_RESOLVED="$SANDBOX_PUBLIC_URL"
 export BROWSER_SERVICE_URL_RESOLVED="$BROWSER_PUBLIC_URL"
@@ -244,7 +244,7 @@ render_manifests() {
 
   # Explicit variable list — prevents envsubst from replacing k8s $(VAR)
   # references like $(POSTGRES_PASSWORD)
-  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${DB_NAME}${TOS_HOST}${TOS_NODE_PORT}'
+  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${DB_NAME}${NAP_HOST}${NAP_NODE_PORT}'
   VARS+='${IMAGE_PULL_SECRET}'
   VARS+='${POSTGRES_IMAGE}${GOTENBERG_IMAGE}${COTURN_IMAGE}${NFS_SERVER_IMAGE}'
   VARS+='${RUNTIME_NODE_IMAGE}${RUNTIME_PYTHON_IMAGE}${RUNTIME_GOLANG_IMAGE}${PAUSE_IMAGE}'
@@ -675,9 +675,9 @@ case "$MODE" in
     log ""
     log "============================================"
     log " Neutree Agent Platform installed successfully!"
-    log " Access: http://${TOS_HOST}:${TOS_NODE_PORT}"
-    [ "$BROWSER_ENABLED" = true ] && log " Browser: http://${TOS_HOST}:${BROWSER_NODE_PORT}"
-    [ "$SANDBOX_ENABLED" = "true" ] && log " Sandbox: http://${TOS_HOST}:${SANDBOX_NODE_PORT}"
+    log " Access: http://${NAP_HOST}:${NAP_NODE_PORT}"
+    [ "$BROWSER_ENABLED" = true ] && log " Browser: http://${NAP_HOST}:${BROWSER_NODE_PORT}"
+    [ "$SANDBOX_ENABLED" = "true" ] && log " Sandbox: http://${NAP_HOST}:${SANDBOX_NODE_PORT}"
     log " Login:  ${ADMIN_USERNAME} / (password from values.env)"
     log "============================================"
     ;;

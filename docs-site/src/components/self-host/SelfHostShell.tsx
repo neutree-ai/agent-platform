@@ -279,7 +279,7 @@ const PANEL_STR = {
     ovNodeIp: 'Node IP',
     ovNodeIpReq: 'At least one worker IP reachable by users (NodePort uses it)',
     ovNodePort: 'NodePort',
-    ovNodePortReq: <>3 free ports in 30000–32767: <code>TOS_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
+    ovNodePortReq: <>3 free ports in 30000–32767: <code>NAP_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
     ovTurnPorts: 'TURN ports',
     ovTurnPortsReq: <>When the Remote Browser's TURN relay is enabled: open <code>3478/tcp+udp</code> and <code>49152-49252/udp</code> on the coturn node</>,
     ovStorageReach: 'Storage reachability',
@@ -319,7 +319,7 @@ const PANEL_STR = {
     inToolHelm: <><code>helm</code> 3.x — only needed when the cluster doesn't already have an NFS provisioner; invoked by <code>install.sh</code>'s prerequisites stage</>,
     inToolsNote: <>The cluster nodes (not the operator machine) must be able to pull from <code>ghcr.io</code>, <code>docker.io</code>, and <code>registry.k8s.io</code>.</>,
     inQuickH2: 'Quick start',
-    inQuickAfter: <>When it finishes, open <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> and log in with the admin username / password from <code>values.env</code>.</>,
+    inQuickAfter: <>When it finishes, open <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code> and log in with the admin username / password from <code>values.env</code>.</>,
     inStepsH2: 'Step by step',
     inStep1H3: 'Get the installer',
     inStep1Note: <>All first-party images are pulled from the public registry (<code>${'{'}REGISTRY{'}'}</code>, default <code>ghcr.io/neutree-ai/agent-platform</code>); there is no image tarball to load. Override <code>REGISTRY</code> only if you mirror the images elsewhere.</>,
@@ -328,11 +328,11 @@ const PANEL_STR = {
     inStep2P1Pre: 'We recommend the',
     inStep2P1Post: '— fill it in online, download the result, and place it in the ',
     inStep2P1End: ' directory.',
-    inStep2Note: <>You can also edit it on the command line: <code>cp values.env.example values.env</code>, run <code>./gen-secrets.sh</code> to fill all machine-internal secrets, then <code>vi values.env</code> to set <code>TOS_HOST</code>, the admin password, and storage settings.</>,
+    inStep2Note: <>You can also edit it on the command line: <code>cp values.env.example values.env</code>, run <code>./gen-secrets.sh</code> to fill all machine-internal secrets, then <code>vi values.env</code> to set <code>NAP_HOST</code>, the admin password, and storage settings.</>,
     inStep3H3: 'Run the installer',
     inStep3P: <>The same command serves first-time install and upgrade; it is idempotent and safe to re-run. It installs prerequisites (the CloudNativePG operator and the NFS subdir provisioner), renders the manifests with your <code>values.env</code> and applies them, then seeds the admin user, OAuth clients, and the MCP catalog via one-shot Jobs. <code>nap-cp</code> runs SQL migrations on startup.</>,
     inStep4H3: 'Log in',
-    inStep4P: <>Open <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> in a browser and log in with <code>ADMIN_USERNAME</code> and the <code>ADMIN_PASSWORD</code> from{' '}<code>values.env</code>.</>,
+    inStep4P: <>Open <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code> in a browser and log in with <code>ADMIN_USERNAME</code> and the <code>ADMIN_PASSWORD</code> from{' '}<code>values.env</code>.</>,
     inSubH2: 'install.sh subcommands',
     inSubIntro: <>For running stages separately; a single <code>./install.sh</code> is enough for the normal case.</>,
     inSingleH2: 'Single-node profile',
@@ -365,12 +365,12 @@ const PANEL_STR = {
     tsErrPull: <><strong>Images won't pull</strong> → confirm the nodes can reach{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>. If you mirror images, check <code>REGISTRY</code> and the <code>IMAGE_PULL_SECRET</code> you configured.</>,
     tsErrPvc: <><strong>PVCs stuck Pending</strong> → run{' '}<code>kubectl -n $NAMESPACE get pvc</code> and check the StorageClass exists and its provisioner is healthy</>,
     tsErrPg: <><strong>PostgreSQL won't start</strong> →{' '}<code>kubectl -n $NAMESPACE describe cluster.postgresql.cnpg.io nap-pg</code>; the most common cause is the CSI behind <code>PG_STORAGE_CLASS</code> not being writable</>,
-    tsErrPort: <><strong>NodePort already in use</strong> → change <code>TOS_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> and re-run{' '}<code>install.sh</code></>,
+    tsErrPort: <><strong>NodePort already in use</strong> → change <code>NAP_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> and re-run{' '}<code>install.sh</code></>,
     tsBlankH2: 'Blank page after login / APIs return 401',
     tsBlankP: <>Usually because <code>JWT_SECRET</code> changed during an upgrade — all issued tokens are invalidated. Roll <code>JWT_SECRET</code> in{' '}<code>values.env</code> back to its first-install value and re-run{' '}<code>./install.sh</code>.</>,
     tsReachH2: 'Cannot reach the platform',
-    tsReachP: <>The browser gets no response at <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code>. Two common causes:</>,
-    tsReachHost: <><strong><code>TOS_HOST</code> is unreachable</strong> — the configured IP is not a worker node reachable from the browser. Set the correct node IP and re-run <code>install.sh</code></>,
+    tsReachP: <>The browser gets no response at <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code>. Two common causes:</>,
+    tsReachHost: <><strong><code>NAP_HOST</code> is unreachable</strong> — the configured IP is not a worker node reachable from the browser. Set the correct node IP and re-run <code>install.sh</code></>,
     tsReachPort: <><strong>NodePort not open</strong> — the node firewall blocks the port; ask your SRE to open it</>,
     tsGoneH2: 'Browser / Sandbox missing after upgrade',
     tsGoneP: <>Optional-module defaults changed to "disabled unless configured" as of 2026-05. If you previously enabled the browser or sandbox, set{' '}<code>BROWSER_ENABLED=true</code> / <code>SANDBOX_ENABLED=true</code> explicitly in{' '}<code>values.env</code>. See the compatibility section on the Upgrade tab.</>,
@@ -432,7 +432,7 @@ const PANEL_STR = {
     ovNodeIp: '节点 IP',
     ovNodeIpReq: '至少一个用户可达的 worker IP（NodePort 会用到）',
     ovNodePort: 'NodePort',
-    ovNodePortReq: <>30000–32767 范围内 3 个空闲端口：<code>TOS_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
+    ovNodePortReq: <>30000–32767 范围内 3 个空闲端口：<code>NAP_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
     ovTurnPorts: 'TURN 端口',
     ovTurnPortsReq: <>启用 Remote Browser 的 TURN 中继时：在 coturn 节点上开放 <code>3478/tcp+udp</code> 和 <code>49152-49252/udp</code></>,
     ovStorageReach: '存储可达性',
@@ -472,7 +472,7 @@ const PANEL_STR = {
     inToolHelm: <><code>helm</code> 3.x — 仅当集群尚未有 NFS provisioner 时需要；由 <code>install.sh</code> 的前置阶段调用</>,
     inToolsNote: <>集群节点（而非操作者机器）必须能从 <code>ghcr.io</code>、<code>docker.io</code> 和 <code>registry.k8s.io</code> 拉取镜像。</>,
     inQuickH2: '快速开始',
-    inQuickAfter: <>完成后打开 <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的管理员用户名 / 密码登录。</>,
+    inQuickAfter: <>完成后打开 <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的管理员用户名 / 密码登录。</>,
     inStepsH2: '分步操作',
     inStep1H3: '获取安装器',
     inStep1Note: <>所有第一方镜像都从公共仓库拉取（<code>${'{'}REGISTRY{'}'}</code>，默认 <code>ghcr.io/neutree-ai/agent-platform</code>）；没有镜像 tarball 需要加载。仅当你把镜像放到别处镜像源时才覆盖 <code>REGISTRY</code>。</>,
@@ -481,11 +481,11 @@ const PANEL_STR = {
     inStep2P1Pre: '我们推荐使用',
     inStep2P1Post: '— 在线填写、下载结果，放到 ',
     inStep2P1End: ' 目录下。',
-    inStep2Note: <>你也可以在命令行编辑：<code>cp values.env.example values.env</code>，运行 <code>./gen-secrets.sh</code> 填好所有机器内部密钥，再用 <code>vi values.env</code> 设置 <code>TOS_HOST</code>、管理员密码和存储配置。</>,
+    inStep2Note: <>你也可以在命令行编辑：<code>cp values.env.example values.env</code>，运行 <code>./gen-secrets.sh</code> 填好所有机器内部密钥，再用 <code>vi values.env</code> 设置 <code>NAP_HOST</code>、管理员密码和存储配置。</>,
     inStep3H3: '运行安装器',
     inStep3P: <>首次安装和升级用的是同一条命令；它是幂等的，可以安全地重复运行。它会安装前置组件（CloudNativePG operator 和 NFS subdir provisioner），用你的 <code>values.env</code> 渲染 manifest 并 apply，然后通过一次性 Job 写入管理员用户、OAuth client 和 MCP catalog。<code>nap-cp</code> 在启动时运行 SQL 迁移。</>,
     inStep4H3: '登录',
-    inStep4P: <>在浏览器打开 <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的 <code>ADMIN_USERNAME</code> 和{' '}<code>ADMIN_PASSWORD</code> 登录。</>,
+    inStep4P: <>在浏览器打开 <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的 <code>ADMIN_USERNAME</code> 和{' '}<code>ADMIN_PASSWORD</code> 登录。</>,
     inSubH2: 'install.sh 子命令',
     inSubIntro: <>用于单独运行各阶段；通常情况下一条 <code>./install.sh</code> 就够了。</>,
     inSingleH2: 'Single-node profile',
@@ -518,12 +518,12 @@ const PANEL_STR = {
     tsErrPull: <><strong>镜像拉不下来</strong> → 确认节点能访问{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>。如果你用镜像源，检查 <code>REGISTRY</code> 和你配置的 <code>IMAGE_PULL_SECRET</code>。</>,
     tsErrPvc: <><strong>PVC 卡在 Pending</strong> → 运行{' '}<code>kubectl -n $NAMESPACE get pvc</code>，检查 StorageClass 是否存在、其 provisioner 是否健康</>,
     tsErrPg: <><strong>PostgreSQL 起不来</strong> →{' '}<code>kubectl -n $NAMESPACE describe cluster.postgresql.cnpg.io nap-pg</code>；最常见的原因是 <code>PG_STORAGE_CLASS</code> 背后的 CSI 不可写</>,
-    tsErrPort: <><strong>NodePort 已被占用</strong> → 修改 <code>TOS_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> 并重新运行{' '}<code>install.sh</code></>,
+    tsErrPort: <><strong>NodePort 已被占用</strong> → 修改 <code>NAP_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> 并重新运行{' '}<code>install.sh</code></>,
     tsBlankH2: '登录后白屏 / API 返回 401',
     tsBlankP: <>通常是因为升级时 <code>JWT_SECRET</code> 发生了变化 — 所有已签发 token 都失效了。把 <code>values.env</code> 里的 <code>JWT_SECRET</code>{' '}改回首次安装时的值，并重新运行{' '}<code>./install.sh</code>。</>,
     tsReachH2: '无法访问平台',
-    tsReachP: <>浏览器在 <code>http://&lt;TOS_HOST&gt;:&lt;TOS_NODE_PORT&gt;</code> 得不到任何响应。两个常见原因：</>,
-    tsReachHost: <><strong><code>TOS_HOST</code> 不可达</strong> — 配置的 IP 不是浏览器能访问到的 worker 节点。设置正确的节点 IP 并重新运行 <code>install.sh</code></>,
+    tsReachP: <>浏览器在 <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code> 得不到任何响应。两个常见原因：</>,
+    tsReachHost: <><strong><code>NAP_HOST</code> 不可达</strong> — 配置的 IP 不是浏览器能访问到的 worker 节点。设置正确的节点 IP 并重新运行 <code>install.sh</code></>,
     tsReachPort: <><strong>NodePort 未开放</strong> — 节点防火墙拦截了该端口；请让 SRE 开放它</>,
     tsGoneH2: '升级后 Browser / Sandbox 不见了',
     tsGoneP: <>自 2026-05 起，可选模块的默认值改为"未配置即禁用"。如果你之前启用过 browser 或 sandbox，请在 <code>values.env</code> 里显式设置{' '}<code>BROWSER_ENABLED=true</code> / <code>SANDBOX_ENABLED=true</code>。详见 Upgrade 标签页的兼容性章节。</>,
@@ -762,7 +762,7 @@ function Install({ onGo, locale = 'en' }: { onGo: (id: TabId) => void; locale?: 
         <CodeBlock locale={locale}>{`git clone <this-repo> && cd self-host
 cp values.env.example values.env
 ./gen-secrets.sh                # fills random machine secrets
-vi values.env                   # set TOS_HOST, ADMIN_PASSWORD, storage, etc.
+vi values.env                   # set NAP_HOST, ADMIN_PASSWORD, storage, etc.
 ./install.sh`}</CodeBlock>
         <p>{t.inQuickAfter}</p>
       </section>
@@ -816,7 +816,7 @@ vi values.env                   # set TOS_HOST, ADMIN_PASSWORD, storage, etc.
         <p>{t.inSingleP}</p>
         <CodeBlock locale={locale}>{`cp values.env.single-node.example values.env
 ./gen-secrets.sh
-vi values.env                 # set TOS_HOST + ADMIN_PASSWORD
+vi values.env                 # set NAP_HOST + ADMIN_PASSWORD
 ./install.sh --profile=single-node`}</CodeBlock>
         <p class="sh-muted">{t.inSingleNote}</p>
       </section>

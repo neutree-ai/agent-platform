@@ -45,7 +45,7 @@ spec:
             - "--external-ip=${TURN_HOST}"
             - "--min-port=49152"
             - "--max-port=49252"
-            - "--realm=${TOS_HOST}"
+            - "--realm=${NAP_HOST}"
             - "--use-auth-secret"
             - "--static-auth-secret=$(TURN_AUTH_SECRET)"
             - "--no-tls"

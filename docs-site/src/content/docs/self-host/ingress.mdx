@@ -5,7 +5,7 @@ description: Replace the default NodePort with your existing ingress controller 
 
 ## When to replace NodePort
 
-The default deployment exposes the platform with NodePort (`TOS_NODE_PORT` / `BROWSER_NODE_PORT` / `SANDBOX_NODE_PORT`). If your cluster already has an ingress stack, you want a domain + TLS, or you need WAF / auth / canary at the ingress layer, you can route these three HTTP services through your own ingress.
+The default deployment exposes the platform with NodePort (`NAP_NODE_PORT` / `BROWSER_NODE_PORT` / `SANDBOX_NODE_PORT`). If your cluster already has an ingress stack, you want a domain + TLS, or you need WAF / auth / canary at the ingress layer, you can route these three HTTP services through your own ingress.
 
 To switch: set `INGRESS_MODE` to `external` in `values.env`. `install.sh` renders these three Services as `ClusterIP` and strips the `nodePort` field, then you proxy traffic to the ClusterIP Services from your own ingress controller. The three `*_NODE_PORT` values stay in `values.env` so you can switch back, but the rendered output won't include them.
 
@@ -34,7 +34,7 @@ In other words, whatever the main domain is, the others grow underneath it. When
    - `nap-tls-cert` — SAN covering `<main-domain>` itself plus the `files` / `browsers` / `sandbox` direct subdomains
    - `nap-sandbox-tls-cert` — **must be wildcard**, covering `*.sandbox.<main-domain>`. Preview subdomain names differ every time and can't be enumerated
 3. DNS records (see the next section)
-4. In `values.env`: `INGRESS_MODE=external`; `TOS_HOST` set to `<main-domain>`; `SANDBOX_DOMAIN=sandbox.<main-domain>`
+4. In `values.env`: `INGRESS_MODE=external`; `NAP_HOST` set to `<main-domain>`; `SANDBOX_DOMAIN=sandbox.<main-domain>`
 
 ## DNS records
 

@@ -5,7 +5,7 @@ description: 用你已有的 ingress controller 替换默认的 NodePort，为 N
 
 ## 何时替换 NodePort
 
-默认部署用 NodePort 暴露平台（`TOS_NODE_PORT` / `BROWSER_NODE_PORT` / `SANDBOX_NODE_PORT`）。如果你的集群已有 ingress 栈、想要域名 + TLS，或者需要在 ingress 层做 WAF / 鉴权 / 灰度，可以把这三个 HTTP 服务通过你自己的 ingress 路由。
+默认部署用 NodePort 暴露平台（`NAP_NODE_PORT` / `BROWSER_NODE_PORT` / `SANDBOX_NODE_PORT`）。如果你的集群已有 ingress 栈、想要域名 + TLS，或者需要在 ingress 层做 WAF / 鉴权 / 灰度，可以把这三个 HTTP 服务通过你自己的 ingress 路由。
 
 切换方式：在 `values.env` 中把 `INGRESS_MODE` 设为 `external`。`install.sh` 会把这三个 Service 渲染为 `ClusterIP` 并去掉 `nodePort` 字段，然后你从自己的 ingress controller 把流量代理到这些 ClusterIP Service。三个 `*_NODE_PORT` 值仍保留在 `values.env` 中以便切回，但渲染输出不会包含它们。
 

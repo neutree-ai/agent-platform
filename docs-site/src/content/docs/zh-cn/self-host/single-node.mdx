@@ -61,12 +61,12 @@ curl -sfL https://nap.docs.neutree.ai/get.sh \
 cd self-host
 cp values.env.single-node.example values.env
 ./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
-vi values.env           # set TOS_HOST + ADMIN_PASSWORD
+vi values.env           # set NAP_HOST + ADMIN_PASSWORD
 ```
 
 `values.env.single-node.example` 已经内置了单节点默认值，所以你只需要改两处：
 
-- `TOS_HOST` —— 节点对外可达的 IP；pod 和登录入口都使用它
+- `NAP_HOST` —— 节点对外可达的 IP；pod 和登录入口都使用它
 - `ADMIN_PASSWORD` —— 初始 admin 密码
 
 其余所有项（PG 副本数、storage class、NFS 后端）都已按单节点形态预置。
@@ -82,7 +82,7 @@ vi values.env           # set TOS_HOST + ADMIN_PASSWORD
 ### 3. 登录
 
 ```
-http://<TOS_HOST>:30080
+http://<NAP_HOST>:30080
 admin / <ADMIN_PASSWORD>
 ```
 
