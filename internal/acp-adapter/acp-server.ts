@@ -9,13 +9,13 @@
 import { readFileSync } from 'node:fs'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { McpServer } from '@agentclientprotocol/sdk'
 import { createNodeWebSocket } from '@hono/node-ws'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { streamSSE } from 'hono/streaming'
 import WebSocket from 'ws'
-import type { McpServer } from '@agentclientprotocol/sdk'
 import type { AgentCapabilities } from '../types/events.js'
 import type { AcpBridge, AcpSessionHandler } from './acp-bridge.js'
 import type { ChatRequest } from './types.js'
@@ -38,6 +38,14 @@ export interface AcpAgentServerConfig {
   loadCredentials: () => Promise<boolean>
   /** Called after config/credentials reload to restart the ACP child process with updated env. */
   restartBridge?: () => Promise<void>
+  /**
+   * Called once per completed prompt turn with `PromptResponse.usage` (may be
+   * undefined — codex never populates it). Agents whose transcripts the
+   * agent-usage sweeper can't parse (goose persists sessions in SQLite)
+   * implement this to append their own usage records for the `POST /usage`
+   * pull. Must not throw; failures are logged and swallowed.
+   */
+  recordUsage?: (sessionId: string, usage: unknown) => void
 }
 
 // ── Session sink: replaceable SSE writer that survives UI refresh ──
@@ -203,10 +211,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
 
   const activeSinks = new Map<string, SessionSink>()
 
-  function switchToBufferMode(
-    sessionId: string,
-    expectedWriter?: SessionSink['write'],
-  ) {
+  function switchToBufferMode(sessionId: string, expectedWriter?: SessionSink['write']) {
     const sink = activeSinks.get(sessionId)
     if (!sink) return
     // If the caller owned a specific writer but something has since replaced
@@ -340,7 +345,9 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
             reusedBridge = true
             activeSinks.set(sessionId, sink)
             touchBridge(sessionId)
-            console.log(`[agent] Reusing bridge session=${sessionId} bridge_reuse=${Date.now() - chatStartedAt}ms`)
+            console.log(
+              `[agent] Reusing bridge session=${sessionId} bridge_reuse=${Date.now() - chatStartedAt}ms`,
+            )
           } else {
             // Bridge died — remove stale entry, will fall through to loadSession
             console.warn(`[agent] Bridge dead for session=${sessionId}, replacing`)
@@ -353,7 +360,9 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           // Session not active — spawn a new bridge and try to load persisted state.
           const bridgeStart = Date.now()
           const newBridge = await bridgeFactory!()
-          console.log(`[agent] Bridge spawned session=${sessionId} bridge_spawn=${Date.now() - bridgeStart}ms`)
+          console.log(
+            `[agent] Bridge spawned session=${sessionId} bridge_spawn=${Date.now() - bridgeStart}ms`,
+          )
           try {
             const loadStart = Date.now()
             const mcpServers = config.loadMcpServers(sessionToken)
@@ -361,12 +370,16 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
             // replays the full conversation history via notifications during
             // loadSession, and we don't want those replayed events in the SSE
             // stream (the client loads history from the DB).
-            currentSessionId = await newBridge.loadSession(sessionId, { mcpServers })
+            currentSessionId = await newBridge.loadSession(sessionId, {
+              mcpServers,
+            })
             currentBridge = newBridge
             sessionBridges.set(currentSessionId, newBridge)
             activeSinks.set(currentSessionId, sink)
             touchBridge(currentSessionId)
-            console.log(`[agent] Loaded persisted session=${currentSessionId} session_load=${Date.now() - loadStart}ms`)
+            console.log(
+              `[agent] Loaded persisted session=${currentSessionId} session_load=${Date.now() - loadStart}ms`,
+            )
           } catch (err: any) {
             // loadSession failed (id not owned by this core, rollout missing, etc.).
             // Don't silently fall through to createSession — that splits the
@@ -395,11 +408,15 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           // Create a brand new bridge + session
           const bridgeStart = Date.now()
           const newBridge = await bridgeFactory!()
-          console.log(`[agent] Bridge spawned (new session) bridge_spawn=${Date.now() - bridgeStart}ms`)
+          console.log(
+            `[agent] Bridge spawned (new session) bridge_spawn=${Date.now() - bridgeStart}ms`,
+          )
           const createStart = Date.now()
           const mcpServers = config.loadMcpServers(sessionToken)
           currentSessionId = await newBridge.createSession({ mcpServers })
-          console.log(`[agent] Session created session=${currentSessionId} session_create=${Date.now() - createStart}ms`)
+          console.log(
+            `[agent] Session created session=${currentSessionId} session_create=${Date.now() - createStart}ms`,
+          )
           currentBridge = newBridge
           sessionBridges.set(currentSessionId, newBridge)
           activeSinks.set(currentSessionId, sink)
@@ -409,7 +426,9 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           if (config.hasMcpServers?.()) {
             const mcpStart = Date.now()
             await newBridge.waitForMcpReady()
-            console.log(`[agent] MCP ready session=${currentSessionId} mcp_wait=${Date.now() - mcpStart}ms`)
+            console.log(
+              `[agent] MCP ready session=${currentSessionId} mcp_wait=${Date.now() - mcpStart}ms`,
+            )
           }
 
           // Emit session.started with the new session ID
@@ -496,7 +515,17 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           result = await runTurn(rebuilt)
           console.log(`[agent] Rebuilt bridge recovered session=${currentSessionId}`)
         }
-        console.log(`[agent] Prompt done session=${currentSessionId} prompt=${Date.now() - promptStart}ms total=${Date.now() - chatStartedAt}ms`)
+        console.log(
+          `[agent] Prompt done session=${currentSessionId} prompt=${Date.now() - promptStart}ms total=${Date.now() - chatStartedAt}ms`,
+        )
+
+        if (config.recordUsage) {
+          try {
+            config.recordUsage(currentSessionId!, (result as { usage?: unknown }).usage)
+          } catch (usageErr) {
+            console.error(`[agent] recordUsage failed session=${currentSessionId}:`, usageErr)
+          }
+        }
 
         // Finalize any in-progress message item
         for (const evt of translator.finalize()) {
@@ -514,11 +543,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         // have one (e.g. "cyber_policy"), otherwise fall back.
         const cause = err.data?.message
         const tag = err.data?.codex_error_info ?? err.data?.error_code
-        const msg = cause
-          ? tag
-            ? `${cause} (${tag})`
-            : cause
-          : err.message || JSON.stringify(err)
+        const msg = cause ? (tag ? `${cause} (${tag})` : cause) : err.message || JSON.stringify(err)
         console.error(`[agent] Chat error session=${currentSessionId}:`, msg)
         await sink.write('message', JSON.stringify(translator.error(msg)))
         await sink.write('message', JSON.stringify(translator.sessionEnded('error')))
@@ -529,7 +554,9 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         const currentSink = activeSinks.get(currentSessionId)
         if (currentSink?.disconnected) {
           // CP disconnected — keep sink alive for reconnect to flush buffered events
-          console.log(`[agent] Turn done but CP disconnected, keeping sink for reconnect session=${currentSessionId}`)
+          console.log(
+            `[agent] Turn done but CP disconnected, keeping sink for reconnect session=${currentSessionId}`,
+          )
         } else {
           activeSinks.delete(currentSessionId)
         }
@@ -639,11 +666,12 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
       }
       const all = !scope || scope.length === 0
 
-      const configOk = (all || scope!.includes('config')) ? await config.loadConfig() : false
-      const skillsResult = (all || scope!.includes('skills'))
-        ? await config.loadSkills()
-        : { ok: false, failed: [] as string[] }
-      const credsOk = (all || scope!.includes('credentials')) ? await config.loadCredentials() : false
+      const configOk = all || scope!.includes('config') ? await config.loadConfig() : false
+      const skillsResult =
+        all || scope!.includes('skills')
+          ? await config.loadSkills()
+          : { ok: false, failed: [] as string[] }
+      const credsOk = all || scope!.includes('credentials') ? await config.loadCredentials() : false
 
       if (configOk) console.log('[agent] Config reloaded from CP')
       if (skillsResult.ok) console.log('[agent] Skills reloaded from CP')
@@ -693,10 +721,9 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
 
       return {
         onOpen(_evt, ws) {
-          backend = new WebSocket(
-            `ws://localhost:7681/ws?arg=${encodeURIComponent(session)}`,
-            ['tty'],
-          )
+          backend = new WebSocket(`ws://localhost:7681/ws?arg=${encodeURIComponent(session)}`, [
+            'tty',
+          ])
           backend.binaryType = 'arraybuffer'
 
           backend.on('open', () => {

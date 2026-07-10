@@ -25,6 +25,18 @@ function nextItemId(): string {
   return `item_${Date.now()}_${++_itemCounter}`
 }
 
+/**
+ * Extract goose's structured tool identity from a tool_call(_update)'s _meta.
+ * Shape: `_meta.goose.toolCall.toolName` — bare for builtins (`shell`),
+ * `<extension>__<tool>` for MCP/extension tools
+ * (`tos-platform__sandbox_run_command`). Absent on other ACP agents.
+ */
+function gooseToolName(update: { _meta?: unknown }): string | undefined {
+  const meta = update._meta as { goose?: { toolCall?: { toolName?: unknown } } } | null | undefined
+  const name = meta?.goose?.toolCall?.toolName
+  return typeof name === 'string' && name.length > 0 ? name : undefined
+}
+
 /** Serialize unknown rawInput/rawOutput to a display string. */
 function stringifyRaw(raw: unknown): string {
   if (raw == null) return ''
@@ -127,9 +139,7 @@ export class AcpEventTranslator {
     if (!this.turnStartMs) this.turnStartMs = Date.now()
     const events: UniversalEvent[] = []
 
-    console.log(
-      `[acp-events] sessionUpdate kind=${update.sessionUpdate} session=${this.sessionId}`,
-    )
+    console.log(`[acp-events] sessionUpdate kind=${update.sessionUpdate} session=${this.sessionId}`)
 
     switch (update.sessionUpdate) {
       case 'agent_message_chunk': {
@@ -199,12 +209,16 @@ export class AcpEventTranslator {
         // SDK type: ToolCall & { sessionUpdate: 'tool_call' }
         // Fields: toolCallId, title, kind, status, rawInput, rawOutput, content
         //
-        // Prefer ACP `kind` (stable: execute/read/edit/...) as the tool name
-        // for the universal protocol. Codex sets `title` to a formatted
-        // command preview, which the UI also derives from rawInput — using
-        // `title` as `name` causes the same string to render twice.
+        // Prefer the agent's structured tool identity when present. Goose
+        // carries it in `_meta.goose.toolCall.toolName` (`shell`,
+        // `tos-platform__sandbox_run_command`) while its `title` is display
+        // text that can even be model-generated — useless as a dispatch key.
+        // Next preference is ACP `kind` (stable: execute/read/edit/...).
+        // Codex sets `title` to a formatted command preview, which the UI
+        // also derives from rawInput — using `title` as `name` causes the
+        // same string to render twice.
         const itemId = nextItemId()
-        const stableName = update.kind ?? update.title
+        const stableName = gooseToolName(update) ?? update.kind ?? update.title
         // codex's built-in image-generation tool surfaces as a tool_call with
         // kind "other" / title "Image generation" and a call id prefixed `ig_`.
         // Flag it so the completion compensation below can fire — see the
@@ -249,7 +263,10 @@ export class AcpEventTranslator {
         // above), which reuses all the terminal/output handling.
         if (update.status === 'completed' || update.status === 'failed') {
           events.push(
-            ...this.translateUpdate({ ...update, sessionUpdate: 'tool_call_update' } as SessionUpdate),
+            ...this.translateUpdate({
+              ...update,
+              sessionUpdate: 'tool_call_update',
+            } as SessionUpdate),
           )
         }
         break
@@ -289,9 +306,9 @@ export class AcpEventTranslator {
 
         if (tracked) {
           if (update.rawInput !== undefined) tracked.rawInput = update.rawInput
-          // Mirror the started-side preference: kind is the stable name; only
-          // accept `title` as a fallback if no kind was ever set.
-          const updatedName = update.kind ?? update.title
+          // Mirror the started-side preference: goose structured identity,
+          // then kind; only accept `title` as a last-resort fallback.
+          const updatedName = gooseToolName(update) ?? update.kind ?? update.title
           if (updatedName !== undefined && updatedName !== null) tracked.title = updatedName
           tracked.lastStatus = effectiveStatus
         }
@@ -375,7 +392,11 @@ export class AcpEventTranslator {
           const ro = (update.rawOutput ?? {}) as Record<string, unknown>
           const saved = typeof ro.savedPath === 'string' ? ro.savedPath : undefined
           const revised = typeof ro.revisedPrompt === 'string' ? ro.revisedPrompt : undefined
-          output = ['Image generated.', revised && `Revised prompt: ${revised}`, saved && `Saved to: ${saved}`]
+          output = [
+            'Image generated.',
+            revised && `Revised prompt: ${revised}`,
+            saved && `Saved to: ${saved}`,
+          ]
             .filter(Boolean)
             .join('\n')
         }
