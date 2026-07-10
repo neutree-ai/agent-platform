@@ -145,10 +145,6 @@ export SANDBOX_NODE_SELECTOR="${SANDBOX_NODE_SELECTOR:-}"
 # the server svc in this namespace; override if you install OpenSandbox into its
 # own namespace (e.g. http://opensandbox-server.opensandbox-system.svc:80).
 export OPENSANDBOX_URL="${OPENSANDBOX_URL:-http://opensandbox-server.${NAMESPACE}.svc:80}"
-# Public URL users (and the OAuth callback) reach sandbox at. Override when
-# external ingress / a custom domain fronts the service; empty derives the
-# NodePort form (unchanged behavior).
-export SANDBOX_PUBLIC_URL="${SANDBOX_PUBLIC_URL:-}"
 
 # Browser + TURN module
 export BROWSER_NODE_PORT="${BROWSER_NODE_PORT:-30085}"
@@ -157,26 +153,25 @@ export TURN_HOST="${TURN_HOST:-}"
 export TURN_PORT="${TURN_PORT:-3478}"
 export TURN_AUTH_SECRET="${TURN_AUTH_SECRET:-}"
 export COTURN_NODE_SELECTOR="${COTURN_NODE_SELECTOR:-}"
-# Public URL users (and the OAuth callback) reach the browser service at.
-# Same override semantics as SANDBOX_PUBLIC_URL.
-export BROWSER_PUBLIC_URL="${BROWSER_PUBLIC_URL:-}"
 
 # --- Service public URLs + OAuth redirect URIs ---------------------------
-# The URL each service computes its own /api/auth/callback from MUST match the
-# redirect_uri registered in oauth_clients, or cp returns 400 invalid_client.
-# Resolve both from a single source here so they can't drift. PUBLIC_URL wins;
-# otherwise derive the NodePort form (the value baked into the manifests before
-# this override existed).
-if [ -n "$SANDBOX_PUBLIC_URL" ]; then
-  export SANDBOX_SERVICE_URL_RESOLVED="$SANDBOX_PUBLIC_URL"
-else
-  export SANDBOX_SERVICE_URL_RESOLVED="http://${TOS_HOST}:${SANDBOX_NODE_PORT}"
-fi
-if [ -n "$BROWSER_PUBLIC_URL" ]; then
-  export BROWSER_SERVICE_URL_RESOLVED="$BROWSER_PUBLIC_URL"
-else
-  export BROWSER_SERVICE_URL_RESOLVED="http://${TOS_HOST}:${BROWSER_NODE_PORT}"
-fi
+# Every URL a browser (or an OAuth callback) has to reach from outside the
+# cluster is resolved here, once. Each defaults to the NodePort form the
+# manifests used to hard-code, so nodeport installs are unchanged; set them in
+# values.env when external ingress or a custom domain fronts the services —
+# with INGRESS_MODE=external there are no NodePorts for the old default to
+# point at, and control-plane would hand out unreachable absolute links.
+#
+# The callback each service computes MUST equal the redirect_uri registered in
+# oauth_clients, or cp returns 400 invalid_client — so both derive from the
+# same value and can't drift.
+export WEB_PUBLIC_URL="${WEB_PUBLIC_URL:-http://${TOS_HOST}:${TOS_NODE_PORT}}"
+export FILES_PUBLIC_URL="${FILES_PUBLIC_URL:-$WEB_PUBLIC_URL}"
+export SANDBOX_PUBLIC_URL="${SANDBOX_PUBLIC_URL:-http://${TOS_HOST}:${SANDBOX_NODE_PORT}}"
+export BROWSER_PUBLIC_URL="${BROWSER_PUBLIC_URL:-http://${TOS_HOST}:${BROWSER_NODE_PORT}}"
+
+export SANDBOX_SERVICE_URL_RESOLVED="$SANDBOX_PUBLIC_URL"
+export BROWSER_SERVICE_URL_RESOLVED="$BROWSER_PUBLIC_URL"
 # Redirect URIs feed the seed-oauth-clients job; empty when the module is off,
 # so the seed script skips that client.
 if [ "$SANDBOX_ENABLED" = "true" ]; then
@@ -262,6 +257,7 @@ render_manifests() {
   VARS+='${LDAP_SEARCH_FILTER}${LDAP_ATTR_USERNAME}${LDAP_ATTR_NAME}${LDAP_ATTR_EMAIL}'
   VARS+='${ADMIN_USERNAME}${ADMIN_PASSWORD}${ADMIN_DISPLAY_NAME}'
   VARS+='${BROWSER_NODE_PORT}${BROWSER_JWT_SECRET}'
+  VARS+='${WEB_PUBLIC_URL}${FILES_PUBLIC_URL}${BROWSER_PUBLIC_URL}${SANDBOX_PUBLIC_URL}'
   VARS+='${SANDBOX_NODE_PORT}${SANDBOX_JWT_SECRET}${SANDBOX_SERVICE_KEY}${SANDBOX_DOMAIN}${OPENSANDBOX_URL}'
   VARS+='${SANDBOX_SERVICE_URL_RESOLVED}${BROWSER_SERVICE_URL_RESOLVED}'
   VARS+='${SANDBOX_OAUTH_REDIRECT_URI}${BROWSER_OAUTH_REDIRECT_URI}'
