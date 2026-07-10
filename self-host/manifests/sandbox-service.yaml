@@ -43,7 +43,7 @@ spec:
                   name: ${APP_PREFIX}-sandbox-secret
                   key: SERVICE_KEY
             - name: NAP_OAUTH_URL
-              value: "http://${TOS_HOST}:${TOS_NODE_PORT}"
+              value: "${WEB_PUBLIC_URL}"
             - name: NAP_URL
               value: "http://${APP_PREFIX}-cp:3000"
             - name: OAUTH_CLIENT_ID
