@@ -38,6 +38,25 @@ interface OAuthToken {
 // it; refreshing every ~30min is cheap and avoids stale-token 401s.
 const DEFAULT_TOKEN_TTL_SECONDS = 1800
 
+// How long before expiry we start refreshing proactively. Must exceed
+// google-auth's REFRESH_THRESHOLD (3m45s): clients built on it treat a token
+// as already expired that far ahead of the wire expiry, so anything we serve
+// must have more life left than that.
+const REFRESH_MARGIN_MS = 5 * 60 * 1000
+
+/**
+ * Classify a stored token by remaining life. OAuth-proxy MCP servers mint
+ * their access token together with the upstream provider token, and
+ * google-auth style clients refuse a token in its final 3m45s — serving a
+ * nearly-expired token makes every downstream call fail until it rotates.
+ * `refresh-ahead` marks the window where the token still works but must be
+ * refreshed rather than served as-is.
+ */
+export function classifyTokenLife(msLeft: number): 'fresh' | 'refresh-ahead' | 'expired' {
+  if (msLeft <= 0) return 'expired'
+  return msLeft > REFRESH_MARGIN_MS ? 'fresh' : 'refresh-ahead'
+}
+
 // In-memory store for pending PKCE flows (keyed by state)
 interface PendingAuth {
   user_id: string
@@ -458,22 +477,24 @@ export async function getValidAccessToken(
   // Effective expiry: use stored expires_at, else fall back to updated_at + TTL.
   // Older rows predating the fallback default may have NULL expires_at; treat
   // those as expired once they're past the fallback window so refresh kicks in.
-  if (!forceRefresh) {
-    const effectiveExpiresAt =
-      token.expires_at ??
-      new Date(new Date(token.updated_at).getTime() + DEFAULT_TOKEN_TTL_SECONDS * 1000)
-    if (effectiveExpiresAt > new Date()) {
-      return token.access_token
-    }
+  const effectiveExpiresAt =
+    token.expires_at ??
+    new Date(new Date(token.updated_at).getTime() + DEFAULT_TOKEN_TTL_SECONDS * 1000)
+  const msLeft = effectiveExpiresAt.getTime() - Date.now()
+  const life = classifyTokenLife(msLeft)
+
+  if (!forceRefresh && life === 'fresh') {
+    return token.access_token
   }
+  const stillValid = life !== 'expired'
 
   // Try refresh
-  if (!token.refresh_token) return null
+  if (!token.refresh_token) return stillValid ? token.access_token : null
   const { rows: clientRows } = await pool.query(
     'SELECT server_origin, metadata, client_id, client_secret FROM mcp_oauth_clients WHERE server_origin = $1',
     [serverOrigin],
   )
-  if (clientRows.length === 0) return null
+  if (clientRows.length === 0) return stillValid ? token.access_token : null
   const client = clientRows[0] as OAuthClient
 
   try {
@@ -481,6 +502,16 @@ export async function getValidAccessToken(
     await upsertToken(userId, serverOrigin, refreshed)
     return refreshed.access_token
   } catch (e) {
+    // A proactive (within-margin) refresh failure is not fatal while the
+    // current token is still valid: serve it and let a later request retry.
+    // forceRefresh callers are excluded — they hold proof the token is bad.
+    if (stillValid && !forceRefresh) {
+      console.warn(
+        `[mcp-oauth] proactive refresh failed for ${serverOrigin}; serving still-valid token (${Math.round(msLeft / 1000)}s left):`,
+        e instanceof Error ? e.message : e,
+      )
+      return token.access_token
+    }
     if (e instanceof McpRefreshError && e.permanent) {
       // A "permanent" OAuth code may actually be an upstream transient (a TLS
       // blip while the broker refreshes the provider token, reported back as

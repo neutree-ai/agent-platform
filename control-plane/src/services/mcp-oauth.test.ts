@@ -9,7 +9,7 @@
  * are out of scope for a unit test.
  */
 import { describe, expect, it } from 'vitest'
-import { shouldDropTokenOnRefreshFailure } from './mcp-oauth'
+import { classifyTokenLife, shouldDropTokenOnRefreshFailure } from './mcp-oauth'
 
 const NOW = new Date('2026-06-10T12:00:00.000Z')
 const ago = (seconds: number) => new Date(NOW.getTime() - seconds * 1000)
@@ -41,5 +41,30 @@ describe('shouldDropTokenOnRefreshFailure', () => {
   it('is exactly at the grace boundary (inclusive)', () => {
     expect(shouldDropTokenOnRefreshFailure(3, ago(600), NOW)).toBe(true)
     expect(shouldDropTokenOnRefreshFailure(3, ago(599), NOW)).toBe(false)
+  })
+})
+
+describe('classifyTokenLife', () => {
+  const MINUTE = 60 * 1000
+
+  it('serves a token with plenty of life as-is', () => {
+    expect(classifyTokenLife(30 * MINUTE)).toBe('fresh')
+  })
+
+  it('flags a token inside the pre-expiry margin for proactive refresh', () => {
+    // google-auth clients treat a token as expired 3m45s before the wire
+    // expiry; the margin must catch it before that.
+    expect(classifyTokenLife(4 * MINUTE)).toBe('refresh-ahead')
+    expect(classifyTokenLife(1)).toBe('refresh-ahead')
+  })
+
+  it('is exactly at the margin boundary (exclusive)', () => {
+    expect(classifyTokenLife(5 * MINUTE + 1)).toBe('fresh')
+    expect(classifyTokenLife(5 * MINUTE)).toBe('refresh-ahead')
+  })
+
+  it('reports a past-expiry token as expired', () => {
+    expect(classifyTokenLife(0)).toBe('expired')
+    expect(classifyTokenLife(-1)).toBe('expired')
   })
 })
