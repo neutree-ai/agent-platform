@@ -181,16 +181,14 @@ export function WorkspaceFilesPanel({
 
   const qc = useQueryClient()
   const listingQueryKey = useMemo(
-    () => ['workspace-files', workspaceId, drive, currentPath, searchQuery || ''] as const,
-    [workspaceId, drive, currentPath, searchQuery],
+    () => ['workspace-files', workspaceId, drive, currentPath] as const,
+    [workspaceId, drive, currentPath],
   )
   const isAfsRoot = drive === 'afs' && currentPath === '/'
   const listingQuery = useQuery<{ entries: DufsEntry[] }>({
     queryKey: listingQueryKey,
     queryFn: async () => {
-      const resp = await fetch(
-        dirListUrl(workspaceId, currentPath, searchQuery || undefined, drive),
-      )
+      const resp = await fetch(dirListUrl(workspaceId, currentPath, undefined, drive))
       if (!resp.ok) {
         throw new Error(t('components.workspaceFiles.errors.listFailed', { status: resp.status }))
       }
@@ -198,7 +196,16 @@ export function WorkspaceFilesPanel({
     },
     enabled: !isAfsRoot,
   })
-  const entries: DufsEntry[] = listingQuery.data?.entries ?? []
+  // Search filters the already-fetched listing client-side. Passing `q`
+  // through puts dufs into a recursive walk of the entire subtree — two
+  // stats per entry, 100s+ on large workspaces over NFS — so the panel
+  // deliberately scopes search to the current folder.
+  const allEntries: DufsEntry[] = listingQuery.data?.entries ?? []
+  const entries: DufsEntry[] = useMemo(() => {
+    if (!searchQuery) return allEntries
+    const q = searchQuery.toLowerCase()
+    return allEntries.filter((e) => e.name.toLowerCase().includes(q))
+  }, [allEntries, searchQuery])
   const isLoading = listingQuery.isLoading && !isAfsRoot
   const listingError = listingQuery.error
     ? listingQuery.error instanceof Error
@@ -429,7 +436,7 @@ export function WorkspaceFilesPanel({
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
-    // Listing query is keyed on searchQuery, so it refetches automatically.
+    // Filtering happens client-side over the current listing — no refetch.
   }
 
   const openFile = (entry: DufsEntry) => {

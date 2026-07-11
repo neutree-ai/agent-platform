@@ -1580,7 +1580,7 @@
         "copiedPath": "路径已复制"
       },
       "placeholders": {
-        "search": "搜索文件..."
+        "search": "筛选当前目录..."
       },
       "states": {
         "dropToUpload": "拖拽文件到这里以上传",
