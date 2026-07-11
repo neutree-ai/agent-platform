@@ -6,6 +6,7 @@
  * its agent-specific config and exports the resulting app.
  */
 
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -64,8 +65,16 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   const app = new Hono()
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-  // 1 bridge : 1 session — each ACP session gets its own child process to avoid SQLite contention.
-  let bridgeFactory: (() => Promise<AcpBridge>) | null = null
+  // 1 bridge : 1 session — each ACP session gets its own child process.
+  //
+  // The factory receives the platform session id. For resumed sessions it's
+  // the existing id; for brand-new sessions the /chat handler pre-mints a
+  // draft UUID *before* the ACP session exists, so factories that stage
+  // per-session state keyed by the platform id (goose's per-session data
+  // dir, wired through env at spawn) can prepare it up front. Factories that
+  // don't need it (codex, whose native ids are already platform UUIDs) just
+  // ignore the argument.
+  let bridgeFactory: ((sessionId: string) => Promise<AcpBridge>) | null = null
   const sessionBridges = new Map<string, AcpBridge>()
   // Per-session count of turns currently in flight. A reference count, not a
   // flag — concurrent turns can share one session's bridge (e.g. a page
@@ -109,7 +118,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
     bridgeLastActive.set(sessionId, Date.now())
   }
 
-  function setBridgeFactory(factory: () => Promise<AcpBridge>) {
+  function setBridgeFactory(factory: (sessionId: string) => Promise<AcpBridge>) {
     bridgeFactory = factory
   }
 
@@ -359,7 +368,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         if (!currentSessionId && sessionId) {
           // Session not active — spawn a new bridge and try to load persisted state.
           const bridgeStart = Date.now()
-          const newBridge = await bridgeFactory!()
+          const newBridge = await bridgeFactory!(sessionId)
           console.log(
             `[agent] Bridge spawned session=${sessionId} bridge_spawn=${Date.now() - bridgeStart}ms`,
           )
@@ -405,9 +414,15 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         }
 
         if (!currentSessionId) {
-          // Create a brand new bridge + session
+          // Create a brand new bridge + session. The draft UUID names the
+          // platform session before the agent has created it — factories that
+          // stage per-session state need the id at spawn time. Whether it
+          // sticks is the factory's codec's call: goose adopts it as the
+          // platform id; codex ignores it and createSession returns codex's
+          // own UUID.
+          const draftSessionId = randomUUID()
           const bridgeStart = Date.now()
-          const newBridge = await bridgeFactory!()
+          const newBridge = await bridgeFactory!(draftSessionId)
           console.log(
             `[agent] Bridge spawned (new session) bridge_spawn=${Date.now() - bridgeStart}ms`,
           )
@@ -501,7 +516,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
             `[agent] Reused bridge failed with no output, rebuilding session=${currentSessionId}: ${promptErr?.message ?? promptErr}`,
           )
           destroyBridge(currentSessionId)
-          const rebuilt = await bridgeFactory!()
+          const rebuilt = await bridgeFactory!(currentSessionId)
           await rebuilt.loadSession(currentSessionId, {
             mcpServers: config.loadMcpServers(sessionToken),
           })

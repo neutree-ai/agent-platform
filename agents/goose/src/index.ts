@@ -18,7 +18,7 @@ import {
   setRestartBridge,
   trackExtNotification,
 } from './server.js'
-import { sessionIdMap } from './session-id-map.js'
+import { prepareSessionDir, sessionDirCodec, sweepOrphanSessionDirs } from './session-store.js'
 
 writePlatformPrompt({
   agentKind: 'goose',
@@ -81,39 +81,42 @@ if (rc) {
   console.log(`[agent] Provider env applied: ${rc.provider_type} model=${rc.model}`)
 }
 
-// ── ACP bridge factory (1 bridge per session, matching the codex layout;
-//    goose supports multiple sessions per process, but per-session bridges
-//    keep the eviction/rebuild semantics of acp-server unchanged) ──
+// ── ACP bridge factory (1 bridge : 1 session : 1 data dir) ──
 
 // --with-builtin developer: when session/new carries mcpServers (always, for
 // tos-platform), goose REPLACES the config-file extension set with that list —
 // only CLI-pinned builtins survive (initial_session_extensions in goose's ACP
 // server). Without this flag the agent has no shell/edit tools.
 //
-// sessionIdCodec: goose session ids are `YYYYMMDD_<counter>` from its local
-// SQLite — per-instance only, counter resets on store wipe, and cp's
-// sessions.id is a global primary key. Mint platform UUIDs with a durable
-// alias map (see session-id-map.ts); legacy prefixed/raw ids still decode.
+// GOOSE_PATH_ROOT: every session runs against its own private goose store —
+// the platform session id (acp-server's draft UUID for new sessions) names
+// the dir, sessionDirCodec maps it to/from goose's per-dir native id, and
+// config/.agents stay shared via symlinks. See session-store.ts for why
+// (NFS SQLite contention + serverless multi-pod safety).
 //
 // customNotifications + onExtNotification: unlock goose's private
 // `_goose/unstable/session/update` stream — its `accumulatedInputTokens` /
 // `accumulatedOutputTokens` counters are the only accurate billing source
 // (PromptResponse.usage reports just the turn's LAST request, undercounting
-// tool-loop turns ~2×+). server.ts tracks the counters for recordUsage.
-const BRIDGE_OPTS = {
-  program: 'goose',
-  args: ['acp', '--with-builtin', 'developer'],
-  cwd: WORKSPACE_DIR,
-  sessionIdCodec: sessionIdMap(),
-  clientCapabilitiesMeta: { goose: { customNotifications: true } },
-  onExtNotification: trackExtNotification,
-}
-
-setBridgeFactory(async () => {
-  const b = new AcpBridge(BRIDGE_OPTS)
+// tool-loop turns ~2×+). server.ts tracks the counters for recordUsage,
+// keyed by the platform id: this bridge serves exactly one session, so the
+// closure id is authoritative and the notification's native id can be
+// ignored.
+setBridgeFactory(async (sessionId: string) => {
+  const dataDir = prepareSessionDir(sessionId)
+  const b = new AcpBridge({
+    program: 'goose',
+    args: ['acp', '--with-builtin', 'developer'],
+    cwd: WORKSPACE_DIR,
+    env: { GOOSE_PATH_ROOT: dataDir },
+    sessionIdCodec: sessionDirCodec(sessionId),
+    clientCapabilitiesMeta: { goose: { customNotifications: true } },
+    onExtNotification: (method, params) => trackExtNotification(sessionId, method, params),
+  })
   await b.start()
   return b
 })
+sweepOrphanSessionDirs()
 console.log('[agent] ACP bridge factory ready')
 
 // On config/credentials reload: refresh env so newly spawned bridges pick up
