@@ -3,15 +3,25 @@ import { SkillManager, type Fs, type Shell, type FetchResponse } from './index.t
 
 // ── In-memory DI implementations ──
 
-function createMemFs(): Fs & { files: Map<string, Buffer | string>; dirs: Set<string> } {
+function createMemFs(): Fs & {
+  files: Map<string, Buffer | string>
+  dirs: Set<string>
+  symlinks: Set<string>
+} {
   const files = new Map<string, Buffer | string>()
   const dirs = new Set<string>()
+  // Paths (already present in `dirs`) that are symlinks rather than real dirs.
+  const symlinks = new Set<string>()
 
   return {
     files,
     dirs,
+    symlinks,
     exists(path) {
       return files.has(path) || dirs.has(path)
+    },
+    isSymlink(path) {
+      return symlinks.has(path)
     },
     async mkdir(path) {
       dirs.add(path)
@@ -27,6 +37,7 @@ function createMemFs(): Fs & { files: Map<string, Buffer | string>; dirs: Set<st
     async rm(path) {
       files.delete(path)
       dirs.delete(path)
+      symlinks.delete(path)
     },
     async readdir(path) {
       const prefix = path.endsWith('/') ? path : `${path}/`
@@ -467,6 +478,7 @@ describe('SkillManager', () => {
     test('pre-sweep removes dangling symlinks (localDir gone after restart)', async () => {
       // Symlink present on NFS but its /tmp target is gone (pod restart wiped it).
       fs.dirs.add('/workspace/.claude/skills/orphan')
+      fs.symlinks.add('/workspace/.claude/skills/orphan')
       // /tmp/skill-orphan intentionally missing
 
       const fetchImpl = async (url: string) => {
@@ -476,6 +488,23 @@ describe('SkillManager', () => {
 
       await createManager(fetchImpl).load()
       expect(fs.exists('/workspace/.claude/skills/orphan')).toBe(false)
+    })
+
+    test('pre-sweep preserves hand-added real directories (not symlinks)', async () => {
+      // A user dropped a skill directory straight into skillsDir: a real dir,
+      // no /tmp target, no .managed marker. It must survive both sweeps.
+      fs.dirs.add('/workspace/.claude/skills/hand-added')
+      fs.files.set('/workspace/.claude/skills/hand-added/SKILL.md', 'hand-authored')
+      // /tmp/skill-hand-added intentionally missing
+
+      const fetchImpl = async (url: string) => {
+        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [] })
+        throw new Error(`Unexpected: ${url}`)
+      }
+
+      await createManager(fetchImpl).load()
+      expect(fs.exists('/workspace/.claude/skills/hand-added')).toBe(true)
+      expect(fs.exists('/workspace/.claude/skills/hand-added/SKILL.md')).toBe(true)
     })
 
     test('preserves drafts (present locally, no .managed marker)', async () => {
