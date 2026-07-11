@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import WebSocket from 'ws'
 import { NapClient } from '../../../internal/client/src/index'
 import * as db from '../services/db'
-import { wecomSend, wecomSendStream } from './wecom-sender'
+import { handleRespondAck, wecomSend, wecomSendStream } from './wecom-sender'
 
 const NAP_API_URL = process.env.NAP_API_URL || 'http://localhost:3000'
 const WS_URL = 'wss://openws.work.weixin.qq.com'
@@ -177,6 +177,20 @@ export async function startOne(connectorId: string) {
           if (pending.kind === 'initial') {
             console.log(`[WeCom] ${connector.name}: subscribed successfully`)
           }
+        }
+        return
+      }
+
+      // Acks for `aibot_respond_msg` share the inbound req_id and carry no
+      // cmd field. Route them to the sender so rejected/dropped frames mark
+      // the stream dead (triggering the markdown fallback on finish) instead
+      // of being fire-and-forget "successes".
+      if (!frame.cmd && reqId && typeof frame.errcode === 'number') {
+        const consumed = handleRespondAck(frame)
+        if (!consumed && frame.errcode !== 0) {
+          console.error(
+            `[WeCom] ${connector.name}: send rejected errcode=${frame.errcode} errmsg=${frame.errmsg} req=${reqId}`,
+          )
         }
         return
       }
