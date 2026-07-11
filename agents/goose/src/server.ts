@@ -15,30 +15,35 @@ import {
   loadRuntimeConfig,
   loadSkills,
 } from './config.js'
-import { sessionIdMap } from './session-id-map.js'
 
 let _restartBridge: (() => Promise<void>) | undefined
 
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
 /**
- * Latest session-accumulated token counters, keyed by NATIVE goose session id
- * (ext notifications carry native ids). Fed by trackExtNotification; read at
- * turn end by recordUsage. These counters — not PromptResponse.usage — are
- * the accurate billing source: the response usage only reflects the turn's
- * last LLM request, so tool-loop turns undercount 2×+.
+ * Latest session-accumulated token counters, keyed by PLATFORM session id.
+ * The ext notification itself carries the native id, but each bridge serves
+ * exactly one session, so index.ts binds the platform id into the
+ * onExtNotification closure instead — native ids are per-data-dir (always
+ * `<date>_1`) and would collide across sessions. Fed by trackExtNotification;
+ * read at turn end by recordUsage. These counters — not PromptResponse.usage —
+ * are the accurate billing source: the response usage only reflects the
+ * turn's last LLM request, so tool-loop turns undercount 2×+.
  */
 const accumulatedUsage = new Map<string, { input: number; output: number }>()
 
-export function trackExtNotification(method: string, params: Record<string, unknown>): void {
+export function trackExtNotification(
+  platformSessionId: string,
+  method: string,
+  params: Record<string, unknown>,
+): void {
   if (method !== '_goose/unstable/session/update') return
-  const sessionId = params.sessionId
   const update = params.update as Record<string, unknown> | undefined
-  if (typeof sessionId !== 'string' || update?.sessionUpdate !== 'usage_update') return
+  if (update?.sessionUpdate !== 'usage_update') return
   const input = num(update.accumulatedInputTokens)
   const output = num(update.accumulatedOutputTokens)
   if (input === 0 && output === 0) return
-  accumulatedUsage.set(sessionId, { input, output })
+  accumulatedUsage.set(platformSessionId, { input, output })
 }
 
 /**
@@ -54,8 +59,7 @@ export function trackExtNotification(method: string, params: Record<string, unkn
  * nothing).
  */
 function recordUsage(sessionId: string, usage: unknown): void {
-  const nativeId = sessionIdMap().decode(sessionId)
-  const acc = accumulatedUsage.get(nativeId)
+  const acc = accumulatedUsage.get(sessionId)
   const model = loadRuntimeConfig()?.model || undefined
   let payload: Record<string, unknown> | null = null
   if (acc) {
