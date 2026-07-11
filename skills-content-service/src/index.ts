@@ -364,6 +364,7 @@ app.openapi(importGitRoute, async (c) => {
     })
     if (!r.ok) {
       if (r.status === 400) return c.json({ error: r.error }, 400)
+      if (r.status === 409) return c.json({ error: r.error }, 409)
       if (r.status === 413) return c.json({ error: r.error }, 413)
       if (r.status === 502) return c.json({ error: r.error }, 502)
       return c.json({ error: r.error }, 500 as never)
