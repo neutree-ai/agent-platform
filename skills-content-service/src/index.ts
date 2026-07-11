@@ -44,13 +44,7 @@ import {
   writeDraftFile,
 } from './draft-cache'
 import { DUFS_ORIGIN, startDufs } from './dufs'
-import {
-  importFromGit,
-  scanGit,
-  scanTarballBytes,
-  switchSourceToGit,
-  syncSource,
-} from './from-git'
+import { importFromGit, scanGit, scanTarballBytes, switchSourceToGit, syncSource } from './from-git'
 import { startLruSweep } from './lru'
 
 const MAX_SKILL_PACKAGE_BYTES = Number(process.env.MAX_SKILL_PACKAGE_BYTES || 50 * 1024 * 1024)
@@ -410,7 +404,10 @@ const switchToGitRoute = createRoute({
       },
     },
     400: { description: 'Bad input', content: { 'application/json': { schema: ErrorSchema } } },
-    404: { description: 'Skill not found', content: { 'application/json': { schema: ErrorSchema } } },
+    404: {
+      description: 'Skill not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
     409: { description: 'Conflict', content: { 'application/json': { schema: ErrorSchema } } },
     413: { description: 'Too large', content: { 'application/json': { schema: ErrorSchema } } },
     502: {
@@ -715,7 +712,10 @@ const DraftReadRoute = createRoute({
   summary: 'Read a single draft file',
   request: { params: IdParam, query: DraftFileQuery },
   responses: {
-    200: { description: 'Bytes', content: { 'application/octet-stream': { schema: BinarySchema } } },
+    200: {
+      description: 'Bytes',
+      content: { 'application/octet-stream': { schema: BinarySchema } },
+    },
     400: { description: 'Bad path', content: { 'application/json': { schema: ErrorSchema } } },
     404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
     409: { description: 'Not native', content: { 'application/json': { schema: ErrorSchema } } },
@@ -1186,9 +1186,7 @@ const readFileRoute = createRoute({
 app.openapi(readFileRoute, async (c) => {
   const { id } = c.req.valid('param')
   const { path, version } = c.req.valid('query')
-  const hit = version
-    ? await resolveSpecificVersion(id, version)
-    : await resolveActiveVersion(id)
+  const hit = version ? await resolveSpecificVersion(id, version) : await resolveActiveVersion(id)
   if (!hit) return c.json({ error: 'skill or version not found' }, 404)
   let resp: Response
   try {
@@ -1226,9 +1224,7 @@ const listDirRoute = createRoute({
 app.openapi(listDirRoute, async (c) => {
   const { id } = c.req.valid('param')
   const { path, q, version } = c.req.valid('query')
-  const hit = version
-    ? await resolveSpecificVersion(id, version)
-    : await resolveActiveVersion(id)
+  const hit = version ? await resolveSpecificVersion(id, version) : await resolveActiveVersion(id)
   if (!hit) return c.json({ error: 'skill or version not found' }, 404)
   const search = q ? `?q=${encodeURIComponent(q)}&json` : '?json'
   let resp: Response
