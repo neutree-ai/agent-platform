@@ -27,6 +27,8 @@ export interface Fetcher {
 /** Filesystem operations used by SkillManager. */
 export interface Fs {
   exists(path: string): boolean
+  /** lstat-based check: true only when the entry itself is a symlink. */
+  isSymlink(path: string): boolean
   mkdir(path: string): Promise<void>
   writeFile(path: string, data: string | Buffer): Promise<void>
   readFile(path: string): Promise<Buffer>
@@ -374,6 +376,10 @@ export class SkillManager {
         if (name.startsWith('.')) continue
         if (RESERVED_SKILL_NAMES.has(name)) continue
         if (this.isEditing(name)) continue
+        // Only symlinks are ours to sweep here: a real directory at destDir is
+        // user-created content (dropped in by hand, never registered), which
+        // the orphan cleanup below also preserves. Deleting it would eat data.
+        if (!this.fs.isSymlink(this.destDir(name))) continue
         if (this.fs.exists(this.localDir(name))) continue
         try {
           await this.fs.rm(this.destDir(name))
