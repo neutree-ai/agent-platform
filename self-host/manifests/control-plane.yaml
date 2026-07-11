@@ -115,6 +115,13 @@ spec:
               value: "http://${APP_PREFIX}-sandbox:3006"
             - name: SANDBOX_PUBLIC_URL
               value: "${SANDBOX_PUBLIC_URL}"
+            # Injected into workspace pods as CP_URL (k8s-provider). Without it
+            # the code falls back to http://nap-cp:3000, which only resolves
+            # when APP_PREFIX is "nap". Keep in sync with env-runner-k8s.yaml.
+            - name: CP_SERVICE_URL
+              value: "http://${APP_PREFIX}-cp:3000"
+            - name: SKILLS_CONTENT_URL
+              value: "http://${APP_PREFIX}-skills:3008"
             - name: AFS_ENABLED
               value: "true"
             - name: AFS_IMAGE

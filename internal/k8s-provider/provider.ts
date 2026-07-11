@@ -94,6 +94,21 @@ export class KubernetesProvider implements EnvironmentProvider {
     }
   }
 
+  /**
+   * Run a create call, adopting an already-existing object instead of failing.
+   * createInstance must be idempotent: the reconcile loop re-enters it every
+   * tick while a workspace is unconverged, and the PVC/Service deliberately
+   * outlive the Deployment (rebuildInstance, manual Deployment deletion). A
+   * bare create would 409 on the survivors forever and deadlock the reconcile.
+   */
+  private async createOrAdopt(create: () => Promise<unknown>): Promise<void> {
+    try {
+      await create()
+    } catch (e: any) {
+      if (e.response?.statusCode !== 409) throw e
+    }
+  }
+
   /** Create K8s resources for a workspace */
   async createInstance(
     workspaceId: string,
@@ -106,39 +121,47 @@ export class KubernetesProvider implements EnvironmentProvider {
 
     // Create PVC for workspace persistent storage
     const storageSize = resources?.storage || this.cfg.workspaceStorageSize
-    await this.coreApi.createNamespacedPersistentVolumeClaim(this.cfg.namespace, {
-      apiVersion: 'v1',
-      kind: 'PersistentVolumeClaim',
-      metadata: { name: pvcName, labels },
-      spec: {
-        accessModes: ['ReadWriteOnce'],
-        storageClassName: this.cfg.storageClass,
-        resources: { requests: { storage: storageSize } },
-      },
-    })
+    await this.createOrAdopt(() =>
+      this.coreApi.createNamespacedPersistentVolumeClaim(this.cfg.namespace, {
+        apiVersion: 'v1',
+        kind: 'PersistentVolumeClaim',
+        metadata: { name: pvcName, labels },
+        spec: {
+          accessModes: ['ReadWriteOnce'],
+          storageClassName: this.cfg.storageClass,
+          resources: { requests: { storage: storageSize } },
+        },
+      }),
+    )
 
-    // Create Deployment
-    await this.appsApi.createNamespacedDeployment(
-      this.cfg.namespace,
-      buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
+    // Create Deployment. A 409 here can only be a race with a concurrent
+    // create building the same fresh spec (a pre-existing Deployment routes
+    // apply() to rebuildInstance instead), so adopting is safe.
+    await this.createOrAdopt(() =>
+      this.appsApi.createNamespacedDeployment(
+        this.cfg.namespace,
+        buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
+      ),
     )
 
     // Create Service (ClusterIP — agents are reached via cluster DNS at
-    // tos-<wsId>.<ns>.svc:3001; afs-fuse via :9101)
-    await this.coreApi.createNamespacedService(this.cfg.namespace, {
-      apiVersion: 'v1',
-      kind: 'Service',
-      metadata: { name, labels },
-      spec: {
-        selector: labels,
-        ports: [
-          { port: 3001, targetPort: 3001 as any, name: 'http' },
-          { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
-          { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
-        ],
-        type: 'ClusterIP',
-      },
-    })
+    // <prefix>-<wsId>.<ns>.svc:3001; afs-fuse via :9101)
+    await this.createOrAdopt(() =>
+      this.coreApi.createNamespacedService(this.cfg.namespace, {
+        apiVersion: 'v1',
+        kind: 'Service',
+        metadata: { name, labels },
+        spec: {
+          selector: labels,
+          ports: [
+            { port: 3001, targetPort: 3001 as any, name: 'http' },
+            { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
+            { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
+          ],
+          type: 'ClusterIP',
+        },
+      }),
+    )
 
     return {
       workspaceId,
