@@ -91,13 +91,6 @@ function recordUsage(sessionId: string, usage: unknown): void {
 
 const { app, injectWebSocket, setBridgeFactory } = createAcpAgentApp({
   agentType: 'goose',
-  // One goose child serves every session (ACP multiplexes sessions natively;
-  // per-session MCP token isolation within one process is verified). Critical
-  // here because goose persists sessions in a WAL-mode SQLite on the
-  // workspace volume (typically NFS) — per-session child processes would be
-  // N concurrent SQLite writers on a network filesystem, the exact setup
-  // SQLite documents as unsafe. Single child = single writer.
-  bridgeMode: 'shared',
   capabilities: {
     system_prompt: true,
     mcp: true,

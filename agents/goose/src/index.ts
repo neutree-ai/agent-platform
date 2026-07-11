@@ -81,9 +81,9 @@ if (rc) {
   console.log(`[agent] Provider env applied: ${rc.provider_type} model=${rc.model}`)
 }
 
-// ── ACP bridge factory (shared mode: one goose child serves every session,
-//    lazily spawned and reclaimed whole after the idle TTL — see
-//    bridgeMode: 'shared' in server.ts for why) ──
+// ── ACP bridge factory (1 bridge per session, matching the codex layout;
+//    goose supports multiple sessions per process, but per-session bridges
+//    keep the eviction/rebuild semantics of acp-server unchanged) ──
 
 // --with-builtin developer: when session/new carries mcpServers (always, for
 // tos-platform), goose REPLACES the config-file extension set with that list —

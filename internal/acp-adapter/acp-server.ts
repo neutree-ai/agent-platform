@@ -30,25 +30,6 @@ export interface AcpAgentServerConfig {
   workspaceDir: string
   cpUrl?: string
   workspaceId?: string
-  /**
-   * Bridge process topology.
-   *
-   * - 'per-session' (default, codex): every ACP session gets its own child
-   *   process. Needed when the ACP server binary is effectively
-   *   single-session, and gives per-session crash/eviction isolation.
-   * - 'shared' (goose): one child serves every session — ACP natively
-   *   multiplexes sessions over a single connection. This is the correct
-   *   topology when the agent keeps shared on-disk state: goose's sessions
-   *   SQLite (WAL mode) sits on the workspace volume, which is typically
-   *   NFS, and N concurrent per-session writer processes on a network
-   *   filesystem is exactly the configuration SQLite documents as unsafe.
-   *   A single process also drops idle memory (one runtime instead of N)
-   *   and makes new sessions a session/new RPC instead of a process spawn.
-   *   The shared child is still lazily spawned and reclaimed as a whole
-   *   after the idle TTL — all durable state lives in the agent's store,
-   *   so a respawn + session/load restores any session on demand.
-   */
-  bridgeMode?: 'per-session' | 'shared'
   loadMcpServers: (sessionToken?: string) => McpServer[]
   /** Whether MCP servers are configured in config.toml (requires waiting for startup) */
   hasMcpServers?: () => boolean
@@ -83,11 +64,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   const app = new Hono()
   const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app })
 
-  const sharedMode = config.bridgeMode === 'shared'
-
-  // per-session mode: 1 bridge : 1 session — each ACP session gets its own
-  // child process. (In shared mode this map stays empty; see the shared-state
-  // block below.)
+  // 1 bridge : 1 session — each ACP session gets its own child process to avoid SQLite contention.
   let bridgeFactory: (() => Promise<AcpBridge>) | null = null
   const sessionBridges = new Map<string, AcpBridge>()
   // Per-session count of turns currently in flight. A reference count, not a
@@ -130,70 +107,10 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
 
   function touchBridge(sessionId: string) {
     bridgeLastActive.set(sessionId, Date.now())
-    sharedLastActive = Date.now()
   }
 
   function setBridgeFactory(factory: () => Promise<AcpBridge>) {
     bridgeFactory = factory
-  }
-
-  // ── Shared-bridge state (bridgeMode: 'shared') ──
-  // One lazily-spawned child serves every session. Reclaim is whole-process:
-  // all durable session state lives in the agent's own store, so destroying
-  // the child costs nothing beyond a respawn + session/load on next use.
-  let sharedBridge: AcpBridge | null = null
-  let sharedSpawn: Promise<AcpBridge> | null = null
-  /** Sessions loaded/created in the CURRENT shared child (reset on destroy). */
-  const sharedLoadedSessions = new Set<string>()
-  let sharedLastActive = 0
-  let sharedPendingDestroy = false
-
-  function anyBusy(): boolean {
-    return busyTurns.size > 0
-  }
-
-  function destroySharedBridge(reason: string) {
-    if (!sharedBridge) return
-    console.log(`[agent] Destroying shared bridge (${reason})`)
-    sharedBridge.destroy()
-    sharedBridge = null
-    sharedLoadedSessions.clear()
-    sharedPendingDestroy = false
-    // The child is gone — any in-flight-turn accounting with it (see
-    // destroyBridge for the per-session rationale).
-    busyTurns.clear()
-  }
-
-  /** Return the live shared child, spawning it if needed (single-flight). */
-  async function getSharedBridge(): Promise<AcpBridge> {
-    if (sharedBridge?.isAlive()) return sharedBridge
-    if (sharedBridge) destroySharedBridge('dead')
-    if (!sharedSpawn) {
-      sharedSpawn = (async () => {
-        const spawnStart = Date.now()
-        const b = await bridgeFactory!()
-        sharedBridge = b
-        sharedLastActive = Date.now()
-        console.log(`[agent] Shared bridge spawned bridge_spawn=${Date.now() - spawnStart}ms`)
-        return b
-      })().finally(() => {
-        sharedSpawn = null
-      })
-    }
-    return sharedSpawn
-  }
-
-  // Shared-mode sweep: whole-process idle TTL + deferred-reload drain.
-  function evictSharedBridge() {
-    if (!sharedBridge) return
-    if (anyBusy()) return
-    if (sharedPendingDestroy) {
-      destroySharedBridge('reload')
-      return
-    }
-    if (Date.now() - sharedLastActive > BRIDGE_IDLE_TTL_MS) {
-      destroySharedBridge('ttl')
-    }
   }
 
   function destroyBridge(sessionId: string) {
@@ -274,19 +191,10 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
     }
   }
 
-  setInterval(sharedMode ? evictSharedBridge : evictIdleBridges, BRIDGE_EVICT_INTERVAL_MS).unref()
+  setInterval(evictIdleBridges, BRIDGE_EVICT_INTERVAL_MS).unref()
 
   // Destroy idle bridges now; defer busy ones until their turn completes.
   function destroyIdleBridges() {
-    if (sharedMode) {
-      if (!sharedBridge) return { destroyed: 0, deferred: 0 }
-      if (anyBusy()) {
-        sharedPendingDestroy = true
-        return { destroyed: 0, deferred: 1 }
-      }
-      destroySharedBridge('reload')
-      return { destroyed: 1, deferred: 0 }
-    }
     let destroyed = 0
     let deferred = 0
     for (const sid of [...sessionBridges.keys()]) {
@@ -427,64 +335,6 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
       const chatStartedAt = Date.now()
 
       try {
-        // ── Shared mode: resolve the session on the single shared child. The
-        // per-session blocks below then no-op naturally (sessionBridges stays
-        // empty and currentSessionId is already set), and the final else-branch
-        // emits session.started exactly once for every shared path.
-        if (sharedMode) {
-          const bridge = await getSharedBridge()
-          currentBridge = bridge
-          if (sessionId && sharedLoadedSessions.has(sessionId)) {
-            // Session already live in the shared child — nothing to load.
-            currentSessionId = sessionId
-            reusedBridge = true
-            activeSinks.set(sessionId, sink)
-            touchBridge(sessionId)
-          } else if (sessionId) {
-            // Load persisted state into the shared child. Handler is
-            // registered after the load on purpose — loadSession replays the
-            // conversation history as notifications, and this session has no
-            // handler yet, so the replay is dropped instead of streamed.
-            try {
-              const loadStart = Date.now()
-              currentSessionId = await bridge.loadSession(sessionId, {
-                mcpServers: config.loadMcpServers(sessionToken),
-              })
-              sharedLoadedSessions.add(currentSessionId)
-              activeSinks.set(currentSessionId, sink)
-              touchBridge(currentSessionId)
-              console.log(
-                `[agent] Loaded persisted session=${currentSessionId} session_load=${Date.now() - loadStart}ms (shared)`,
-              )
-            } catch (err: any) {
-              // Same cross-core-resume framing as the per-session path below,
-              // but do NOT destroy the shared child — other sessions live in it.
-              console.error(`[agent] loadSession failed session=${sessionId}:`, err)
-              const detail = err?.data?.message || err?.message || String(err)
-              throw new Error(
-                `Cannot continue this session: its session record was not found. ` +
-                  `It was most likely created under a different agent type, and sessions ` +
-                  `cannot continue after switching agent type. Switch the workspace's agent ` +
-                  `type back to the original one and try again. (${detail})`,
-              )
-            }
-          } else {
-            const createStart = Date.now()
-            currentSessionId = await bridge.createSession({
-              mcpServers: config.loadMcpServers(sessionToken),
-            })
-            sharedLoadedSessions.add(currentSessionId)
-            activeSinks.set(currentSessionId, sink)
-            touchBridge(currentSessionId)
-            console.log(
-              `[agent] Session created session=${currentSessionId} session_create=${Date.now() - createStart}ms (shared)`,
-            )
-            if (config.hasMcpServers?.()) {
-              await bridge.waitForMcpReady()
-            }
-          }
-        }
-
         // Get, load, or create ACP session — each session has its own bridge process.
         if (sessionId && sessionBridges.has(sessionId)) {
           const existing = sessionBridges.get(sessionId)!
@@ -650,45 +500,20 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           console.warn(
             `[agent] Reused bridge failed with no output, rebuilding session=${currentSessionId}: ${promptErr?.message ?? promptErr}`,
           )
-          if (sharedMode) {
-            // Reload just this session. If the shared child itself died,
-            // getSharedBridge respawns it (destroying the dead one clears
-            // sharedLoadedSessions — other sessions lazily reload on their
-            // next prompt). If the child is alive, re-load in place:
-            // unregister the handler first so the load's history replay
-            // isn't streamed into this SSE.
-            currentBridge!.unregisterHandler(currentSessionId)
-            const bridge = await getSharedBridge()
-            await bridge.loadSession(currentSessionId, {
-              mcpServers: config.loadMcpServers(sessionToken),
-            })
-            sharedLoadedSessions.add(currentSessionId)
-            currentBridge = bridge
-            reusedBridge = false
-            activeSinks.set(currentSessionId, sink)
-            touchBridge(currentSessionId)
-            bridge.registerHandler(currentSessionId, sessionHandler)
-            console.log(
-              `[agent] Reloaded session in shared bridge, retrying session=${currentSessionId}`,
-            )
-            result = await runTurn(bridge)
-            console.log(`[agent] Shared bridge recovered session=${currentSessionId}`)
-          } else {
-            destroyBridge(currentSessionId)
-            const rebuilt = await bridgeFactory!()
-            await rebuilt.loadSession(currentSessionId, {
-              mcpServers: config.loadMcpServers(sessionToken),
-            })
-            currentBridge = rebuilt
-            reusedBridge = false
-            sessionBridges.set(currentSessionId, rebuilt)
-            activeSinks.set(currentSessionId, sink)
-            touchBridge(currentSessionId)
-            rebuilt.registerHandler(currentSessionId, sessionHandler)
-            console.log(`[agent] Rebuilt bridge, retrying prompt session=${currentSessionId}`)
-            result = await runTurn(rebuilt)
-            console.log(`[agent] Rebuilt bridge recovered session=${currentSessionId}`)
-          }
+          destroyBridge(currentSessionId)
+          const rebuilt = await bridgeFactory!()
+          await rebuilt.loadSession(currentSessionId, {
+            mcpServers: config.loadMcpServers(sessionToken),
+          })
+          currentBridge = rebuilt
+          reusedBridge = false
+          sessionBridges.set(currentSessionId, rebuilt)
+          activeSinks.set(currentSessionId, sink)
+          touchBridge(currentSessionId)
+          rebuilt.registerHandler(currentSessionId, sessionHandler)
+          console.log(`[agent] Rebuilt bridge, retrying prompt session=${currentSessionId}`)
+          result = await runTurn(rebuilt)
+          console.log(`[agent] Rebuilt bridge recovered session=${currentSessionId}`)
         }
         console.log(
           `[agent] Prompt done session=${currentSessionId} prompt=${Date.now() - promptStart}ms total=${Date.now() - chatStartedAt}ms`,
@@ -741,15 +566,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         // turn), and destroying it now would abort the still-running turn with
         // "AcpBridge destroyed". Leave the entry in pendingDestroy — whichever
         // turn exits last drains it once the bridge is genuinely idle.
-        if (sharedMode) {
-          if (sharedPendingDestroy) {
-            if (anyBusy()) {
-              console.log('[agent] Shared bridge destroy still deferred — turns in flight')
-            } else {
-              destroySharedBridge('reload-deferred')
-            }
-          }
-        } else if (pendingDestroy.has(currentSessionId)) {
+        if (pendingDestroy.has(currentSessionId)) {
           if (isBusy(currentSessionId)) {
             console.log(
               `[agent] Bridge destroy still deferred — another turn in flight session=${currentSessionId}`,
@@ -828,11 +645,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   app.post('/sessions/:id/interrupt', (c) => {
     const sessionId = c.req.param('id')
     console.log(`[agent] Interrupt request session=${sessionId}`)
-    const bridge = sharedMode
-      ? sharedLoadedSessions.has(sessionId)
-        ? sharedBridge
-        : null
-      : sessionBridges.get(sessionId)
+    const bridge = sessionBridges.get(sessionId)
     if (bridge) {
       bridge.cancel(sessionId)
       return c.json({ success: true, interrupted: true })
