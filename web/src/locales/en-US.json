@@ -1555,7 +1555,7 @@
         "copiedPath": "Path copied!"
       },
       "placeholders": {
-        "search": "Search files..."
+        "search": "Filter this folder..."
       },
       "states": {
         "dropToUpload": "Drop files to upload",
