@@ -89,7 +89,7 @@ RUN case "$TARGETARCH" in amd64) AB_ARCH=x64 ;; arm64) AB_ARCH=arm64 ;; \
 
 # Install codex-acp globally (pre-install to avoid npx cold start).
 # Upstream rewrite: github.com/agentclientprotocol/codex-acp — a TypeScript ACP
-# server that drives codex over its app-server JSON-RPC protocol (codex 0.142+)
+# server that drives codex over its app-server JSON-RPC protocol (codex 0.144+)
 # and bundles the codex binary through @openai/codex (per-arch native dep, npm
 # resolves the host arch — no TARGETARCH switch needed, no glibc constraint).
 # Replaces the previous Rust-based codex-acp fork: its collab-subagent and
@@ -97,7 +97,7 @@ RUN case "$TARGETARCH" in amd64) AB_ARCH=x64 ;; arm64) AB_ARCH=arm64 ;; \
 # ItemStarted/ItemCompleted lifecycle (collabAgentToolCall / imageGeneration
 # items), so they no longer need to be carried here. bin name `codex-acp`
 # and no-arg stdio-server invocation match the bridge's BRIDGE_OPTS.
-RUN npm install -g --registry=https://registry.npmjs.org @agentclientprotocol/codex-acp@1.0.2
+RUN npm install -g --registry=https://registry.npmjs.org @agentclientprotocol/codex-acp@1.1.2
 
 WORKDIR /app
 
