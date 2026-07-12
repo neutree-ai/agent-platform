@@ -22,12 +22,15 @@ import {
 const AGENT_TYPES = [
   { value: 'claude-code', label: 'Claude Code' },
   { value: 'codex', label: 'Codex' },
+  { value: 'goose', label: 'Goose' },
 ]
 
 /** Provider types each agent supports — omit to allow all. */
 const AGENT_PROVIDER_TYPES: Record<string, string[] | null> = {
   'claude-code': ['anthropic', 'anthropic-oauth', 'claude-code-oauth'],
   codex: ['openai'],
+  // Dev scope: OpenAI-compatible chat-completions endpoints only.
+  goose: ['openai'],
 }
 
 // Compose a one-line attribution for non-owned providers so the workspace
