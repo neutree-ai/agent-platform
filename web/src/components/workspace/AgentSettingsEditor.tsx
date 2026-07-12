@@ -10,7 +10,7 @@ interface AgentSettingsEditorProps {
 /**
  * Settings dialect per agent core. Explicit switch (not key concatenation) so
  * unknown/dev agent types degrade to no hint instead of leaking a raw i18n
- * key — `goose-dev` is the canary alias of `goose`.
+ * key.
  */
 type SettingsKind = 'claude-code' | 'codex' | 'goose'
 
@@ -21,7 +21,6 @@ function settingsKind(agentType?: string): SettingsKind | null {
     case 'codex':
       return 'codex'
     case 'goose':
-    case 'goose-dev':
       return 'goose'
     default:
       return null

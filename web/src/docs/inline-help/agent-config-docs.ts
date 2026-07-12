@@ -7,9 +7,7 @@ function getSettingsDoc(agentType: string): string {
   switch (agentType) {
     case 'codex':
       return loadDoc('agent-config-settings-codex')
-    // `goose-dev` is the canary alias of `goose` (dev-image rollout pattern).
     case 'goose':
-    case 'goose-dev':
       return loadDoc('agent-config-settings-goose')
     default:
       return loadDoc('agent-config-settings-claude-code')

@@ -66,7 +66,6 @@ function defaultAgentSettings(agentType: string): string {
     // Goose settings are YAML — an empty string means "no extra settings"
     // (a JSON `{}` would be skipped agent-side but reads as the wrong dialect).
     case 'goose':
-    case 'goose-dev':
       return ''
     default:
       return JSON.stringify(AGENT_SETTINGS_DEFAULTS[agentType] ?? {}, null, 2)

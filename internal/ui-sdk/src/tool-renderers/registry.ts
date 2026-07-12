@@ -150,7 +150,6 @@ const agentFallbacks: Record<string, ToolRendererDef> = {
   // so the codex fallback renders them well; other builtins fall through to
   // the default renderer until dedicated goose renderers land.
   goose: codexFallback,
-  'goose-dev': codexFallback,
 }
 
 // ── Public API ──
