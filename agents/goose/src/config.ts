@@ -481,6 +481,8 @@ export function applyProviderEnv(rc: RuntimeConfig): void {
   delete process.env.OPENAI_HOST
   // biome-ignore lint/performance/noDelete: env vars must be removed, not set to "undefined"
   delete process.env.OPENAI_BASE_PATH
+  // biome-ignore lint/performance/noDelete: env vars must be removed, not set to "undefined"
+  delete process.env.GOOSE_FAST_MODEL
 
   process.env.GOOSE_PROVIDER = 'openai'
   process.env.GOOSE_MODEL = rc.model
@@ -488,9 +490,27 @@ export function applyProviderEnv(rc: RuntimeConfig): void {
   // Sessions/config live on the workspace volume via $HOME redirect; the
   // system keyring doesn't exist in the container.
   process.env.GOOSE_DISABLE_KEYRING = '1'
+  // Goose sends no User-Agent at all by default (reqwest never gets
+  // .user_agent()); gateways that identify apps by UA see anonymous traffic.
+  // OPENAI_CUSTOM_HEADERS (comma-separated Key=Value pairs, resolved from env
+  // like OPENAI_API_KEY) rides every chat/completions request. Env wins over
+  // config.yaml in goose, so this is platform-enforced — a user-set
+  // OPENAI_CUSTOM_HEADERS in agent_settings would be shadowed.
+  process.env.OPENAI_CUSTOM_HEADERS = 'User-Agent=agent-platform-goose/1.0'
+  // Goose's own UI niceties that each cost an extra LLM call: an
+  // AI-generated title per tool call and an AI-generated session name per
+  // session. The platform renders tool calls itself and cp owns session
+  // naming, so both are pure waste here.
+  process.env.GOOSE_DISABLE_TOOL_CALL_SUMMARY = '1'
+  process.env.GOOSE_DISABLE_SESSION_NAMING = '1'
 
   if (rc.api_key) {
     process.env.OPENAI_API_KEY = rc.api_key
+  }
+  if (rc.small_model) {
+    // Route goose's auxiliary calls (classification, summaries it still
+    // makes) to the provider's configured small model instead of the main one.
+    process.env.GOOSE_FAST_MODEL = rc.small_model
   }
   if (rc.base_url) {
     // Goose splits the endpoint into host + path: OPENAI_HOST is the origin,
