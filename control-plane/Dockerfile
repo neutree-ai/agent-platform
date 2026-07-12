@@ -111,7 +111,7 @@ COPY .npmrc /root/.npmrc
 # ffmpeg is used by the ASR module to transcode incoming audio (webm/opus, amr, ...)
 # to wav 16k mono before handing off to the configured provider.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg \
+  && apt-get install -y --no-install-recommends -o Acquire::Retries=3 ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
