@@ -7,10 +7,6 @@
 
 - 服务端必须实现 **Responses API**（`/v1/responses`）—— 只提供 Chat Completions（`/v1/chat/completions`）的服务**不能用**此类型，请改用 **OpenAI Chat Completions**
 
-## 注意事项
-
-- OpenRouter 免费模型需在模型名后加 `:free` 后缀，如 `stepfun/step-3.5-flash:free`
-
 ## Visibility
 
 - **Private**: 仅自己可见

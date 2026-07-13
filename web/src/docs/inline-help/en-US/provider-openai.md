@@ -7,10 +7,6 @@ Connects to the official OpenAI API, Azure OpenAI, or any gateway that implement
 
 - The endpoint must implement the **Responses API** (`/v1/responses`) — services that only offer Chat Completions (`/v1/chat/completions`) do **not** work with this type; use **OpenAI Chat Completions** for those
 
-## Notes
-
-- OpenRouter free models require the `:free` suffix on the model name, such as `stepfun/step-3.5-flash:free`
-
 ## Visibility
 
 - **Private**: visible only to yourself
