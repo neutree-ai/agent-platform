@@ -35,13 +35,6 @@ export async function getUserByUsername(username: string): Promise<User | null> 
   return (rows[0] as User) ?? null
 }
 
-export async function listUsers(): Promise<User[]> {
-  const { rows } = await pool.query(
-    "SELECT * FROM users WHERE role != 'system' ORDER BY created_at DESC",
-  )
-  return rows as User[]
-}
-
 export async function createUser(
   username: string,
   displayName: string,

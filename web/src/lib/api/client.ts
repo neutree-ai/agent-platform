@@ -10,7 +10,10 @@ import type {
   AdminTokenUsage,
   AdminTotals,
   AdminTrend,
-  AdminUser,
+  AdminUsersPage,
+  AdminUsersQuery,
+  AdminWorkspacesPage,
+  AdminWorkspacesQuery,
   AgentInfo,
   ApiActivitySummary,
   ApiAgentRequest,
@@ -2050,8 +2053,15 @@ class ApiClient {
   }
 
   // Admin — User management
-  async getAdminUsers(): Promise<AdminUser[]> {
-    return this.request('/admin/users')
+  async getAdminUsers(params: AdminUsersQuery = {}): Promise<AdminUsersPage> {
+    const qs = new URLSearchParams()
+    if (params.page) qs.set('page', String(params.page))
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize))
+    if (params.sort) qs.set('sort', params.sort)
+    if (params.order) qs.set('order', params.order)
+    if (params.q) qs.set('q', params.q)
+    const query = qs.toString()
+    return this.request(`/admin/users${query ? `?${query}` : ''}`)
   }
   async createAdminUser(data: {
     username: string
@@ -2070,6 +2080,27 @@ class ApiClient {
   }
   async deleteAdminUser(userId: string): Promise<void> {
     return this.request(`/admin/users/${userId}`, { method: 'DELETE' })
+  }
+
+  // Admin — Workspace fleet view
+  async getAdminWorkspaces(params: AdminWorkspacesQuery = {}): Promise<AdminWorkspacesPage> {
+    const qs = new URLSearchParams()
+    if (params.page) qs.set('page', String(params.page))
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize))
+    if (params.sort) qs.set('sort', params.sort)
+    if (params.order) qs.set('order', params.order)
+    if (params.q) qs.set('q', params.q)
+    if (params.status) qs.set('status', params.status)
+    if (params.agentType) qs.set('agentType', params.agentType)
+    if (params.ownerId) qs.set('ownerId', params.ownerId)
+    const query = qs.toString()
+    return this.request(`/admin/workspaces${query ? `?${query}` : ''}`)
+  }
+  async stopAdminWorkspace(id: string): Promise<void> {
+    return this.request(`/admin/workspaces/${id}/stop`, { method: 'POST' })
+  }
+  async deleteAdminWorkspace(id: string): Promise<void> {
+    return this.request(`/admin/workspaces/${id}`, { method: 'DELETE' })
   }
 
   // Sandboxes

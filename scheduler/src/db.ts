@@ -320,6 +320,27 @@ export async function cleanupOldThreadSessions(olderThanDays = 7): Promise<numbe
   return rowCount ?? 0
 }
 
+// --- Admin Stats Matviews ---
+
+/**
+ * Refresh the admin dashboard's materialized views. Mirrors the set that
+ * control-plane refreshes on-demand in routes/admin/stats.ts — keep the two
+ * lists in sync when a matview is added or removed.
+ *
+ * CONCURRENTLY keeps the dashboard readable during the refresh (no exclusive
+ * lock on the matview) and cannot run inside a transaction — so these go one
+ * per query on the pool, never wrapped in BEGIN/COMMIT. Sequential on purpose:
+ * the token matviews are cheap relative to the base ones and ordering keeps the
+ * lock footprint predictable.
+ */
+export async function refreshAdminMatviews(): Promise<void> {
+  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_workspace_stats')
+  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_daily_stats')
+  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_user_stats')
+  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_workspace_stats')
+  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_daily_stats')
+}
+
 // --- Session Title Generation ---
 
 /** Read the system-level title-gen config from the single system_settings row. */

@@ -5,30 +5,23 @@ import {
   WorkspaceCreateBodySchema,
   WorkspacePatchBodySchema,
 } from '../../../../internal/types/api'
-import * as jobs from '../../lib/jobs'
-import { fireDeleteHooks } from '../../lib/service-hooks'
 import type { AppEnv } from '../../lib/types'
-import { getWorkspaceAddress } from '../../lib/workspace-address'
-import { getWorkspacePlacementEnv } from '../../services/db/environments'
 import { attachStore, createStore } from '../../services/db/memory'
-import { listSchedulesByWorkspace } from '../../services/db/schedules'
-import { listActiveSessionIds } from '../../services/db/sessions'
 import { getTemplateForUser, getTemplateVersion } from '../../services/db/templates'
 import {
   createWorkspace,
-  deleteWorkspace,
   getWorkspace,
   updateWorkspace,
   updateWorkspaceConfig,
 } from '../../services/db/workspaces'
-import * as k8s from '../../services/k8s'
 import { isMemoryFuseAvailable } from '../../services/k8s'
-import { bumpWorkspaceSpec, placeWorkspace, setDesiredPhase } from '../../services/placement'
+import { bumpWorkspaceSpec, placeWorkspace } from '../../services/placement'
 import { chooseEnvironment } from '../../services/placement-decision'
 import { skillRepo } from '../../services/skills-composition'
 import { materializeTemplateLayout } from '../../services/template-layout'
 import { materializeTemplateSchedules } from '../../services/template-schedules'
 import { applyWorkspaceConfigUpdate } from '../../services/workspace-config'
+import { destroyWorkspace } from '../../services/workspace-lifecycle'
 import { canManage, toApiWorkspace } from './_shared'
 
 const write = new OpenAPIHono<AppEnv>()
@@ -316,40 +309,7 @@ write.openapi(deleteRouteDef, async (c) => {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
-  if (workspace.status === 'running') {
-    const address = getWorkspaceAddress(workspace.id)
-    const sessionIds = await listActiveSessionIds(workspace.id)
-    for (const sid of sessionIds) {
-      try {
-        await fetch(`${address}/sessions/${sid}/interrupt`, { method: 'POST' })
-      } catch (e) {
-        console.error('[Delete] Failed to interrupt session:', e)
-      }
-    }
-  }
-
-  // Unregister pg-boss timers before the schedule rows are CASCADE-deleted with
-  // the workspace — otherwise cron registrations / one-time jobs leak in pg-boss.
-  for (const s of await listSchedulesByWorkspace(id)) {
-    await jobs.cancelScheduleTimer(s).catch(() => {})
-  }
-
-  await fireDeleteHooks(id)
-
-  // Remote environments: cp can't reach the cluster to tear the pod down, and
-  // deleting the row now would CASCADE away the placement before the runner ever
-  // sees desired=deleted (orphan pod). Instead invert: mark desired=deleted and
-  // status=deleting; the runner destroys the pod + removes the placement, then
-  // the env projection reaps the workspace row. Built-in stays synchronous.
-  const placementEnv = await getWorkspacePlacementEnv(id)
-  if (placementEnv && !placementEnv.isBuiltin) {
-    await setDesiredPhase(id, 'deleted')
-    await updateWorkspace(id, { status: 'deleting' })
-    return c.json({ success: true }, 200)
-  }
-
-  await k8s.deleteInstance(workspace.id)
-  await deleteWorkspace(id)
+  await destroyWorkspace(workspace)
   return c.json({ success: true }, 200)
 })
 
