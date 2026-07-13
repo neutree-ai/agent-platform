@@ -127,6 +127,7 @@
       "navigation": {
         "dashboard": "仪表盘",
         "users": "用户",
+        "workspaces": "工作空间",
         "infrastructure": "基础设施",
         "system": "系统"
       }
@@ -3137,6 +3138,20 @@
           "resetPassword": "重置密码",
           "deleteUser": "删除用户"
         },
+        "search": {
+          "placeholder": "搜索用户…"
+        },
+        "columns": {
+          "name": "用户",
+          "agents": "Agent 数",
+          "interactions": "交互次数",
+          "tokens": "Token",
+          "lastActive": "最近活跃"
+        },
+        "pagination": {
+          "total": "共 {{count}} 位用户",
+          "page": "{{page}} / {{pageCount}}"
+        },
         "empty": {
           "noUsers": "当前没有用户"
         },
@@ -3156,6 +3171,58 @@
         "errors": {
           "loadFailed": "加载用户失败",
           "deleteFailed": "删除用户失败"
+        }
+      },
+      "workspacesSection": {
+        "search": {
+          "placeholder": "搜索名称或 owner…"
+        },
+        "filters": {
+          "allStatus": "全部状态",
+          "allAgentTypes": "全部 agent 类型"
+        },
+        "status": {
+          "running": "运行中",
+          "stopped": "已停止",
+          "error": "异常"
+        },
+        "columns": {
+          "name": "名称",
+          "owner": "Owner",
+          "status": "状态",
+          "agentType": "Agent 类型",
+          "interactions": "交互次数",
+          "tokens": "Token",
+          "lastActive": "最近活跃",
+          "created": "创建时间"
+        },
+        "ownerChip": "Owner：{{name}}",
+        "filterByOwner": "按该 owner 过滤",
+        "actions": {
+          "stop": "停止工作空间",
+          "delete": "删除工作空间"
+        },
+        "stopDialog": {
+          "title": "停止工作空间",
+          "description": "停止「{{name}}」？活跃会话会被中断，实例缩容。下次对话或触发时会自动重新启动。",
+          "confirm": "停止"
+        },
+        "deleteDialog": {
+          "title": "删除工作空间",
+          "description": "将永久删除「{{name}}」并销毁其实例，此操作不可撤销。",
+          "confirmLabel": "输入工作空间名称 {{name}} 确认",
+          "confirm": "删除"
+        },
+        "toasts": {
+          "stopped": "已停止工作空间 {{name}}",
+          "deleted": "已删除工作空间 {{name}}"
+        },
+        "pagination": {
+          "total": "共 {{count}} 个工作空间",
+          "page": "{{page}} / {{pageCount}}"
+        },
+        "empty": {
+          "noWorkspaces": "暂无工作空间"
         }
       },
       "createUser": {
@@ -3196,6 +3263,18 @@
         "errors": {
           "passwordTooShort": "密码长度至少为 6 位",
           "resetFailed": "重置密码失败"
+        }
+      },
+      "deleteUser": {
+        "title": "删除用户",
+        "warning": "将永久删除 {{displayName}}（{{username}}）及其数据，此操作不可撤销。",
+        "confirmLabel": "输入用户名 {{username}} 确认",
+        "confirmButton": "删除",
+        "toasts": {
+          "deleted": "已删除用户 {{username}}"
+        },
+        "errors": {
+          "deleteFailed": "删除用户失败"
         }
       }
     },

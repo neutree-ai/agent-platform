@@ -1,4 +1,5 @@
 import { type JobWithMetadata, PgBoss } from 'pg-boss'
+import { registerAdminStatsRefreshWorker } from './admin-stats-refresh'
 import {
   cleanupOldEventLogs,
   cleanupOldThreadSessions,
@@ -110,6 +111,9 @@ await registerSkillReloadWorker(boss)
 
 // Register the session title-generation cron worker.
 await registerTitleGenWorker(boss)
+
+// Register the admin dashboard stats-refresh cron worker.
+await registerAdminStatsRefreshWorker(boss)
 
 console.log('[Scheduler] Worker registered, waiting for jobs...')
 

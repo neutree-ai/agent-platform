@@ -127,6 +127,7 @@
       "navigation": {
         "dashboard": "Dashboard",
         "users": "Users",
+        "workspaces": "Workspaces",
         "infrastructure": "Infrastructure",
         "system": "System"
       }
@@ -3113,6 +3114,20 @@
           "resetPassword": "Reset password",
           "deleteUser": "Delete user"
         },
+        "search": {
+          "placeholder": "Search users…"
+        },
+        "columns": {
+          "name": "User",
+          "agents": "Agents",
+          "interactions": "Interactions",
+          "tokens": "Tokens",
+          "lastActive": "Last active"
+        },
+        "pagination": {
+          "total": "{{count}} users",
+          "page": "{{page}} / {{pageCount}}"
+        },
         "empty": {
           "noUsers": "No users"
         },
@@ -3132,6 +3147,58 @@
         "errors": {
           "loadFailed": "Failed to load users",
           "deleteFailed": "Failed to delete user"
+        }
+      },
+      "workspacesSection": {
+        "search": {
+          "placeholder": "Search name or owner…"
+        },
+        "filters": {
+          "allStatus": "All status",
+          "allAgentTypes": "All agent types"
+        },
+        "status": {
+          "running": "Running",
+          "stopped": "Stopped",
+          "error": "Error"
+        },
+        "columns": {
+          "name": "Name",
+          "owner": "Owner",
+          "status": "Status",
+          "agentType": "Agent type",
+          "interactions": "Interactions",
+          "tokens": "Tokens",
+          "lastActive": "Last active",
+          "created": "Created"
+        },
+        "ownerChip": "Owner: {{name}}",
+        "filterByOwner": "Filter by this owner",
+        "actions": {
+          "stop": "Stop workspace",
+          "delete": "Delete workspace"
+        },
+        "stopDialog": {
+          "title": "Stop workspace",
+          "description": "Stop \"{{name}}\"? Active sessions are interrupted and the instance scales down. It auto-starts again on the next chat or trigger.",
+          "confirm": "Stop"
+        },
+        "deleteDialog": {
+          "title": "Delete workspace",
+          "description": "This will permanently delete \"{{name}}\" and tear down its instance. This cannot be undone.",
+          "confirmLabel": "Type the workspace name {{name}} to confirm",
+          "confirm": "Delete"
+        },
+        "toasts": {
+          "stopped": "Workspace {{name}} stopped",
+          "deleted": "Workspace {{name}} deleted"
+        },
+        "pagination": {
+          "total": "{{count}} workspaces",
+          "page": "{{page}} / {{pageCount}}"
+        },
+        "empty": {
+          "noWorkspaces": "No workspaces"
         }
       },
       "createUser": {
@@ -3172,6 +3239,18 @@
         "errors": {
           "passwordTooShort": "Password must be at least 6 characters",
           "resetFailed": "Failed to reset password"
+        }
+      },
+      "deleteUser": {
+        "title": "Delete user",
+        "warning": "This will permanently delete {{displayName}} ({{username}}) and their data. This cannot be undone.",
+        "confirmLabel": "Type the username {{username}} to confirm",
+        "confirmButton": "Delete",
+        "toasts": {
+          "deleted": "User {{username}} deleted"
+        },
+        "errors": {
+          "deleteFailed": "Failed to delete user"
         }
       }
     },

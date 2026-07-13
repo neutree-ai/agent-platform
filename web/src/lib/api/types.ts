@@ -260,7 +260,7 @@ export interface AdminCluster {
   total_sandboxes: number
 }
 
-export interface AdminUser {
+interface AdminUser {
   id: string
   username: string
   display_name: string
@@ -269,6 +269,77 @@ export interface AdminUser {
   auth_source: 'password' | 'ldap'
   created_at: string
   last_login_at: string | null
+  /** Number of workspaces (agents) owned by this user. */
+  agent_count: number
+  /** Lifetime interaction count across the user's workspaces. */
+  interactions: number
+  /** Lifetime token total across the user's workspaces. */
+  tokens: number
+  /** Most recent session activity across the user's workspaces. */
+  last_active_at: string | null
+}
+
+export type AdminUsersSort =
+  | 'tokens'
+  | 'interactions'
+  | 'agents'
+  | 'name'
+  | 'created'
+  | 'last_active'
+
+export interface AdminUsersQuery {
+  page?: number
+  pageSize?: number
+  sort?: AdminUsersSort
+  order?: 'asc' | 'desc'
+  q?: string
+}
+
+export interface AdminUsersPage {
+  items: AdminUser[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface AdminWorkspace {
+  id: string
+  name: string
+  status: 'running' | 'stopped' | 'error'
+  owner_id: string
+  owner: string
+  owner_username: string
+  agent_type: string
+  interactions: number
+  tokens: number
+  last_active_at: string | null
+  created_at: string
+}
+
+export type AdminWorkspacesSort =
+  | 'tokens'
+  | 'interactions'
+  | 'last_active'
+  | 'created'
+  | 'name'
+  | 'status'
+
+export interface AdminWorkspacesQuery {
+  page?: number
+  pageSize?: number
+  sort?: AdminWorkspacesSort
+  order?: 'asc' | 'desc'
+  q?: string
+  status?: 'running' | 'stopped' | 'error'
+  agentType?: string
+  ownerId?: string
+}
+
+export interface AdminWorkspacesPage {
+  items: AdminWorkspace[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export interface BrowserSession {

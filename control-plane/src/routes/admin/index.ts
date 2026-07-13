@@ -4,6 +4,7 @@ import cluster from './cluster'
 import stats from './stats'
 import systemSettings from './system-settings'
 import users from './users'
+import workspaces from './workspaces'
 
 const admin = new Hono<AppEnv>()
 
@@ -19,6 +20,7 @@ admin.use('*', async (c, next) => {
 admin.route('/stats', stats)
 admin.route('/cluster', cluster)
 admin.route('/users', users)
+admin.route('/workspaces', workspaces)
 admin.route('/system-settings', systemSettings)
 
 export default admin

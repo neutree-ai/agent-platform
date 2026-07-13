@@ -3,6 +3,7 @@ import type { AppEnv } from '../../lib/types'
 import { resetAllSessionsIdle } from '../../services/db/sessions'
 import { getWorkspace, updateWorkspace } from '../../services/db/workspaces'
 import { bumpWorkspaceSpec, setDesiredPhase } from '../../services/placement'
+import { stopWorkspace } from '../../services/workspace-lifecycle'
 import { reconcileWorkspacePod, startWorkspaceInstance } from '../../services/workspace-reconcile'
 import { canManage, interruptAllSessions } from './_shared'
 
@@ -108,11 +109,7 @@ lifecycle.openapi(stopRoute, async (c) => {
 
   try {
     console.log(`[Stop] Request workspace=${id}`)
-    await interruptAllSessions(workspace, 'Stop')
-    // Control inversion (P1): record desired=stopped; the env-runner scales down.
-    await setDesiredPhase(workspace.id, 'stopped')
-    await resetAllSessionsIdle(id)
-    await updateWorkspace(id, { status: 'stopped' })
+    await stopWorkspace(workspace)
     return c.json({ success: true }, 200)
   } catch (e: any) {
     return c.json({ error: e.message }, 500)

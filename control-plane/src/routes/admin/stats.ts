@@ -4,23 +4,11 @@ import { pool } from '../../services/db/pool'
 
 const stats = new Hono<AppEnv>()
 
-// Refresh matviews in background, at most once every 10 minutes.
-let lastMatviewRefresh = 0
-function refreshBlockStats() {
-  const now = Date.now()
-  if (now - lastMatviewRefresh < 10 * 60 * 1000) return
-  lastMatviewRefresh = now
-  pool
-    .query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_workspace_stats')
-    .then(() => pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_daily_stats'))
-    .then(() => pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_user_stats'))
-    .then(() => pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_workspace_stats'))
-    .then(() => pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_daily_stats'))
-    .catch((e) => console.error('[Admin] matview refresh failed:', e))
-}
+// The admin_* matviews these handlers read are refreshed on a cadence by the
+// scheduler's admin-stats-refresh cron (scheduler/src/admin-stats-refresh.ts).
+// Handlers just read the latest snapshot — no on-request refresh here.
 
 stats.get('/totals', async (c) => {
-  refreshBlockStats()
   const result = await pool.query(`
     SELECT
       (SELECT count(*) FROM users WHERE role != 'system')::int AS total_users,
@@ -36,7 +24,6 @@ stats.get('/totals', async (c) => {
 })
 
 stats.get('/trends', async (c) => {
-  refreshBlockStats()
   const result = await pool.query(`
     WITH base AS (
       SELECT
@@ -95,7 +82,6 @@ stats.get('/session-sources', async (c) => {
 })
 
 stats.get('/power-users', async (c) => {
-  refreshBlockStats()
   const result = await pool.query(`
     SELECT
       u.display_name AS name,
@@ -113,7 +99,6 @@ stats.get('/power-users', async (c) => {
 })
 
 stats.get('/power-agents', async (c) => {
-  refreshBlockStats()
   const result = await pool.query(`
     SELECT
       w.name,
@@ -168,15 +153,14 @@ stats.get('/mcp-usage', async (c) => {
 // Served from the admin_token_* matviews (migration 111) instead of the raw
 // workspace_usage_events ledger: the all-time aggregates are full-table scans
 // that grow linearly with the append-only ledger, so reading the pre-rolled-up
-// matviews (refreshed ≤10min via refreshBlockStats, like the other admin
-// blocks) keeps the dashboard cheap as the ledger grows. The user/workspace
+// matviews (refreshed on a cadence by the scheduler's admin-stats-refresh
+// cron) keeps the dashboard cheap as the ledger grows. The user/workspace
 // names are joined live (small PK joins) so the matviews stay name-free.
 const TOKEN_SINCE = "(current_date - interval '29 days')::date"
 const TOKEN_ALL_IN =
   '(s.input_tokens + s.output_tokens + s.cache_read_tokens + s.cache_creation_tokens)'
 
 stats.get('/token-usage', async (c) => {
-  refreshBlockStats()
   const [overview, daily, topUsers, topAgents] = await Promise.all([
     pool.query(`
       SELECT
