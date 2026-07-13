@@ -122,6 +122,11 @@ spec:
               value: "http://${APP_PREFIX}-cp:3000"
             - name: SKILLS_CONTENT_URL
               value: "http://${APP_PREFIX}-skills:3008"
+            # Reverse-proxy target for /_cg/* (cg-proxy). Without it the code
+            # falls back to http://nap-cg:3002, which only resolves when
+            # APP_PREFIX is "nap", so /_cg/connectors 502s on other installs.
+            - name: CG_URL
+              value: "http://${APP_PREFIX}-cg:3002"
             - name: AFS_ENABLED
               value: "true"
             - name: AFS_IMAGE
