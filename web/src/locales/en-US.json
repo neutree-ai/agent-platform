@@ -2017,8 +2017,12 @@
           "desc": "Personal Claude Pro / Team subscription — token via claude setup-token"
         },
         "openai": {
-          "label": "OpenAI compatible",
-          "desc": "For Codex — endpoint must support the OpenAI Responses API"
+          "label": "OpenAI Responses",
+          "desc": "Endpoint must support the OpenAI Responses API (/v1/responses)"
+        },
+        "openaiChat": {
+          "label": "OpenAI Chat Completions",
+          "desc": "Endpoint must support the OpenAI Chat Completions API (/v1/chat/completions)"
         }
       },
       "actions": {

@@ -82,6 +82,13 @@ function isAnthropicType(pt: string): boolean {
   return pt === 'anthropic' || pt === 'anthropic-oauth' || pt === 'claude-code-oauth'
 }
 
+// Both OpenAI-family types list models the same way (GET /v1/models); they
+// differ only in the chat wire protocol used at runtime and by the test probe:
+// `openai` = Responses API (Codex), `openai-chat` = Chat Completions (goose).
+function isOpenAIType(pt: string): boolean {
+  return pt === 'openai' || pt === 'openai-chat'
+}
+
 // ── GET / ──────────────────────────────────────────────────────────────────
 const listRoute = createRoute({
   method: 'get',
@@ -295,7 +302,7 @@ providers.openapi(listModelsRoute, async (c) => {
       return c.json({ models }, 200)
     }
 
-    if (provider.provider_type === 'openai') {
+    if (isOpenAIType(provider.provider_type)) {
       const baseUrl = (provider.base_url || 'https://api.openai.com').replace(/\/+$/, '')
       const res = await fetch(`${baseUrl}/v1/models`, {
         headers: { Authorization: `Bearer ${provider.api_key}` },
@@ -381,35 +388,44 @@ providers.openapi(testRoute, async (c) => {
           messages: [{ role: 'user', content: 'hi' }],
         }),
       })
-    } else if (effective.provider_type === 'openai') {
+    } else if (isOpenAIType(effective.provider_type)) {
       const baseUrl = (effective.base_url || 'https://api.openai.com').replace(/\/+$/, '')
       const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${effective.api_key}`,
       }
+      const probeChat = () =>
+        fetch(`${baseUrl}/v1/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            max_tokens: 1,
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+        })
 
-      res = await fetch(`${baseUrl}/v1/responses`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model,
-          input: 'hi',
-          max_output_tokens: 1,
-        }),
-      })
+      if (effective.provider_type === 'openai-chat') {
+        // Chat Completions only — probe the endpoint goose actually uses.
+        res = await probeChat()
+      } else {
+        // `openai` = Responses API; fall back to Chat Completions for gateways
+        // that don't implement /v1/responses.
+        res = await fetch(`${baseUrl}/v1/responses`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            input: 'hi',
+            max_output_tokens: 1,
+          }),
+        })
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        if (text.includes('Unsupported') || res.status === 404) {
-          res = await fetch(`${baseUrl}/v1/chat/completions`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              model,
-              max_tokens: 1,
-              messages: [{ role: 'user', content: 'hi' }],
-            }),
-          })
+        if (!res.ok) {
+          const text = await res.text().catch(() => '')
+          if (text.includes('Unsupported') || res.status === 404) {
+            res = await probeChat()
+          }
         }
       }
     } else {

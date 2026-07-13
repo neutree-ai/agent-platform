@@ -1,11 +1,11 @@
-Connects to the official OpenAI API, Azure OpenAI, or any gateway that implements the OpenAI **Responses API**.
+Connects to the official OpenAI API, Azure OpenAI, or any gateway that implements the OpenAI **Chat Completions API** — the widely supported OpenAI protocol offered by most gateways.
 
 - **Base URL**: `https://api.openai.com` or the endpoint of a compatible service
 - **API Key**: the key for that service
 
 ## Requirements
 
-- The endpoint must implement the **Responses API** (`/v1/responses`) — services that only offer Chat Completions (`/v1/chat/completions`) do **not** work with this type; use **OpenAI Chat Completions** for those
+- The endpoint must implement the **Chat Completions API** (`/v1/chat/completions`) — for endpoints that implement the newer Responses API (`/v1/responses`), use **OpenAI Responses** instead
 
 ## Notes
 

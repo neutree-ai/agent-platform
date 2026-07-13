@@ -28,9 +28,10 @@ const AGENT_TYPES = [
 /** Provider types each agent supports — omit to allow all. */
 const AGENT_PROVIDER_TYPES: Record<string, string[] | null> = {
   'claude-code': ['anthropic', 'anthropic-oauth', 'claude-code-oauth'],
+  // Codex speaks the OpenAI Responses API (wire_api = "responses").
   codex: ['openai'],
-  // Dev scope: OpenAI-compatible chat-completions endpoints only.
-  goose: ['openai'],
+  // Goose speaks the OpenAI Chat Completions API only.
+  goose: ['openai-chat'],
 }
 
 // Compose a one-line attribution for non-owned providers so the workspace
