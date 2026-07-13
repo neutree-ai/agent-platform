@@ -2042,8 +2042,12 @@
           "desc": "个人 Claude Pro / Team 订阅 —— claude setup-token 获取 token"
         },
         "openai": {
-          "label": "OpenAI 兼容",
-          "desc": "Codex 专用 —— 服务端必须支持 OpenAI Responses API"
+          "label": "OpenAI Responses",
+          "desc": "服务端必须支持 OpenAI Responses API（/v1/responses）"
+        },
+        "openaiChat": {
+          "label": "OpenAI Chat Completions",
+          "desc": "服务端必须支持 OpenAI Chat Completions API（/v1/chat/completions）"
         }
       },
       "actions": {

@@ -39,6 +39,7 @@ type InlineDocName =
   | 'provider-anthropic-oauth'
   | 'provider-claude-code-oauth'
   | 'provider-openai'
+  | 'provider-openai-chat'
   | 'route-overview'
   | 'route-slack'
   | 'route-webhook'

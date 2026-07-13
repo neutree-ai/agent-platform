@@ -66,6 +66,11 @@ const PROVIDER_TYPES: Array<{ value: string; labelKey: string; descKey: string }
     labelKey: 'components.createProvider.types.openai.label',
     descKey: 'components.createProvider.types.openai.desc',
   },
+  {
+    value: 'openai-chat',
+    labelKey: 'components.createProvider.types.openaiChat.label',
+    descKey: 'components.createProvider.types.openaiChat.desc',
+  },
 ]
 
 export function ProviderFormFields({ form, setForm, errors, isEditing }: ProviderFormFieldsProps) {
