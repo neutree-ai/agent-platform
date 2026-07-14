@@ -76,7 +76,19 @@ if (rc) {
 
 // ── ACP bridge factory (1 bridge per session to avoid SQLite contention) ──
 
-const BRIDGE_OPTS = { program: 'codex-acp', args: [] as string[], cwd: WORKSPACE_DIR }
+// codex-acp (1.1.x) picks the sandbox from the INITIAL_AGENT_MODE env var
+// (`read-only` | `agent` | `agent-full-access`) — NOT from config.toml's
+// `sandbox_mode`, which it ignores. Unset, it defaults to `agent` =
+// workspace-write, whose writable roots are only /workspace + /tmp; writes to
+// /mnt/memory and /mnt/afs are then rejected with EROFS at the sandbox layer,
+// before they ever reach the FUSE mount. Force full access so agents can
+// persist memory and exchange files as the platform contract promises.
+const BRIDGE_OPTS = {
+  program: 'codex-acp',
+  args: [] as string[],
+  cwd: WORKSPACE_DIR,
+  env: { INITIAL_AGENT_MODE: 'agent-full-access' },
+}
 
 setBridgeFactory(async () => {
   const b = new AcpBridge(BRIDGE_OPTS)
