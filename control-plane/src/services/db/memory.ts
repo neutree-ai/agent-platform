@@ -309,7 +309,11 @@ export async function deleteMemoryByPath(input: {
       await client.query('ROLLBACK')
       return false
     }
-    if (input.ifMatchSha256 !== undefined && input.ifMatchSha256 !== row.content_sha256) {
+    if (
+      input.ifMatchSha256 !== undefined &&
+      input.ifMatchSha256 !== '' &&
+      input.ifMatchSha256 !== row.content_sha256
+    ) {
       throw new PreconditionFailedError(row.content_sha256)
     }
     await client.query('DELETE FROM memories WHERE id = $1', [row.id])
@@ -383,7 +387,11 @@ export async function moveMemory(input: {
       await client.query('ROLLBACK')
       return null
     }
-    if (input.ifMatchSha256 !== undefined && input.ifMatchSha256 !== fromRow.content_sha256) {
+    if (
+      input.ifMatchSha256 !== undefined &&
+      input.ifMatchSha256 !== '' &&
+      input.ifMatchSha256 !== fromRow.content_sha256
+    ) {
       throw new PreconditionFailedError(fromRow.content_sha256)
     }
     if (toRow) {
