@@ -303,8 +303,14 @@ providers.openapi(listModelsRoute, async (c) => {
     }
 
     if (isOpenAIType(provider.provider_type)) {
-      const baseUrl = (provider.base_url || 'https://api.openai.com').replace(/\/+$/, '')
-      const res = await fetch(`${baseUrl}/v1/models`, {
+      // base_url is treated as version-complete (already ending in /v1 or the
+      // gateway's equivalent), matching how the agent runtimes consume it —
+      // goose sets OPENAI_BASE_PATH = <base_url path>/chat/completions and codex
+      // passes base_url straight to OPENAI_BASE_URL. So append only the endpoint,
+      // never another /v1; otherwise a base_url like `.../tos-provider/v1` becomes
+      // `.../v1/v1/models` and the gateway rejects it (404, or 401 at its auth layer).
+      const baseUrl = (provider.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
+      const res = await fetch(`${baseUrl}/models`, {
         headers: { Authorization: `Bearer ${provider.api_key}` },
       })
       if (!res.ok) return c.json({ models: [], error: `${res.status} ${res.statusText}` }, 200)
@@ -389,13 +395,15 @@ providers.openapi(testRoute, async (c) => {
         }),
       })
     } else if (isOpenAIType(effective.provider_type)) {
-      const baseUrl = (effective.base_url || 'https://api.openai.com').replace(/\/+$/, '')
+      // base_url is version-complete; append only the endpoint (see the
+      // fetch-models handler above for why we must not add another /v1).
+      const baseUrl = (effective.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
       const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${effective.api_key}`,
       }
       const probeChat = () =>
-        fetch(`${baseUrl}/v1/chat/completions`, {
+        fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -410,8 +418,8 @@ providers.openapi(testRoute, async (c) => {
         res = await probeChat()
       } else {
         // `openai` = Responses API; fall back to Chat Completions for gateways
-        // that don't implement /v1/responses.
-        res = await fetch(`${baseUrl}/v1/responses`, {
+        // that don't implement /responses.
+        res = await fetch(`${baseUrl}/responses`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
