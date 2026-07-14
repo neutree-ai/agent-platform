@@ -303,13 +303,15 @@ providers.openapi(listModelsRoute, async (c) => {
     }
 
     if (isOpenAIType(provider.provider_type)) {
-      // base_url is treated as version-complete (already ending in /v1 or the
-      // gateway's equivalent), matching how the agent runtimes consume it —
-      // goose sets OPENAI_BASE_PATH = <base_url path>/chat/completions and codex
-      // passes base_url straight to OPENAI_BASE_URL. So append only the endpoint,
-      // never another /v1; otherwise a base_url like `.../tos-provider/v1` becomes
-      // `.../v1/v1/models` and the gateway rejects it (404, or 401 at its auth layer).
-      const baseUrl = (provider.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
+      // OpenAI model listing lives at `<base>/v1/models`. base_url may or may not
+      // already carry the `/v1` suffix: some gateways are configured version-
+      // complete (`.../tos-provider/v1`), others as a bare host
+      // (`https://proxy.example.com`). Append `/v1` only when it is missing, so
+      // both styles resolve to a single `/v1/models` — never `/models` (which a
+      // proxy serves its SPA index for → HTML → JSON parse error) and never
+      // `/v1/v1/models` (which the gateway 404s).
+      const raw = (provider.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
+      const baseUrl = raw.endsWith('/v1') ? raw : `${raw}/v1`
       const res = await fetch(`${baseUrl}/models`, {
         headers: { Authorization: `Bearer ${provider.api_key}` },
       })
@@ -395,9 +397,11 @@ providers.openapi(testRoute, async (c) => {
         }),
       })
     } else if (isOpenAIType(effective.provider_type)) {
-      // base_url is version-complete; append only the endpoint (see the
-      // fetch-models handler above for why we must not add another /v1).
-      const baseUrl = (effective.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
+      // Normalise to a single `/v1` suffix regardless of how base_url is stored
+      // (bare host or already version-complete); see the fetch-models handler
+      // above for why both `/models` and `/v1/v1/...` are wrong.
+      const raw = (effective.base_url || 'https://api.openai.com/v1').replace(/\/+$/, '')
+      const baseUrl = raw.endsWith('/v1') ? raw : `${raw}/v1`
       const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${effective.api_key}`,
