@@ -11,13 +11,13 @@ const pool = new pg.Pool({
 
 export async function initDb() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
+    CREATE TABLE IF NOT EXISTS public.schema_migrations (
       id TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ DEFAULT NOW()
     )
   `)
 
-  const { rows } = await pool.query('SELECT id FROM schema_migrations ORDER BY id')
+  const { rows } = await pool.query('SELECT id FROM public.schema_migrations ORDER BY id')
   const applied = new Set(rows.map((r: { id: string }) => r.id))
 
   const migrationsDir = join(process.cwd(), 'migrations')
@@ -35,7 +35,13 @@ export async function initDb() {
     try {
       await client.query('BEGIN')
       await client.query(sql)
-      await client.query('INSERT INTO schema_migrations (id) VALUES ($1)', [id])
+      // A squashed pg_dump baseline sets search_path to '' (session-scoped:
+      // set_config(..., false)), which persists past the migration body. Reset
+      // it so the bookkeeping INSERT below resolves schema_migrations, and so the
+      // empty search_path doesn't leak back onto the pooled connection and break
+      // later unqualified app queries.
+      await client.query('RESET search_path')
+      await client.query('INSERT INTO public.schema_migrations (id) VALUES ($1)', [id])
       await client.query('COMMIT')
       console.log(`[channel-db] migration applied: ${file}`)
       newCount++
@@ -47,7 +53,9 @@ export async function initDb() {
       client.release()
     }
   }
-  console.log(`[channel-db] migrations: ${applied.size} existing, ${newCount} new, ${files.length} total`)
+  console.log(
+    `[channel-db] migrations: ${applied.size} existing, ${newCount} new, ${files.length} total`,
+  )
 }
 
 // --- Connectors ---
@@ -77,7 +85,15 @@ export async function createConnector(data: {
   const { rows } = await pool.query(
     `INSERT INTO channel.connectors (id, user_id, type, name, credentials, config, is_public)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [id, data.user_id, data.type, data.name, JSON.stringify(data.credentials || {}), JSON.stringify(data.config || {}), data.is_public ?? false],
+    [
+      id,
+      data.user_id,
+      data.type,
+      data.name,
+      JSON.stringify(data.credentials || {}),
+      JSON.stringify(data.config || {}),
+      data.is_public ?? false,
+    ],
   )
   return rows[0]
 }
@@ -113,7 +129,13 @@ export async function getConnectorsByType(type: string): Promise<Connector[]> {
 export async function updateConnector(
   id: string,
   user_id: string,
-  data: { name?: string; credentials?: Record<string, unknown>; config?: Record<string, unknown>; enabled?: boolean; is_public?: boolean },
+  data: {
+    name?: string
+    credentials?: Record<string, unknown>
+    config?: Record<string, unknown>
+    enabled?: boolean
+    is_public?: boolean
+  },
 ): Promise<Connector | null> {
   const fields: string[] = []
   const values: unknown[] = []
@@ -142,7 +164,7 @@ export async function updateConnector(
 
   if (fields.length === 0) return getConnector(id, user_id)
 
-  fields.push(`updated_at = NOW()`)
+  fields.push('updated_at = NOW()')
   values.push(id)
   values.push(user_id)
 
@@ -154,7 +176,10 @@ export async function updateConnector(
 }
 
 export async function deleteConnector(id: string, user_id: string): Promise<boolean> {
-  const { rowCount } = await pool.query('DELETE FROM channel.connectors WHERE id = $1 AND user_id = $2', [id, user_id])
+  const { rowCount } = await pool.query(
+    'DELETE FROM channel.connectors WHERE id = $1 AND user_id = $2',
+    [id, user_id],
+  )
   return (rowCount ?? 0) > 0
 }
 
@@ -211,7 +236,15 @@ export async function createRoute(data: {
   const { rows } = await pool.query(
     `INSERT INTO channel.routes (id, user_id, connector_id, external_id, workspace_id, name, config)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-    [id, data.user_id, data.connector_id, data.external_id, data.workspace_id, data.name || null, JSON.stringify(data.config || {})],
+    [
+      id,
+      data.user_id,
+      data.connector_id,
+      data.external_id,
+      data.workspace_id,
+      data.name || null,
+      JSON.stringify(data.config || {}),
+    ],
   )
   return rows[0]
 }
@@ -224,20 +257,29 @@ export async function listRoutes(user_id: string, connector_id?: string): Promis
     )
     return rows
   }
-  const { rows } = await pool.query(`${ROUTE_SELECT} WHERE r.user_id = $1 ORDER BY r.created_at DESC`, [user_id])
+  const { rows } = await pool.query(
+    `${ROUTE_SELECT} WHERE r.user_id = $1 ORDER BY r.created_at DESC`,
+    [user_id],
+  )
   return rows
 }
 
 export async function getRoute(id: string, user_id?: string): Promise<Route | null> {
   if (user_id) {
-    const { rows } = await pool.query(`${ROUTE_SELECT} WHERE r.id = $1 AND r.user_id = $2`, [id, user_id])
+    const { rows } = await pool.query(`${ROUTE_SELECT} WHERE r.id = $1 AND r.user_id = $2`, [
+      id,
+      user_id,
+    ])
     return rows[0] || null
   }
   const { rows } = await pool.query(`${ROUTE_SELECT} WHERE r.id = $1`, [id])
   return rows[0] || null
 }
 
-export async function getRouteByExternalId(connectorId: string, externalId: string): Promise<Route | null> {
+export async function getRouteByExternalId(
+  connectorId: string,
+  externalId: string,
+): Promise<Route | null> {
   const { rows } = await pool.query(
     `${ROUTE_SELECT} WHERE r.connector_id = $1 AND r.external_id = $2 AND r.enabled = true`,
     [connectorId, externalId],
@@ -248,7 +290,12 @@ export async function getRouteByExternalId(connectorId: string, externalId: stri
 export async function updateRoute(
   id: string,
   user_id: string,
-  data: { name?: string; workspace_id?: string; config?: Record<string, unknown>; enabled?: boolean },
+  data: {
+    name?: string
+    workspace_id?: string
+    config?: Record<string, unknown>
+    enabled?: boolean
+  },
 ): Promise<Route | null> {
   const fields: string[] = []
   const values: unknown[] = []
@@ -273,7 +320,7 @@ export async function updateRoute(
 
   if (fields.length === 0) return getRoute(id, user_id)
 
-  fields.push(`updated_at = NOW()`)
+  fields.push('updated_at = NOW()')
   values.push(id)
   values.push(user_id)
 
@@ -285,7 +332,10 @@ export async function updateRoute(
 }
 
 export async function deleteRoute(id: string, user_id: string): Promise<boolean> {
-  const { rowCount } = await pool.query('DELETE FROM channel.routes WHERE id = $1 AND user_id = $2', [id, user_id])
+  const { rowCount } = await pool.query(
+    'DELETE FROM channel.routes WHERE id = $1 AND user_id = $2',
+    [id, user_id],
+  )
   return (rowCount ?? 0) > 0
 }
 
@@ -381,7 +431,7 @@ export async function updateEvent(
   data: { job_id?: string; status?: string; error?: string },
 ): Promise<void> {
   await pool.query(
-    `UPDATE channel.event_log SET job_id = COALESCE($2, job_id), status = COALESCE($3, status), error = COALESCE($4, error) WHERE id = $1`,
+    'UPDATE channel.event_log SET job_id = COALESCE($2, job_id), status = COALESCE($3, status), error = COALESCE($4, error) WHERE id = $1',
     [id, data.job_id || null, data.status || null, data.error || null],
   )
 }
@@ -447,10 +497,10 @@ export async function updateConnectorMetadata(
   id: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
-  await pool.query(
-    'UPDATE channel.connectors SET metadata = metadata || $1::jsonb WHERE id = $2',
-    [JSON.stringify(patch), id],
-  )
+  await pool.query('UPDATE channel.connectors SET metadata = metadata || $1::jsonb WHERE id = $2', [
+    JSON.stringify(patch),
+    id,
+  ])
 }
 
 // --- Session source lookup ---
@@ -480,12 +530,9 @@ export async function getThreadSessionCursor(
 
 /** Delete the thread_sessions row so the next message starts a fresh session.
  *  Returns true if a row was deleted. */
-export async function deleteThreadSession(
-  routeId: string,
-  threadId: string,
-): Promise<boolean> {
+export async function deleteThreadSession(routeId: string, threadId: string): Promise<boolean> {
   const { rowCount } = await pool.query(
-    `DELETE FROM channel.thread_sessions WHERE route_id = $1 AND external_thread_id = $2`,
+    'DELETE FROM channel.thread_sessions WHERE route_id = $1 AND external_thread_id = $2',
     [routeId, threadId],
   )
   return (rowCount ?? 0) > 0

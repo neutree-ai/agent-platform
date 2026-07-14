@@ -27,13 +27,13 @@ export const pool = _pool
 // Run SQL migrations from control-plane/migrations/
 export async function initDb() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
+    CREATE TABLE IF NOT EXISTS public.schema_migrations (
       id TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ DEFAULT NOW()
     )
   `)
 
-  const { rows } = await pool.query('SELECT id FROM schema_migrations ORDER BY id')
+  const { rows } = await pool.query('SELECT id FROM public.schema_migrations ORDER BY id')
   const applied = new Set(rows.map((r: { id: string }) => r.id))
 
   const migrationsDir = join(process.cwd(), 'migrations')
@@ -60,7 +60,13 @@ export async function initDb() {
         ])
       }
       await client.query(sql)
-      await client.query('INSERT INTO schema_migrations (id) VALUES ($1)', [id])
+      // A squashed pg_dump baseline sets search_path to '' (session-scoped:
+      // set_config(..., false)), which persists past the migration body. Reset
+      // it so the bookkeeping INSERT below resolves schema_migrations, and so the
+      // empty search_path doesn't leak back onto the pooled connection and break
+      // later unqualified app queries.
+      await client.query('RESET search_path')
+      await client.query('INSERT INTO public.schema_migrations (id) VALUES ($1)', [id])
       await client.query('COMMIT')
       console.log(`[db] migration applied: ${file}`)
       newCount++

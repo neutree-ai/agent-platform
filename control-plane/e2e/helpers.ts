@@ -63,13 +63,13 @@ export async function dropTestDatabase() {
 /** Run all SQL migrations from control-plane/migrations/ */
 export async function runMigrations() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
+    CREATE TABLE IF NOT EXISTS public.schema_migrations (
       id TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ DEFAULT NOW()
     )
   `)
 
-  const { rows } = await pool.query('SELECT id FROM schema_migrations ORDER BY id')
+  const { rows } = await pool.query('SELECT id FROM public.schema_migrations ORDER BY id')
   const applied = new Set(rows.map((r: { id: string }) => r.id))
 
   const migrationsDir = join(__dirname, '../migrations')
@@ -86,7 +86,11 @@ export async function runMigrations() {
     try {
       await client.query('BEGIN')
       await client.query(sql)
-      await client.query('INSERT INTO schema_migrations (id) VALUES ($1)', [id])
+      // See services/db/pool.ts: reset the search_path the pg_dump baseline
+      // clears, so the bookkeeping INSERT resolves and the pooled connection
+      // returns clean.
+      await client.query('RESET search_path')
+      await client.query('INSERT INTO public.schema_migrations (id) VALUES ($1)', [id])
       await client.query('COMMIT')
     } catch (e) {
       await client.query('ROLLBACK')
