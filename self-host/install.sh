@@ -2,13 +2,18 @@
 set -euo pipefail
 
 # ============================================================================
-# Neutree Agent Platform — Self-Hosted Installer (CONNECTED variant)
+# Neutree Agent Platform — Self-Hosted Installer
 # ============================================================================
-# This is the connected / online installer: the target cluster MUST be able to
-# reach the public internet. Images are pulled directly from a public registry
-# and prereq charts/manifests are fetched from their public sources. There is
-# no offline image bundle, no in-cluster registry, no HTTP registry mirror.
-# (For air-gapped / offline sites, use the separate offline "super" installer.)
+# Connected (default): images are pulled directly from a public registry and
+# prereq charts/manifests are fetched from their public sources.
+#
+# Air-gapped / offline: point REGISTRY at your own private registry, load the
+# image bundle into it with offline/load-images.sh (build the bundle first on a
+# connected host with offline/save-images.sh, or use one your vendor delivered),
+# and place the prereq charts under prereqs/. The installer then applies the
+# offline CNPG/NFS bundles and wires an imagePullSecret from REGISTRY_USERNAME /
+# REGISTRY_PASSWORD automatically. No separate installer — the offline path is
+# gated on the bundle being present, so the same command serves both.
 #
 # Usage:
 #   ./install.sh                  # Full install (prereqs + manifests + seed admin)
@@ -19,15 +24,17 @@ set -euo pipefail
 #
 # Single-node profile (DEPLOY_PROFILE=single-node in values.env, or
 #   --profile=single-node CLI flag):
-#   A 1-node k3s that pulls images straight from the public registry — exactly
-#   like the full profile, just PG_INSTANCES=1 and an in-cluster NFS server for
-#   RWX (no external NFS available on a single node). It brings up NO in-cluster
-#   registry and loads NO tarball.
+#   A 1-node k3s — like the full profile, just PG_INSTANCES=1 and an in-cluster
+#   NFS server for RWX (no external NFS on a single node). Connected: pulls from
+#   the public registry. Air-gapped: when offline/nap-images.tar.gz is present it
+#   brings up an in-cluster registry and seeds it from the bundle, so no external
+#   registry is needed at all. Must run ON the k3s node (uses crane / k3s ctr).
 #
 # Prerequisites:
 #   - kubectl, envsubst on the machine running this script
 #   - helm (only if the NFS provisioner isn't pre-installed)
-#   - the cluster nodes can reach ghcr.io / docker.io / registry.k8s.io
+#   - connected: the cluster nodes can reach ghcr.io / docker.io / registry.k8s.io
+#   - air-gapped: a registry every node can pull from + the loaded image bundle
 #   - values.env filled in from values.env.example
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -89,9 +96,23 @@ export AFS_IMAGE="${AFS_IMAGE:-ghcr.io/neutree-ai/afs:latest}"
 AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}-agent}"
 export AGENT_IMAGE_PREFIX
 
+# Registry authentication. Blank for a public / anonymous registry. When both
+# username and password are set, the installer creates a 'regcred'
+# docker-registry Secret and attaches it as an imagePullSecret to the platform
+# ServiceAccounts, CNPG, coturn, and the workspace pods cp spawns.
+export REGISTRY_SERVER="${REGISTRY_SERVER:-}"
+export REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
+export REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
+
 # imagePullSecret name cp injects into spawned workspace pods. Empty on a
-# connected install (public agent images); a mirror/offline install sets it.
-export IMAGE_PULL_SECRET="${IMAGE_PULL_SECRET:-}"
+# connected/anonymous install (public agent images); derived as 'regcred' when
+# the registry is authenticated. An unauthenticated mirror (e.g. the single-node
+# in-cluster registry) needs none, matching create_regcred's condition.
+if [ -n "$REGISTRY_USERNAME" ] && [ -n "$REGISTRY_PASSWORD" ]; then
+  export IMAGE_PULL_SECRET="${IMAGE_PULL_SECRET:-regcred}"
+else
+  export IMAGE_PULL_SECRET="${IMAGE_PULL_SECRET:-}"
+fi
 
 export KUBECONFIG="${KUBECONFIG:-./kubeconfig.yaml}"
 
@@ -101,6 +122,11 @@ export AFS_STORAGE_SIZE="${AFS_STORAGE_SIZE:-500Gi}"
 export AGENT_NODE_SELECTOR="${AGENT_NODE_SELECTOR:-}"
 
 export DEPLOY_PROFILE="${DEPLOY_PROFILE:-multi-node}"
+# In-cluster registry config, consumed only by the single-node offline path
+# (single_node_load_registry + manifests/registry.yaml). Safe to render in any
+# profile.
+export REGISTRY_NODE_PORT="${REGISTRY_NODE_PORT:-30500}"
+export REGISTRY_STORAGE_SIZE="${REGISTRY_STORAGE_SIZE:-20Gi}"
 # Backing PVC size for the in-cluster NFS server (single-node only).
 export SINGLE_NODE_NFS_SIZE="${SINGLE_NODE_NFS_SIZE:-100Gi}"
 
@@ -266,6 +292,7 @@ render_manifests() {
   VARS+='${SERVICE_TYPE}'
   VARS+='${PG_SYNC_REPLICAS}'
   VARS+='${SINGLE_NODE_NFS_SIZE}'
+  VARS+='${REGISTRY_NODE_PORT}${REGISTRY_STORAGE_SIZE}'
 
   for tmpl in "$SCRIPT_DIR"/manifests/*.yaml; do
     local name
@@ -310,6 +337,55 @@ ensure_recreate_strategy() {
   fi
 }
 
+# --- Registry credentials --------------------------------------------------
+
+# Create the 'regcred' docker-registry Secret in a namespace. No-op on an
+# unauthenticated registry (username/password blank) or if it already exists.
+create_regcred() {
+  local ns="$1"
+  if [ -z "$REGISTRY_USERNAME" ] || [ -z "$REGISTRY_PASSWORD" ]; then
+    return 0
+  fi
+  if kubectl -n "$ns" get secret regcred &>/dev/null; then
+    log "  imagePullSecret 'regcred' already exists in $ns"
+    return 0
+  fi
+  log "  Creating imagePullSecret in $ns ..."
+  kubectl -n "$ns" create secret docker-registry regcred \
+    --docker-server="${REGISTRY_SERVER}" \
+    --docker-username="${REGISTRY_USERNAME}" \
+    --docker-password="${REGISTRY_PASSWORD}"
+}
+
+# The shared manifests intentionally carry no imagePullSecrets. For an
+# authenticated registry we wire the pull secret at the ServiceAccount level so
+# every pod using that SA inherits it. Patched before the workloads are applied
+# so their pods get it at creation time. No-op when IMAGE_PULL_SECRET is empty.
+attach_pull_secret_to_sa() {
+  local ns="$1" sa="$2"
+  [ -z "$IMAGE_PULL_SECRET" ] && return 0
+  # The default SA is created asynchronously after the namespace, and the cp SA
+  # is owned by its manifest — create-if-missing so we can patch it up front.
+  # The manifest re-apply later won't drop imagePullSecrets: server-side apply
+  # only manages fields present in the applied config, and the SA manifests
+  # declare none.
+  kubectl -n "$ns" create serviceaccount "$sa" --dry-run=client -o yaml \
+    | kubectl apply -f - >/dev/null
+  kubectl -n "$ns" patch serviceaccount "$sa" \
+    -p "{\"imagePullSecrets\":[{\"name\":\"${IMAGE_PULL_SECRET}\"}]}" >/dev/null
+  log "  attached imagePullSecret '${IMAGE_PULL_SECRET}' to sa/$sa in $ns"
+}
+
+# CNPG manages its own instance pods, so the pull secret goes on the Cluster
+# spec (its native field) rather than a SA. No-op on an unauthenticated registry.
+attach_pull_secret_to_cnpg() {
+  [ -z "$IMAGE_PULL_SECRET" ] && return 0
+  kubectl -n "${NAMESPACE}" patch cluster.postgresql.cnpg.io "${APP_PREFIX}-pg" \
+    --type merge \
+    -p "{\"spec\":{\"imagePullSecrets\":[{\"name\":\"${IMAGE_PULL_SECRET}\"}]}}" >/dev/null \
+    && log "  attached imagePullSecret '${IMAGE_PULL_SECRET}' to cluster/${APP_PREFIX}-pg"
+}
+
 # --- coturn (TURN server) --------------------------------------------------
 
 # Patch the rendered coturn manifest with optional nodeSelector, apply, wait
@@ -333,6 +409,12 @@ apply_coturn() {
   log "Deploying coturn ..."
   ensure_recreate_strategy coturn
   kapply -f "$RENDERED_DIR/coturn.yaml"
+
+  # imagePullSecrets (authenticated registry only)
+  if [ -n "$IMAGE_PULL_SECRET" ]; then
+    kubectl -n "${NAMESPACE}" patch deployment coturn \
+      -p "{\"spec\":{\"template\":{\"spec\":{\"imagePullSecrets\":[{\"name\":\"${IMAGE_PULL_SECRET}\"}]}}}}"
+  fi
 
   # nodeSelector + matching tolerations (so tainted nodes still accept)
   if [ -n "$COTURN_NODE_SELECTOR" ]; then
@@ -363,11 +445,29 @@ apply_coturn() {
 
 install_cnpg_operator() {
   log "Installing CloudNativePG operator v${CNPG_VERSION} ..."
-  # Connected variant: always fetch the operator manifest from GitHub. The
-  # manifest already references CNPG's public GHCR image, so there's no
-  # registry re-point step.
-  kapply -f \
-    "https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-${CNPG_VERSION%.*}/releases/cnpg-${CNPG_VERSION}.yaml"
+  # Offline bundle (prereqs/cnpg-<ver>.yaml, written by offline/save-images.sh)
+  # takes precedence: apply it locally and re-point the operator image at the
+  # mirror, since the upstream GHCR image is unreachable in an air-gapped site.
+  # Connected default: fetch the manifest from GitHub — it already references
+  # CNPG's public GHCR image, so no re-point step.
+  local cnpg_yaml="$SCRIPT_DIR/prereqs/cnpg-${CNPG_VERSION}.yaml"
+  if [ -f "$cnpg_yaml" ]; then
+    log "  Using offline bundle: $cnpg_yaml"
+    kapply -f "$cnpg_yaml"
+    log "  Re-pointing operator image at ${REGISTRY}/cloudnative-pg:${CNPG_VERSION}"
+    kubectl -n cnpg-system set env deployment/cnpg-controller-manager \
+      OPERATOR_IMAGE_NAME="${REGISTRY}/cloudnative-pg:${CNPG_VERSION}"
+    kubectl -n cnpg-system set image deployment/cnpg-controller-manager \
+      manager="${REGISTRY}/cloudnative-pg:${CNPG_VERSION}"
+    if [ -n "$IMAGE_PULL_SECRET" ]; then
+      create_regcred cnpg-system
+      kubectl -n cnpg-system patch deployment cnpg-controller-manager \
+        -p "{\"spec\":{\"template\":{\"spec\":{\"imagePullSecrets\":[{\"name\":\"${IMAGE_PULL_SECRET}\"}]}}}}"
+    fi
+  else
+    kapply -f \
+      "https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-${CNPG_VERSION%.*}/releases/cnpg-${CNPG_VERSION}.yaml"
+  fi
 
   kubectl rollout status deployment -n cnpg-system cnpg-controller-manager --timeout=180s
   log "CNPG operator ready."
@@ -410,15 +510,30 @@ install_nfs_provisioner() {
     die "helm is required to install NFS provisioner. Install helm or pre-install the provisioner."
   fi
 
-  # Connected variant: always add the upstream helm repo and install from it.
-  # The chart's default image (registry.k8s.io/sig-storage/...) is public, so
-  # no registry re-point step is needed.
-  helm repo add nfs-subdir-external-provisioner \
-    https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/ 2>/dev/null || true
-  helm repo update nfs-subdir-external-provisioner
+  # Offline bundle (prereqs/nfs-subdir-external-provisioner-chart.tgz, written by
+  # offline/save-images.sh) takes precedence: install from the local chart and
+  # re-point the image at the mirror. Connected default: add the upstream helm
+  # repo and install from it — the chart's default image (registry.k8s.io/...)
+  # is public, so no re-point step.
+  local chart_ref extra_args=()
+  local offline_chart="$SCRIPT_DIR/prereqs/nfs-subdir-external-provisioner-chart.tgz"
+  if [ -f "$offline_chart" ]; then
+    log "  Using offline chart: $offline_chart"
+    chart_ref="$offline_chart"
+    extra_args+=(--set "image.repository=${REGISTRY}/nfs-subdir-external-provisioner")
+    if [ -n "$IMAGE_PULL_SECRET" ]; then
+      create_regcred "${NAMESPACE}"
+      extra_args+=(--set "imagePullSecrets[0].name=${IMAGE_PULL_SECRET}")
+    fi
+  else
+    helm repo add nfs-subdir-external-provisioner \
+      https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner/ 2>/dev/null || true
+    helm repo update nfs-subdir-external-provisioner
+    chart_ref="nfs-subdir-external-provisioner/nfs-subdir-external-provisioner"
+  fi
 
   helm upgrade --install --force nfs-subdir-external-provisioner \
-    nfs-subdir-external-provisioner/nfs-subdir-external-provisioner \
+    "$chart_ref" \
     --namespace "${NAMESPACE}" --create-namespace \
     --set nfs.server="${NFS_SERVER}" \
     --set nfs.path="${NFS_PATH}" \
@@ -428,7 +543,8 @@ install_nfs_provisioner() {
     --set storageClass.archiveOnDelete=true \
     --set storageClass.volumeBindingMode=Immediate \
     --set storageClass.allowVolumeExpansion=true \
-    --set 'storageClass.mountOptions={vers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport}'
+    --set 'storageClass.mountOptions={vers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport}' \
+    ${extra_args[@]+"${extra_args[@]}"}
 
   log "NFS provisioner installed. StorageClass: ${NFS_STORAGE_CLASS}"
 }
@@ -445,6 +561,153 @@ install_prereqs() {
   fi
 }
 
+# --- Single-node profile: in-cluster registry bootstrap ---------------------
+
+# Air-gapped single-node only. Brings up an in-cluster registry and seeds it
+# from the offline image bundle, so workspace pods (which reference a registry
+# URL) have a registry to pull from without any external one. Runs only when
+# DEPLOY_PROFILE=single-node AND the bundle is present — a connected single-node
+# install pulls from the public registry and skips this entirely. Must execute
+# on the k3s node itself (uses crane against the in-cluster registry over HTTP).
+single_node_load_registry() {
+  local archive="${IMAGES_ARCHIVE:-$SCRIPT_DIR/offline/nap-images.tar.gz}"
+  if [ ! -f "$archive" ]; then
+    log "single-node: no offline bundle at $archive — assuming a connected registry, skipping in-cluster registry."
+    return 0
+  fi
+  if ! command -v crane &>/dev/null; then
+    die "single-node offline profile requires crane (single-node-prep/preinstall.sh bundles it)"
+  fi
+
+  # Preflight: containerd must know the in-cluster registry NodePort speaks
+  # plain HTTP, or pod-side pulls fail with "server gave HTTP response to HTTPS
+  # client". single-node-prep/preinstall.sh writes both files, but only once
+  # NAP_HOST is set in values.env — if preinstall ran before values.env was
+  # filled (or NAP_HOST changed since), they're missing/stale and the failure
+  # only surfaces much later (CNPG / app pods stuck ImagePullBackOff). Fail fast
+  # here with the exact remedy instead.
+  local endpoint="${NAP_HOST}:${REGISTRY_NODE_PORT}"
+  local hosts_toml="/var/lib/rancher/k3s/agent/etc/containerd/certs.d/${endpoint}/hosts.toml"
+  if ! grep -qF "$endpoint" /etc/rancher/k3s/registries.yaml 2>/dev/null || [ ! -f "$hosts_toml" ]; then
+    die "containerd has no plain-HTTP mirror for ${endpoint} (registries.yaml / hosts.toml missing or stale).
+       This is written by single-node-prep/preinstall.sh AFTER NAP_HOST is set in values.env.
+       Set NAP_HOST=${NAP_HOST:-<this-host-ip>} in values.env, then re-run preinstall:
+         sudo IMAGES_ARCHIVE=${archive} <prep-dir>/preinstall.sh
+       (preinstall rewrites registries.yaml + hosts.toml and restarts k3s.)"
+  fi
+
+  log "Bringing up in-cluster registry ..."
+  render_manifests
+  kapply -f "$RENDERED_DIR/namespace.yaml"
+  kapply -f "$RENDERED_DIR/registry.yaml"
+  kubectl -n "${NAMESPACE}" rollout status deployment/nap-registry --timeout=120s || {
+    die "nap-registry not ready; check kubectl -n ${NAMESPACE} describe deploy nap-registry"
+  }
+
+  local push_endpoint="${NAP_HOST}:${REGISTRY_NODE_PORT}"
+
+  # docker-archive is read sequentially. Reading from .tar.gz forces a full
+  # decompression per image (gzip has no random access). Decompress once to a
+  # plain .tar so per-image extraction below can seek directly.
+  local plain_archive="$archive"
+  if [[ "$archive" == *.gz ]]; then
+    plain_archive="${archive%.gz}"
+    if [ ! -f "$plain_archive" ] || [ "$archive" -nt "$plain_archive" ]; then
+      log "Decompressing $archive → $plain_archive (one-time) ..."
+      gunzip -k -f "$archive"
+    fi
+  fi
+
+  # Read manifest.json from the docker-save tarball to get image refs to push.
+  # We push these and only these — k3s ctr push hangs under k3s's auto-generated
+  # hosts.toml (HTTP host is pull-only), so we use crane against the in-cluster
+  # registry over plain HTTP (--insecure).
+  log "Reading archive manifest ..."
+  local refs
+  refs=$(tar -xOf "$plain_archive" manifest.json | python3 -c '
+import json, sys
+for entry in json.load(sys.stdin):
+    for tag in entry.get("RepoTags", []):
+        print(tag)
+')
+  if [ -z "$refs" ]; then
+    die "no images parsed from $plain_archive manifest.json"
+  fi
+
+  # crane's `push` CLI loads a tarball with tarball.ImageFromPath(path, nil),
+  # which only works for single-image tarballs. The multi-image bundle has 20+
+  # entries in manifest.json, so feeding the whole archive fails. For each image
+  # we materialize a small per-image tarball in /tmp containing just that image's
+  # Config + Layers + a filtered manifest.json, push with crane, then delete.
+  local total
+  total=$(echo "$refs" | wc -l | tr -d ' ')
+  log "Pushing $total images to $push_endpoint via crane ..."
+
+  local stage
+  stage="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$stage'" RETURN
+
+  local i=0
+  local src
+  while IFS= read -r src; do
+    i=$((i + 1))
+    # Collapse each source ref to the short name the values.env image vars
+    # expect under ${REGISTRY}/<short> — must match offline/load-images.sh.
+    local short
+    case "$src" in
+      *cloudnative-pg/postgresql:*) short="cloudnative-pg-postgresql:${src##*:}" ;;
+      *cloudnative-pg/cloudnative-pg:*) short="cloudnative-pg:${src##*:}" ;;
+      *sig-storage/nfs-subdir-external-provisioner:*) short="nfs-subdir-external-provisioner:${src##*:}" ;;
+      *) short="${src##*/}" ;;
+    esac
+    # registry:2 (if bundled) stays local: the registry pod uses IfNotPresent +
+    # a pre-loaded image, and pushing it to itself is a chicken-and-egg no-op.
+    if [ "$short" = "registry:2" ]; then
+      log "  [$i/$total] skipping registry:2"
+      continue
+    fi
+    local dst="${push_endpoint}/nap/${short}"
+    log "  [$i/$total] $src → $dst"
+
+    local per_image_tar="$stage/img.tar"
+    python3 - "$plain_archive" "$src" "$per_image_tar" <<'PY' || die "failed to build per-image tarball for $src"
+import io, json, sys, tarfile
+src_tar, ref, out_tar = sys.argv[1], sys.argv[2], sys.argv[3]
+with tarfile.open(src_tar, "r") as tin:
+    manifest = json.load(tin.extractfile("manifest.json"))
+    entry = next((e for e in manifest if ref in e.get("RepoTags", [])), None)
+    if entry is None:
+        sys.exit(f"ref {ref} not found in manifest.json")
+    wanted = {entry["Config"]} | set(entry.get("Layers", []))
+    # Single-image manifest.json with RepoTags trimmed to just the requested
+    # ref (some entries list multiple tags; crane would push all of them).
+    new_entry = dict(entry, RepoTags=[ref])
+    new_manifest = json.dumps([new_entry]).encode()
+    with tarfile.open(out_tar, "w") as tout:
+        for name in wanted:
+            ti = tin.getmember(name)
+            tout.addfile(ti, tin.extractfile(ti))
+        ti = tarfile.TarInfo("manifest.json")
+        ti.size = len(new_manifest)
+        tout.addfile(ti, io.BytesIO(new_manifest))
+PY
+
+    crane push --insecure "$per_image_tar" "$dst" >/dev/null || {
+      die "crane push failed for $src"
+    }
+    rm -f "$per_image_tar"
+  done <<< "$refs"
+  log "Registry seeded with $total images."
+
+  # Decompressed copy is only useful during seeding; the .gz original is the
+  # on-disk artifact for any future re-seed. Drop the .tar to reclaim space.
+  if [ "$plain_archive" != "$archive" ] && [ -f "$plain_archive" ]; then
+    log "Reclaiming $plain_archive ($(du -h "$plain_archive" | cut -f1))"
+    rm -f "$plain_archive"
+  fi
+}
+
 # --- Apply manifests -------------------------------------------------------
 
 apply_manifests() {
@@ -452,12 +715,19 @@ apply_manifests() {
 
   log "Applying manifests to namespace ${NAMESPACE} ..."
 
-  # Order matters: namespace → secrets → postgres → services
+  # Order matters: namespace → regcred → secrets → postgres → services
   kapply -f "$RENDERED_DIR/namespace.yaml"
+  # Authenticated registry: create the pull secret and attach it to the SAs so
+  # every platform pod (and the workspace pods cp spawns via the default SA)
+  # inherits it. No-op on a public/anonymous registry.
+  create_regcred "${NAMESPACE}"
+  attach_pull_secret_to_sa "${NAMESPACE}" default
+  attach_pull_secret_to_sa "${NAMESPACE}" "${APP_PREFIX}-cp"
   kapply -f "$RENDERED_DIR/secrets.yaml"
 
   log "Creating PostgreSQL cluster ..."
   kapply -f "$RENDERED_DIR/postgres.yaml"
+  attach_pull_secret_to_cnpg
   log "Waiting for PostgreSQL cluster to be ready (this may take a few minutes) ..."
   # Use the fully-qualified resource name: the bare `cluster` short name is
   # ambiguous if the target cluster also has Cluster API CRDs installed
@@ -647,11 +917,14 @@ MODE="${1:-full}"
 check_prereqs
 
 if [ "$DEPLOY_PROFILE" = "single-node" ]; then
-  log "DEPLOY_PROFILE=single-node — 1-node k3s pulling images from the public registry."
+  log "DEPLOY_PROFILE=single-node — 1-node k3s. Connected: pulls from the public"
+  log "  registry. Air-gapped: seeds an in-cluster registry from the offline bundle"
+  log "  (offline/nap-images.tar.gz) when present."
 fi
 
 case "$MODE" in
   --prereqs-only)
+    [ "$DEPLOY_PROFILE" = "single-node" ] && single_node_load_registry
     install_prereqs
     ;;
   --manifests-only)
@@ -667,6 +940,7 @@ case "$MODE" in
     log "Dry run complete. Check $RENDERED_DIR/"
     ;;
   full|"")
+    [ "$DEPLOY_PROFILE" = "single-node" ] && single_node_load_registry
     install_prereqs
     apply_manifests
     seed_admin

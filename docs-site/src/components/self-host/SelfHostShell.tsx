@@ -24,7 +24,7 @@ interface TabDef {
 const STR = {
   en: {
     headEyebrow: 'Neutree Agent Platform — Self-Host',
-    headTag: 'Install the platform on your own Kubernetes cluster, pulling images from public registries',
+    headTag: 'Install the platform on your own Kubernetes cluster — pulling images from a public registry, or fully air-gapped from your own',
     printTitle: 'Print all sections together or export to PDF',
     printBtn: 'Print / Export PDF',
     tocLabel: 'On this page',
@@ -38,7 +38,7 @@ const STR = {
   },
   'zh-CN': {
     headEyebrow: 'Neutree Agent Platform — 私有化部署',
-    headTag: '在你自己的 Kubernetes 集群上安装平台，从公共镜像仓库拉取镜像',
+    headTag: '在你自己的 Kubernetes 集群上安装平台 —— 从公共镜像仓库拉取镜像，或从你自己的私有仓库完全离线部署',
     printTitle: '将所有章节一起打印或导出为 PDF',
     printBtn: '打印 / 导出 PDF',
     tocLabel: '本页目录',
@@ -242,7 +242,7 @@ const PANEL_STR = {
     ovCapH2: 'What one install gives you',
     ovIntro: (
       <>
-        This is the <strong>connected / online</strong> installer: the target cluster must be able to reach the public internet. Images are pulled directly from public registries (<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>) and prerequisite charts/manifests are fetched from their public sources. There is no offline image bundle, no in-cluster registry, and no host image-loading step. For fully air-gapped sites, a separate offline installer ships an image tarball, an in-cluster registry, and a host-prep step.
+        The same <code>./install.sh</code> brings up the platform either way — the only difference is where the images come from. Every node pulls them from a registry it can reach: <strong>connected</strong>, that's a public registry (<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>) or a mirror you point <code>REGISTRY</code> at; <strong>air-gapped</strong>, it's your own private registry, seeded from an image bundle you build on a connected host with <code>offline/save-images.sh</code> and push in with <code>offline/load-images.sh</code>. For a single machine, see the <a href="/self-host/single-node/">single-node profile</a>, which brings up an in-cluster registry so no external one is needed at all.
       </>
     ),
     ovCoreH3: 'Core platform (always installed)',
@@ -265,9 +265,9 @@ const PANEL_STR = {
     ovWorkers: 'Worker nodes',
     ovWorkersReq: '4 vCPU / 8GB RAM minimum',
     ovWorkersNote: 'Agent pods are created per workspace dynamically',
-    ovRegAccess: 'Public registry access',
-    ovRegAccessReq: <>Nodes can pull from <code>ghcr.io</code>, <code>docker.io</code>, <code>registry.k8s.io</code></>,
-    ovRegAccessNote: <>Override <code>REGISTRY</code> only to use a mirror</>,
+    ovRegAccess: 'Container registry',
+    ovRegAccessReq: <>A registry every node can pull from — a public one (connected) or your own private registry (air-gapped)</>,
+    ovRegAccessNote: <>Set <code>REGISTRY</code> to it; fill <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> when it needs a login</>,
     ovRwx: 'RWX shared storage',
     ovRwxReq: 'A CSI that supports ReadWriteMany (NFS is the most common)',
     ovRwxNote: 'Backs the AFS shared directory, 500Gi by default',
@@ -285,7 +285,7 @@ const PANEL_STR = {
     ovStorageReach: 'Storage reachability',
     ovStorageReachReq: 'All nodes can mount the two storage classes above (NFS / block-storage CSI, etc.)',
     ovRegReach: 'Registry reachability',
-    ovRegReachReq: 'All nodes can pull images from the public registries',
+    ovRegReachReq: 'All nodes can pull images from the registry above (a public one, or your private registry)',
     ovLlmH3: 'LLM API',
     ovLlmIntro: 'The platform does not bundle any model. Depending on the agent types you enable, you must provide protocol-compatible API endpoints:',
     ovThAgentType: 'Agent type',
@@ -317,12 +317,16 @@ const PANEL_STR = {
     inToolEnvsubst: <><code>envsubst</code> — usually shipped with the <code>gettext</code> package</>,
     inToolOpenssl: <><code>openssl</code> — used by <code>gen-secrets.sh</code> to generate random secrets</>,
     inToolHelm: <><code>helm</code> 3.x — only needed when the cluster doesn't already have an NFS provisioner; invoked by <code>install.sh</code>'s prerequisites stage</>,
-    inToolsNote: <>The cluster nodes (not the operator machine) must be able to pull from <code>ghcr.io</code>, <code>docker.io</code>, and <code>registry.k8s.io</code>.</>,
+    inToolLoader: <><code>docker</code> or <code>nerdctl</code> — used by <code>offline/load-images.sh</code> to push the image bundle into your registry (air-gapped installs only)</>,
+    inToolsNote: <>The cluster nodes (not the operator machine) must be able to pull from your <code>REGISTRY</code>. Connected, that's a public registry (<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>); air-gapped, it's your own registry and they never touch the internet.</>,
     inQuickH2: 'Quick start',
     inQuickAfter: <>When it finishes, open <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code> and log in with the admin username / password from <code>values.env</code>.</>,
     inStepsH2: 'Step by step',
     inStep1H3: 'Get the installer',
-    inStep1Note: <>All first-party images are pulled from the public registry (<code>${'{'}REGISTRY{'}'}</code>, default <code>ghcr.io/neutree-ai/agent-platform</code>); there is no image tarball to load. Override <code>REGISTRY</code> only if you mirror the images elsewhere.</>,
+    inStep1Note: <>For a connected install, all first-party images are pulled from the public registry (<code>${'{'}REGISTRY{'}'}</code>, default <code>ghcr.io/neutree-ai/agent-platform</code>). Override <code>REGISTRY</code> only if you mirror the images elsewhere.</>,
+    inAirgapLead: 'Air-gapped —',
+    inAirgapBody: <> on a connected host run <code>./offline/save-images.sh</code> to build <code>offline/nap-images.tar.gz</code> plus the prerequisite charts, move it to the air-gapped side, then <code>./offline/load-images.sh --registry &lt;your-registry&gt;</code> loads, retags, and pushes every image into your registry and prints the exact <code>REGISTRY=</code> / <code>*_IMAGE=</code> lines to paste into <code>values.env</code>. Vendor delivered a bundle? Skip <code>save-images</code> and start at <code>load-images</code>.</>,
+    inRegAuthNote: <>If your registry needs a login, set <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> in <code>values.env</code> — the installer builds a <code>regcred</code> imagePullSecret from them automatically and attaches it to the platform, CNPG, and the workspace pods.</>,
     inStep2H3: 'Prepare values.env',
     inStep2GenBtn: 'configuration generator',
     inStep2P1Pre: 'We recommend the',
@@ -336,15 +340,16 @@ const PANEL_STR = {
     inSubH2: 'install.sh subcommands',
     inSubIntro: <>For running stages separately; a single <code>./install.sh</code> is enough for the normal case.</>,
     inSingleH2: 'Single-node profile',
-    inSingleP: <>A single k3s node that pulls every image straight from the public registry — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). It does not bring up an in-cluster registry and does not load any tarball.</>,
+    inSingleP: <>A single k3s node — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). <strong>Connected</strong>, it pulls every image from the public registry. <strong>Air-gapped</strong>, it brings up an in-cluster registry and seeds it from the image bundle, so no external registry is needed at all. See the <a href="/self-host/single-node/">single-node page</a> for both paths.</>,
     inSingleNote: <>Run this on a host that has a working k3s with its kubeconfig at <code>/etc/rancher/k3s/k3s.yaml</code> (the default in the single-node example).</>,
-    inOfflineH2: 'Air-gapped sites',
-    inOfflineP: <>This page documents the connected installer. For fully air-gapped / offline sites there is a separate offline installer that ships an image tarball, an in-cluster registry, and a host image-loading step.</>,
+    inOfflineH2: 'Air-gapped: build the image bundle',
+    inOfflineP: <>On a connected host, <code>./offline/save-images.sh</code> pulls every first-party and prerequisite image and writes <code>offline/nap-images.tar.gz</code> plus the prereq charts under <code>prereqs/</code>. Move that to the air-gapped side and load it with <code>./offline/load-images.sh --registry &lt;your-registry&gt;</code> (add <code>--insecure-registry</code> for a plain-HTTP registry) — it pushes every image into your registry and prints the <code>values.env</code> overrides to paste. Set those, then <code>./install.sh</code> runs exactly as it does online — it auto-detects the offline prereq bundles and wires the pull secret from <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code>. If a vendor delivered a prebuilt bundle, skip <code>save-images</code> and start at <code>load-images</code>. For a single machine with no external registry, use the <a href="/self-host/single-node/">single-node profile</a> instead.</>,
     // Upgrade
     upPathH2: 'Upgrade',
     upPathP1: <>Upgrading is the same command as a first install. Pin <code>IMAGE_TAG</code> to the new release tag (or keep <code>latest</code>) in your existing <code>values.env</code>, then re-run:</>,
     upPathP2: <><code>install.sh</code> is idempotent, so the upgrade path matches the first install. It re-renders and re-applies the manifests and refreshes the first-party deployments to pick up new image digests. SQL migrations run automatically when <code>nap-cp</code> starts.</>,
     upCallout: <><strong>Do not change secrets</strong> · Reuse the <code>values.env</code> from your first install. If a machine-internal secret (e.g. <code>JWT_SECRET</code>) changes, all issued session tokens are invalidated and the existing database can no longer be reached.</>,
+    upAirgapNote: <><strong>Air-gapped</strong> — before an air-gapped upgrade, re-run <code>offline/save-images.sh</code> / <code>offline/load-images.sh</code> to push the new image tags into your registry first, then the same <code>./install.sh</code>.</>,
     upCompatH2: 'Upgrading from a pre-2026-05 release',
     upCompatP: <>Optional-module defaults changed from "enabled unless configured" to "disabled unless configured". If the following <code>_ENABLED</code> fields aren't set explicitly in <code>values.env</code>, the corresponding capabilities are off after the upgrade:</>,
     upThCapability: 'Capability',
@@ -362,7 +367,7 @@ const PANEL_STR = {
     tsErrH2: 'install.sh fails',
     tsErrIntro: <>First find the deployment that isn't ready (replace <code>$NAMESPACE</code> with{' '}<code>NAMESPACE</code> from <code>values.env</code>, default <code>nap</code>):</>,
     tsErrCommon: 'Common causes:',
-    tsErrPull: <><strong>Images won't pull</strong> → confirm the nodes can reach{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>. If you mirror images, check <code>REGISTRY</code> and the <code>IMAGE_PULL_SECRET</code> you configured.</>,
+    tsErrPull: <><strong>Images won't pull</strong> → <strong>connected</strong>: confirm the nodes can reach{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>. <strong>Air-gapped</strong>: confirm <code>load-images.sh</code> pushed the bundle into your <code>REGISTRY</code> and that <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> are set — the installer builds the regcred pull secret from them. A plain-HTTP registry also needs the nodes' container runtime to trust it as insecure.</>,
     tsErrPvc: <><strong>PVCs stuck Pending</strong> → run{' '}<code>kubectl -n $NAMESPACE get pvc</code> and check the StorageClass exists and its provisioner is healthy</>,
     tsErrPg: <><strong>PostgreSQL won't start</strong> →{' '}<code>kubectl -n $NAMESPACE describe cluster.postgresql.cnpg.io nap-pg</code>; the most common cause is the CSI behind <code>PG_STORAGE_CLASS</code> not being writable</>,
     tsErrPort: <><strong>NodePort already in use</strong> → change <code>NAP_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> and re-run{' '}<code>install.sh</code></>,
@@ -395,7 +400,7 @@ const PANEL_STR = {
     ovCapH2: '一次安装能得到什么',
     ovIntro: (
       <>
-        这是 <strong>联网 / 在线</strong> 安装器：目标集群必须能访问公网。镜像直接从公共仓库（<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>）拉取，前置 chart/manifest 也从各自的公共来源获取。没有离线镜像包、没有集群内仓库，也没有主机侧加载镜像的步骤。对于完全隔离网络的场景，另有一套离线安装器，提供镜像 tarball、集群内仓库和主机准备步骤。
+        无论哪种方式，都是同一条 <code>./install.sh</code> 把平台装起来 —— 唯一的区别是镜像从哪里来。每个节点都从一个它能访问的仓库拉取镜像：<strong>联网</strong> 时是公共仓库（<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>）或你用 <code>REGISTRY</code> 指向的镜像源；<strong>隔离网络</strong> 时是你自己的私有仓库，由你在一台联网机器上用 <code>offline/save-images.sh</code> 构建、再用 <code>offline/load-images.sh</code> 推入的镜像包填充。若只有一台机器，见 <a href="/self-host/single-node/">单节点 profile</a>，它会启动集群内仓库，完全不需要外部仓库。
       </>
     ),
     ovCoreH3: '核心平台（始终安装）',
@@ -418,9 +423,9 @@ const PANEL_STR = {
     ovWorkers: 'Worker 节点',
     ovWorkersReq: '至少 4 vCPU / 8GB 内存',
     ovWorkersNote: 'Agent pod 按 Workspace 动态创建',
-    ovRegAccess: '公共仓库访问',
-    ovRegAccessReq: <>节点能从 <code>ghcr.io</code>、<code>docker.io</code>、<code>registry.k8s.io</code> 拉取镜像</>,
-    ovRegAccessNote: <>仅在使用镜像源时才覆盖 <code>REGISTRY</code></>,
+    ovRegAccess: '容器镜像仓库',
+    ovRegAccessReq: <>一个所有节点都能拉取的仓库 —— 公共仓库（联网）或你自己的私有仓库（隔离网络）</>,
+    ovRegAccessNote: <>把 <code>REGISTRY</code> 指向它；仓库需要登录时填写 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code></>,
     ovRwx: 'RWX 共享存储',
     ovRwxReq: '支持 ReadWriteMany 的 CSI（最常见的是 NFS）',
     ovRwxNote: '承载 AFS 共享目录，默认 500Gi',
@@ -438,7 +443,7 @@ const PANEL_STR = {
     ovStorageReach: '存储可达性',
     ovStorageReachReq: '所有节点都能挂载上面两个 storage class（NFS / 块存储 CSI 等）',
     ovRegReach: '仓库可达性',
-    ovRegReachReq: '所有节点都能从公共仓库拉取镜像',
+    ovRegReachReq: '所有节点都能从上面那个仓库拉取镜像（公共仓库，或你的私有仓库）',
     ovLlmH3: 'LLM API',
     ovLlmIntro: '平台不内置任何模型。根据启用的 Agent 类型，你需要提供协议兼容的 API endpoint：',
     ovThAgentType: 'Agent 类型',
@@ -470,12 +475,16 @@ const PANEL_STR = {
     inToolEnvsubst: <><code>envsubst</code> — 通常随 <code>gettext</code> 包一起提供</>,
     inToolOpenssl: <><code>openssl</code> — 被 <code>gen-secrets.sh</code> 用来生成随机密钥</>,
     inToolHelm: <><code>helm</code> 3.x — 仅当集群尚未有 NFS provisioner 时需要；由 <code>install.sh</code> 的前置阶段调用</>,
-    inToolsNote: <>集群节点（而非操作者机器）必须能从 <code>ghcr.io</code>、<code>docker.io</code> 和 <code>registry.k8s.io</code> 拉取镜像。</>,
+    inToolLoader: <><code>docker</code> 或 <code>nerdctl</code> — 供 <code>offline/load-images.sh</code> 把镜像包推入你的仓库（仅隔离网络安装需要）</>,
+    inToolsNote: <>集群节点（而非操作者机器）必须能从你的 <code>REGISTRY</code> 拉取镜像。联网时是公共仓库（<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>）；隔离网络时是你自己的仓库，节点完全不碰公网。</>,
     inQuickH2: '快速开始',
     inQuickAfter: <>完成后打开 <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的管理员用户名 / 密码登录。</>,
     inStepsH2: '分步操作',
     inStep1H3: '获取安装器',
-    inStep1Note: <>所有第一方镜像都从公共仓库拉取（<code>${'{'}REGISTRY{'}'}</code>，默认 <code>ghcr.io/neutree-ai/agent-platform</code>）；没有镜像 tarball 需要加载。仅当你把镜像放到别处镜像源时才覆盖 <code>REGISTRY</code>。</>,
+    inStep1Note: <>联网安装时，所有第一方镜像都从公共仓库拉取（<code>${'{'}REGISTRY{'}'}</code>，默认 <code>ghcr.io/neutree-ai/agent-platform</code>）。仅当你把镜像放到别处镜像源时才覆盖 <code>REGISTRY</code>。</>,
+    inAirgapLead: '隔离网络 ——',
+    inAirgapBody: <> 在一台联网机器上执行 <code>./offline/save-images.sh</code> 构建 <code>offline/nap-images.tar.gz</code> 及前置 chart，拷到隔离侧，再用 <code>./offline/load-images.sh --registry &lt;你的仓库&gt;</code> 加载、重打 tag 并把所有镜像推入你的仓库，同时打印出需要粘贴进 <code>values.env</code> 的 <code>REGISTRY=</code> / <code>*_IMAGE=</code> 各行。厂商已交付镜像包？跳过 <code>save-images</code>，直接从 <code>load-images</code> 开始。</>,
+    inRegAuthNote: <>若你的仓库需要登录，在 <code>values.env</code> 里设置 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> —— 安装器会据此自动创建 <code>regcred</code> imagePullSecret，并挂到平台、CNPG 与 workspace pod 上。</>,
     inStep2H3: '准备 values.env',
     inStep2GenBtn: '配置生成器',
     inStep2P1Pre: '我们推荐使用',
@@ -489,15 +498,16 @@ const PANEL_STR = {
     inSubH2: 'install.sh 子命令',
     inSubIntro: <>用于单独运行各阶段；通常情况下一条 <code>./install.sh</code> 就够了。</>,
     inSingleH2: 'Single-node profile',
-    inSingleP: <>单个 k3s 节点，所有镜像直接从公共仓库拉取 — 与完整 profile 相同，只是改成 <code>PG_INSTANCES=1</code> 并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。它不会启动集群内仓库，也不加载任何 tarball。</>,
+    inSingleP: <>单个 k3s 节点 —— 与完整 profile 相同，只是改成 <code>PG_INSTANCES=1</code> 并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。<strong>联网</strong> 时所有镜像直接从公共仓库拉取。<strong>隔离网络</strong> 时它会启动集群内仓库并用镜像包填充，完全不需要外部仓库。两种路径详见 <a href="/self-host/single-node/">单节点页面</a>。</>,
     inSingleNote: <>在一台已经跑好 k3s、kubeconfig 位于 <code>/etc/rancher/k3s/k3s.yaml</code>（single-node 示例中的默认值）的主机上运行。</>,
-    inOfflineH2: '隔离网络场景',
-    inOfflineP: <>本页文档讲的是联网安装器。对于完全隔离网络 / 离线的场景，另有一套离线安装器，提供镜像 tarball、集群内仓库和主机侧加载镜像的步骤。</>,
+    inOfflineH2: '隔离网络：构建镜像包',
+    inOfflineP: <>在一台联网机器上，<code>./offline/save-images.sh</code> 会拉取全部第一方与前置镜像，产出 <code>offline/nap-images.tar.gz</code> 以及 <code>prereqs/</code> 下的前置 chart。把它拷到隔离侧，用 <code>./offline/load-images.sh --registry &lt;你的仓库&gt;</code> 加载（纯 HTTP 仓库加 <code>--insecure-registry</code>）—— 它会把所有镜像推入你的仓库并打印出需要粘贴的 <code>values.env</code> 覆盖项。设好之后，<code>./install.sh</code> 的运行方式与联网时完全一致 —— 它会自动识别离线前置包，并据 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> 接好 pull secret。若厂商已交付预构建镜像包，跳过 <code>save-images</code>，直接从 <code>load-images</code> 开始。若是单台机器、没有外部仓库，改用 <a href="/self-host/single-node/">单节点 profile</a>。</>,
     // Upgrade
     upPathH2: '升级',
     upPathP1: <>升级与首次安装用的是同一条命令。在现有 <code>values.env</code> 里把 <code>IMAGE_TAG</code> 固定到新的发布 tag（或保持 <code>latest</code>），然后重新运行：</>,
     upPathP2: <><code>install.sh</code> 是幂等的，所以升级路径与首次安装一致。它会重新渲染并重新 apply manifest，并刷新第一方 deployment 以拉取新的镜像 digest。<code>nap-cp</code> 启动时会自动运行 SQL 迁移。</>,
     upCallout: <><strong>不要修改密钥</strong> · 复用首次安装时的 <code>values.env</code>。如果机器内部密钥（例如 <code>JWT_SECRET</code>）发生变化，所有已签发的会话 token 都会失效，现有数据库也将无法访问。</>,
+    upAirgapNote: <><strong>隔离网络</strong> —— 隔离网络升级前，先重新执行 <code>offline/save-images.sh</code> / <code>offline/load-images.sh</code> 把新的镜像 tag 推入你的仓库，然后再跑同一条 <code>./install.sh</code>。</>,
     upCompatH2: '从 2026-05 之前的版本升级',
     upCompatP: <>可选模块的默认值从"未配置即启用"改为"未配置即禁用"。如果以下 <code>_ENABLED</code> 字段没有在 <code>values.env</code> 里显式设置，升级后对应能力将处于关闭状态：</>,
     upThCapability: '能力',
@@ -515,7 +525,7 @@ const PANEL_STR = {
     tsErrH2: 'install.sh 失败',
     tsErrIntro: <>先找出未就绪的 deployment（把 <code>$NAMESPACE</code> 替换为{' '}<code>values.env</code> 里的 <code>NAMESPACE</code>，默认 <code>nap</code>）：</>,
     tsErrCommon: '常见原因：',
-    tsErrPull: <><strong>镜像拉不下来</strong> → 确认节点能访问{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>。如果你用镜像源，检查 <code>REGISTRY</code> 和你配置的 <code>IMAGE_PULL_SECRET</code>。</>,
+    tsErrPull: <><strong>镜像拉不下来</strong> → <strong>联网</strong>：确认节点能访问{' '}<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>。<strong>隔离网络</strong>：确认 <code>load-images.sh</code> 已把镜像包推入你的 <code>REGISTRY</code>，且 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> 已设置 —— 安装器会据此生成 regcred pull secret。纯 HTTP 仓库还需让节点容器运行时将其信任为 insecure。</>,
     tsErrPvc: <><strong>PVC 卡在 Pending</strong> → 运行{' '}<code>kubectl -n $NAMESPACE get pvc</code>，检查 StorageClass 是否存在、其 provisioner 是否健康</>,
     tsErrPg: <><strong>PostgreSQL 起不来</strong> →{' '}<code>kubectl -n $NAMESPACE describe cluster.postgresql.cnpg.io nap-pg</code>；最常见的原因是 <code>PG_STORAGE_CLASS</code> 背后的 CSI 不可写</>,
     tsErrPort: <><strong>NodePort 已被占用</strong> → 修改 <code>NAP_NODE_PORT</code> /{' '}<code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> 并重新运行{' '}<code>install.sh</code></>,
@@ -753,6 +763,7 @@ function Install({ onGo, locale = 'en' }: { onGo: (id: TabId) => void; locale?: 
           <li>{t.inToolEnvsubst}</li>
           <li>{t.inToolOpenssl}</li>
           <li>{t.inToolHelm}</li>
+          <li>{t.inToolLoader}</li>
         </ul>
         <p class="sh-muted">{t.inToolsNote}</p>
       </section>
@@ -774,6 +785,13 @@ vi values.env                   # set NAP_HOST, ADMIN_PASSWORD, storage, etc.
             <h3>{t.inStep1H3}</h3>
             <CodeBlock locale={locale}>{`git clone <this-repo> && cd self-host`}</CodeBlock>
             <p class="sh-muted">{t.inStep1Note}</p>
+            <div class="sh-callout sh-callout-airgap">
+              <svg class="sh-callout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <strong>{t.inAirgapLead}</strong>{t.inAirgapBody}
+            </div>
           </li>
           <li>
             <h3>{t.inStep2H3}</h3>
@@ -788,6 +806,7 @@ vi values.env                   # set NAP_HOST, ADMIN_PASSWORD, storage, etc.
               {t.inStep2P1Post}<code>self-host/</code>{t.inStep2P1End}
             </p>
             <p class="sh-muted">{t.inStep2Note}</p>
+            <p class="sh-muted">{t.inRegAuthNote}</p>
           </li>
           <li>
             <h3>{t.inStep3H3}</h3>
@@ -839,6 +858,7 @@ function Upgrade({ locale = 'en' }: { locale?: string }) {
         <CodeBlock locale={locale}>{`./install.sh`}</CodeBlock>
         <p>{t.upPathP2}</p>
         <div class="sh-callout sh-callout-warn">{t.upCallout}</div>
+        <div class="sh-callout sh-callout-airgap">{t.upAirgapNote}</div>
       </section>
 
       <section>

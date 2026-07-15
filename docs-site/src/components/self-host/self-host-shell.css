@@ -523,6 +523,18 @@ main:has(.sh-root) > .content-panel:first-child {
 .sh-callout-warn {
   border-left-color: var(--sl-color-orange, #f59e0b);
 }
+/* Air-gap addendum: calm, accent-tinted — distinct from the orange warning but
+   not alarming. Mirrors .sh-callout-warn's border-only approach, adding a faint
+   accent wash so it reads as a labeled aside on the connected-first spine. */
+.sh-callout-airgap {
+  border-left-color: var(--sl-color-accent);
+  background: color-mix(in srgb, var(--sl-color-accent) 8%, var(--sl-color-bg-nav));
+}
+.sh-callout-icon {
+  vertical-align: -2px;
+  margin-right: 0.3rem;
+  color: var(--sl-color-accent);
+}
 
 /* ---- Misc -------------------------------------------------------------- */
 

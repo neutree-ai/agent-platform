@@ -179,6 +179,10 @@ const SCHEMA_ZH: {
       title: '容器镜像仓库',
       desc: '存放所有第一方镜像的公共镜像仓库路径',
     },
+    registryAuth: {
+      title: '私有仓库鉴权（可选）',
+      desc: '仅当你的仓库需要登录时填写 —— 私有 / 镜像源 / 隔离网络仓库。公共或匿名仓库留空即可；安装器会据此创建 regcred imagePullSecret。',
+    },
     cluster: {
       title: '集群与访问',
       desc: 'K8s 命名空间、kubeconfig 路径，以及用户访问平台所用的 IP / NodePort',
@@ -215,6 +219,12 @@ const SCHEMA_ZH: {
     },
     IMAGE_TAG: {
       hint: '所有第一方镜像的 tag。固定到某个发布 tag 可获得可复现的安装',
+    },
+    REGISTRY_SERVER: {
+      hint: '仓库主机名（用于生成 imagePullSecret）。仅当仓库需要鉴权时填写',
+    },
+    REGISTRY_USERNAME: {
+      hint: '当仓库需要鉴权时填写；安装器会据此创建 regcred imagePullSecret',
     },
     NAP_HOST: {
       hint: '用户访问平台所用的 IP 或主机名（某个 worker 节点）',
@@ -326,6 +336,32 @@ const SCHEMA: SectionDef[] = [
         label: 'IMAGE_TAG',
         default: 'latest',
         hint: 'Tag for all first-party images. Pin to a release tag for a reproducible install',
+      },
+    ],
+  },
+  {
+    id: 'registryAuth',
+    title: 'Private registry auth (optional)',
+    envTitle: 'Private Registry Auth (optional)',
+    desc: 'Only when your registry needs a login — a private / mirrored / air-gapped registry. Leave blank for a public or anonymous one; the installer builds a regcred imagePullSecret from these.',
+    fields: [
+      {
+        key: 'REGISTRY_SERVER',
+        kind: 'text',
+        label: 'REGISTRY_SERVER',
+        hint: 'Registry hostname (used to build the imagePullSecret). Fill in only when the registry requires authentication',
+        placeholder: 'registry.example.com',
+      },
+      {
+        key: 'REGISTRY_USERNAME',
+        kind: 'text',
+        label: 'REGISTRY_USERNAME',
+        hint: 'Fill in when the registry requires authentication; the installer builds a regcred imagePullSecret from it',
+      },
+      {
+        key: 'REGISTRY_PASSWORD',
+        kind: 'password',
+        label: 'REGISTRY_PASSWORD',
       },
     ],
   },
