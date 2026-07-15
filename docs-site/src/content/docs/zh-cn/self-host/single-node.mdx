@@ -3,11 +3,9 @@ title: 单节点 k3s 快速部署
 description: 在一台机器上用 k3s 拉起完整的 Neutree Agent Platform —— 最快的安装路径。镜像从公共 registry 拉取。
 ---
 
-在单节点 k3s 集群上安装 Neutree Agent Platform —— 让完整平台跑起来的最快方式。单节点 profile 与完整 profile 一致，只是 PostgreSQL 为单实例、共享存储由集群内 NFS server 提供。所有镜像都从公共 registry（`ghcr.io` / `docker.io` / `registry.k8s.io`）拉取，节点需要能访问互联网。
+在单节点 k3s 集群上安装 Neutree Agent Platform —— 让完整平台跑起来的最快方式。单节点 profile 与完整 profile 一致，只是 PostgreSQL 为单实例、共享存储由集群内 NFS server 提供。默认所有镜像都从公共 registry（`ghcr.io` / `docker.io` / `registry.k8s.io`）拉取，节点需要能访问互联网。若节点**完全无法访问互联网**，直接看[隔离网络安装](#隔离网络安装) —— 它会启动集群内仓库并用镜像包填充，全程不从互联网拉取任何镜像。
 
 推荐配置：**8 vCPU / 32 GB / 200 GB 磁盘**，约可支撑 **10 个并发 workspace**。需要 HA 或横向扩展时，走[生产部署](/zh-cn/self-host/)。
-
-> 完全隔离（air-gapped）的离线安装是可行的，但尚未打包进开源发行版 —— 有需要请提 [GitHub issue](https://github.com/neutree-ai/agent-platform/issues)。
 
 ## 一行命令安装
 
@@ -80,6 +78,59 @@ vi values.env           # set NAP_HOST + ADMIN_PASSWORD
 `install.sh` 会先拉起集群内 NFS server（`nap-nfs-server` pod，以 `local-path` 为后端），从公共源安装 CloudNativePG operator 和 NFS subdir provisioner，渲染并应用 manifest，然后初始化（seed）admin 用户、OAuth client 和 MCP 目录。所有镜像都从公共 registry 拉取。
 
 ### 3. 登录
+
+```
+http://<NAP_HOST>:30080
+admin / <ADMIN_PASSWORD>
+```
+
+## 隔离网络安装
+
+**完全无法访问互联网**的节点，从两个在联网机器上构建的物料包安装 —— 平台镜像包和 k3s 准备包。`install.sh` 会启动集群内仓库（`nap-registry`）并用镜像包填充，节点全程不碰互联网，也无需外部仓库。
+
+### 1. 构建物料包（联网机器）
+
+在任意联网机器上，进入 `self-host/` 目录：
+
+```bash
+./offline/save-images.sh                         # → offline/nap-images.tar.gz + 前置 chart
+./single-node-prep/package-prep.sh --arch amd64  # → k3s + helm/envsubst/crane + airgap 镜像
+```
+
+`save-images.sh` 产出 `offline/nap-images.tar.gz`（全部第一方、第三方镜像及 `registry:2`）以及 `prereqs/` 下的 CNPG / NFS provisioner chart。`package-prep.sh` 打包 k3s 二进制、其 airgap 镜像和 `install.sh` 依赖的 CLI 工具 —— 按目标节点架构选择 `--arch`（`amd64` / `arm64`）。若厂商已交付这些物料包，可跳过此步。
+
+### 2. 在节点上就位
+
+把两个物料包拷到隔离节点并解压，使 `single-node-prep/` 与 `self-host/offline/nap-images.tar.gz` 相邻 —— `preinstall.sh` 会在那里查找镜像包。
+
+### 3. 准备 values.env
+
+```bash
+cd self-host
+cp values.env.single-node.example values.env
+./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
+vi values.env           # set NAP_HOST + ADMIN_PASSWORD
+```
+
+请在下一步**之前**设好 `NAP_HOST` —— `preinstall.sh` 会写入让节点通过 HTTP 访问集群内仓库的 containerd 配置，而它需要该 host。
+
+### 4. Preinstall —— 安装 k3s 并导入镜像
+
+```bash
+cd single-node-prep
+sudo ./preinstall.sh
+```
+
+它会从物料包安装 k3s，放入 helm / envsubst / crane，把 `nap-images.tar.gz` 导入 k3s containerd（预置 `registry:2` 和第三方镜像），并配置 containerd 将集群内仓库视为纯 HTTP。修改 `values.env` 后可随时重跑。
+
+### 5. 安装
+
+```bash
+cd ..
+./install.sh --profile=single-node
+```
+
+由于 `offline/nap-images.tar.gz` 存在，`install.sh` 会启动集群内 `nap-registry`、用镜像包填充，并把所有工作负载指向它 —— 无需外部仓库、不碰互联网。其余流程（集群内 NFS server、CloudNativePG、初始化 admin 用户和 MCP 目录）与联网流程一致。登录方式相同：
 
 ```
 http://<NAP_HOST>:30080

@@ -1,0 +1,91 @@
+# In-cluster image registry used by the single-node profile to keep the host
+# free of external registry dependencies. Rendered unconditionally so other
+# profiles can ignore it; install.sh only applies it when DEPLOY_PROFILE=single-node
+# (single_node_load_registry) and an offline bundle is present.
+#
+# Reachability:
+#   - in-cluster pods → Service ClusterIP `nap-registry:5000`
+#   - host containerd & install.sh → NodePort `${NAP_HOST}:${REGISTRY_NODE_PORT}`
+# Same backing pod; using a single `${NAP_HOST}:${REGISTRY_NODE_PORT}` hostname
+# everywhere (manifests + crane push) avoids cluster-DNS / hosts-file gymnastics.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nap-registry-data
+  namespace: ${NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: ${REGISTRY_STORAGE_SIZE}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nap-registry
+  namespace: ${NAMESPACE}
+  labels:
+    app: nap-registry
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nap-registry
+  template:
+    metadata:
+      labels:
+        app: nap-registry
+    spec:
+      containers:
+        - name: registry
+          # Pre-loaded into k3s containerd by single-node-prep/preinstall.sh
+          # (k3s ctr images import of nap-images.tar.gz, which carries registry:2
+          # via this manifest's render). IfNotPresent avoids a chicken-and-egg
+          # pull at boot — there is no registry to pull the registry from yet.
+          image: registry:2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              name: http
+          env:
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "20m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: nap-registry-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nap-registry
+  namespace: ${NAMESPACE}
+spec:
+  type: NodePort
+  selector:
+    app: nap-registry
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+      nodePort: ${REGISTRY_NODE_PORT}

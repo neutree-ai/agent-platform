@@ -3,11 +3,9 @@ title: Single-Node k3s Quick Deploy
 description: Bring up the full Neutree Agent Platform on one machine with k3s — the quickest install path. Pulls images from the public registry.
 ---
 
-Install Neutree Agent Platform on a single-node k3s cluster — the quickest way to get the full platform running. The single-node profile matches the full one, just with a single PostgreSQL instance and an in-cluster NFS server for shared storage. Every image is pulled from the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`), so the node needs internet access.
+Install Neutree Agent Platform on a single-node k3s cluster — the quickest way to get the full platform running. The single-node profile matches the full one, just with a single PostgreSQL instance and an in-cluster NFS server for shared storage. By default every image is pulled from the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`), so the node needs internet access. For a node with **no internet access**, jump to [Air-gapped install](#air-gapped-install) — it brings up an in-cluster registry seeded from an image bundle, so nothing is pulled from the internet.
 
 Recommended spec: **8 vCPU / 32 GB / 200 GB disk** — comfortable for roughly **10 concurrent workspaces**. When you need HA or horizontal scale, use the [production deployment](/self-host/).
-
-> Fully air-gapped (offline) installs are possible but not yet packaged for the open-source distribution — [open a GitHub issue](https://github.com/neutree-ai/agent-platform/issues) if you need one.
 
 ## One-line install
 
@@ -80,6 +78,59 @@ Everything else (PG replica count, storage classes, NFS backend) is preset for t
 `install.sh` first brings up the in-cluster NFS server (`nap-nfs-server` pod, backed by `local-path`), installs the CloudNativePG operator and the NFS subdir provisioner from their public sources, renders and applies the manifests, then seeds the admin user, OAuth clients, and the MCP catalog. All images are pulled from the public registry.
 
 ### 3. Log in
+
+```
+http://<NAP_HOST>:30080
+admin / <ADMIN_PASSWORD>
+```
+
+## Air-gapped install
+
+A node with **no internet access** installs from two bundles built on a connected host — the platform image bundle and a k3s prep bundle. `install.sh` brings up an in-cluster registry (`nap-registry`) and seeds it from the image bundle, so the node never reaches the internet and you need no external registry.
+
+### 1. Build the bundles (connected host)
+
+On any internet-connected machine, from the `self-host/` directory:
+
+```bash
+./offline/save-images.sh                         # → offline/nap-images.tar.gz + prereq charts
+./single-node-prep/package-prep.sh --arch amd64  # → k3s + helm/envsubst/crane + airgap images
+```
+
+`save-images.sh` writes `offline/nap-images.tar.gz` (every first-party and third-party image, plus `registry:2`) and the CNPG / NFS-provisioner charts under `prereqs/`. `package-prep.sh` bundles the k3s binary, its airgap images, and the CLI tools `install.sh` depends on — pick the `--arch` (`amd64` / `arm64`) that matches the target node. If a vendor delivered these bundles, skip this step.
+
+### 2. Stage on the node
+
+Copy both bundles to the air-gapped node and extract them so `single-node-prep/` sits alongside `self-host/offline/nap-images.tar.gz` — `preinstall.sh` looks for the image bundle there.
+
+### 3. Prepare values.env
+
+```bash
+cd self-host
+cp values.env.single-node.example values.env
+./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
+vi values.env           # set NAP_HOST + ADMIN_PASSWORD
+```
+
+Set `NAP_HOST` **before** the next step — `preinstall.sh` writes the containerd config that lets the node reach the in-cluster registry over HTTP, and it needs the host.
+
+### 4. Preinstall — install k3s and import images
+
+```bash
+cd single-node-prep
+sudo ./preinstall.sh
+```
+
+This installs k3s from the bundle, drops in helm / envsubst / crane, imports `nap-images.tar.gz` into k3s containerd (priming `registry:2` and the third-party images), and configures containerd to treat the in-cluster registry as plain HTTP. Re-run it any time after editing `values.env`.
+
+### 5. Install
+
+```bash
+cd ..
+./install.sh --profile=single-node
+```
+
+Because `offline/nap-images.tar.gz` is present, `install.sh` brings up the in-cluster `nap-registry`, seeds it from the bundle, and points every workload at it — no external registry, no internet. Everything else (in-cluster NFS server, CloudNativePG, seeding the admin user and MCP catalog) matches the connected flow. Log in the same way:
 
 ```
 http://<NAP_HOST>:30080
