@@ -31,20 +31,29 @@ fi
 ARCHIVE=""
 TARGET_REGISTRY=""
 INSECURE=false
+# First-party object/image prefix the bundle was built with (values.env
+# APP_PREFIX). Only used to locate the first-party source registry in the loaded
+# images; a deployment built with a non-default prefix passes --app-prefix
+# <prefix> to match.
+APP_PREFIX="${APP_PREFIX:-nap}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --registry)           TARGET_REGISTRY="$2"; shift 2 ;;
     --archive)            ARCHIVE="$2"; shift 2 ;;
+    --app-prefix)         APP_PREFIX="$2"; shift 2 ;;
     --insecure-registry)  INSECURE=true; shift ;;
     *)                    echo "Unknown option: $1"; exit 1 ;;
   esac
 done
 
 if [ -z "$TARGET_REGISTRY" ] || [ -z "$ARCHIVE" ]; then
-  echo "Usage: $0 --registry <target-registry> --archive <tar-file> [--insecure-registry]"
+  echo "Usage: $0 --registry <target-registry> --archive <tar-file> [--app-prefix <prefix>] [--insecure-registry]"
   echo ""
-  echo "  --insecure-registry  push over plain HTTP (registry without TLS)"
+  echo "  --app-prefix <prefix>  first-party image prefix (default: nap). Set this"
+  echo "                         to the values.env APP_PREFIX the bundle was built"
+  echo "                         with, if it was not the default."
+  echo "  --insecure-registry    push over plain HTTP (registry without TLS)"
   echo ""
   echo "Example:"
   echo "  $0 --registry registry.example.com/nap --archive nap-images.tar.gz"
@@ -115,48 +124,37 @@ retag_push() {
 }
 
 # --- First-party images -----------------------------------------------------
-# All under one source registry. Derive it from the loaded */nap-cp image and
-# exclude the target registry: a previous (possibly failed) run leaves retagged
-# ${TARGET_REGISTRY}/nap-cp images in the local store, and matching one of those
-# would make every other first-party image resolve to a nonexistent source tag.
+# Every first-party image (services + agents + chromium-headful) lives under one
+# source registry — the values.env REGISTRY the bundle was built with. Derive it
+# from the loaded ${APP_PREFIX}-cp image (cp is always present, whatever the
+# prefix), excluding the target registry: a previous (possibly failed) run
+# leaves retagged ${TARGET_REGISTRY}/... images in the local store, and matching
+# one of those would point the sweep at the wrong registry.
 SOURCE_REGISTRY=$("$CONTAINER_CLI" images --format '{{.Repository}}' \
-  | grep '/nap-cp$' \
+  | grep -E "/${APP_PREFIX}-cp$" \
   | grep -vF "${TARGET_REGISTRY}/" \
-  | head -1 | sed 's|/nap-cp$||')
+  | head -1 | sed "s|/${APP_PREFIX}-cp$||")
 
 if [ -z "$SOURCE_REGISTRY" ]; then
-  echo "ERROR: could not determine source registry — no nap-cp image found" >&2
-  echo "       in the archive. Is $ARCHIVE the correct image bundle?" >&2
+  echo "ERROR: could not find a '${APP_PREFIX}-cp' image in the loaded bundle." >&2
+  echo "       Is $ARCHIVE the correct bundle, and does its APP_PREFIX match?" >&2
+  echo "       Pass --app-prefix <prefix> if the bundle used a non-default one." >&2
   exit 1
 fi
-echo "==> Source registry: $SOURCE_REGISTRY"
+echo "==> Source registry: $SOURCE_REGISTRY  (app-prefix: $APP_PREFIX)"
 
-# First-party service + agent images live under ${SOURCE_REGISTRY}/<short>.
-# chromium-headful shares the same registry; afs ships from its own repo and is
-# handled in the third-party list below.
-FIRST_PARTY_NAMES=(
-  nap-cp
-  nap-cg
-  nap-scheduler
-  nap-browser
-  nap-sandbox
-  nap-skills-content-service
-  nap-env-runner-k8s
-  nap-memory-fuse
-  chromium-headful
-  nap-agent-claude-code
-  nap-agent-codex
-)
-
+# Push EVERY image under ${SOURCE_REGISTRY}/ — services, agents, chromium-headful,
+# and any future first-party image — to ${TARGET_REGISTRY}/<basename>. Deriving
+# the set from the loaded images (rather than a hard-coded list) keeps it correct
+# across app-prefix changes and as first-party images are added. afs ships from
+# its own repo (ghcr.io/neutree-ai/afs), so it's a third-party entry below.
 echo "==> Retagging and pushing first-party images to ${TARGET_REGISTRY} ..."
-for name in "${FIRST_PARTY_NAMES[@]}"; do
-  # Find whatever tag was bundled for this repo (latest, a release tag, ...).
-  while IFS= read -r local_ref; do
-    [ -n "$local_ref" ] || continue
-    retag_push "$local_ref"
-  done < <("$CONTAINER_CLI" images --format '{{.Repository}}:{{.Tag}}' \
-             | grep -E "^${SOURCE_REGISTRY}/${name}:")
-done
+while IFS= read -r local_ref; do
+  [ -n "$local_ref" ] || continue
+  case "$local_ref" in
+    "${SOURCE_REGISTRY}/"*) retag_push "$local_ref" ;;
+  esac
+done < <("$CONTAINER_CLI" images --format '{{.Repository}}:{{.Tag}}')
 
 # --- Third-party images -----------------------------------------------------
 # Absolute source refs (their registries differ from SOURCE_REGISTRY). registry:2
@@ -189,6 +187,7 @@ echo "==========================================================================
 echo "Paste these into your values.env (uncomment the third-party block):"
 echo "============================================================================"
 echo "REGISTRY=${TARGET_REGISTRY}"
+[ "$APP_PREFIX" != "nap" ] && echo "APP_PREFIX=${APP_PREFIX}"
 echo "POSTGRES_IMAGE=${TARGET_REGISTRY}/cloudnative-pg-postgresql:16"
 echo "GOTENBERG_IMAGE=${TARGET_REGISTRY}/gotenberg:8"
 echo "COTURN_IMAGE=${TARGET_REGISTRY}/coturn:4.6"

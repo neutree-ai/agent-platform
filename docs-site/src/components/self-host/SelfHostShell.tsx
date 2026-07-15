@@ -344,6 +344,7 @@ const PANEL_STR = {
     inSingleNote: <>Run this on a host that has a working k3s with its kubeconfig at <code>/etc/rancher/k3s/k3s.yaml</code> (the default in the single-node example).</>,
     inOfflineH2: 'Air-gapped: build the image bundle',
     inOfflineP: <>On a connected host, <code>./offline/save-images.sh</code> pulls every first-party and prerequisite image and writes <code>offline/nap-images.tar.gz</code> plus the prereq charts under <code>prereqs/</code>. Move that to the air-gapped side and load it with <code>./offline/load-images.sh --registry &lt;your-registry&gt;</code> (add <code>--insecure-registry</code> for a plain-HTTP registry) — it pushes every image into your registry and prints the <code>values.env</code> overrides to paste. Set those, then <code>./install.sh</code> runs exactly as it does online — it auto-detects the offline prereq bundles and wires the pull secret from <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code>. If a vendor delivered a prebuilt bundle, skip <code>save-images</code> and start at <code>load-images</code>. For a single machine with no external registry, use the <a href="/self-host/single-node/">single-node profile</a> instead.</>,
+    inAppPrefixNote: <><strong>Naming.</strong> Every first-party image carries the <code>values.env</code> <code>APP_PREFIX</code> (default <code>nap</code>, as in <code>nap-cp</code>). A rebranded or migrated deployment that kept a different prefix sets it in <code>values.env</code>; build the bundle with that file, and run <code>load-images.sh --app-prefix &lt;prefix&gt;</code> so it finds and pushes the prefixed images. Never change <code>APP_PREFIX</code> on an existing install — it would rebuild every object under new names.</>,
     // Upgrade
     upPathH2: 'Upgrade',
     upPathP1: <>Upgrading is the same command as a first install. Pin <code>IMAGE_TAG</code> to the new release tag (or keep <code>latest</code>) in your existing <code>values.env</code>, then re-run:</>,
@@ -502,6 +503,7 @@ const PANEL_STR = {
     inSingleNote: <>在一台已经跑好 k3s、kubeconfig 位于 <code>/etc/rancher/k3s/k3s.yaml</code>（single-node 示例中的默认值）的主机上运行。</>,
     inOfflineH2: '隔离网络：构建镜像包',
     inOfflineP: <>在一台联网机器上，<code>./offline/save-images.sh</code> 会拉取全部第一方与前置镜像，产出 <code>offline/nap-images.tar.gz</code> 以及 <code>prereqs/</code> 下的前置 chart。把它拷到隔离侧，用 <code>./offline/load-images.sh --registry &lt;你的仓库&gt;</code> 加载（纯 HTTP 仓库加 <code>--insecure-registry</code>）—— 它会把所有镜像推入你的仓库并打印出需要粘贴的 <code>values.env</code> 覆盖项。设好之后，<code>./install.sh</code> 的运行方式与联网时完全一致 —— 它会自动识别离线前置包，并据 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> 接好 pull secret。若厂商已交付预构建镜像包，跳过 <code>save-images</code>，直接从 <code>load-images</code> 开始。若是单台机器、没有外部仓库，改用 <a href="/self-host/single-node/">单节点 profile</a>。</>,
+    inAppPrefixNote: <><strong>命名</strong>：每个第一方镜像都带 <code>values.env</code> 里的 <code>APP_PREFIX</code>（默认 <code>nap</code>，即 <code>nap-cp</code>）。经过 rebrand 或迁移、沿用其他前缀的部署，在 <code>values.env</code> 里设好它；用该文件构建镜像包，并以 <code>load-images.sh --app-prefix &lt;前缀&gt;</code> 加载，脚本才能找到并推送带前缀的镜像。现有部署<strong>切勿</strong>修改 <code>APP_PREFIX</code> —— 会把所有对象按新名重建。</>,
     // Upgrade
     upPathH2: '升级',
     upPathP1: <>升级与首次安装用的是同一条命令。在现有 <code>values.env</code> 里把 <code>IMAGE_TAG</code> 固定到新的发布 tag（或保持 <code>latest</code>），然后重新运行：</>,
@@ -843,6 +845,7 @@ vi values.env                 # set NAP_HOST + ADMIN_PASSWORD
       <section>
         <h2 id="offline">{t.inOfflineH2}</h2>
         <p class="sh-muted">{t.inOfflineP}</p>
+        <p class="sh-muted">{t.inAppPrefixNote}</p>
       </section>
     </div>
   )
