@@ -22,6 +22,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SELF_HOST_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RENDERED_DIR="$SELF_HOST_DIR/rendered"
 
+# Load values.env so REGISTRY / APP_PREFIX / IMAGE_TAG below match what the
+# render (install.sh --render-only, which sources the same file) resolves —
+# a deployment with a non-default APP_PREFIX bundles its own prefixed images
+# instead of the nap-* defaults, and the supplement stays in lockstep with the
+# rendered set.
+VALUES_FILE="${VALUES_FILE:-$SELF_HOST_DIR/values.env}"
+if [ -f "$VALUES_FILE" ]; then
+  set -a; source "$VALUES_FILE"; set +a
+fi
+
 OUTPUT="${OUTPUT:-$SCRIPT_DIR/nap-images.tar.gz}"
 
 # First-party image coordinates. Defaults match install.sh; the render below is
