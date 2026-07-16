@@ -333,8 +333,19 @@ function refreshUserDailyInteractions(): void {
   const now = Date.now()
   if (now - lastUserDailyRefresh < 10 * 60 * 1000) return
   lastUserDailyRefresh = now
+  // CONCURRENTLY only once populated: the base schema creates this matview
+  // `WITH NO DATA`, and Postgres rejects `REFRESH ... CONCURRENTLY` on a
+  // never-populated matview — so the first refresh must be plain or it stays
+  // empty forever and reads error with "has not been populated". Mirrors the
+  // guard in scheduler/src/db.ts refreshMatview().
   pool
-    .query('REFRESH MATERIALIZED VIEW CONCURRENTLY user_daily_interactions')
+    .query<{ ispopulated: boolean }>(
+      "SELECT ispopulated FROM pg_matviews WHERE matviewname = 'user_daily_interactions'",
+    )
+    .then((r) => {
+      const concurrently = r.rows[0]?.ispopulated === true ? 'CONCURRENTLY ' : ''
+      return pool.query(`REFRESH MATERIALIZED VIEW ${concurrently}user_daily_interactions`)
+    })
     .catch((e) => console.error('[Stats] user_daily_interactions refresh failed:', e))
 }
 
