@@ -334,11 +334,29 @@ export async function cleanupOldThreadSessions(olderThanDays = 7): Promise<numbe
  * lock footprint predictable.
  */
 export async function refreshAdminMatviews(): Promise<void> {
-  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_workspace_stats')
-  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_daily_stats')
-  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_user_stats')
-  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_workspace_stats')
-  await pool.query('REFRESH MATERIALIZED VIEW CONCURRENTLY admin_token_daily_stats')
+  await refreshMatview('admin_workspace_stats')
+  await refreshMatview('admin_daily_stats')
+  await refreshMatview('admin_token_user_stats')
+  await refreshMatview('admin_token_workspace_stats')
+  await refreshMatview('admin_token_daily_stats')
+}
+
+/**
+ * Refresh one matview, using CONCURRENTLY only once it has been populated.
+ * The base schema creates these matviews `WITH NO DATA`, and Postgres rejects
+ * `REFRESH MATERIALIZED VIEW CONCURRENTLY` on a never-populated matview — so on
+ * a fresh install the first refresh must be plain, or the view stays empty
+ * forever and every read errors with "has not been populated". Once populated,
+ * CONCURRENTLY keeps the dashboard readable during the rebuild. `name` comes
+ * from the fixed caller list above, never user input — safe to interpolate.
+ */
+async function refreshMatview(name: string): Promise<void> {
+  const { rows } = await pool.query<{ ispopulated: boolean }>(
+    'SELECT ispopulated FROM pg_matviews WHERE matviewname = $1',
+    [name],
+  )
+  const concurrently = rows[0]?.ispopulated === true ? 'CONCURRENTLY ' : ''
+  await pool.query(`REFRESH MATERIALIZED VIEW ${concurrently}${name}`)
 }
 
 // --- Session Title Generation ---
