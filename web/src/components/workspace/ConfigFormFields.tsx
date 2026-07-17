@@ -78,11 +78,12 @@ export const INITIAL_CONFIG_VALUES: ConfigFormValues = {
   model: '',
   small_model: '',
   prompt_id: '',
-  mcp_config: JSON.stringify({
-    mcpServers: {
-      'tos-platform': { type: 'http', url: 'http://nap-cp:3000/mcp' },
-    },
-  }),
+  // Start with no MCP servers pre-baked. The platform ("tos-platform") server
+  // is a `required` catalog entry, so the MCP editor force-enables it and
+  // writes its URL from the backend catalog (prefix-aware) — hardcoding the
+  // host here would bake a non-default-APP_PREFIX-incompatible `nap-cp` URL
+  // into the web bundle, which can't be overridden at runtime.
+  mcp_config: JSON.stringify({ mcpServers: {} }),
   agent_settings: defaultAgentSettings('claude-code'),
   compute_resources: { ...DEFAULTS },
   skill_ids: [],
