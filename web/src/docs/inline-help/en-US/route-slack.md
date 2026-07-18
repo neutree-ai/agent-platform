@@ -17,6 +17,7 @@ Define how to convert a Slack message into an agent prompt. Available variables:
 | `{thread_context}` | Historical messages in the same thread |
 | `{thread_ts}` | Thread timestamp |
 | `{channel}` | Channel ID |
+| `{channel_name}` | Channel name (empty if lookup fails, e.g. in DMs) |
 
 If left empty, the original message is used directly. You can also select from the Prompt library.
 

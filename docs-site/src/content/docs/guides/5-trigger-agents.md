@@ -118,7 +118,7 @@ The scopes the Bot Token needs: `chat:write`, `channels:history`, `channels:read
 
 After filling in the tokens and creating the Slack Connector, attach a Route to it—choose the channel to listen on (only channels the bot has joined are listed) and the target Workspace.
 
-A Slack Route additionally supports multi-turn conversation within a thread: consecutive messages in the same thread reuse the same Session, with a default TTL of 24 hours. The Prompt template has more variables available than Webhook: `{message}`, `{user}`, `{thread_context}`, `{channel}`.
+A Slack Route additionally supports multi-turn conversation within a thread: consecutive messages in the same thread reuse the same Session, with a default TTL of 24 hours. The Prompt template has more variables available than Webhook: `{message}`, `{user}`, `{thread_context}`, `{channel}`, `{channel_name}`.
 
 ### WeCom integration
 

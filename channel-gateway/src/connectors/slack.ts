@@ -116,6 +116,26 @@ export async function startOne(connectorId: string) {
     console.error(`[Slack] ${connector.name}: failed to get bot user ID:`, e)
   }
 
+  // Channel names are stable enough to cache for the connector's lifetime;
+  // lookup failures (e.g. missing scope, DMs) are not cached so they can retry.
+  const channelNameCache = new Map<string, string>()
+  async function getChannelName(channel: string): Promise<string> {
+    const cached = channelNameCache.get(channel)
+    if (cached !== undefined) return cached
+    try {
+      const info = await web.conversations.info({ channel })
+      const name = info.channel?.name ?? ''
+      channelNameCache.set(channel, name)
+      return name
+    } catch (e) {
+      console.warn(
+        `[Slack] ${connector.name}: failed to resolve channel name for ${channel}:`,
+        e instanceof Error ? e.message : e,
+      )
+      return ''
+    }
+  }
+
   async function downloadSlackImage(file: {
     mimetype?: string
     url_private?: string
@@ -388,6 +408,7 @@ Indexes are 1-based and match the attached images order.
     }
 
     const promptTemplate = (route.config as Record<string, unknown>)?.prompt as string | undefined
+    const channelName = await getChannelName(channel)
 
     console.log(
       `[Slack] ${connector.name}: triggering job: channel=${channel} user=${user} workspace=${route.workspace_id}`,
@@ -440,7 +461,7 @@ Indexes are 1-based and match the attached images order.
             reply_context: { thread_id: threadTs, thread_ts: threadTs, channel_id: channel },
             thread_context: threadContext || undefined,
             prompt_template: promptTemplate || undefined,
-            template_vars: { user, thread_ts: threadTs, channel },
+            template_vars: { user, thread_ts: threadTs, channel, channel_name: channelName },
             images: allImages.length
               ? allImages.map(({ data, media_type }) => ({ data, media_type }))
               : undefined,
