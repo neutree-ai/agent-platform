@@ -17,6 +17,7 @@
 | `{thread_context}` | 同一 thread 的历史消息 |
 | `{thread_ts}` | Thread 时间戳 |
 | `{channel}` | Channel ID |
+| `{channel_name}` | Channel 名称（获取失败时为空，如 DM 场景） |
 
 留空则直接使用原始消息。也可以从 Prompt 库中选择。
 
