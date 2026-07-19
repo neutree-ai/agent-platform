@@ -67,6 +67,20 @@ export interface WorkspaceSpec {
   /** Drift anchor; mirrors workspace_placements.spec_version. */
   version: number
 
+  /**
+   * Runtime shape of the workspace. Omitted / `'static'` = today's only
+   * behavior: a single fixed replica on a ReadWriteOnce workspace volume.
+   * `'auto-scaling'` = 0..N replicas sharing one ReadWriteMany workspace volume,
+   * sized by an autoscaler. A provider only honors `'auto-scaling'` when it
+   * advertises the `multiReplica` capability. Fixed at creation, immutable after.
+   */
+  runtimeMode?: 'static' | 'auto-scaling'
+  /**
+   * Desired replica count under `'auto-scaling'` (the autoscaler writes it).
+   * Ignored for `'static'` (always 1); omitted → the provider treats it as 1.
+   */
+  replicas?: number
+
   // ── Reserved / forward-looking (unused by the v1 k8s provider) ──
   /** Explicit container image, if a backend takes one directly instead of agentType. */
   image?: string
@@ -83,6 +97,15 @@ export interface WorkspaceSpec {
 export interface Capabilities {
   sharedFs: boolean
   persistentMemory: boolean
+  /**
+   * The environment can run more than one replica of a single workspace, all
+   * sharing one persistent ReadWriteMany workspace volume — the requirement for
+   * `WorkspaceSpec.runtimeMode === 'auto-scaling'`. Distinct from `sharedFs`,
+   * which is the cross-workspace AgentFS sidecar, not the workspace's own
+   * volume. A k8s provider advertises this only when its storage class supports
+   * ReadWriteMany.
+   */
+  multiReplica?: boolean
   [key: string]: boolean | number | string | undefined
 }
 
@@ -105,6 +128,18 @@ export interface ObservedState {
   version?: number
   endpoint?: EnvironmentEndpoint
   message?: string
+  /**
+   * Replica counts for an `'auto-scaling'` workspace: how many the runner wants
+   * (`desired`) and how many are Ready. Omitted for single-replica (`'static'`)
+   * workspaces, which report liveness through `phase` alone.
+   */
+  replicas?: { desired: number; ready: number }
+  /**
+   * Provider-assigned ids of the Ready replicas (a subset of `[0, desired)`).
+   * This is the sole readiness signal the control plane routes on — cp does not
+   * probe replicas itself. Omitted for single-replica workspaces.
+   */
+  readyReplicaIds?: number[]
 }
 
 /** A handle returned by {@link EnvironmentProvider.watch} to stop watching. */
