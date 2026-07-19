@@ -9,6 +9,7 @@ import {
 } from '../services/db/messages'
 import {
   createSession,
+  setSessionReplicaOrdinal,
   transitionSessionStatus,
   updateSessionActivity,
   updateSessionStats,
@@ -377,6 +378,13 @@ interface InterceptedSSEOptions {
    * session→task reverse lookup can succeed on the very first tool call.
    */
   onNewSession?: (sessionId: string) => Promise<void>
+  /**
+   * The auto-scaling replica this turn was routed to, from the replica router.
+   * Persisted onto the session row on `session.started` so the session's next
+   * turns pin to the same replica (shared-volume transcript safety). Undefined
+   * for static single-replica workspaces — the binding stays NULL.
+   */
+  replicaId?: number
 }
 
 export function createInterceptedSSEResponse(
@@ -394,6 +402,7 @@ export function createInterceptedSSEResponse(
     initialAssistant,
     sessionToken,
     onNewSession,
+    replicaId,
   } = opts
   if (!response.body) {
     return new Response(response.body, {
@@ -458,6 +467,7 @@ export function createInterceptedSSEResponse(
     initialAssistant,
     sessionToken,
     onNewSession,
+    replicaId,
   })
   const broadcastPlugin = createBroadcastPlugin({
     workspaceId,
@@ -655,6 +665,12 @@ interface PersistPluginCtx {
    * X-Task-Id header path. Errors are logged but not propagated.
    */
   onNewSession?: (sessionId: string) => Promise<void>
+  /**
+   * The auto-scaling replica this turn was routed to; persisted onto the
+   * session row on `session.started` so subsequent turns pin to it. Undefined
+   * for static workspaces (binding stays NULL).
+   */
+  replicaId?: number
   /**
    * Optional initial assistant-message state. Set on the recovery path
    * (CP restart) so the plugin resumes writing into the existing DB row
@@ -871,6 +887,15 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
               await updateSessionActivity(newSid)
             }
             await transitionSessionStatus(newSid, 'agent')
+            // Pin the session to the replica this turn was routed to (auto-
+            // scaling workspaces only). Written every turn: unchanged while
+            // affinity holds, updated when the router rebound to a healthy
+            // replica. Stays NULL for static workspaces (replicaId undefined).
+            if (ctx.replicaId !== undefined) {
+              await setSessionReplicaOrdinal(newSid, ctx.replicaId).catch((e) => {
+                console.warn(`[SSE] setSessionReplicaOrdinal failed session=${newSid}:`, e)
+              })
+            }
             // Bind the dispatcher-minted token to this session_id once the
             // sessions row exists (FK target satisfied). Idempotent: a
             // reconnect that re-emits session.started for an already-bound
