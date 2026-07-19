@@ -7,6 +7,7 @@ import {
   resourceName,
   swallow404,
   workspaceLabels,
+  workspacePvcName,
 } from './support'
 import {
   CURRENT_TEMPLATE_VERSION,
@@ -53,7 +54,7 @@ export class AutoScalingWorkload {
   async apply(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
     const name = resourceName(this.cfg, workspaceId)
     const labels = workspaceLabels(this.cfg, workspaceId)
-    const pvcName = `${name}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
     const replicas = spec.replicas ?? 1
     const storageSize = spec.resources?.storage || this.cfg.workspaceStorageSize
 
@@ -169,9 +170,23 @@ export class AutoScalingWorkload {
       this.appsApi.deleteNamespacedStatefulSet(name, this.cfg.namespace).catch(swallow404),
       this.coreApi.deleteNamespacedService(`${name}-hl`, this.cfg.namespace).catch(swallow404),
       this.coreApi
-        .deleteNamespacedPersistentVolumeClaim(`${name}-workspace`, this.cfg.namespace)
+        .deleteNamespacedPersistentVolumeClaim(
+          workspacePvcName(this.cfg, workspaceId),
+          this.cfg.namespace,
+        )
         .catch(swallow404),
     ])
+  }
+
+  /** The observed state (phase + ready replica set on the endpoint) for a set. */
+  private observed(name: string, sts: k8s.V1StatefulSet, pods: k8s.V1Pod[]): ObservedState {
+    return {
+      phase: resolveStatefulSetStatus(sts),
+      endpoint: {
+        address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001`,
+        readyReplicaIds: readyReplicaIdsFromPods(pods, name),
+      },
+    }
   }
 
   /** Observe one workspace: phase + ready replica set (on the endpoint). */
@@ -188,18 +203,16 @@ export class AutoScalingWorkload {
       undefined,
       `app=${this.cfg.namePrefix},workspace-id=${workspaceId}`,
     )
-    return {
-      phase: resolveStatefulSetStatus(sts),
-      endpoint: {
-        address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001`,
-        readyReplicaIds: readyReplicaIdsFromPods(pods.body.items, name),
-        desiredReplicas: sts.spec?.replicas ?? 0,
-      },
-    }
+    return this.observed(name, sts, pods.body.items)
   }
 
   /** Batch counterpart: every StatefulSet-backed (auto-scaling) workspace. */
   async observeAll(): Promise<Map<string, ObservedState>> {
+    const out = new Map<string, ObservedState>()
+    // Environments that can't host the shape have provably zero StatefulSets —
+    // skip the LIST entirely rather than pay it every reconcile pass.
+    if (!this.cfg.multiReplica) return out
+
     const res = await this.appsApi.listNamespacedStatefulSet(
       this.cfg.namespace,
       undefined,
@@ -209,7 +222,6 @@ export class AutoScalingWorkload {
       `app=${this.cfg.namePrefix},component=workspace`,
     )
     const sets = res.body.items.filter((s) => s.metadata?.labels?.['workspace-id'])
-    const out = new Map<string, ObservedState>()
     if (sets.length === 0) return out
 
     // One pod LIST across all auto-scaling workspaces, bucketed by workspace-id.
@@ -225,22 +237,14 @@ export class AutoScalingWorkload {
     for (const pod of pods.body.items) {
       const wsId = pod.metadata?.labels?.['workspace-id']
       if (!wsId) continue
-      const list = podsByWs.get(wsId)
-      if (list) list.push(pod)
-      else podsByWs.set(wsId, [pod])
+      const list = podsByWs.get(wsId) ?? []
+      list.push(pod)
+      podsByWs.set(wsId, list)
     }
 
     for (const sts of sets) {
       const wsId = sts.metadata?.labels?.['workspace-id'] as string
-      const name = resourceName(this.cfg, wsId)
-      out.set(wsId, {
-        phase: resolveStatefulSetStatus(sts),
-        endpoint: {
-          address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001`,
-          readyReplicaIds: readyReplicaIdsFromPods(podsByWs.get(wsId) ?? [], name),
-          desiredReplicas: sts.spec?.replicas ?? 0,
-        },
-      })
+      out.set(wsId, this.observed(resourceName(this.cfg, wsId), sts, podsByWs.get(wsId) ?? []))
     }
     return out
   }

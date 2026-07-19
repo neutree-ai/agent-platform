@@ -1,6 +1,7 @@
 import type * as k8s from '@kubernetes/client-node'
 import type { ComputeResources } from '../types/api'
 import { type K8sConfig, agentImageFor, defaultCfg } from './config'
+import { isPodReady } from './support'
 
 // Workspace pod/deployment spec construction, plus the pure status/annotation
 // readers the reconcile paths share. Split from the provider so the pod
@@ -304,6 +305,17 @@ export function buildStatefulSetSpec(
 }
 
 /**
+ * Ports every workspace Service exposes: the agent (http), afs-fuse and
+ * memory-fuse sidecars. Shared by the static ClusterIP Service and the
+ * auto-scaling headless Service so the two shapes can't drift.
+ */
+export const WORKSPACE_SERVICE_PORTS: k8s.V1ServicePort[] = [
+  { port: 3001, targetPort: 3001 as any, name: 'http' },
+  { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
+  { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
+]
+
+/**
  * The headless Service backing a StatefulSet workspace: `clusterIP: None`, so
  * each pod gets a stable DNS name (`<name>-<ordinal>.<name>-hl.<ns>.svc`) that
  * cp routes to per replica. No ClusterIP Service is created for an auto-scaling
@@ -321,11 +333,7 @@ export function buildHeadlessServiceSpec(
     spec: {
       clusterIP: 'None',
       selector: labels,
-      ports: [
-        { port: 3001, targetPort: 3001 as any, name: 'http' },
-        { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
-        { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
-      ],
+      ports: WORKSPACE_SERVICE_PORTS,
     },
   }
 }
@@ -370,9 +378,7 @@ export function deploymentTemplateVersion(dep: k8s.V1Deployment | undefined): nu
  * (the pod's 600s startupProbe grace covers a slow boot); the autoscaler and
  * per-replica readiness live in {@link readyReplicaIdsFromPods}, not here.
  */
-export function resolveStatefulSetStatus(
-  sts: k8s.V1StatefulSet | undefined,
-): ReconciledStatus {
+export function resolveStatefulSetStatus(sts: k8s.V1StatefulSet | undefined): ReconciledStatus {
   const desired = sts?.spec?.replicas ?? 0
   if (!sts || desired === 0) return 'stopped'
   const ready = sts.status?.readyReplicas ?? 0
@@ -389,16 +395,13 @@ function podReplicaOrdinal(podName: string, stsName: string): number | null {
 
 /**
  * The replica ids of the Ready pods of a StatefulSet — the readiness signal cp
- * routes on (reported via ObservedState.readyReplicaIds). A pod is Ready when
- * it has container statuses and all of them are ready. Returned sorted.
+ * routes on (reported via the endpoint's readyReplicaIds). Returned sorted.
  */
 export function readyReplicaIdsFromPods(pods: k8s.V1Pod[], stsName: string): number[] {
   const ids: number[] = []
   for (const pod of pods) {
     const ordinal = podReplicaOrdinal(pod.metadata?.name ?? '', stsName)
-    if (ordinal === null) continue
-    const statuses = pod.status?.containerStatuses ?? []
-    if (statuses.length > 0 && statuses.every((c) => c.ready)) ids.push(ordinal)
+    if (ordinal !== null && isPodReady(pod)) ids.push(ordinal)
   }
   return ids.sort((a, b) => a - b)
 }
