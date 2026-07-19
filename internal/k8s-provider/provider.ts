@@ -918,7 +918,18 @@ export class KubernetesProvider implements EnvironmentProvider {
   }
 
   async start(workspaceId: string): Promise<void> {
-    await this.startInstance(workspaceId)
+    // Detect the shape by what exists (no spec here). A static workspace scales
+    // its Deployment 0→1; startInstance returns false (404) when there is none,
+    // i.e. an auto-scaling workspace, whose StatefulSet we wake instead.
+    const started = await this.startInstance(workspaceId)
+    if (!started) {
+      // Wake the StatefulSet to a floor of 1 replica; the autoscaler reconciles
+      // to the true desired on its next tick. (The primary wake path is apply()
+      // with spec.replicas — this covers a bare stopped→running phase flip with
+      // no spec bump.) scaleStatefulSet is 404-tolerant, so a workspace with
+      // neither shape is a no-op, exactly as before.
+      await this.scaleStatefulSet(workspaceId, 1)
+    }
   }
 
   async stop(workspaceId: string): Promise<void> {
