@@ -11,6 +11,7 @@ import {
 import { addTeamworkSession } from '../db/teamwork'
 import type { Workspace } from '../db/types'
 import { getWorkspace } from '../db/workspaces'
+import { pickReplicaForTurn } from '../replica-router'
 import { WorkspaceStartError, ensureWorkspaceRunning } from '../workspace-autostart'
 import { type ChatImage, buildAgentChatBody, buildUserMessageBlocks } from './request'
 
@@ -81,14 +82,23 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   // this a caller could drive messages belonging to another workspace's
   // session, or create orphan rows with `session_id` pointing at a
   // session that lives under a different workspace_id.
+  let boundReplica: number | undefined
   if (sessionId) {
     const session = await getSession(sessionId)
     if (!session || session.workspace_id !== workspaceId) {
       return jsonError('Session not found for this workspace', 400)
     }
+    boundReplica = session.replica_ordinal ?? undefined
   }
 
-  const address = resolveAgentAddress(workspaceId, { sessionId })
+  // For an auto-scaling workspace, pin this turn to a specific replica: keep the
+  // session's existing binding while its replica is still ready, else rebind /
+  // pick fresh (a new session, or a replica that dropped out). Static workspaces
+  // report no ready set → undefined → the workspace's default address,
+  // byte-identical to before. The chosen id is threaded to the interceptor so
+  // `session.started` persists the binding for the session's next turns.
+  const replicaId = pickReplicaForTurn(workspaceId, boundReplica)
+  const address = resolveAgentAddress(workspaceId, { sessionId, replicaId })
 
   // Mint (or look up) the session_token before dispatching. For a resume
   // the same token follows the session across turns; for a new session we
@@ -202,6 +212,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     },
     sessionToken,
     onNewSession,
+    replicaId,
   })
 }
 
