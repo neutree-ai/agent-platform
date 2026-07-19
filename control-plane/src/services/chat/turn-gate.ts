@@ -125,6 +125,19 @@ export function acquireTurn(workspaceId: string): Promise<TurnSlot> {
   })
 }
 
+/**
+ * A workspace's current turn demand: turns in flight plus turns waiting for a
+ * slot. This is the one signal the autoscaler scales on — no separate metric.
+ * queued is always 0 for a static workspace (capacity is Infinity, nothing
+ * queues), so a static workspace reads as pure in-flight count.
+ */
+export function turnDemand(workspaceId: string): { active: number; queued: number } {
+  return {
+    active: activeTurns.get(workspaceId) ?? 0,
+    queued: waiters.get(workspaceId)?.length ?? 0,
+  }
+}
+
 /** Test seam: drop all admission state, rejecting any still-pending waiters. */
 export function __resetTurnGate(): void {
   for (const q of waiters.values()) {
