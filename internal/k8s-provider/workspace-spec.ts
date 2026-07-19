@@ -338,6 +338,39 @@ export function buildHeadlessServiceSpec(
   }
 }
 
+/** The HTTP port a workspace agent serves on (mirrors the pod's `http` port). */
+export const AGENT_PORT = 3001
+
+/**
+ * The in-cluster base URL to reach a workspace's agent on the built-in (k8s)
+ * environment. This is the k8s address format, kept in the provider package so
+ * cp-core never hardcodes cluster-DNS shape — it asks for an address by
+ * (workspace, replica) and gets a URL back.
+ *
+ * - `replicaId` omitted → the workspace's own Service: `<prefix>-<ws>.<ns>.svc`.
+ *   This is the single-replica (static) path and is byte-identical to the
+ *   address cp built inline before this seam existed.
+ * - `replicaId` given → one specific StatefulSet pod of an auto-scaling
+ *   workspace, via its headless Service:
+ *   `<prefix>-<ws>-<id>.<prefix>-<ws>-hl.<ns>.svc`. This is the stable
+ *   per-ordinal DNS {@link buildStatefulSetSpec} exists to provide.
+ *
+ * Pure (config + ids → string): no kube client, so cp can call it synchronously
+ * on the routing hot path without an API round-trip.
+ */
+export function builtinReplicaAddress(
+  cfg: K8sConfig,
+  workspaceId: string,
+  replicaId?: number,
+): string {
+  const base = `${cfg.namePrefix}-${workspaceId}`
+  const host =
+    replicaId === undefined
+      ? `${base}.${cfg.namespace}.svc.cluster.local`
+      : `${base}-${replicaId}.${base}-hl.${cfg.namespace}.svc.cluster.local`
+  return `http://${host}:${AGENT_PORT}`
+}
+
 /**
  * Batch-check K8s deployment statuses for active workspaces.
  * Returns a map of workspaceId → resolved status.
