@@ -15,13 +15,37 @@ const BUILTIN_ENV = 'builtin'
  * means adding a field here (and a column migration), not editing callers.
  */
 export function buildWorkspaceSpec(
-  config: { agent_type?: string | null; compute_resources?: unknown } | null,
+  config: {
+    agent_type?: string | null
+    compute_resources?: unknown
+    auto_scaling?: { min_replicas: number } | null
+  } | null,
   version: number,
-): { agentType: string; resources: unknown; version: number } {
-  return {
+): {
+  agentType: string
+  resources: unknown
+  version: number
+  runtimeMode?: 'auto-scaling'
+  replicas?: number
+} {
+  const base = {
     agentType: config?.agent_type || 'claude-code',
     resources: config?.compute_resources ?? {},
     version,
+  }
+  // The presence of auto_scaling is the shape discriminant: absent → static,
+  // which projects byte-identically (no new fields, so the Deployment it becomes
+  // is unchanged) and, by construction, cannot read a replica count. An
+  // auto-scaling workspace carries the shape and an initial count:
+  // max(min_replicas, 1) so a freshly-created one is runnable before the
+  // autoscaler's first pass (and before scale-to-zero can apply). Once the
+  // autoscaler exists it owns the count via setDesiredReplicas, and a config
+  // bump must preserve it there.
+  if (!config?.auto_scaling) return base
+  return {
+    ...base,
+    runtimeMode: 'auto-scaling',
+    replicas: Math.max(config.auto_scaling.min_replicas, 1),
   }
 }
 
