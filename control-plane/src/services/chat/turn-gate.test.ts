@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 // Configure tiny capacity/queue before the gate module evaluates its env-read
-// constants: 1 session per replica, queue of 2, 50ms wait. Top-level await
-// import so these are set first.
-process.env.TURN_GATE_DEFAULT_TARGET = '1'
+// constants: 1 turn per replica, queue of 2. Top-level await import so these are
+// set first.
+process.env.TURN_GATE_FALLBACK_TARGET = '1'
 process.env.TURN_GATE_MAX_QUEUE = '2'
-process.env.TURN_GATE_QUEUE_TIMEOUT_MS = '50'
 
 const { acquireTurn, TurnCapacityError, __resetTurnGate } = await import('./turn-gate')
 const { syncReadyReplicas, __resetReplicaRouter } = await import('../replica-router')
@@ -60,17 +59,27 @@ describe('acquireTurn — auto-scaling workspace', () => {
     b.release()
   })
 
-  it('rejects with TurnCapacityError once the queue is full', async () => {
+  it('a queued turn waits (no timeout) — it resolves only when a slot frees', async () => {
+    autoScaling('ws1', 1)
+    const held = await acquireTurn('ws1') // active, capacity 1
+
+    let granted = false
+    const queued = acquireTurn('ws1').then((s) => {
+      granted = true
+      return s
+    })
+    await tick(20)
+    expect(granted).toBe(false) // still waiting — no timeout kicks it out
+
+    held.release()
+    await expect(queued).resolves.toBeDefined() // freed → granted
+  })
+
+  it('rejects with TurnCapacityError once the queue is full (flood backstop)', async () => {
     autoScaling('ws1', 1) // cap 1, queue max 2
     await acquireTurn('ws1') // active
     acquireTurn('ws1').catch(() => {}) // queued 1
     acquireTurn('ws1').catch(() => {}) // queued 2 (full)
-    await expect(acquireTurn('ws1')).rejects.toBeInstanceOf(TurnCapacityError)
-  })
-
-  it('rejects a queued turn that waits past the timeout', async () => {
-    autoScaling('ws1', 1)
-    await acquireTurn('ws1') // active, never released
     await expect(acquireTurn('ws1')).rejects.toBeInstanceOf(TurnCapacityError)
   })
 
@@ -86,9 +95,11 @@ describe('acquireTurn — auto-scaling workspace', () => {
     await expect(q1).resolves.toBeDefined()
 
     let q2Granted = false
-    void q2.then(() => {
-      q2Granted = true
-    })
+    void q2
+      .then(() => {
+        q2Granted = true
+      })
+      .catch(() => {}) // reset() rejects it after the test; swallow
     await tick()
     expect(q2Granted).toBe(false) // still capped at 1
   })
