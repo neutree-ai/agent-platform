@@ -1,39 +1,35 @@
+import { builtinReplicaAddress, defaultCfg } from '../../../internal/k8s-provider'
 import { getRemoteProxyPort } from './remote-proxy'
 
-const NAMESPACE = process.env.K8S_NAMESPACE || 'default'
-const AGENT_PORT = 3001
-
-/** Cluster-DNS address of a workspace on the built-in environment. */
-function builtinAddress(workspaceId: string): string {
-  return `http://tos-${workspaceId}.${NAMESPACE}.svc.cluster.local:${AGENT_PORT}`
-}
-
 /**
- * Resolve the base URL cp uses to reach a workspace's agent.
+ * Resolve the base URL cp uses to reach a workspace's agent, optionally a
+ * specific replica of an auto-scaling workspace.
  *
- * This is the workspace data-plane routing seam (design §6). In v1 every
- * workspace lives on the built-in environment and is reached via cluster DNS —
- * so this stays a synchronous, zero-cost call, identical to before.
+ * This is the workspace data-plane routing seam (design §6). A built-in
+ * workspace is reached via cluster DNS — the k8s address format lives in the
+ * provider package ({@link builtinReplicaAddress}), so cp-core never hardcodes
+ * cluster-DNS shape. `replicaId` omitted → the workspace's own Service
+ * (single-replica / static, byte-identical to before); `replicaId` given → that
+ * StatefulSet pod's stable per-ordinal DNS.
  *
  * A workspace on a remote (BYOI) environment is reached through that
- * environment's tunnel instead of cluster DNS. cp keeps a localhost forward
- * proxy per reachable remote workspace (lib/remote-proxy); this stays a
- * synchronous O(1) map lookup — built-in workspaces are never in the map, so
- * their path is byte-identical (cluster DNS, zero extra cost). The proxy
- * lifecycle (set up on observe-running, torn down on stop) is driven elsewhere.
+ * environment's tunnel instead. cp keeps a localhost forward proxy per
+ * reachable remote workspace (lib/remote-proxy); this stays a synchronous O(1)
+ * map lookup — built-in workspaces are never in the map, so their path is
+ * byte-identical. Per-replica remote addressing (a proxy keyed by (ws, replica),
+ * with the ordinal carried in the tunnel meta) is a later stage, so today the
+ * remote proxy is per-workspace and `replicaId` does not yet reach it.
  */
-export function getWorkspaceAddress(workspaceId: string): string {
+export function getWorkspaceAddress(workspaceId: string, replicaId?: number): string {
   const remotePort = getRemoteProxyPort(workspaceId)
   if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
-  return builtinAddress(workspaceId)
+  return builtinReplicaAddress(defaultCfg, workspaceId, replicaId)
 }
 
 /**
- * Why a request is being routed to the workspace's agent. A workspace runs
- * exactly one replica today, so every context resolves to the same address —
- * but call sites that act on behalf of a session declare it here, so that the
- * day a workspace runs more than one replica, session-affine routing is a
- * change to this function only, not to its callers.
+ * Why a request is being routed to the workspace's agent. Call sites that act on
+ * behalf of a session declare it here so session-affine routing is a change to
+ * this seam only, not to its callers.
  */
 interface AgentRouteContext {
   /**
@@ -42,6 +38,14 @@ interface AgentRouteContext {
    * workspace-scoped call — both route to the workspace's default address.
    */
   sessionId?: string | null
+  /**
+   * The replica (auto-scaling workspaces only) this request is bound to — the
+   * session's `replica_ordinal` binding. undefined/null → the workspace's
+   * default address (a static workspace, or a call with no replica affinity).
+   * The binding that fills this comes from the replica router (a later stage);
+   * until then every caller leaves it unset and routing is byte-identical.
+   */
+  replicaId?: number | null
 }
 
 /**
@@ -51,8 +55,8 @@ interface AgentRouteContext {
  * calling {@link getWorkspaceAddress} directly — it is this function's
  * zero-context form.
  */
-export function resolveAgentAddress(workspaceId: string, _ctx: AgentRouteContext = {}): string {
-  return getWorkspaceAddress(workspaceId)
+export function resolveAgentAddress(workspaceId: string, ctx: AgentRouteContext = {}): string {
+  return getWorkspaceAddress(workspaceId, ctx.replicaId ?? undefined)
 }
 
 type ReloadScope = 'config' | 'skills' | 'credentials'

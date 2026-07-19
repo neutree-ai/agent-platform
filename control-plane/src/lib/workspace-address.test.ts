@@ -34,6 +34,12 @@ describe('getWorkspaceAddress', () => {
     expect(getWorkspaceAddress('ws1')).toBe('http://tos-ws1.default.svc.cluster.local:3001')
   })
 
+  it('resolves a specific replica to its per-ordinal headless DNS', () => {
+    expect(getWorkspaceAddress('ws1', 2)).toBe(
+      'http://tos-ws1-2.tos-ws1-hl.default.svc.cluster.local:3001',
+    )
+  })
+
   it('resolves remote workspaces to their localhost forward proxy', () => {
     getRemoteProxyPortMock.mockReturnValue(41234)
     expect(getWorkspaceAddress('ws1')).toBe('http://127.0.0.1:41234')
@@ -41,12 +47,19 @@ describe('getWorkspaceAddress', () => {
 })
 
 describe('resolveAgentAddress', () => {
-  it('matches getWorkspaceAddress for every route context (single-replica invariant)', () => {
+  it('matches the default builtin address when no replica is bound', () => {
     const expected = getWorkspaceAddress('ws1')
     expect(resolveAgentAddress('ws1')).toBe(expected)
     expect(resolveAgentAddress('ws1', {})).toBe(expected)
     expect(resolveAgentAddress('ws1', { sessionId: null })).toBe(expected)
     expect(resolveAgentAddress('ws1', { sessionId: 'sess-1' })).toBe(expected)
+    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: null })).toBe(expected)
+  })
+
+  it('routes a replica-bound session to that replica', () => {
+    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: 0 })).toBe(
+      'http://tos-ws1-0.tos-ws1-hl.default.svc.cluster.local:3001',
+    )
   })
 
   it('follows the remote-proxy path too', () => {
