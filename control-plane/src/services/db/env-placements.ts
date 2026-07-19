@@ -85,6 +85,26 @@ export async function writeObservedForEnvironment(
   return (result.rowCount ?? 0) > 0
 }
 
+/**
+ * The runner-reported ready-replica set of every auto-scaling workspace, read
+ * out of the observed endpoint. Only rows whose endpoint actually carries
+ * `readyReplicaIds` are returned (static workspaces never do), so the result is
+ * empty until an auto-scaling workspace is running. Environment-agnostic: the
+ * built-in runner and remote runners all write the same column, so cp gets a
+ * uniform picture from one query. Feeds the in-memory replica router.
+ */
+export async function listWorkspaceReplicaSets(): Promise<
+  { workspace_id: string; ready_replica_ids: number[] }[]
+> {
+  const { rows } = await pool.query(
+    `SELECT workspace_id,
+            endpoint->'readyReplicaIds' AS ready_replica_ids
+       FROM workspace_placements
+      WHERE jsonb_exists(endpoint, 'readyReplicaIds')`,
+  )
+  return rows
+}
+
 /** Remove a placement after destroy, scoped to the environment. */
 export async function deletePlacementForEnvironment(
   environmentId: string,
