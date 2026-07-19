@@ -1,0 +1,19 @@
+-- Auto-scaling runtime configuration, per workspace.
+-- A workspace is either static (this column NULL — today's single fixed replica
+-- on a ReadWriteOnce volume) or auto-scaling (this column set — 0..max replicas
+-- sharing one ReadWriteMany volume, sized by the autoscaler). The PRESENCE of
+-- this object is the shape discriminant: there is no separate runtime_mode flag
+-- to drift out of sync, and a static workspace simply has no replica parameters
+-- to mis-read. Shape is fixed at creation and immutable after.
+--
+-- Shape (all keys present when the object is): {
+--   "min_replicas": int >= 0,            -- may be 0 for scale-to-zero
+--   "max_replicas": int >= 1,            -- min <= max
+--   "scale_to_zero_idle_seconds": int | null  -- null = never scale to zero
+-- }
+-- Per-replica turn capacity reuses the existing workspace_config.max_concurrency
+-- (no key here). Sub-field validation lives in the write path (app-side), the
+-- same as compute_resources — this stays a plain nullable jsonb blob read and
+-- written as a whole. NULL default preserves today's behavior: every existing
+-- workspace is static.
+ALTER TABLE workspace_config ADD COLUMN IF NOT EXISTS auto_scaling jsonb;
