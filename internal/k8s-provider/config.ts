@@ -37,6 +37,13 @@ export function getAgentImage(agentType: string): string {
 const WORKSPACE_STORAGE_SIZE = process.env.WORKSPACE_STORAGE_SIZE || '10Gi'
 const NAME_PREFIX = 'tos'
 
+// Whether this environment may host auto-scaling (multi-replica) workspaces.
+// Gated on the storage class supporting ReadWriteMany (all replicas share one
+// RWX workspace PVC), which is a deploy-time property, so it is an explicit
+// opt-in env rather than inferred. Default off → the environment advertises no
+// multiReplica capability and placement rejects auto-scaling there.
+const WORKSPACE_MULTI_REPLICA = process.env.WORKSPACE_MULTI_REPLICA === 'true'
+
 /**
  * All infra config a `buildDeploymentSpec` / provider instance needs,
  * captured explicitly instead of read from module-level env at call time. This
@@ -55,6 +62,8 @@ export interface K8sConfig {
   workspaceStorageSize: string
   cpServiceUrl: string
   memoryFuseImage: string
+  /** This environment may host auto-scaling workspaces (RWX storage available). */
+  multiReplica: boolean
   afs: {
     enabled: boolean
     image: string
@@ -78,6 +87,7 @@ function defaultK8sConfig(): K8sConfig {
     workspaceStorageSize: WORKSPACE_STORAGE_SIZE,
     cpServiceUrl: process.env.CP_SERVICE_URL || 'http://nap-cp:3000',
     memoryFuseImage: MEMORY_FUSE_IMAGE,
+    multiReplica: WORKSPACE_MULTI_REPLICA,
     afs: {
       enabled: AFS_ENABLED,
       image: AFS_IMAGE,

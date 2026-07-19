@@ -16,7 +16,11 @@ export {
   CURRENT_TEMPLATE_VERSION,
   type ReconciledStatus,
   buildDeploymentSpec,
+  buildHeadlessServiceSpec,
+  buildStatefulSetSpec,
   buildWorkspacePodTemplate,
   deploymentTemplateVersion,
+  readyReplicaIdsFromPods,
   resolveDeploymentStatus,
+  resolveStatefulSetStatus,
 } from './workspace-spec'

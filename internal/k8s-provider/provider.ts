@@ -8,12 +8,22 @@ import type {
 } from '../types/environments'
 import { type K8sConfig, defaultCfg } from './config'
 import {
+  CURRENT_TEMPLATE_VERSION,
   MEMORY_FUSE_CONTAINER_NAME,
   type ReconciledStatus,
   TEMPLATE_VERSION_ANNOTATION,
   buildDeploymentSpec,
+  buildHeadlessServiceSpec,
+  buildStatefulSetSpec,
+  readyReplicaIdsFromPods,
   resolveDeploymentStatus,
+  resolveStatefulSetStatus,
 } from './workspace-spec'
+
+/** A delete/read whose 404 means "already gone" = success; rethrow the rest. */
+function swallow404(e: any): void {
+  if (e.response?.statusCode !== 404) throw e
+}
 
 const STORAGE_UNITS: Record<string, number> = {
   Ki: 2 ** 10,
@@ -686,6 +696,200 @@ export class KubernetesProvider implements EnvironmentProvider {
     }
   }
 
+  // ── Auto-scaling (StatefulSet) form ──
+  // A workspace with runtimeMode 'auto-scaling' is backed by a StatefulSet +
+  // headless Service + one shared RWX PVC, instead of a Deployment + ClusterIP
+  // Service + RWO PVC. runtime_mode is immutable, so a given workspace is only
+  // ever one shape; these private methods handle the auto-scaling shape and the
+  // facade below dispatches to them (detecting the shape from what exists, since
+  // observe/stop/destroy aren't handed the spec). The pod template is identical
+  // to the static form — only the surrounding workload/service/PVC differ.
+
+  private async getStatefulSet(workspaceId: string): Promise<k8s.V1StatefulSet | null> {
+    const name = this.getResourceName(workspaceId)
+    try {
+      return (await this.appsApi.readNamespacedStatefulSet(name, this.cfg.namespace)).body
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return null
+      throw e
+    }
+  }
+
+  /** Create-or-converge the StatefulSet, headless Service and shared RWX PVC. */
+  private async applyStatefulSet(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
+    const name = this.getResourceName(workspaceId)
+    const labels = this.getLabels(workspaceId)
+    const pvcName = `${name}-workspace`
+    const replicas = spec.replicas ?? 1
+    const storageSize = spec.resources?.storage || this.cfg.workspaceStorageSize
+
+    // Shared workspace volume: ReadWriteMany so every replica mounts it at once.
+    // Created once — runtime_mode is immutable, so the access mode never changes.
+    await this.createOrAdopt(() =>
+      this.coreApi.createNamespacedPersistentVolumeClaim(this.cfg.namespace, {
+        apiVersion: 'v1',
+        kind: 'PersistentVolumeClaim',
+        metadata: { name: pvcName, labels },
+        spec: {
+          accessModes: ['ReadWriteMany'],
+          storageClassName: this.cfg.storageClass,
+          resources: { requests: { storage: storageSize } },
+        },
+      }),
+    )
+
+    // Headless Service for stable per-ordinal DNS (no ClusterIP — a VIP would
+    // round-robin across replicas and defeat session affinity).
+    await this.createOrAdopt(() =>
+      this.coreApi.createNamespacedService(
+        this.cfg.namespace,
+        buildHeadlessServiceSpec(name, labels),
+      ),
+    )
+
+    const desired = buildStatefulSetSpec(
+      name,
+      labels,
+      workspaceId,
+      spec.agentType,
+      pvcName,
+      replicas,
+      spec.resources,
+      this.cfg,
+    )
+    const existing = await this.getStatefulSet(workspaceId)
+    if (!existing) {
+      await this.createOrAdopt(() =>
+        this.appsApi.createNamespacedStatefulSet(this.cfg.namespace, desired),
+      )
+    } else {
+      // Converge in place — never delete+recreate, which would take every
+      // replica down at once. Strategic-merge the pod template (a rolling
+      // update reconciles image/resources) and set the replica count.
+      await this.appsApi.patchNamespacedStatefulSet(
+        name,
+        this.cfg.namespace,
+        {
+          metadata: {
+            annotations: { [TEMPLATE_VERSION_ANNOTATION]: String(CURRENT_TEMPLATE_VERSION) },
+          },
+          spec: { replicas, template: desired.spec?.template },
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      )
+    }
+
+    if (spec.resources?.storage) {
+      await this.expandInstanceStorage(workspaceId, spec.resources.storage)
+    }
+  }
+
+  /** Scale a StatefulSet workspace; 404-tolerant (false when it doesn't exist). */
+  private async scaleStatefulSet(workspaceId: string, replicas: number): Promise<boolean> {
+    const name = this.getResourceName(workspaceId)
+    try {
+      await this.appsApi.patchNamespacedStatefulSetScale(
+        name,
+        this.cfg.namespace,
+        { spec: { replicas } },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/merge-patch+json' } },
+      )
+      return true
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return false
+      throw e
+    }
+  }
+
+  /** Observe one StatefulSet workspace: phase + replica counts + ready ids. */
+  private async observeStatefulSet(workspaceId: string): Promise<ObservedState> {
+    const name = this.getResourceName(workspaceId)
+    const sts = await this.getStatefulSet(workspaceId)
+    if (!sts) return { phase: 'unknown' }
+
+    const pods = await this.coreApi.listNamespacedPod(
+      this.cfg.namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `app=${this.cfg.namePrefix},workspace-id=${workspaceId}`,
+    )
+    return {
+      phase: resolveStatefulSetStatus(sts),
+      endpoint: { address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001` },
+      replicas: { desired: sts.spec?.replicas ?? 0, ready: sts.status?.readyReplicas ?? 0 },
+      readyReplicaIds: readyReplicaIdsFromPods(pods.body.items, name),
+    }
+  }
+
+  /** Batch counterpart: every StatefulSet-backed (auto-scaling) workspace. */
+  private async observeAllStatefulSets(): Promise<Map<string, ObservedState>> {
+    const res = await this.appsApi.listNamespacedStatefulSet(
+      this.cfg.namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `app=${this.cfg.namePrefix},component=workspace`,
+    )
+    const sets = res.body.items.filter((s) => s.metadata?.labels?.['workspace-id'])
+    const out = new Map<string, ObservedState>()
+    if (sets.length === 0) return out
+
+    // One pod LIST across all auto-scaling workspaces, bucketed by workspace-id.
+    const pods = await this.coreApi.listNamespacedPod(
+      this.cfg.namespace,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      `app=${this.cfg.namePrefix},component=workspace`,
+    )
+    const podsByWs = new Map<string, k8s.V1Pod[]>()
+    for (const pod of pods.body.items) {
+      const wsId = pod.metadata?.labels?.['workspace-id']
+      if (!wsId) continue
+      const list = podsByWs.get(wsId)
+      if (list) list.push(pod)
+      else podsByWs.set(wsId, [pod])
+    }
+
+    for (const sts of sets) {
+      const wsId = sts.metadata?.labels?.['workspace-id'] as string
+      const name = this.getResourceName(wsId)
+      out.set(wsId, {
+        phase: resolveStatefulSetStatus(sts),
+        endpoint: { address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001` },
+        replicas: { desired: sts.spec?.replicas ?? 0, ready: sts.status?.readyReplicas ?? 0 },
+        readyReplicaIds: readyReplicaIdsFromPods(podsByWs.get(wsId) ?? [], name),
+      })
+    }
+    return out
+  }
+
+  /** Delete a StatefulSet workspace's resources (StatefulSet + headless svc + PVC). */
+  private async deleteStatefulSetInstance(workspaceId: string): Promise<void> {
+    const name = this.getResourceName(workspaceId)
+    await Promise.all([
+      this.appsApi.deleteNamespacedStatefulSet(name, this.cfg.namespace).catch(swallow404),
+      this.coreApi.deleteNamespacedService(`${name}-hl`, this.cfg.namespace).catch(swallow404),
+      this.coreApi
+        .deleteNamespacedPersistentVolumeClaim(`${name}-workspace`, this.cfg.namespace)
+        .catch(swallow404),
+    ])
+  }
+
   // ── EnvironmentProvider interface ──
   // Infra-agnostic facade over the methods above, consumed by the runner. The
   // legacy methods stay (their callers are unchanged); these adapt signatures
@@ -695,6 +899,10 @@ export class KubernetesProvider implements EnvironmentProvider {
 
   /** Create if absent, else rebuild to converge (v1: cp bumps version → rebuild). */
   async apply(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
+    if (spec.runtimeMode === 'auto-scaling') {
+      await this.applyStatefulSet(workspaceId, spec)
+      return
+    }
     const existing = await this.getInstance(workspaceId)
     if (existing) {
       // rebuild swaps the Deployment (new container resources/image) but
@@ -714,11 +922,19 @@ export class KubernetesProvider implements EnvironmentProvider {
   }
 
   async stop(workspaceId: string): Promise<void> {
-    await this.stopInstance(workspaceId)
+    // runtime_mode isn't passed here — detect the form by what exists. A static
+    // workspace scales its Deployment; stopInstance returns false (404) when
+    // there is none, i.e. an auto-scaling workspace, whose StatefulSet we scale.
+    const scaled = await this.stopInstance(workspaceId)
+    if (!scaled) await this.scaleStatefulSet(workspaceId, 0)
   }
 
   async destroy(workspaceId: string): Promise<void> {
-    await this.deleteInstance(workspaceId)
+    // A StatefulSet-backed workspace has no Deployment/ClusterIP Service to
+    // delete; route teardown by the shape that actually exists.
+    const sts = await this.getStatefulSet(workspaceId)
+    if (sts) await this.deleteStatefulSetInstance(workspaceId)
+    else await this.deleteInstance(workspaceId)
   }
 
   async resize(workspaceId: string, resources: ComputeResources): Promise<void> {
@@ -746,7 +962,8 @@ export class KubernetesProvider implements EnvironmentProvider {
       }
     } catch (e: any) {
       if (e.response?.statusCode === 404) {
-        return { phase: 'unknown' }
+        // No Deployment — maybe an auto-scaling (StatefulSet) workspace.
+        return this.observeStatefulSet(workspaceId)
       }
       throw e
     }
@@ -771,6 +988,11 @@ export class KubernetesProvider implements EnvironmentProvider {
         },
       })
     }
+    // Merge in auto-scaling (StatefulSet) workspaces. A workspace is only ever
+    // one shape, so keys never collide.
+    for (const [wsId, state] of await this.observeAllStatefulSets()) {
+      out.set(wsId, state)
+    }
     return out
   }
 
@@ -778,6 +1000,7 @@ export class KubernetesProvider implements EnvironmentProvider {
     return {
       sharedFs: this.cfg.afs.enabled,
       persistentMemory: this.cfg.memoryFuseImage !== '',
+      multiReplica: this.cfg.multiReplica,
     }
   }
 }
