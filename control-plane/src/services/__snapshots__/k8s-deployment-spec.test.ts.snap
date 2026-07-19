@@ -776,3 +776,129 @@ exports[`buildDeploymentSpec golden master > minimal: afs off, memory off, no no
   },
 }
 `;
+
+exports[`buildStatefulSetSpec > golden master: shared RWX PVC, headless serviceName, parallel mgmt, N replicas 1`] = `
+{
+  "apiVersion": "apps/v1",
+  "kind": "StatefulSet",
+  "metadata": {
+    "annotations": {
+      "agent-platform/workspace-version": "6",
+    },
+    "labels": {
+      "app": "nap",
+      "component": "workspace",
+      "workspace-id": "ws1",
+    },
+    "name": "nap-ws1",
+  },
+  "spec": {
+    "podManagementPolicy": "Parallel",
+    "replicas": 3,
+    "selector": {
+      "matchLabels": {
+        "app": "nap",
+        "component": "workspace",
+        "workspace-id": "ws1",
+      },
+    },
+    "serviceName": "nap-ws1-hl",
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "nap",
+          "component": "workspace",
+          "workspace-id": "ws1",
+        },
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "WORKSPACE_DIR",
+                "value": "/workspace",
+              },
+              {
+                "name": "CP_URL",
+                "value": "http://nap-cp:3000",
+              },
+              {
+                "name": "WORKSPACE_ID",
+                "value": "ws1",
+              },
+            ],
+            "image": "nap-agent-claude-code:latest",
+            "livenessProbe": {
+              "failureThreshold": 6,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 30,
+              "timeoutSeconds": 5,
+            },
+            "name": "agent",
+            "ports": [
+              {
+                "containerPort": 3001,
+                "name": "http",
+              },
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 3,
+              "periodSeconds": 10,
+              "timeoutSeconds": 3,
+            },
+            "resources": {
+              "limits": {
+                "cpu": "500m",
+                "memory": "1Gi",
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi",
+              },
+            },
+            "startupProbe": {
+              "failureThreshold": 120,
+              "httpGet": {
+                "path": "/health",
+                "port": 3001,
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 5,
+              "timeoutSeconds": 3,
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/workspace",
+                "name": "workspace",
+              },
+            ],
+          },
+        ],
+        "nodeSelector": undefined,
+        "securityContext": {
+          "fsGroup": 1000,
+          "fsGroupChangePolicy": "OnRootMismatch",
+        },
+        "volumes": [
+          {
+            "name": "workspace",
+            "persistentVolumeClaim": {
+              "claimName": "nap-ws1-workspace",
+            },
+          },
+        ],
+      },
+    },
+  },
+}
+`;
