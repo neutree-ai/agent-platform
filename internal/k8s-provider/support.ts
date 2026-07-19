@@ -40,6 +40,17 @@ export function workspaceLabels(cfg: K8sConfig, workspaceId: string): Record<str
   }
 }
 
+/** The workspace's persistent-volume-claim name. */
+export function workspacePvcName(cfg: K8sConfig, workspaceId: string): string {
+  return `${resourceName(cfg, workspaceId)}-workspace`
+}
+
+/** A pod is Ready when it has container statuses and all of them are ready. */
+export function isPodReady(pod: k8s.V1Pod): boolean {
+  const statuses = pod.status?.containerStatuses ?? []
+  return statuses.length > 0 && statuses.every((c) => c.ready)
+}
+
 const STORAGE_UNITS: Record<string, number> = {
   Ki: 2 ** 10,
   Mi: 2 ** 20,
