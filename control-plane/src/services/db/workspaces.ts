@@ -365,13 +365,15 @@ export async function updateWorkspaceConfig(
     'agent_settings',
     'compute_resources',
     'auto_start',
+    'auto_scaling',
     'template_id',
     'template_version',
   ] as const
+  const jsonbFields: readonly (typeof fields)[number][] = ['compute_resources', 'auto_scaling']
   for (const field of fields) {
     if (updates[field] !== undefined) {
       sets.push(`${field} = $${paramIndex++}`)
-      values.push(field === 'compute_resources' ? JSON.stringify(updates[field]) : updates[field])
+      values.push(jsonbFields.includes(field) ? JSON.stringify(updates[field]) : updates[field])
     }
   }
 

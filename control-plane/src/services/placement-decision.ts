@@ -1,3 +1,4 @@
+import { defaultCfg } from '../../../internal/k8s-provider'
 import { type EnvironmentWithAccess, getEnvironmentForUser } from './db/environments'
 
 // Placement decision (design §8): choose the environment a new workspace runs
@@ -11,6 +12,14 @@ const BUILTIN_ENV = 'builtin'
 interface RequiredFeatures {
   sharedFs?: boolean
   persistentMemory?: boolean
+  /** Auto-scaling: multiple replicas on one RWX volume (design §7). */
+  multiReplica?: boolean
+}
+
+interface Supports {
+  sharedFs: boolean
+  persistentMemory: boolean
+  multiReplica: boolean
 }
 
 type PlacementDecision =
@@ -18,18 +27,28 @@ type PlacementDecision =
       ok: true
       environmentId: string
       /** What the chosen environment can actually provide (drives opportunistic features). */
-      supports: { sharedFs: boolean; persistentMemory: boolean }
+      supports: Supports
     }
   | { ok: false; error: string }
 
-function envSupports(
-  env: EnvironmentWithAccess,
-  feature: 'sharedFs' | 'persistentMemory',
-): boolean {
-  // The built-in cluster ships afs-fuse + memory-fuse, so it supports everything;
-  // its capabilities row is empty by design. Remote environments must advertise.
-  if (env.is_builtin) return true
+function envSupports(env: EnvironmentWithAccess, feature: keyof Supports): boolean {
+  if (env.is_builtin) {
+    // The built-in cluster ships afs-fuse + memory-fuse unconditionally. But
+    // multiReplica is deploy-gated (it needs a ReadWriteMany storage class), so
+    // read it from cp's own provider config rather than assuming true.
+    if (feature === 'multiReplica') return defaultCfg.multiReplica
+    return true
+  }
+  // Remote environments advertise every capability, multiReplica included.
   return env.capabilities?.[feature] === true
+}
+
+function supportsFor(env: EnvironmentWithAccess): Supports {
+  return {
+    sharedFs: envSupports(env, 'sharedFs'),
+    persistentMemory: envSupports(env, 'persistentMemory'),
+    multiReplica: envSupports(env, 'multiReplica'),
+  }
 }
 
 export async function chooseEnvironment(opts: {
@@ -43,7 +62,7 @@ export async function chooseEnvironment(opts: {
     return {
       ok: true,
       environmentId: BUILTIN_ENV,
-      supports: { sharedFs: true, persistentMemory: true },
+      supports: { sharedFs: true, persistentMemory: true, multiReplica: defaultCfg.multiReplica },
     }
   }
 
@@ -62,15 +81,18 @@ export async function chooseEnvironment(opts: {
   }
 
   // Capability negotiation: every explicitly required feature must be supported.
-  const supports = {
-    sharedFs: envSupports(env, 'sharedFs'),
-    persistentMemory: envSupports(env, 'persistentMemory'),
-  }
+  const supports = supportsFor(env)
   if (opts.required.persistentMemory && !supports.persistentMemory) {
     return { ok: false, error: `Environment '${env.name}' does not support persistent memory` }
   }
   if (opts.required.sharedFs && !supports.sharedFs) {
     return { ok: false, error: `Environment '${env.name}' does not support a shared filesystem` }
+  }
+  if (opts.required.multiReplica && !supports.multiReplica) {
+    return {
+      ok: false,
+      error: `Environment '${env.name}' does not support auto-scaling workspaces`,
+    }
   }
 
   return { ok: true, environmentId: env.id, supports }
