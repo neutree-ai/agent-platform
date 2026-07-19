@@ -63,6 +63,14 @@ export interface Session {
   caller_user_id: string | null
   /** Calling agent's workspace id when `source = 'agent'`; null otherwise. */
   caller_workspace_id: string | null
+  /**
+   * The replica id this session is pinned to on an auto-scaling workspace, so
+   * every turn hits the same agent process (shared-volume transcript safety).
+   * NULL for static single-replica sessions; the routing seam resolves NULL to
+   * the workspace's default address. Set by the replica router on the session's
+   * first turn.
+   */
+  replica_ordinal: number | null
   pending_message: SessionPendingMessage | null
   /** When the session was starred, or null when it is not starred. */
   starred_at: string | null
