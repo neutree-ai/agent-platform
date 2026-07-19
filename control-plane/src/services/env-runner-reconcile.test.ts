@@ -290,9 +290,7 @@ describe('reconcileOnce decision table', () => {
     // scale-up readiness fills in while phase stays 'running'. An observation
     // carrying readyReplicaIds must be recorded even when phase is unchanged.
     const provider = new FakeProvider({
-      observeAll: new Map([
-        ['ws1', { phase: 'running', endpoint: { readyReplicaIds: [0, 2], desiredReplicas: 3 } }],
-      ]),
+      observeAll: new Map([['ws1', { phase: 'running', endpoint: { readyReplicaIds: [0, 2] } }]]),
     })
     const transport = new FakeTransport([
       placement({ desired_phase: 'running', observed_phase: 'running' }),
@@ -302,7 +300,7 @@ describe('reconcileOnce decision table', () => {
 
     expect(provider.count('apply')).toBe(0)
     expect(transport.count('writeObserved')).toBe(1)
-    expect(transport.writes()[0].endpoint).toEqual({ readyReplicaIds: [0, 2], desiredReplicas: 3 })
+    expect(transport.writes()[0].endpoint).toEqual({ readyReplicaIds: [0, 2] })
     // Still a no-op action (no mutation) — the write only refreshes observed state.
     expect(result).toMatchObject({ acted: 0, noop: 1, failed: 0 })
   })

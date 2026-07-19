@@ -121,16 +121,13 @@ export interface EnvironmentEndpoint {
   routeKey?: string
   /**
    * For an auto-scaling workspace: the provider-assigned ids of the Ready
-   * replicas (a subset of `[0, desiredReplicas)`). This is the readiness signal
-   * cp routes on — the replicas reachable right now. It rides on the endpoint
-   * (not a separate observed field) because for a multi-replica workspace the
-   * ready set IS its reachability; it therefore flows to cp through the existing
-   * observed-endpoint channel with no extra plumbing. Omitted for single-replica
-   * (static) workspaces.
+   * replicas. This is the readiness signal cp routes on — the replicas reachable
+   * right now. It rides on the endpoint (not a separate observed field) because
+   * for a multi-replica workspace the ready set IS its reachability; it therefore
+   * flows to cp through the existing observed-endpoint channel with no extra
+   * plumbing. Omitted for single-replica (static) workspaces.
    */
   readyReplicaIds?: number[]
-  /** Desired replica count for an auto-scaling workspace (status display). */
-  desiredReplicas?: number
 }
 
 /** The runner's observation of a single workspace, written back to cp. */

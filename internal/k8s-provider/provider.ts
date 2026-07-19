@@ -8,11 +8,19 @@ import type {
 } from '../types/environments'
 import { AutoScalingWorkload } from './auto-scaling-workload'
 import { type K8sConfig, defaultCfg } from './config'
-import { createOrAdopt, expandWorkspacePvc, resourceName, workspaceLabels } from './support'
+import {
+  createOrAdopt,
+  expandWorkspacePvc,
+  isPodReady,
+  resourceName,
+  workspaceLabels,
+  workspacePvcName,
+} from './support'
 import {
   MEMORY_FUSE_CONTAINER_NAME,
   type ReconciledStatus,
   TEMPLATE_VERSION_ANNOTATION,
+  WORKSPACE_SERVICE_PORTS,
   buildDeploymentSpec,
   resolveDeploymentStatus,
 } from './workspace-spec'
@@ -80,7 +88,7 @@ export class KubernetesProvider implements EnvironmentProvider {
   ): Promise<K8sInstance> {
     const name = this.getResourceName(workspaceId)
     const labels = this.getLabels(workspaceId)
-    const pvcName = `${name}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
 
     // Create PVC for workspace persistent storage
     const storageSize = resources?.storage || this.cfg.workspaceStorageSize
@@ -116,11 +124,7 @@ export class KubernetesProvider implements EnvironmentProvider {
         metadata: { name, labels },
         spec: {
           selector: labels,
-          ports: [
-            { port: 3001, targetPort: 3001 as any, name: 'http' },
-            { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
-            { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
-          ],
+          ports: WORKSPACE_SERVICE_PORTS,
           type: 'ClusterIP',
         },
       }),
@@ -293,7 +297,7 @@ export class KubernetesProvider implements EnvironmentProvider {
   ): Promise<void> {
     const name = this.getResourceName(workspaceId)
     const labels = this.getLabels(workspaceId)
-    const pvcName = `${name}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
 
     // Delete existing deployment
     try {
@@ -361,7 +365,7 @@ export class KubernetesProvider implements EnvironmentProvider {
 
   /** Expand PVC storage (grow-only, 404/shrink-tolerant). See expandWorkspacePvc. */
   async expandInstanceStorage(workspaceId: string, newSize: string): Promise<boolean> {
-    const pvcName = `${this.getResourceName(workspaceId)}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
     return expandWorkspacePvc(this.coreApi, this.cfg, pvcName, newSize)
   }
 
@@ -384,7 +388,7 @@ export class KubernetesProvider implements EnvironmentProvider {
       conditions: [],
     }
 
-    const pvcName = `${name}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
 
     // Query all resources concurrently
     const [depResult, svcResult, pvcResult, podsResult] = await Promise.allSettled([
@@ -480,11 +484,8 @@ export class KubernetesProvider implements EnvironmentProvider {
         const podName = pod.metadata?.name || ''
         podNames.push(podName)
 
-        const containerStatuses = pod.status?.containerStatuses || []
-        const allReady = containerStatuses.length > 0 && containerStatuses.every((c) => c.ready)
-
         result.pods.total++
-        if (allReady) result.pods.ready++
+        if (isPodReady(pod)) result.pods.ready++
       }
 
       // Fetch events for all pods concurrently
@@ -607,7 +608,10 @@ export class KubernetesProvider implements EnvironmentProvider {
       await Promise.all([
         this.appsApi.deleteNamespacedDeployment(name, this.cfg.namespace),
         this.coreApi.deleteNamespacedService(name, this.cfg.namespace),
-        this.coreApi.deleteNamespacedPersistentVolumeClaim(`${name}-workspace`, this.cfg.namespace),
+        this.coreApi.deleteNamespacedPersistentVolumeClaim(
+          workspacePvcName(this.cfg, workspaceId),
+          this.cfg.namespace,
+        ),
       ])
       return true
     } catch (e: any) {
@@ -648,11 +652,9 @@ export class KubernetesProvider implements EnvironmentProvider {
   async start(workspaceId: string): Promise<void> {
     // Detect the shape by what exists (no spec here). A static workspace scales
     // its Deployment 0→1; startInstance returns false (404) when there is none,
-    // i.e. an auto-scaling workspace, whose StatefulSet we wake instead.
+    // i.e. an auto-scaling workspace, whose StatefulSet we wake instead (also a
+    // no-op if it has neither shape).
     const started = await this.startInstance(workspaceId)
-    // startInstance returns false (404) when there is no Deployment, i.e. an
-    // auto-scaling workspace — wake its StatefulSet instead (also a no-op if it
-    // has neither shape).
     if (!started) await this.autoScaling.start(workspaceId)
   }
 
