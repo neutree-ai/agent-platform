@@ -285,6 +285,28 @@ describe('reconcileOnce decision table', () => {
     expect(result).toMatchObject({ acted: 0, noop: 1, failed: 0 })
   })
 
+  it('converged auto-scaling (running/running) → writeObserved refreshes the ready-replica set every pass', async () => {
+    // A phase-only gate would let readyReplicaIds go stale: pods die/recover and
+    // scale-up readiness fills in while phase stays 'running'. An observation
+    // carrying readyReplicaIds must be recorded even when phase is unchanged.
+    const provider = new FakeProvider({
+      observeAll: new Map([
+        ['ws1', { phase: 'running', endpoint: { readyReplicaIds: [0, 2], desiredReplicas: 3 } }],
+      ]),
+    })
+    const transport = new FakeTransport([
+      placement({ desired_phase: 'running', observed_phase: 'running' }),
+    ])
+
+    const result = await reconcileOnce(provider, transport)
+
+    expect(provider.count('apply')).toBe(0)
+    expect(transport.count('writeObserved')).toBe(1)
+    expect(transport.writes()[0].endpoint).toEqual({ readyReplicaIds: [0, 2], desiredReplicas: 3 })
+    // Still a no-op action (no mutation) — the write only refreshes observed state.
+    expect(result).toMatchObject({ acted: 0, noop: 1, failed: 0 })
+  })
+
   it('observeAll present → used once, provider.observe never called; placement absent from map treated as phase unknown', async () => {
     // wsA converged/running (present in the batch map, no post-action re-observe);
     // wsB absent from the map → must be treated as 'unknown'. If it were treated

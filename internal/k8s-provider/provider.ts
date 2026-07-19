@@ -827,9 +827,11 @@ export class KubernetesProvider implements EnvironmentProvider {
     )
     return {
       phase: resolveStatefulSetStatus(sts),
-      endpoint: { address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001` },
-      replicas: { desired: sts.spec?.replicas ?? 0, ready: sts.status?.readyReplicas ?? 0 },
-      readyReplicaIds: readyReplicaIdsFromPods(pods.body.items, name),
+      endpoint: {
+        address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001`,
+        readyReplicaIds: readyReplicaIdsFromPods(pods.body.items, name),
+        desiredReplicas: sts.spec?.replicas ?? 0,
+      },
     }
   }
 
@@ -870,9 +872,11 @@ export class KubernetesProvider implements EnvironmentProvider {
       const name = this.getResourceName(wsId)
       out.set(wsId, {
         phase: resolveStatefulSetStatus(sts),
-        endpoint: { address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001` },
-        replicas: { desired: sts.spec?.replicas ?? 0, ready: sts.status?.readyReplicas ?? 0 },
-        readyReplicaIds: readyReplicaIdsFromPods(podsByWs.get(wsId) ?? [], name),
+        endpoint: {
+          address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001`,
+          readyReplicaIds: readyReplicaIdsFromPods(podsByWs.get(wsId) ?? [], name),
+          desiredReplicas: sts.spec?.replicas ?? 0,
+        },
       })
     }
     return out
