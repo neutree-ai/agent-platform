@@ -149,6 +149,22 @@ export async function updateSessionStats(
   ])
 }
 
+/**
+ * Pin a session to a replica of its auto-scaling workspace. Idempotent — the
+ * router writes the same id every turn while affinity holds, and a new id when
+ * it rebinds after the old replica dropped out. NULL for static workspaces
+ * (never called with a replica there).
+ */
+export async function setSessionReplicaOrdinal(
+  sessionId: string,
+  replicaOrdinal: number,
+): Promise<void> {
+  await pool.query('UPDATE sessions SET replica_ordinal = $1 WHERE id = $2', [
+    replicaOrdinal,
+    sessionId,
+  ])
+}
+
 export async function transitionSessionStatus(
   sessionId: string,
   to: 'agent' | 'human' | 'idle',
