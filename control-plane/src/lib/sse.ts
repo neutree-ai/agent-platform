@@ -385,6 +385,13 @@ interface InterceptedSSEOptions {
    * for static single-replica workspaces — the binding stays NULL.
    */
   replicaId?: number
+  /**
+   * Fired exactly once when the turn terminates — clean end, error, interrupt,
+   * or the agent pod dying mid-turn — after the stream is fully done. The turn
+   * gate hangs the admission-slot release here so capacity is freed on every
+   * termination path, including pod death (the slot-leak risk).
+   */
+  onTurnEnd?: () => void
 }
 
 export function createInterceptedSSEResponse(
@@ -403,8 +410,12 @@ export function createInterceptedSSEResponse(
     sessionToken,
     onNewSession,
     replicaId,
+    onTurnEnd,
   } = opts
   if (!response.body) {
+    // No stream to intercept — the turn is over before it began. Fire the
+    // end hook here so the admission slot is still released exactly once.
+    onTurnEnd?.()
     return new Response(response.body, {
       status: response.status,
       headers: {
@@ -546,6 +557,10 @@ export function createInterceptedSSEResponse(
       console.error(`[SSE] runTurn unexpectedly threw ${tag}:`, e)
     })
     .finally(() => {
+      // The turn is fully terminated here (clean end, error, interrupt, or
+      // pod death). Release the admission slot exactly once — before the drain
+      // below, whose dispatched follow-up acquires its own slot.
+      onTurnEnd?.()
       // After a cleanly-completed turn, dispatch any follow-up the user
       // queued mid-turn. This runs once `runTurn` has fully resolved — both
       // plugins' `onEnd` are done and `activeStreams` is cleaned up — so the
