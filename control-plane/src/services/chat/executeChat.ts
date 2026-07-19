@@ -14,6 +14,7 @@ import { getWorkspace } from '../db/workspaces'
 import { pickReplicaForTurn } from '../replica-router'
 import { WorkspaceStartError, ensureWorkspaceRunning } from '../workspace-autostart'
 import { type ChatImage, buildAgentChatBody, buildUserMessageBlocks } from './request'
+import { TurnCapacityError, type TurnSlot, acquireTurn } from './turn-gate'
 
 interface ExecuteChatOpts {
   workspace: Workspace
@@ -63,6 +64,23 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   const sessionId = opts.sessionId
   let userMessageText: string | null = opts.message
 
+  // Admit the turn before doing any work. Auto-scaling workspaces are capped at
+  // readyReplicas × target (queue / 503 over the cap); static workspaces are
+  // only accounted, never blocked. The slot must be released exactly once when
+  // the turn ends: the streaming path hands it to the interceptor (onTurnEnd),
+  // and EVERY early return below releases it inline first. release() is
+  // idempotent, so any belt-and-suspenders double-release is harmless — but a
+  // missed one leaks capacity, so a new early return must release too.
+  let slot: TurnSlot
+  try {
+    slot = await acquireTurn(workspaceId)
+  } catch (e) {
+    if (e instanceof TurnCapacityError) {
+      return jsonError('Workspace is busy, please retry shortly', 503)
+    }
+    throw e
+  }
+
   // Auto-start a stopped workspace before dispatching the turn. Covers every
   // trigger source that funnels through executeChat — interactive chat,
   // scheduled jobs, connector events, batch. Blocks until the agent /health
@@ -71,6 +89,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   try {
     await ensureWorkspaceRunning(workspace)
   } catch (e) {
+    slot.release()
     if (e instanceof WorkspaceStartError) {
       return jsonError(e.message, 503)
     }
@@ -86,6 +105,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   if (sessionId) {
     const session = await getSession(sessionId)
     if (!session || session.workspace_id !== workspaceId) {
+      slot.release()
       return jsonError('Session not found for this workspace', 400)
     }
     boundReplica = session.replica_ordinal ?? undefined
@@ -139,6 +159,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     })
   } catch (e: any) {
     console.error(`[chat] Agent fetch failed workspace=${workspaceId}:`, e.message)
+    slot.release()
     if (sessionId) {
       await transitionSessionStatus(sessionId, 'idle').catch(() => {})
     }
@@ -148,6 +169,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   if (!response.headers.get('Content-Type')?.includes('text/event-stream')) {
     // Non-SSE error from the agent (e.g. 4xx/5xx JSON). Pass the body
     // through so the caller can see what the agent said.
+    slot.release()
     const text = await response.text().catch(() => '')
     return new Response(text || JSON.stringify({ error: 'Agent returned non-SSE response' }), {
       status: response.status || 502,
@@ -213,6 +235,10 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     sessionToken,
     onNewSession,
     replicaId,
+    // Hand the admission slot to the interceptor: it releases exactly once when
+    // the turn terminates (clean end, error, interrupt, or pod death), which is
+    // the single point that also frees the accounting for the autoscaler.
+    onTurnEnd: () => slot.release(),
   })
 }
 
