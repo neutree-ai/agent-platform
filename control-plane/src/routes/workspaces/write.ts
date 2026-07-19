@@ -104,7 +104,9 @@ write.openapi(createRouteDef, async (c) => {
       userId: currentUser.sub,
       isSystem,
       requestedEnvironmentId: body.environment_id,
-      required: {},
+      // Auto-scaling needs the environment to advertise multiReplica (a RWX
+      // storage class); a static workspace requires nothing extra.
+      required: { multiReplica: body.auto_scaling ? true : undefined },
     })
     if (!placement.ok) {
       return c.json({ error: placement.error }, 400)
@@ -208,6 +210,19 @@ write.openapi(createRouteDef, async (c) => {
         // still attach a store later via the global Memory app.
         console.error(`[workspace ${workspace.id}] auto-attach memory store failed:`, e.message)
       }
+    }
+
+    // Persist the auto-scaling shape (immutable after creation) before placing,
+    // so the first spec the runner sees already carries runtimeMode + replicas.
+    // Static workspaces skip this and stay a plain single-replica Deployment.
+    if (body.auto_scaling) {
+      await updateWorkspaceConfig(workspace.id, {
+        auto_scaling: {
+          min_replicas: body.auto_scaling.min_replicas,
+          max_replicas: body.auto_scaling.max_replicas,
+          scale_to_zero_idle_seconds: body.auto_scaling.scale_to_zero_idle_seconds ?? null,
+        },
+      })
     }
 
     // Control inversion (P1): record desired state; the env-runner creates the

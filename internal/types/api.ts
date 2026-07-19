@@ -82,6 +82,20 @@ export const WorkspaceCreateBodySchema = z.object({
   // Recipient consent for template-provided schedules: name → enabled. Absent
   // entries fall back to the template's enabled_default. Both UI and API set this.
   schedule_overrides: z.record(z.string(), z.boolean()).optional(),
+  // Opt into auto-scaling (0..max replicas sharing one RWX volume). Omitted →
+  // a static single-replica workspace. Set only at creation — the runtime shape
+  // is immutable, so this field is deliberately absent from the config-update
+  // schema. Per-replica turn capacity reuses max_concurrency.
+  auto_scaling: z
+    .object({
+      min_replicas: z.number().int().min(0),
+      max_replicas: z.number().int().min(1),
+      scale_to_zero_idle_seconds: z.number().int().positive().nullable().optional(),
+    })
+    .refine((v) => v.min_replicas <= v.max_replicas, {
+      message: 'min_replicas must be <= max_replicas',
+    })
+    .optional(),
 })
 
 export type WorkspaceCreateBody = z.infer<typeof WorkspaceCreateBodySchema>
@@ -1354,7 +1368,7 @@ export const ScheduleCreateBodySchema = z
     path: ['cron'],
   })
   .refine((v) => !v.cron || !hasOutOfRangeCronStep(v.cron), {
-    message: 'cron step exceeds a field\'s valid range (e.g. minute step > 59)',
+    message: "cron step exceeds a field's valid range (e.g. minute step > 59)",
     path: ['cron'],
   })
 
@@ -1373,7 +1387,7 @@ export const ScheduleUpdateBodySchema = z
   })
   .partial()
   .refine((v) => !v.cron || !hasOutOfRangeCronStep(v.cron), {
-    message: 'cron step exceeds a field\'s valid range (e.g. minute step > 59)',
+    message: "cron step exceeds a field's valid range (e.g. minute step > 59)",
     path: ['cron'],
   })
 
