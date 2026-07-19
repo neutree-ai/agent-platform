@@ -260,6 +260,77 @@ export function buildDeploymentSpec(
 }
 
 /**
+ * The auto-scaling workload form: a StatefulSet whose pods all mount the SAME
+ * shared ReadWriteMany workspace PVC (via the pod template's `workspace`
+ * volume) — deliberately NOT volumeClaimTemplates. StatefulSet is used only for
+ * its stable per-ordinal identity: stable DNS (`<name>-<n>.<name>-hl`) so cp
+ * routing is stateless, and ordered scale-down (highest ordinal first) so
+ * draining has a determinate target. The pod template is byte-identical to the
+ * Deployment's — same container/sidecar/volume layout via
+ * {@link buildWorkspacePodTemplate} — so there is no second template to drift.
+ */
+export function buildStatefulSetSpec(
+  name: string,
+  labels: Record<string, string>,
+  workspaceId: string,
+  agentType: string,
+  pvcName: string,
+  replicas: number,
+  resources?: ComputeResources,
+  cfg: K8sConfig = defaultCfg,
+): k8s.V1StatefulSet {
+  return {
+    apiVersion: 'apps/v1',
+    kind: 'StatefulSet',
+    metadata: {
+      name,
+      labels,
+      annotations: { [TEMPLATE_VERSION_ANNOTATION]: String(CURRENT_TEMPLATE_VERSION) },
+    },
+    spec: {
+      serviceName: `${name}-hl`,
+      replicas,
+      // Bring all replicas up/down at once — replicas share the workspace
+      // volume and have no inter-pod handshake, so OrderedReady's one-at-a-time
+      // gating would only make scale-up needlessly slow. Scale-DOWN still
+      // removes the highest ordinal first regardless of this policy.
+      podManagementPolicy: 'Parallel',
+      selector: { matchLabels: labels },
+      template: buildWorkspacePodTemplate(labels, workspaceId, agentType, pvcName, resources, cfg),
+      // No volumeClaimTemplates: every pod mounts the one shared RWX PVC named
+      // in the pod template. See the function doc.
+    },
+  }
+}
+
+/**
+ * The headless Service backing a StatefulSet workspace: `clusterIP: None`, so
+ * each pod gets a stable DNS name (`<name>-<ordinal>.<name>-hl.<ns>.svc`) that
+ * cp routes to per replica. No ClusterIP Service is created for an auto-scaling
+ * workspace — a VIP would round-robin across replicas and defeat session
+ * affinity.
+ */
+export function buildHeadlessServiceSpec(
+  name: string,
+  labels: Record<string, string>,
+): k8s.V1Service {
+  return {
+    apiVersion: 'v1',
+    kind: 'Service',
+    metadata: { name: `${name}-hl`, labels },
+    spec: {
+      clusterIP: 'None',
+      selector: labels,
+      ports: [
+        { port: 3001, targetPort: 3001 as any, name: 'http' },
+        { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
+        { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
+      ],
+    },
+  }
+}
+
+/**
  * Batch-check K8s deployment statuses for active workspaces.
  * Returns a map of workspaceId → resolved status.
  * Uses a single listNamespacedDeployment call (O(1) K8s API).
@@ -291,4 +362,43 @@ export function deploymentTemplateVersion(dep: k8s.V1Deployment | undefined): nu
   if (raw === undefined) return null
   const n = Number(raw)
   return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Resolve a StatefulSet to a workspace status. Unlike a Deployment there is no
+ * Progressing condition to read, so a not-yet-ready set is always 'starting'
+ * (the pod's 600s startupProbe grace covers a slow boot); the autoscaler and
+ * per-replica readiness live in {@link readyReplicaIdsFromPods}, not here.
+ */
+export function resolveStatefulSetStatus(
+  sts: k8s.V1StatefulSet | undefined,
+): ReconciledStatus {
+  const desired = sts?.spec?.replicas ?? 0
+  if (!sts || desired === 0) return 'stopped'
+  const ready = sts.status?.readyReplicas ?? 0
+  return ready >= 1 ? 'running' : 'starting'
+}
+
+/** Parse the ordinal (replica id) out of a StatefulSet pod name, or null. */
+function podReplicaOrdinal(podName: string, stsName: string): number | null {
+  const prefix = `${stsName}-`
+  if (!podName.startsWith(prefix)) return null
+  const suffix = podName.slice(prefix.length)
+  return /^\d+$/.test(suffix) ? Number(suffix) : null
+}
+
+/**
+ * The replica ids of the Ready pods of a StatefulSet — the readiness signal cp
+ * routes on (reported via ObservedState.readyReplicaIds). A pod is Ready when
+ * it has container statuses and all of them are ready. Returned sorted.
+ */
+export function readyReplicaIdsFromPods(pods: k8s.V1Pod[], stsName: string): number[] {
+  const ids: number[] = []
+  for (const pod of pods) {
+    const ordinal = podReplicaOrdinal(pod.metadata?.name ?? '', stsName)
+    if (ordinal === null) continue
+    const statuses = pod.status?.containerStatuses ?? []
+    if (statuses.length > 0 && statuses.every((c) => c.ready)) ids.push(ordinal)
+  }
+  return ids.sort((a, b) => a - b)
 }
