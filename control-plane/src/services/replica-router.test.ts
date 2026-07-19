@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { __resetReplicaRouter, pickReplicaForTurn, syncReadyReplicas } from './replica-router'
+import {
+  __resetReplicaRouter,
+  perReplicaCapacity,
+  pickReplicaForTurn,
+  syncReadyReplicas,
+} from './replica-router'
 
 // The replica router is pure in-memory state: a ready set fed by observation
 // and a session→replica pick. It must be a no-op (undefined) for any workspace
@@ -10,7 +15,8 @@ beforeEach(() => {
   __resetReplicaRouter()
 })
 
-const snapshot = (entries: Record<string, number[]>) => new Map(Object.entries(entries))
+const snapshot = (entries: Record<string, number[]>) =>
+  new Map(Object.entries(entries).map(([ws, ids]) => [ws, { ids }]))
 
 describe('pickReplicaForTurn', () => {
   it('returns undefined for a workspace with no reported replicas (static)', () => {
@@ -51,5 +57,18 @@ describe('syncReadyReplicas', () => {
   it('treats an empty replica list as no auto-scaling replicas', () => {
     syncReadyReplicas(snapshot({ ws1: [] }))
     expect(pickReplicaForTurn('ws1')).toBeUndefined()
+  })
+})
+
+describe('perReplicaCapacity', () => {
+  it('carries a workspace’s per-replica capacity from the snapshot', () => {
+    syncReadyReplicas(new Map([['ws1', { ids: [0, 1], perReplicaCapacity: 10 }]]))
+    expect(perReplicaCapacity('ws1')).toBe(10)
+  })
+
+  it('is undefined for an unknown workspace or one reported without a capacity', () => {
+    expect(perReplicaCapacity('static-ws')).toBeUndefined()
+    syncReadyReplicas(new Map([['ws1', { ids: [0] }]]))
+    expect(perReplicaCapacity('ws1')).toBeUndefined()
   })
 })

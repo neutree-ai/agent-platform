@@ -26,8 +26,22 @@
 
 import { listWorkspaceReplicaSets } from './db/env-placements'
 
+/** Per-workspace snapshot of one observation: ready replicas + capacity input. */
+interface ReplicaSnapshot {
+  /** Provider-assigned ids of the ready replicas. */
+  ids: number[]
+  /**
+   * The workspace's per-replica turn capacity (its own max_concurrency). Feeds
+   * the turn gate's capacity sizing; undefined when unknown (no config row),
+   * which leaves the workspace unenforced.
+   */
+  perReplicaCapacity?: number
+}
+
 /** Ready replica ids per workspace, sorted. Absent = no auto-scaling replicas. */
 const readyReplicas = new Map<string, number[]>()
+/** Per-replica turn capacity (max_concurrency) per workspace. */
+const perReplicaCap = new Map<string, number>()
 /** Round-robin cursor per workspace, so new sessions spread across replicas. */
 const rrCursor = new Map<string, number>()
 
@@ -38,14 +52,17 @@ const rrCursor = new Map<string, number>()
  * routing falls back to the default address. Cursors for vanished workspaces are
  * pruned so the maps can't grow without bound.
  */
-export function syncReadyReplicas(snapshot: ReadonlyMap<string, number[]>): void {
+export function syncReadyReplicas(snapshot: ReadonlyMap<string, ReplicaSnapshot>): void {
   readyReplicas.clear()
-  for (const [workspaceId, ids] of snapshot) {
-    if (ids.length > 0)
-      readyReplicas.set(
-        workspaceId,
-        [...ids].sort((a, b) => a - b),
-      )
+  perReplicaCap.clear()
+  for (const [workspaceId, snap] of snapshot) {
+    if (snap.ids.length === 0) continue
+    readyReplicas.set(
+      workspaceId,
+      [...snap.ids].sort((a, b) => a - b),
+    )
+    if (snap.perReplicaCapacity !== undefined)
+      perReplicaCap.set(workspaceId, snap.perReplicaCapacity)
   }
   for (const workspaceId of rrCursor.keys()) {
     if (!readyReplicas.has(workspaceId)) rrCursor.delete(workspaceId)
@@ -59,7 +76,14 @@ export function syncReadyReplicas(snapshot: ReadonlyMap<string, number[]>): void
  */
 export async function refreshReplicaRouter(): Promise<void> {
   const rows = await listWorkspaceReplicaSets()
-  syncReadyReplicas(new Map(rows.map((r) => [r.workspace_id, r.ready_replica_ids])))
+  syncReadyReplicas(
+    new Map(
+      rows.map((r) => [
+        r.workspace_id,
+        { ids: r.ready_replica_ids, perReplicaCapacity: r.max_concurrency ?? undefined },
+      ]),
+    ),
+  )
 }
 
 /**
@@ -100,8 +124,18 @@ export function readyReplicaCount(workspaceId: string): number {
   return readyReplicas.get(workspaceId)?.length ?? 0
 }
 
+/**
+ * A workspace's per-replica turn capacity (its own max_concurrency), or
+ * undefined for a static workspace or one whose capacity is unknown. The turn
+ * gate multiplies this by the ready replica count to size admission.
+ */
+export function perReplicaCapacity(workspaceId: string): number | undefined {
+  return perReplicaCap.get(workspaceId)
+}
+
 /** Test seam: forget all in-memory routing state. */
 export function __resetReplicaRouter(): void {
   readyReplicas.clear()
+  perReplicaCap.clear()
   rrCursor.clear()
 }

@@ -23,15 +23,7 @@
 // cp is single-process, so a plain in-memory counter + FIFO queue is the whole
 // coordination primitive; no distributed locking.
 
-import { readyReplicaCount } from '../replica-router'
-
-// Concurrent turns one replica carries — the per-replica capacity. This is the
-// workspace's own max_concurrency (workspace_config.max_concurrency, the same
-// per-workspace knob the scheduler already caps concurrent jobs with, default
-// 3): one replica carries what the single static pod carried. That per-workspace
-// value is read in with the config stage; this constant is only the dormant
-// fallback until then (no auto-scaling workspace can exist yet to reach it).
-const FALLBACK_SESSIONS_PER_REPLICA = Number(process.env.TURN_GATE_FALLBACK_TARGET) || 3
+import { perReplicaCapacity, readyReplicaCount } from '../replica-router'
 
 // How many turns may queue per workspace before new arrivals are rejected
 // outright instead of queued — a memory backstop against a flood, nothing more.
@@ -62,14 +54,17 @@ export interface TurnSlot {
 }
 
 /**
- * A workspace's concurrency ceiling right now. Static (no ready replicas) →
- * Infinity, so preview accounts but never blocks. Auto-scaling → readyReplicas ×
- * per-replica capacity, so the cap grows and shrinks with the live replica count.
+ * A workspace's concurrency ceiling right now, sized entirely from the replica
+ * router's live snapshot — no gate-side constant. Static (no ready replicas) or
+ * a workspace whose per-replica capacity is unknown → Infinity, so preview
+ * accounts but never blocks. Auto-scaling → readyReplicas × its own
+ * max_concurrency, so the cap grows and shrinks with the live replica count.
  */
 function capacityOf(workspaceId: string): number {
   const ready = readyReplicaCount(workspaceId)
-  if (ready === 0) return Number.POSITIVE_INFINITY
-  return ready * FALLBACK_SESSIONS_PER_REPLICA
+  const perReplica = perReplicaCapacity(workspaceId)
+  if (ready === 0 || perReplica === undefined) return Number.POSITIVE_INFINITY
+  return ready * perReplica
 }
 
 function decrement(workspaceId: string): void {
