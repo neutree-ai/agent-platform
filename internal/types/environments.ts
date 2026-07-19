@@ -119,6 +119,18 @@ export interface EnvironmentEndpoint {
   address?: string
   /** Tunnel routing key for remote environments (P2). */
   routeKey?: string
+  /**
+   * For an auto-scaling workspace: the provider-assigned ids of the Ready
+   * replicas (a subset of `[0, desiredReplicas)`). This is the readiness signal
+   * cp routes on — the replicas reachable right now. It rides on the endpoint
+   * (not a separate observed field) because for a multi-replica workspace the
+   * ready set IS its reachability; it therefore flows to cp through the existing
+   * observed-endpoint channel with no extra plumbing. Omitted for single-replica
+   * (static) workspaces.
+   */
+  readyReplicaIds?: number[]
+  /** Desired replica count for an auto-scaling workspace (status display). */
+  desiredReplicas?: number
 }
 
 /** The runner's observation of a single workspace, written back to cp. */
@@ -126,20 +138,10 @@ export interface ObservedState {
   phase: ObservedPhase
   /** The spec version the runner has converged to. */
   version?: number
+  // Reachability, incl. the ready replica set for auto-scaling workspaces
+  // (endpoint.readyReplicaIds) — the readiness signal cp routes on.
   endpoint?: EnvironmentEndpoint
   message?: string
-  /**
-   * Replica counts for an `'auto-scaling'` workspace: how many the runner wants
-   * (`desired`) and how many are Ready. Omitted for single-replica (`'static'`)
-   * workspaces, which report liveness through `phase` alone.
-   */
-  replicas?: { desired: number; ready: number }
-  /**
-   * Provider-assigned ids of the Ready replicas (a subset of `[0, desired)`).
-   * This is the sole readiness signal the control plane routes on — cp does not
-   * probe replicas itself. Omitted for single-replica workspaces.
-   */
-  readyReplicaIds?: number[]
 }
 
 /** A handle returned by {@link EnvironmentProvider.watch} to stop watching. */
