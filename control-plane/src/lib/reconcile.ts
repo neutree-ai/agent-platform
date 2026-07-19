@@ -12,6 +12,7 @@ import { runIdleWorkspaceGC } from '../services/idle-workspace-gc'
 import * as k8s from '../services/k8s'
 import { refreshReplicaRouter } from '../services/replica-router'
 import { sweepRunningWorkspaces } from '../services/usage/pull'
+import { runAutoscaler } from '../services/workspace-autoscaler'
 import { applyStatusChange } from './workspace-status'
 
 const WATCH_CYCLE_MS = 10 * 60 * 1000 // 10 minutes
@@ -201,6 +202,16 @@ export function startReconcileLoop() {
         '[Reconcile] replica router refresh error:',
         e instanceof Error ? e.message : e,
       ),
+    ),
+  )
+
+  // Autoscaler: size each auto-scaling workspace's replicas to live turn demand.
+  // Same 15s cadence; a no-op while no workspace is auto-scaling. protect:true so
+  // a slow pass never stacks. Runs after the router refresh above so demand is
+  // read against a fresh ready-replica picture.
+  new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
+    runAutoscaler().catch((e) =>
+      console.error('[Reconcile] autoscaler error:', e instanceof Error ? e.message : e),
     ),
   )
 
