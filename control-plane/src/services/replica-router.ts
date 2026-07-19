@@ -90,6 +90,16 @@ export function pickReplicaForTurn(
   return ready[cursor % ready.length]
 }
 
+/**
+ * How many replicas a workspace currently has ready. 0 for a static workspace
+ * (never reports a ready set) or an auto-scaling one scaled to zero / not yet
+ * observed. The turn gate uses this both to tell the two shapes apart (0 =
+ * static = account-only) and to size auto-scaling capacity.
+ */
+export function readyReplicaCount(workspaceId: string): number {
+  return readyReplicas.get(workspaceId)?.length ?? 0
+}
+
 /** Test seam: forget all in-memory routing state. */
 export function __resetReplicaRouter(): void {
   readyReplicas.clear()
