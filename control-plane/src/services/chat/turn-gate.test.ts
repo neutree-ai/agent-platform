@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-// Configure tiny capacity/queue before the gate module evaluates its env-read
-// constants: 1 turn per replica, queue of 2. Top-level await import so these are
-// set first.
-process.env.TURN_GATE_FALLBACK_TARGET = '1'
+// Set a tiny queue bound before the gate module reads it. Top-level await
+// import so it's in place first. Capacity itself is seeded through the router,
+// not an env constant.
 process.env.TURN_GATE_MAX_QUEUE = '2'
 
 const { acquireTurn, TurnCapacityError, __resetTurnGate } = await import('./turn-gate')
@@ -11,9 +10,14 @@ const { syncReadyReplicas, __resetReplicaRouter } = await import('../replica-rou
 
 // The gate reads capacity from the replica router: a workspace with no ready
 // replicas (static) is Infinity → never blocks; an auto-scaling one is
-// readyReplicas × target.
-const autoScaling = (workspaceId: string, replicas: number) =>
-  syncReadyReplicas(new Map([[workspaceId, Array.from({ length: replicas }, (_, i) => i)]]))
+// readyReplicas × its per-replica capacity (max_concurrency). Seed both here so
+// the tests exercise a real, known capacity with no gate-side constant.
+const autoScaling = (workspaceId: string, replicas: number, perReplicaCapacity = 1) =>
+  syncReadyReplicas(
+    new Map([
+      [workspaceId, { ids: Array.from({ length: replicas }, (_, i) => i), perReplicaCapacity }],
+    ]),
+  )
 
 /** Resolve on the next macrotask so queued grants/timeouts can settle. */
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms))
