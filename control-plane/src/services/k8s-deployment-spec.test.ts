@@ -4,6 +4,7 @@ import {
   buildHeadlessServiceSpec,
   buildStatefulSetSpec,
   buildWorkspacePodTemplate,
+  builtinReplicaAddress,
   readyReplicaIdsFromPods,
   resolveStatefulSetStatus,
 } from '../../../internal/k8s-provider'
@@ -240,6 +241,21 @@ describe('buildHeadlessServiceSpec', () => {
     expect(svc.spec?.clusterIP).toBe('None')
     expect(svc.spec?.selector).toEqual(labels)
     expect(svc.spec?.ports?.map((p) => p.port)).toEqual([3001, 9101, 9102])
+  })
+})
+
+describe('builtinReplicaAddress', () => {
+  it('no replica → the workspace Service DNS (static / single-replica path)', () => {
+    expect(builtinReplicaAddress(baseCfg, 'ws1')).toBe('http://nap-ws1.nap.svc.cluster.local:3001')
+  })
+
+  it("a replica id → that pod's per-ordinal headless DNS", () => {
+    expect(builtinReplicaAddress(baseCfg, 'ws1', 0)).toBe(
+      'http://nap-ws1-0.nap-ws1-hl.nap.svc.cluster.local:3001',
+    )
+    expect(builtinReplicaAddress(baseCfg, 'ws1', 2)).toBe(
+      'http://nap-ws1-2.nap-ws1-hl.nap.svc.cluster.local:3001',
+    )
   })
 })
 
