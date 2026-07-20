@@ -123,7 +123,7 @@ export AGENT_NODE_SELECTOR="${AGENT_NODE_SELECTOR:-}"
 
 export DEPLOY_PROFILE="${DEPLOY_PROFILE:-multi-node}"
 # In-cluster registry config, consumed only by the single-node offline path
-# (single_node_load_registry + manifests/registry.yaml). Safe to render in any
+# (single_node_load_registry + offline/registry.yaml). Safe to render in any
 # profile.
 export REGISTRY_NODE_PORT="${REGISTRY_NODE_PORT:-30500}"
 export REGISTRY_STORAGE_SIZE="${REGISTRY_STORAGE_SIZE:-20Gi}"
@@ -300,6 +300,13 @@ render_manifests() {
     envsubst "$VARS" < "$tmpl" > "$RENDERED_DIR/$name"
     log "  rendered $name"
   done
+
+  # registry.yaml is single-node-only offline infra and lives under offline/,
+  # not manifests/, so downstream consumers that treat manifests/ as the
+  # platform-service set don't render it as a service. Render it into the same
+  # output dir so single_node_load_registry can apply it.
+  envsubst "$VARS" < "$SCRIPT_DIR/offline/registry.yaml" > "$RENDERED_DIR/registry.yaml"
+  log "  rendered registry.yaml (offline)"
 
   # External ingress mode: strip `nodePort:` lines from Service specs.
   # k8s rejects nodePort on ClusterIP, but we keep the value in values.env
