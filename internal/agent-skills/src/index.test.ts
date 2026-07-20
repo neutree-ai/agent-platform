@@ -140,7 +140,10 @@ describe('SkillManager', () => {
   const SKILLS_DIR = '/workspace/.claude/skills'
   const LOCAL_BASE = '/tmp'
 
-  function createManager(fetchImpl: (url: string) => Promise<FetchResponse>) {
+  function createManager(
+    fetchImpl: (url: string) => Promise<FetchResponse>,
+    overrides: { draftBase?: string } = {},
+  ) {
     return new SkillManager({
       cpUrl: 'http://cp:3000',
       workspaceId: 'ws-1',
@@ -150,6 +153,7 @@ describe('SkillManager', () => {
       fetch: fetchImpl,
       fs,
       shell,
+      ...overrides,
     })
   }
 
@@ -436,6 +440,62 @@ describe('SkillManager', () => {
 
       // Temp tar file should be cleaned up
       expect(fs.files.has('/tmp/skill-pkg-publish.tar.gz')).toBe(false)
+    })
+
+    test('tars a local snapshot, not the (possibly NFS) source dir', async () => {
+      fs.dirs.add('/workspace/.skills-draft/skill-pkg')
+      fs.files.set('/workspace/.skills-draft/skill-pkg/SKILL.md', '# test')
+
+      const mgr = createManager(async () => { throw new Error('no fetch') }, {
+        draftBase: '/workspace/.skills-draft',
+      })
+
+      const origExec = shell.exec.bind(shell)
+      shell.exec = async (cmd, args) => {
+        await origExec(cmd, args)
+        if (cmd === 'tar' && args[0] === 'czf') {
+          fs.files.set(args[1], Buffer.from('packed-content'))
+        }
+      }
+
+      const buf = await mgr.pack('pkg')
+      expect(buf.toString()).toBe('packed-content')
+
+      // cp -a copies the draft dir contents into a tmpfs snapshot...
+      const cpCall = shell.calls.find(c => c.cmd === 'cp')
+      expect(cpCall).toBeTruthy()
+      expect(cpCall!.args[1]).toBe('/workspace/.skills-draft/skill-pkg/.')
+      const snapshot = cpCall!.args[2]
+      expect(snapshot.startsWith('/tmp/skill-pkg.pack-')).toBe(true)
+
+      // ...and tar reads that snapshot, never the draft dir itself.
+      const tarCall = shell.calls.find(c => c.cmd === 'tar' && c.args[0] === 'czf')
+      expect(tarCall!.args[tarCall!.args.indexOf('-C') + 1]).toBe(snapshot)
+
+      // Snapshot is cleaned up.
+      expect(fs.dirs.has(snapshot)).toBe(false)
+    })
+
+    test('sweeps snapshot dirs leaked by a crashed pack', async () => {
+      fs.dirs.add('/tmp/skill-pkg')
+      fs.files.set('/tmp/skill-pkg/SKILL.md', '# test')
+      fs.dirs.add('/tmp/skill-pkg.pack-999-1')
+      fs.dirs.add('/tmp/skill-pkg.pack-999-2')
+
+      const mgr = createManager(async () => { throw new Error('no fetch') })
+      const origExec = shell.exec.bind(shell)
+      shell.exec = async (cmd, args) => {
+        await origExec(cmd, args)
+        if (cmd === 'tar' && args[0] === 'czf') {
+          fs.files.set(args[1], Buffer.from('packed-content'))
+        }
+      }
+
+      await mgr.pack('pkg')
+
+      expect(fs.dirs.has('/tmp/skill-pkg.pack-999-1')).toBe(false)
+      expect(fs.dirs.has('/tmp/skill-pkg.pack-999-2')).toBe(false)
+      expect(fs.dirs.has('/tmp/skill-pkg')).toBe(true)
     })
 
     test('throws if skill not found', async () => {

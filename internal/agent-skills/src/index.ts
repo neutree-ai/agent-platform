@@ -574,6 +574,25 @@ export class SkillManager {
   }
 
   /**
+   * Remove every localBase entry starting with `prefix`. Temp dirs carry a
+   * unique pid/timestamp suffix, so a plain rm of the current name never
+   * catches siblings left behind by a crashed or concurrent run — they
+   * accumulated in localBase (hundreds were observed in prod). Best-effort.
+   */
+  private async sweepTemp(prefix: string): Promise<void> {
+    try {
+      const entries = await this.fs.readdir(this.localBase)
+      await Promise.all(
+        entries
+          .filter((e) => e.startsWith(prefix))
+          .map((e) => this.fs.rm(`${this.localBase}/${e}`)),
+      )
+    } catch {
+      // Best-effort
+    }
+  }
+
+  /**
    * Extract tar.gz into a staging dir, then atomically swap into localDir.
    * On any failure (tar error, swap error) the existing localDir is
    * preserved — caller treats this as a per-skill failure.
@@ -588,17 +607,7 @@ export class SkillManager {
     // current name never caught siblings left behind by a crashed or concurrent
     // extract — they accumulated in localBase (hundreds were observed in prod).
     // Clear them all, then stage fresh.
-    try {
-      const prefix = `skill-${name}.staging-`
-      const entries = await this.fs.readdir(this.localBase)
-      await Promise.all(
-        entries
-          .filter((e) => e.startsWith(prefix))
-          .map((e) => this.fs.rm(`${this.localBase}/${e}`)),
-      )
-    } catch {
-      // Best-effort
-    }
+    await this.sweepTemp(`skill-${name}.staging-`)
     await this.fs.mkdir(staging)
     const tmpFile = `${staging}/.skill.tar.gz`
     try {
@@ -797,11 +806,24 @@ export class SkillManager {
       }
 
       const tarFile = `${this.localBase}/skill-${name}-publish.tar.gz`
+      // Snapshot before tarring. Drafts live on the workspace volume (NFS),
+      // where tar's post-read stat can disagree with the pre-read one — either
+      // from attribute-cache/clock skew or from the agent writing SKILL.md
+      // moments before publishing. Either way tar prints "file changed as we
+      // read it" and exits 1, and Shell.exec has no way to tell that warning
+      // apart from a real failure, so the whole publish dies. cp doesn't care
+      // if a file shifts under it, and the snapshot lands on tmpfs, so tar
+      // then reads a directory nothing else is touching. The name lock can't
+      // cover this: it only serializes pack against load.
+      const snapshot = `${this.localBase}/skill-${name}.pack-${process.pid}-${Date.now()}`
       try {
         await this.fs.rm(tarFile)
+        await this.sweepTemp(`skill-${name}.pack-`)
+        await this.fs.mkdir(snapshot)
+        await this.shell.exec('cp', ['-a', `${local}/.`, snapshot])
         await this.shell.exec('tar', [
           'czf', tarFile,
-          '-C', local,
+          '-C', snapshot,
           '--exclude', LOCK_FILE,
           '--exclude', '.skill.tar.gz',
           '.',
@@ -809,6 +831,7 @@ export class SkillManager {
         return await this.fs.readFile(tarFile)
       } finally {
         try { await this.fs.rm(tarFile) } catch {}
+        try { await this.fs.rm(snapshot) } catch {}
       }
     })
   }
