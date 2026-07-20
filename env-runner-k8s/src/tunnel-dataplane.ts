@@ -4,8 +4,10 @@ import { type Mux, listenAndTunnel, pipeToTcp } from '../../internal/env-tunnel'
 import { handleAfsControl } from './afs-control'
 
 // Runner-side data plane. Two directions over the tunnel mux:
-//   - forward (cp→workspace): cp opens `fwd:<wsId>:<port>`; we dial the pod's
-//     cluster-DNS in the customer cluster and pipe.
+//   - forward (cp→workspace): cp opens `fwd:<wsId>:<port>` for a single-Service
+//     (static) workspace, or `fwd:<wsId>:<ordinal>:<port>` for one replica of an
+//     auto-scaling workspace; we dial the pod's cluster-DNS in the customer
+//     cluster and pipe.
 //   - reverse (sidecar→cp): we run local TCP listeners (fronted by a k8s Service
 //     in the customer cluster, see F3 manifest); a sidecar's CP_URL /
 //     AFS_CONTROLLER points here, and its bytes ride the tunnel back to cp.
@@ -19,13 +21,32 @@ const FORWARD_PORTS = new Set([3001, 9101, 9102])
 const CP_PROXY_PORT = Number(process.env.TUNNEL_CP_PROXY_PORT) || 38000
 const AFS_PROXY_PORT = Number(process.env.TUNNEL_AFS_PROXY_PORT) || 39100
 
-/** Resolve a forward stream's target pod address, or null if invalid/disallowed. */
+/**
+ * Resolve a forward stream's target pod address, or null if invalid/disallowed.
+ *
+ * Two meta forms:
+ *   - `fwd:<ws>:<port>` — static workspace, its single Service:
+ *     `<prefix>-<ws>.<ns>.svc.cluster.local`.
+ *   - `fwd:<ws>:<ordinal>:<port>` — one replica of an auto-scaling workspace, via
+ *     its headless Service: `<prefix>-<ws>-<ordinal>.<prefix>-<ws>-hl.<ns>...`.
+ *     Byte-identical to internal/k8s-provider's builtinReplicaAddress, so a
+ *     remote-routed replica resolves to the same pod DNS a built-in one would.
+ *
+ * The workspace id can't contain a colon, so the optional middle group
+ * unambiguously distinguishes the two forms.
+ */
 function resolveForwardTarget(meta: string): { host: string; port: number } | null {
-  const m = /^fwd:([^:]+):(\d+)$/.exec(meta)
+  const m = /^fwd:([^:]+):(?:(\d+):)?(\d+)$/.exec(meta)
   if (!m) return null
-  const port = Number(m[2])
+  const [, ws, ordinal] = m
+  const port = Number(m[3])
   if (!FORWARD_PORTS.has(port)) return null
-  return { host: `${NAME_PREFIX}-${m[1]}.${NAMESPACE}.svc.cluster.local`, port }
+  const base = `${NAME_PREFIX}-${ws}`
+  const host =
+    ordinal === undefined
+      ? `${base}.${NAMESPACE}.svc.cluster.local`
+      : `${base}-${ordinal}.${base}-hl.${NAMESPACE}.svc.cluster.local`
+  return { host, port }
 }
 
 /** Handle a forward stream cp opened: validate, dial the pod, pipe. */
