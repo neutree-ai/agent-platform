@@ -8,7 +8,7 @@ describe('prompts CRUD', () => {
     const prompt = await client.prompts.create({
       name: 'e2e-prompt',
       content: 'You are an assistant for automated testing.',
-      is_public: false,
+      visibility: 'private',
     })
     expect(prompt.id).toBeTruthy()
     expect(prompt.name).toBe('e2e-prompt')
@@ -48,7 +48,9 @@ describe('prompts CRUD', () => {
   })
 
   test('make prompt public and verify in listPublic', async () => {
-    await client.prompts.update(promptId, { is_public: true })
+    // Visibility is the write-side field; `is_public` is read-only on the
+    // response. Sending `is_public` here would be silently dropped.
+    await client.prompts.update(promptId, { visibility: 'public' })
 
     const publicPrompts = await client.prompts.listPublic()
     const found = publicPrompts.find((p) => p.id === promptId)

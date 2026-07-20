@@ -1,4 +1,9 @@
-import type { ApiK8sStatus, ApiWorkspace, ApiWorkspaceConfig, ComputeResources } from '../../types/api'
+import type {
+  ApiK8sStatus,
+  ApiWorkspace,
+  ApiWorkspaceConfig,
+  ComputeResources,
+} from '../../types/api'
 import type { HttpClient } from './http'
 
 export class WorkspacesApi {
@@ -13,7 +18,19 @@ export class WorkspacesApi {
     return this.http.fetchJson(`/api/workspaces${qs ? `?${qs}` : ''}`)
   }
 
-  async create(params: { name: string; agentType?: string; computeResources?: ComputeResources; templateId?: string }): Promise<ApiWorkspace> {
+  // Field names go on the wire verbatim, so they must match the server schema
+  // (snake_case). The previous camelCase signature was silently dropped by the
+  // server's schema validation, so agent_type / template_id / compute_resources
+  // never actually applied.
+  async create(params: {
+    name: string
+    agent_type?: string
+    compute_resources?: ComputeResources
+    template_id?: string
+    provider_id?: string
+    model?: string
+    small_model?: string
+  }): Promise<ApiWorkspace> {
     return this.http.fetchJson('/api/workspaces', {
       method: 'POST',
       body: JSON.stringify(params),
