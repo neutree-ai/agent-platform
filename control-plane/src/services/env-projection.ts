@@ -1,4 +1,4 @@
-import { dropRemoteProxy, ensureRemoteProxy } from '../lib/remote-proxy'
+import { dropRemoteProxy, ensureRemoteProxy, syncReplicaProxies } from '../lib/remote-proxy'
 import { type WorkspaceStatus, applyStatusChange } from '../lib/workspace-status'
 import {
   listReapableWorkspaces,
@@ -64,9 +64,15 @@ export async function runEnvProjection(thresholdSec: number): Promise<void> {
 
     // Forward proxy lifecycle: a reachable, running remote workspace gets a
     // localhost proxy so cp's fetch sites can reach it through the tunnel;
-    // anything else (stopped/starting/offline) has none.
+    // anything else (stopped/starting/offline) has none. An auto-scaling
+    // workspace reports a ready-replica set → one proxy per ready ordinal; a
+    // static one reports none → the single ordinal-less proxy, unchanged.
     if (!o.env_offline && status === 'running') {
-      await ensureRemoteProxy(o.workspace_id, o.environment_id)
+      if (o.ready_replica_ids && o.ready_replica_ids.length > 0) {
+        await syncReplicaProxies(o.workspace_id, o.environment_id, o.ready_replica_ids)
+      } else {
+        await ensureRemoteProxy(o.workspace_id, o.environment_id)
+      }
     } else {
       dropRemoteProxy(o.workspace_id)
     }

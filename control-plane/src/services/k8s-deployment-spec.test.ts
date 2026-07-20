@@ -1,6 +1,13 @@
 import type * as k8s from '@kubernetes/client-node'
 import { describe, expect, it } from 'vitest'
-import { buildWorkspacePodTemplate } from '../../../internal/k8s-provider'
+import {
+  buildHeadlessServiceSpec,
+  buildStatefulSetSpec,
+  buildWorkspacePodTemplate,
+  builtinReplicaAddress,
+  readyReplicaIdsFromPods,
+  resolveStatefulSetStatus,
+} from '../../../internal/k8s-provider'
 import type { ComputeResources } from '../../../internal/types/api'
 import {
   type K8sConfig,
@@ -25,6 +32,7 @@ const baseCfg: K8sConfig = {
   workspaceStorageSize: '10Gi',
   cpServiceUrl: 'http://nap-cp:3000',
   memoryFuseImage: '',
+  multiReplica: false,
   afs: {
     enabled: false,
     image: '',
@@ -186,5 +194,119 @@ describe('deploymentTemplateVersion', () => {
 
   it('unparseable annotation → null', () => {
     expect(deploymentTemplateVersion(dep({ annotations: { [ANNOTATION]: 'v6' } }))).toBeNull()
+  })
+})
+
+describe('buildStatefulSetSpec', () => {
+  it('golden master: shared RWX PVC, headless serviceName, parallel mgmt, N replicas', () => {
+    expect(buildStatefulSetSpec(...args, 3, undefined, baseCfg)).toMatchSnapshot()
+  })
+
+  it('embeds the same pod template as the Deployment (no template drift)', () => {
+    const sts = buildStatefulSetSpec(...args, 2, undefined, baseCfg)
+    const template = buildWorkspacePodTemplate(
+      labels,
+      'ws1',
+      'claude-code',
+      'nap-ws1-workspace',
+      undefined,
+      baseCfg,
+    )
+    expect(sts.spec?.template).toEqual(template)
+    // The Deployment wraps the identical template, so both workloads run
+    // byte-identical pods.
+    const dep = buildDeploymentSpec(...args, undefined, baseCfg)
+    expect(sts.spec?.template).toEqual(dep.spec?.template)
+  })
+
+  it('uses no volumeClaimTemplates — all replicas share one PVC', () => {
+    const sts = buildStatefulSetSpec(...args, 3, undefined, baseCfg)
+    expect(sts.spec?.volumeClaimTemplates).toBeUndefined()
+    const wsVolume = sts.spec?.template.spec?.volumes?.find((v) => v.name === 'workspace')
+    expect(wsVolume?.persistentVolumeClaim?.claimName).toBe('nap-ws1-workspace')
+  })
+
+  it('serviceName is the headless service; replicas + policy passed through', () => {
+    const sts = buildStatefulSetSpec(...args, 4, undefined, baseCfg)
+    expect(sts.spec?.serviceName).toBe('nap-ws1-hl')
+    expect(sts.spec?.podManagementPolicy).toBe('Parallel')
+    expect(sts.spec?.replicas).toBe(4)
+  })
+})
+
+describe('buildHeadlessServiceSpec', () => {
+  it('is clusterIP:None, named <name>-hl, selects the workspace pods', () => {
+    const svc = buildHeadlessServiceSpec('nap-ws1', labels)
+    expect(svc.metadata?.name).toBe('nap-ws1-hl')
+    expect(svc.spec?.clusterIP).toBe('None')
+    expect(svc.spec?.selector).toEqual(labels)
+    expect(svc.spec?.ports?.map((p) => p.port)).toEqual([3001, 9101, 9102])
+  })
+})
+
+describe('builtinReplicaAddress', () => {
+  it('no replica → the workspace Service DNS (static / single-replica path)', () => {
+    expect(builtinReplicaAddress(baseCfg, 'ws1')).toBe('http://nap-ws1.nap.svc.cluster.local:3001')
+  })
+
+  it("a replica id → that pod's per-ordinal headless DNS", () => {
+    expect(builtinReplicaAddress(baseCfg, 'ws1', 0)).toBe(
+      'http://nap-ws1-0.nap-ws1-hl.nap.svc.cluster.local:3001',
+    )
+    expect(builtinReplicaAddress(baseCfg, 'ws1', 2)).toBe(
+      'http://nap-ws1-2.nap-ws1-hl.nap.svc.cluster.local:3001',
+    )
+  })
+})
+
+describe('resolveStatefulSetStatus', () => {
+  const sts = (input: { replicas?: number; readyReplicas?: number }): k8s.V1StatefulSet =>
+    ({
+      spec: { replicas: input.replicas },
+      status: { readyReplicas: input.readyReplicas },
+    }) as unknown as k8s.V1StatefulSet
+
+  it('no statefulset → stopped', () => {
+    expect(resolveStatefulSetStatus(undefined)).toBe('stopped')
+  })
+  it('replicas 0 → stopped', () => {
+    expect(resolveStatefulSetStatus(sts({ replicas: 0, readyReplicas: 0 }))).toBe('stopped')
+  })
+  it('at least one ready → running', () => {
+    expect(resolveStatefulSetStatus(sts({ replicas: 3, readyReplicas: 1 }))).toBe('running')
+  })
+  it('desired > 0 but none ready → starting', () => {
+    expect(resolveStatefulSetStatus(sts({ replicas: 2, readyReplicas: 0 }))).toBe('starting')
+  })
+})
+
+describe('readyReplicaIdsFromPods', () => {
+  const pod = (name: string, readies: boolean[]): k8s.V1Pod =>
+    ({
+      metadata: { name },
+      status: { containerStatuses: readies.map((ready) => ({ ready })) },
+    }) as unknown as k8s.V1Pod
+
+  it('returns sorted ordinals of pods whose containers are all ready', () => {
+    const pods = [
+      pod('tos-ws1-2', [true, true]),
+      pod('tos-ws1-0', [true]),
+      pod('tos-ws1-1', [true, false]), // a container not ready → excluded
+    ]
+    expect(readyReplicaIdsFromPods(pods, 'tos-ws1')).toEqual([0, 2])
+  })
+
+  it('ignores pods with no container statuses', () => {
+    expect(readyReplicaIdsFromPods([pod('tos-ws1-0', [])], 'tos-ws1')).toEqual([])
+  })
+
+  it('ignores names that are not <stsName>-<int>', () => {
+    const pods = [
+      pod('tos-ws1-0', [true]),
+      pod('tos-ws1-abc', [true]), // non-numeric suffix
+      pod('other-ws-0', [true]), // a different statefulset
+      pod('tos-ws1', [true]), // no ordinal
+    ]
+    expect(readyReplicaIdsFromPods(pods, 'tos-ws1')).toEqual([0])
   })
 })

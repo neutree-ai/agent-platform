@@ -15,13 +15,37 @@ const BUILTIN_ENV = 'builtin'
  * means adding a field here (and a column migration), not editing callers.
  */
 export function buildWorkspaceSpec(
-  config: { agent_type?: string | null; compute_resources?: unknown } | null,
+  config: {
+    agent_type?: string | null
+    compute_resources?: unknown
+    auto_scaling?: { min_replicas: number } | null
+  } | null,
   version: number,
-): { agentType: string; resources: unknown; version: number } {
-  return {
+): {
+  agentType: string
+  resources: unknown
+  version: number
+  runtimeMode?: 'auto-scaling'
+  replicas?: number
+} {
+  const base = {
     agentType: config?.agent_type || 'claude-code',
     resources: config?.compute_resources ?? {},
     version,
+  }
+  // The presence of auto_scaling is the shape discriminant: absent → static,
+  // which projects byte-identically (no new fields, so the Deployment it becomes
+  // is unchanged) and, by construction, cannot read a replica count. An
+  // auto-scaling workspace carries the shape and an initial count:
+  // max(min_replicas, 1) so a freshly-created one is runnable before the
+  // autoscaler's first pass (and before scale-to-zero can apply). Once the
+  // autoscaler exists it owns the count via setDesiredReplicas, and a config
+  // bump must preserve it there.
+  if (!config?.auto_scaling) return base
+  return {
+    ...base,
+    runtimeMode: 'auto-scaling',
+    replicas: Math.max(config.auto_scaling.min_replicas, 1),
   }
 }
 
@@ -55,6 +79,26 @@ export async function placeWorkspace(
   ])
 }
 
+/**
+ * Set an auto-scaling workspace's desired replica count: update just
+ * spec.replicas and bump the spec version so the runner re-applies (scales the
+ * StatefulSet). Deliberately targeted — it does NOT rebuild the rest of the spec
+ * from config, so it can run every autoscaler tick without clobbering anything
+ * else. Only the autoscaler calls this, only for auto-scaling workspaces (whose
+ * spec already carries a replicas field).
+ */
+export async function setDesiredReplicas(workspaceId: string, replicas: number): Promise<void> {
+  await pool.query(
+    `UPDATE workspace_placements
+        SET spec_version = spec_version + 1,
+            spec = jsonb_set(
+              jsonb_set(spec, '{replicas}', to_jsonb($2::int)),
+              '{version}', to_jsonb(spec_version + 1))
+      WHERE workspace_id = $1`,
+    [workspaceId, replicas],
+  )
+}
+
 /** Set the desired phase (running | stopped | deleted). */
 export async function setDesiredPhase(
   workspaceId: string,
@@ -77,6 +121,17 @@ export async function setDesiredPhase(
 export async function bumpWorkspaceSpec(workspaceId: string): Promise<void> {
   const config = await getWorkspaceConfig(workspaceId)
   const spec = buildWorkspaceSpec(config, 0)
+  // The autoscaler owns replicas via setDesiredReplicas; a config-driven rebuild
+  // must not reset that live count back to the creation initial. Only relevant
+  // for auto-scaling (spec.replicas present); static specs have no replicas key.
+  if (spec.replicas !== undefined) {
+    const { rows } = await pool.query(
+      "SELECT (spec->>'replicas')::int AS replicas FROM workspace_placements WHERE workspace_id = $1",
+      [workspaceId],
+    )
+    const live = rows[0]?.replicas
+    if (typeof live === 'number') spec.replicas = live
+  }
   await pool.query(
     `UPDATE workspace_placements
         SET spec_version = spec_version + 1,

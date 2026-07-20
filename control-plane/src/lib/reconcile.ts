@@ -10,7 +10,9 @@ import { getWorkspace, listAllWorkspaces, updateWorkspace } from '../services/db
 import { runEnvProjection } from '../services/env-projection'
 import { runIdleWorkspaceGC } from '../services/idle-workspace-gc'
 import * as k8s from '../services/k8s'
+import { refreshReplicaRouter } from '../services/replica-router'
 import { sweepRunningWorkspaces } from '../services/usage/pull'
+import { runAutoscaler } from '../services/workspace-autoscaler'
 import { applyStatusChange } from './workspace-status'
 
 const WATCH_CYCLE_MS = 10 * 60 * 1000 // 10 minutes
@@ -186,6 +188,30 @@ export function startReconcileLoop() {
   new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
     runEnvProjection(ENV_HEARTBEAT_TIMEOUT_SEC).catch((e) =>
       console.error('[Reconcile] env projection error:', e instanceof Error ? e.message : e),
+    ),
+  )
+
+  // Replica-router refresh: rebuild the in-memory ready-replica set of every
+  // auto-scaling workspace from the runner-reported observed endpoint. Same
+  // 15s cadence as the projection; a cheap no-op while no workspace is
+  // auto-scaling (the query returns nothing). protect:true so a slow pass never
+  // stacks.
+  new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
+    refreshReplicaRouter().catch((e) =>
+      console.error(
+        '[Reconcile] replica router refresh error:',
+        e instanceof Error ? e.message : e,
+      ),
+    ),
+  )
+
+  // Autoscaler: size each auto-scaling workspace's replicas to live turn demand.
+  // Same 15s cadence; a no-op while no workspace is auto-scaling. protect:true so
+  // a slow pass never stacks. Runs after the router refresh above so demand is
+  // read against a fresh ready-replica picture.
+  new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
+    runAutoscaler().catch((e) =>
+      console.error('[Reconcile] autoscaler error:', e instanceof Error ? e.message : e),
     ),
   )
 

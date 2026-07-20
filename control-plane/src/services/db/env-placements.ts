@@ -85,6 +85,33 @@ export async function writeObservedForEnvironment(
   return (result.rowCount ?? 0) > 0
 }
 
+/**
+ * The runner-reported ready-replica set of every auto-scaling workspace, read
+ * out of the observed endpoint, plus that workspace's own `max_concurrency`
+ * (its per-replica turn capacity — the same per-workspace knob the scheduler
+ * caps concurrent jobs with). Only rows whose endpoint actually carries
+ * `readyReplicaIds` are returned (static workspaces never do), so the result is
+ * empty until an auto-scaling workspace is running. Environment-agnostic: the
+ * built-in runner and remote runners all write the same column, so cp gets a
+ * uniform picture from one query. Feeds the in-memory replica router (routing +
+ * the turn gate's capacity sizing). `max_concurrency` is null only for a
+ * placement without a config row (shouldn't happen); the gate then leaves that
+ * workspace unenforced.
+ */
+export async function listWorkspaceReplicaSets(): Promise<
+  { workspace_id: string; ready_replica_ids: number[]; max_concurrency: number | null }[]
+> {
+  const { rows } = await pool.query(
+    `SELECT p.workspace_id,
+            p.endpoint->'readyReplicaIds' AS ready_replica_ids,
+            wc.max_concurrency
+       FROM workspace_placements p
+       LEFT JOIN workspace_config wc ON wc.workspace_id = p.workspace_id
+      WHERE jsonb_exists(p.endpoint, 'readyReplicaIds')`,
+  )
+  return rows
+}
+
 /** Remove a placement after destroy, scoped to the environment. */
 export async function deletePlacementForEnvironment(
   environmentId: string,

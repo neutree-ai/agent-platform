@@ -17,18 +17,25 @@ import type { PlacementRow, PlacementTransport } from './transport'
 type ReconcileAction = 'apply' | 'start' | 'stop' | 'destroy' | 'none'
 
 /**
- * Write observed state back only when the phase actually moved. A steady-state
- * pass over N converged placements would otherwise issue N DB writes per pass
- * for no change; this keeps it to writes that carry information. endpoint is
- * derived deterministically per workspace (cluster DNS / route key), so phase
- * is the only mutable field on the no-op path.
+ * Write observed state back only when it carries information a steady-state
+ * pass over N converged placements would otherwise issue N no-op DB writes.
+ * Two cases warrant a write:
+ *   - phase moved; or
+ *   - a RUNNING auto-scaling workspace's ready-replica set may have shifted
+ *     (a pod dies/recovers, scale-up readiness fills in) while phase stays
+ *     'running', so a phase-only gate would let cp's routing signal go stale.
+ *     This is data-driven, not a runtime-mode branch — a static workspace never
+ *     reports readyReplicaIds. Gated on 'running' so a stopped/idle set (empty,
+ *     byte-identical every pass) collapses back to the phase-gated path.
  */
 async function recordIfChanged(
   transport: PlacementTransport,
   p: PlacementRow,
   current: ObservedState,
 ): Promise<void> {
-  if (current.phase !== p.observed_phase) {
+  const readySetMayHaveShifted =
+    current.phase === 'running' && current.endpoint?.readyReplicaIds !== undefined
+  if (current.phase !== p.observed_phase || readySetMayHaveShifted) {
     await transport.writeObserved(p.workspace_id, {
       phase: current.phase,
       endpoint: current.endpoint,

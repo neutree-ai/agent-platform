@@ -6,39 +6,24 @@ import type {
   ObservedState,
   WorkspaceSpec,
 } from '../types/environments'
+import { AutoScalingWorkload } from './auto-scaling-workload'
 import { type K8sConfig, defaultCfg } from './config'
+import {
+  createOrAdopt,
+  expandWorkspacePvc,
+  isPodReady,
+  resourceName,
+  workspaceLabels,
+  workspacePvcName,
+} from './support'
 import {
   MEMORY_FUSE_CONTAINER_NAME,
   type ReconciledStatus,
   TEMPLATE_VERSION_ANNOTATION,
+  WORKSPACE_SERVICE_PORTS,
   buildDeploymentSpec,
   resolveDeploymentStatus,
 } from './workspace-spec'
-
-const STORAGE_UNITS: Record<string, number> = {
-  Ki: 2 ** 10,
-  Mi: 2 ** 20,
-  Gi: 2 ** 30,
-  Ti: 2 ** 40,
-  Pi: 2 ** 50,
-  Ei: 2 ** 60,
-  K: 1e3,
-  M: 1e6,
-  G: 1e9,
-  T: 1e12,
-  P: 1e15,
-  E: 1e18,
-}
-
-/** Parse a k8s resource quantity string (e.g. "50Gi", "100000000") into bytes. */
-function parseStorageQuantity(quantity: string): number {
-  const match = quantity.match(/^([0-9.]+)([A-Za-z]*)$/)
-  if (!match) throw new Error(`Unparseable storage quantity: ${quantity}`)
-  const [, num, unit] = match
-  const multiplier = unit ? STORAGE_UNITS[unit] : 1
-  if (multiplier === undefined) throw new Error(`Unknown storage unit: ${unit}`)
-  return Number(num) * multiplier
-}
 
 interface K8sInstance {
   workspaceId: string
@@ -75,38 +60,24 @@ interface InstanceSpecMarkers {
  * default instance so existing call sites stay unchanged.
  */
 export class KubernetesProvider implements EnvironmentProvider {
+  /** The auto-scaling (StatefulSet) workload shape; the facade dispatches here. */
+  private readonly autoScaling: AutoScalingWorkload
+
   constructor(
     private readonly appsApi: k8s.AppsV1Api,
     private readonly coreApi: k8s.CoreV1Api,
     private readonly kc: k8s.KubeConfig,
     private readonly cfg: K8sConfig,
-  ) {}
+  ) {
+    this.autoScaling = new AutoScalingWorkload(appsApi, coreApi, cfg)
+  }
 
   private getResourceName(workspaceId: string): string {
-    return `${this.cfg.namePrefix}-${workspaceId}`
+    return resourceName(this.cfg, workspaceId)
   }
 
   private getLabels(workspaceId: string): Record<string, string> {
-    return {
-      app: this.cfg.namePrefix,
-      component: 'workspace',
-      'workspace-id': workspaceId,
-    }
-  }
-
-  /**
-   * Run a create call, adopting an already-existing object instead of failing.
-   * createInstance must be idempotent: the reconcile loop re-enters it every
-   * tick while a workspace is unconverged, and the PVC/Service deliberately
-   * outlive the Deployment (rebuildInstance, manual Deployment deletion). A
-   * bare create would 409 on the survivors forever and deadlock the reconcile.
-   */
-  private async createOrAdopt(create: () => Promise<unknown>): Promise<void> {
-    try {
-      await create()
-    } catch (e: any) {
-      if (e.response?.statusCode !== 409) throw e
-    }
+    return workspaceLabels(this.cfg, workspaceId)
   }
 
   /** Create K8s resources for a workspace */
@@ -117,11 +88,11 @@ export class KubernetesProvider implements EnvironmentProvider {
   ): Promise<K8sInstance> {
     const name = this.getResourceName(workspaceId)
     const labels = this.getLabels(workspaceId)
-    const pvcName = `${name}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
 
     // Create PVC for workspace persistent storage
     const storageSize = resources?.storage || this.cfg.workspaceStorageSize
-    await this.createOrAdopt(() =>
+    await createOrAdopt(() =>
       this.coreApi.createNamespacedPersistentVolumeClaim(this.cfg.namespace, {
         apiVersion: 'v1',
         kind: 'PersistentVolumeClaim',
@@ -137,7 +108,7 @@ export class KubernetesProvider implements EnvironmentProvider {
     // Create Deployment. A 409 here can only be a race with a concurrent
     // create building the same fresh spec (a pre-existing Deployment routes
     // apply() to rebuildInstance instead), so adopting is safe.
-    await this.createOrAdopt(() =>
+    await createOrAdopt(() =>
       this.appsApi.createNamespacedDeployment(
         this.cfg.namespace,
         buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
@@ -146,18 +117,14 @@ export class KubernetesProvider implements EnvironmentProvider {
 
     // Create Service (ClusterIP — agents are reached via cluster DNS at
     // <prefix>-<wsId>.<ns>.svc:3001; afs-fuse via :9101)
-    await this.createOrAdopt(() =>
+    await createOrAdopt(() =>
       this.coreApi.createNamespacedService(this.cfg.namespace, {
         apiVersion: 'v1',
         kind: 'Service',
         metadata: { name, labels },
         spec: {
           selector: labels,
-          ports: [
-            { port: 3001, targetPort: 3001 as any, name: 'http' },
-            { port: 9101, targetPort: 9101 as any, name: 'afs-fuse' },
-            { port: 9102, targetPort: 9102 as any, name: 'memory-fuse' },
-          ],
+          ports: WORKSPACE_SERVICE_PORTS,
           type: 'ClusterIP',
         },
       }),
@@ -283,7 +250,9 @@ export class KubernetesProvider implements EnvironmentProvider {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+        {
+          headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
+        },
       )
       return true
     } catch (e: any) {
@@ -328,7 +297,7 @@ export class KubernetesProvider implements EnvironmentProvider {
   ): Promise<void> {
     const name = this.getResourceName(workspaceId)
     const labels = this.getLabels(workspaceId)
-    const pvcName = `${name}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
 
     // Delete existing deployment
     try {
@@ -383,7 +352,9 @@ export class KubernetesProvider implements EnvironmentProvider {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+        {
+          headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
+        },
       )
       return true
     } catch (e: any) {
@@ -392,50 +363,10 @@ export class KubernetesProvider implements EnvironmentProvider {
     }
   }
 
-  /**
-   * Expand PVC storage. K8s only ever allows a PVC to grow, never shrink —
-   * patching a smaller size is rejected by the API. A desired spec asking for
-   * less than what's provisioned (e.g. a stale/lowered compute_resources
-   * value) is treated as a no-op here rather than an error, so it can't block
-   * spec convergence for every other field forever (see incident: apply()
-   * threw on this every reconcile pass, tearing down and recreating the
-   * Deployment before the new pod could ever pass its startup probe).
-   */
+  /** Expand PVC storage (grow-only, 404/shrink-tolerant). See expandWorkspacePvc. */
   async expandInstanceStorage(workspaceId: string, newSize: string): Promise<boolean> {
-    const name = this.getResourceName(workspaceId)
-    const pvcName = `${name}-workspace`
-
-    try {
-      const current = await this.coreApi.readNamespacedPersistentVolumeClaim(
-        pvcName,
-        this.cfg.namespace,
-      )
-      const currentSize = current.body.spec?.resources?.requests?.storage
-      if (currentSize && parseStorageQuantity(newSize) <= parseStorageQuantity(currentSize)) {
-        return true
-      }
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) return false
-      throw e
-    }
-
-    try {
-      await this.coreApi.patchNamespacedPersistentVolumeClaim(
-        pvcName,
-        this.cfg.namespace,
-        { spec: { resources: { requests: { storage: newSize } } } },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { headers: { 'Content-Type': 'application/merge-patch+json' } },
-      )
-      return true
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) return false
-      throw e
-    }
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
+    return expandWorkspacePvc(this.coreApi, this.cfg, pvcName, newSize)
   }
 
   /** Get detailed K8s resource status for a workspace */
@@ -444,7 +375,12 @@ export class KubernetesProvider implements EnvironmentProvider {
     const labelSelector = `app=${this.cfg.namePrefix},workspace-id=${workspaceId}`
 
     const result: K8sResourceStatus = {
-      deployment: { exists: false, ready: false, replicas: 0, readyReplicas: 0 },
+      deployment: {
+        exists: false,
+        ready: false,
+        replicas: 0,
+        readyReplicas: 0,
+      },
       service: { exists: false },
       pvc: { exists: false },
       pods: { total: 0, ready: 0 },
@@ -452,7 +388,7 @@ export class KubernetesProvider implements EnvironmentProvider {
       conditions: [],
     }
 
-    const pvcName = `${name}-workspace`
+    const pvcName = workspacePvcName(this.cfg, workspaceId)
 
     // Query all resources concurrently
     const [depResult, svcResult, pvcResult, podsResult] = await Promise.allSettled([
@@ -548,11 +484,8 @@ export class KubernetesProvider implements EnvironmentProvider {
         const podName = pod.metadata?.name || ''
         podNames.push(podName)
 
-        const containerStatuses = pod.status?.containerStatuses || []
-        const allReady = containerStatuses.length > 0 && containerStatuses.every((c) => c.ready)
-
         result.pods.total++
-        if (allReady) result.pods.ready++
+        if (isPodReady(pod)) result.pods.ready++
       }
 
       // Fetch events for all pods concurrently
@@ -675,7 +608,10 @@ export class KubernetesProvider implements EnvironmentProvider {
       await Promise.all([
         this.appsApi.deleteNamespacedDeployment(name, this.cfg.namespace),
         this.coreApi.deleteNamespacedService(name, this.cfg.namespace),
-        this.coreApi.deleteNamespacedPersistentVolumeClaim(`${name}-workspace`, this.cfg.namespace),
+        this.coreApi.deleteNamespacedPersistentVolumeClaim(
+          workspacePvcName(this.cfg, workspaceId),
+          this.cfg.namespace,
+        ),
       ])
       return true
     } catch (e: any) {
@@ -695,6 +631,10 @@ export class KubernetesProvider implements EnvironmentProvider {
 
   /** Create if absent, else rebuild to converge (v1: cp bumps version → rebuild). */
   async apply(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
+    if (spec.runtimeMode === 'auto-scaling') {
+      await this.autoScaling.apply(workspaceId, spec)
+      return
+    }
     const existing = await this.getInstance(workspaceId)
     if (existing) {
       // rebuild swaps the Deployment (new container resources/image) but
@@ -710,15 +650,27 @@ export class KubernetesProvider implements EnvironmentProvider {
   }
 
   async start(workspaceId: string): Promise<void> {
-    await this.startInstance(workspaceId)
+    // Detect the shape by what exists (no spec here). A static workspace scales
+    // its Deployment 0→1; startInstance returns false (404) when there is none,
+    // i.e. an auto-scaling workspace, whose StatefulSet we wake instead (also a
+    // no-op if it has neither shape).
+    const started = await this.startInstance(workspaceId)
+    if (!started) await this.autoScaling.start(workspaceId)
   }
 
   async stop(workspaceId: string): Promise<void> {
-    await this.stopInstance(workspaceId)
+    // runtime_mode isn't passed here — detect the form by what exists. A static
+    // workspace scales its Deployment; stopInstance returns false (404) when
+    // there is none, i.e. an auto-scaling workspace, whose StatefulSet we scale.
+    const scaled = await this.stopInstance(workspaceId)
+    if (!scaled) await this.autoScaling.stop(workspaceId)
   }
 
   async destroy(workspaceId: string): Promise<void> {
-    await this.deleteInstance(workspaceId)
+    // A StatefulSet-backed workspace has no Deployment/ClusterIP Service to
+    // delete; route teardown by the shape that actually exists.
+    if (await this.autoScaling.exists(workspaceId)) await this.autoScaling.destroy(workspaceId)
+    else await this.deleteInstance(workspaceId)
   }
 
   async resize(workspaceId: string, resources: ComputeResources): Promise<void> {
@@ -746,7 +698,8 @@ export class KubernetesProvider implements EnvironmentProvider {
       }
     } catch (e: any) {
       if (e.response?.statusCode === 404) {
-        return { phase: 'unknown' }
+        // No Deployment — maybe an auto-scaling (StatefulSet) workspace.
+        return this.autoScaling.observe(workspaceId)
       }
       throw e
     }
@@ -771,6 +724,11 @@ export class KubernetesProvider implements EnvironmentProvider {
         },
       })
     }
+    // Merge in auto-scaling (StatefulSet) workspaces. A workspace is only ever
+    // one shape, so keys never collide.
+    for (const [wsId, state] of await this.autoScaling.observeAll()) {
+      out.set(wsId, state)
+    }
     return out
   }
 
@@ -778,6 +736,7 @@ export class KubernetesProvider implements EnvironmentProvider {
     return {
       sharedFs: this.cfg.afs.enabled,
       persistentMemory: this.cfg.memoryFuseImage !== '',
+      multiReplica: this.cfg.multiReplica,
     }
   }
 }

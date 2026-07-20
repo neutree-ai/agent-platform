@@ -149,6 +149,22 @@ export async function updateSessionStats(
   ])
 }
 
+/**
+ * Pin a session to a replica of its auto-scaling workspace. Idempotent — the
+ * router writes the same id every turn while affinity holds, and a new id when
+ * it rebinds after the old replica dropped out. NULL for static workspaces
+ * (never called with a replica there).
+ */
+export async function setSessionReplicaOrdinal(
+  sessionId: string,
+  replicaOrdinal: number,
+): Promise<void> {
+  await pool.query('UPDATE sessions SET replica_ordinal = $1 WHERE id = $2', [
+    replicaOrdinal,
+    sessionId,
+  ])
+}
+
 export async function transitionSessionStatus(
   sessionId: string,
   to: 'agent' | 'human' | 'idle',
@@ -223,6 +239,27 @@ export async function resetAllSessionsIdle(workspaceId: string): Promise<void> {
     "UPDATE sessions SET chat_status = 'idle' WHERE workspace_id = $1 AND status = 'active' AND chat_status != 'idle'",
     [workspaceId],
   )
+}
+
+/**
+ * Whether any session bound to one of the given replica ordinals is mid-turn
+ * (chat_status='agent'). The autoscaler calls this before dropping a draining
+ * replica: a replica with an in-flight turn is held back a round so the turn
+ * isn't killed. Same `chat_status='agent'` signal the rollout sweep uses to
+ * avoid interrupting a live stream. Empty ordinals → false (nothing to check).
+ */
+export async function replicasHaveActiveTurn(
+  workspaceId: string,
+  ordinals: number[],
+): Promise<boolean> {
+  if (ordinals.length === 0) return false
+  const { rows } = await pool.query(
+    `SELECT 1 FROM sessions
+      WHERE workspace_id = $1 AND status = 'active' AND chat_status = 'agent'
+        AND replica_ordinal = ANY($2::int[]) LIMIT 1`,
+    [workspaceId, ordinals],
+  )
+  return rows.length > 0
 }
 
 export async function listActiveSessionIds(workspaceId: string): Promise<string[]> {

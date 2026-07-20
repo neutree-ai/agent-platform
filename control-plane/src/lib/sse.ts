@@ -9,6 +9,7 @@ import {
 } from '../services/db/messages'
 import {
   createSession,
+  setSessionReplicaOrdinal,
   transitionSessionStatus,
   updateSessionActivity,
   updateSessionStats,
@@ -377,6 +378,20 @@ interface InterceptedSSEOptions {
    * session→task reverse lookup can succeed on the very first tool call.
    */
   onNewSession?: (sessionId: string) => Promise<void>
+  /**
+   * The auto-scaling replica this turn was routed to, from the replica router.
+   * Persisted onto the session row on `session.started` so the session's next
+   * turns pin to the same replica (shared-volume transcript safety). Undefined
+   * for static single-replica workspaces — the binding stays NULL.
+   */
+  replicaId?: number
+  /**
+   * Fired exactly once when the turn terminates — clean end, error, interrupt,
+   * or the agent pod dying mid-turn — after the stream is fully done. The turn
+   * gate hangs the admission-slot release here so capacity is freed on every
+   * termination path, including pod death (the slot-leak risk).
+   */
+  onTurnEnd?: () => void
 }
 
 export function createInterceptedSSEResponse(
@@ -394,8 +409,13 @@ export function createInterceptedSSEResponse(
     initialAssistant,
     sessionToken,
     onNewSession,
+    replicaId,
+    onTurnEnd,
   } = opts
   if (!response.body) {
+    // No stream to intercept — the turn is over before it began. Fire the
+    // end hook here so the admission slot is still released exactly once.
+    onTurnEnd?.()
     return new Response(response.body, {
       status: response.status,
       headers: {
@@ -458,6 +478,7 @@ export function createInterceptedSSEResponse(
     initialAssistant,
     sessionToken,
     onNewSession,
+    replicaId,
   })
   const broadcastPlugin = createBroadcastPlugin({
     workspaceId,
@@ -536,6 +557,10 @@ export function createInterceptedSSEResponse(
       console.error(`[SSE] runTurn unexpectedly threw ${tag}:`, e)
     })
     .finally(() => {
+      // The turn is fully terminated here (clean end, error, interrupt, or
+      // pod death). Release the admission slot exactly once — before the drain
+      // below, whose dispatched follow-up acquires its own slot.
+      onTurnEnd?.()
       // After a cleanly-completed turn, dispatch any follow-up the user
       // queued mid-turn. This runs once `runTurn` has fully resolved — both
       // plugins' `onEnd` are done and `activeStreams` is cleaned up — so the
@@ -655,6 +680,12 @@ interface PersistPluginCtx {
    * X-Task-Id header path. Errors are logged but not propagated.
    */
   onNewSession?: (sessionId: string) => Promise<void>
+  /**
+   * The auto-scaling replica this turn was routed to; persisted onto the
+   * session row on `session.started` so subsequent turns pin to it. Undefined
+   * for static workspaces (binding stays NULL).
+   */
+  replicaId?: number
   /**
    * Optional initial assistant-message state. Set on the recovery path
    * (CP restart) so the plugin resumes writing into the existing DB row
@@ -871,6 +902,15 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
               await updateSessionActivity(newSid)
             }
             await transitionSessionStatus(newSid, 'agent')
+            // Pin the session to the replica this turn was routed to (auto-
+            // scaling workspaces only). Written every turn: unchanged while
+            // affinity holds, updated when the router rebound to a healthy
+            // replica. Stays NULL for static workspaces (replicaId undefined).
+            if (ctx.replicaId !== undefined) {
+              await setSessionReplicaOrdinal(newSid, ctx.replicaId).catch((e) => {
+                console.warn(`[SSE] setSessionReplicaOrdinal failed session=${newSid}:`, e)
+              })
+            }
             // Bind the dispatcher-minted token to this session_id once the
             // sessions row exists (FK target satisfied). Idempotent: a
             // reconnect that re-emits session.started for an already-bound

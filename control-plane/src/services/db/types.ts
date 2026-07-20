@@ -63,6 +63,14 @@ export interface Session {
   caller_user_id: string | null
   /** Calling agent's workspace id when `source = 'agent'`; null otherwise. */
   caller_workspace_id: string | null
+  /**
+   * The replica id this session is pinned to on an auto-scaling workspace, so
+   * every turn hits the same agent process (shared-volume transcript safety).
+   * NULL for static single-replica sessions; the routing seam resolves NULL to
+   * the workspace's default address. Set by the replica router on the session's
+   * first turn.
+   */
+  replica_ordinal: number | null
   pending_message: SessionPendingMessage | null
   /** When the session was starred, or null when it is not starred. */
   starred_at: string | null
@@ -123,7 +131,25 @@ export interface WorkspaceConfig {
   compute_resources: ComputeResources
   /** When false, a stopped workspace is not auto-started on incoming chat. */
   auto_start: boolean
+  /**
+   * Auto-scaling parameters, or null for a static (single fixed replica)
+   * workspace. Its PRESENCE is the runtime-shape discriminant — there is no
+   * separate mode flag, and a static workspace has no replica parameters to
+   * mis-read. Fixed at creation, immutable after. Per-replica turn capacity
+   * reuses max_concurrency, so it is not part of this object.
+   */
+  auto_scaling: AutoScalingConfig | null
   updated_at: string
+}
+
+/** Replica sizing for an auto-scaling workspace (workspace_config.auto_scaling). */
+interface AutoScalingConfig {
+  /** Lower bound; may be 0 to allow scale-to-zero. */
+  min_replicas: number
+  /** Upper bound; >= 1 and >= min_replicas. */
+  max_replicas: number
+  /** Idle seconds before scaling to zero; null = never. */
+  scale_to_zero_idle_seconds: number | null
 }
 
 type EnvironmentVisibility = 'private' | 'team' | 'public'

@@ -175,7 +175,10 @@ interface IdleWorkspace {
  * workspace's "last used" is the latest of: any session's last_active_at, any
  * message's created_at, and the workspace's own created_at (the fallback for a
  * workspace created but never chatted). System workspaces are excluded — they
- * are platform infrastructure and must not be GC'd. Ordered oldest-idle first.
+ * are platform infrastructure and must not be GC'd. Auto-scaling workspaces are
+ * excluded too — the autoscaler owns their scale-to-zero, and letting the
+ * day-scale GC also stop them would be double control on the same lifecycle.
+ * Ordered oldest-idle first.
  */
 export async function listIdleRunningWorkspaces(idleDays: number): Promise<IdleWorkspace[]> {
   const { rows } = await pool.query(
@@ -194,6 +197,10 @@ export async function listIdleRunningWorkspaces(idleDays: number): Promise<IdleW
          ) AS last_used
        FROM workspaces w
        WHERE w.status = 'running' AND w.is_system = false
+         AND NOT EXISTS (
+           SELECT 1 FROM workspace_config wc
+            WHERE wc.workspace_id = w.id AND wc.auto_scaling IS NOT NULL
+         )
      )
      SELECT id, name, last_used FROM activity
      WHERE last_used < NOW() - make_interval(days => $1::int)
@@ -304,6 +311,7 @@ export async function getWorkspaceConfig(workspaceId: string): Promise<Workspace
        CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(wc.compute_resources, tv.compute_resources)
             ELSE wc.compute_resources END AS compute_resources,
        wc.auto_start,
+       wc.auto_scaling,
        wc.updated_at,
        CASE WHEN wc.template_id IS NOT NULL
             THEN CASE WHEN wc.prompt_id IS NOT NULL THEN wc.prompt_id
@@ -364,13 +372,15 @@ export async function updateWorkspaceConfig(
     'agent_settings',
     'compute_resources',
     'auto_start',
+    'auto_scaling',
     'template_id',
     'template_version',
   ] as const
+  const jsonbFields: readonly (typeof fields)[number][] = ['compute_resources', 'auto_scaling']
   for (const field of fields) {
     if (updates[field] !== undefined) {
       sets.push(`${field} = $${paramIndex++}`)
-      values.push(field === 'compute_resources' ? JSON.stringify(updates[field]) : updates[field])
+      values.push(jsonbFields.includes(field) ? JSON.stringify(updates[field]) : updates[field])
     }
   }
 

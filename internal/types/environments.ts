@@ -67,6 +67,20 @@ export interface WorkspaceSpec {
   /** Drift anchor; mirrors workspace_placements.spec_version. */
   version: number
 
+  /**
+   * Runtime shape of the workspace. Omitted / `'static'` = today's only
+   * behavior: a single fixed replica on a ReadWriteOnce workspace volume.
+   * `'auto-scaling'` = 0..N replicas sharing one ReadWriteMany workspace volume,
+   * sized by an autoscaler. A provider only honors `'auto-scaling'` when it
+   * advertises the `multiReplica` capability. Fixed at creation, immutable after.
+   */
+  runtimeMode?: 'static' | 'auto-scaling'
+  /**
+   * Desired replica count under `'auto-scaling'` (the autoscaler writes it).
+   * Ignored for `'static'` (always 1); omitted → the provider treats it as 1.
+   */
+  replicas?: number
+
   // ── Reserved / forward-looking (unused by the v1 k8s provider) ──
   /** Explicit container image, if a backend takes one directly instead of agentType. */
   image?: string
@@ -83,6 +97,15 @@ export interface WorkspaceSpec {
 export interface Capabilities {
   sharedFs: boolean
   persistentMemory: boolean
+  /**
+   * The environment can run more than one replica of a single workspace, all
+   * sharing one persistent ReadWriteMany workspace volume — the requirement for
+   * `WorkspaceSpec.runtimeMode === 'auto-scaling'`. Distinct from `sharedFs`,
+   * which is the cross-workspace AgentFS sidecar, not the workspace's own
+   * volume. A k8s provider advertises this only when its storage class supports
+   * ReadWriteMany.
+   */
+  multiReplica?: boolean
   [key: string]: boolean | number | string | undefined
 }
 
@@ -96,6 +119,15 @@ export interface EnvironmentEndpoint {
   address?: string
   /** Tunnel routing key for remote environments (P2). */
   routeKey?: string
+  /**
+   * For an auto-scaling workspace: the provider-assigned ids of the Ready
+   * replicas. This is the readiness signal cp routes on — the replicas reachable
+   * right now. It rides on the endpoint (not a separate observed field) because
+   * for a multi-replica workspace the ready set IS its reachability; it therefore
+   * flows to cp through the existing observed-endpoint channel with no extra
+   * plumbing. Omitted for single-replica (static) workspaces.
+   */
+  readyReplicaIds?: number[]
 }
 
 /** The runner's observation of a single workspace, written back to cp. */
@@ -103,6 +135,8 @@ export interface ObservedState {
   phase: ObservedPhase
   /** The spec version the runner has converged to. */
   version?: number
+  // Reachability, incl. the ready replica set for auto-scaling workspaces
+  // (endpoint.readyReplicaIds) — the readiness signal cp routes on.
   endpoint?: EnvironmentEndpoint
   message?: string
 }

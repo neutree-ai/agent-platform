@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // every route context while workspaces are single-replica.
 
 const { getRemoteProxyPortMock } = vi.hoisted(() => ({
-  getRemoteProxyPortMock: vi.fn<(workspaceId: string) => number | undefined>(),
+  getRemoteProxyPortMock: vi.fn<(workspaceId: string, replicaId?: number) => number | undefined>(),
 }))
 
 vi.mock('./remote-proxy', () => ({
@@ -34,6 +34,12 @@ describe('getWorkspaceAddress', () => {
     expect(getWorkspaceAddress('ws1')).toBe('http://tos-ws1.default.svc.cluster.local:3001')
   })
 
+  it('resolves a specific replica to its per-ordinal headless DNS', () => {
+    expect(getWorkspaceAddress('ws1', 2)).toBe(
+      'http://tos-ws1-2.tos-ws1-hl.default.svc.cluster.local:3001',
+    )
+  })
+
   it('resolves remote workspaces to their localhost forward proxy', () => {
     getRemoteProxyPortMock.mockReturnValue(41234)
     expect(getWorkspaceAddress('ws1')).toBe('http://127.0.0.1:41234')
@@ -41,17 +47,33 @@ describe('getWorkspaceAddress', () => {
 })
 
 describe('resolveAgentAddress', () => {
-  it('matches getWorkspaceAddress for every route context (single-replica invariant)', () => {
+  it('matches the default builtin address when no replica is bound', () => {
     const expected = getWorkspaceAddress('ws1')
     expect(resolveAgentAddress('ws1')).toBe(expected)
     expect(resolveAgentAddress('ws1', {})).toBe(expected)
     expect(resolveAgentAddress('ws1', { sessionId: null })).toBe(expected)
     expect(resolveAgentAddress('ws1', { sessionId: 'sess-1' })).toBe(expected)
+    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: null })).toBe(expected)
+  })
+
+  it('routes a replica-bound session to that replica', () => {
+    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: 0 })).toBe(
+      'http://tos-ws1-0.tos-ws1-hl.default.svc.cluster.local:3001',
+    )
   })
 
   it('follows the remote-proxy path too', () => {
     getRemoteProxyPortMock.mockReturnValue(41234)
     expect(resolveAgentAddress('ws1', { sessionId: 'sess-1' })).toBe('http://127.0.0.1:41234')
+  })
+
+  it('routes a replica-bound remote session to that replica’s proxy', () => {
+    // proxy exists only for replica 2 → a turn bound to 2 reaches it, others miss
+    getRemoteProxyPortMock.mockImplementation((_ws, id) => (id === 2 ? 41250 : undefined))
+    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: 2 })).toBe(
+      'http://127.0.0.1:41250',
+    )
+    expect(getRemoteProxyPortMock).toHaveBeenCalledWith('ws1', 2)
   })
 })
 
