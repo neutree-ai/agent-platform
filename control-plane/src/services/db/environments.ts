@@ -131,6 +131,13 @@ interface RemoteObservation {
   observed_phase: string | null
   /** True when the environment has no live runner (offline/pending/stale beat). */
   env_offline: boolean
+  /**
+   * Ready replica ordinals the runner reported (auto-scaling workspaces only);
+   * null for a static workspace, which never carries the field. Drives the
+   * per-replica forward proxies the projection keeps for a remote auto-scaling
+   * workspace.
+   */
+  ready_replica_ids: number[] | null
 }
 
 /**
@@ -147,7 +154,8 @@ export async function listRemoteWorkspaceObservations(
               e.status = 'online'
               AND e.last_heartbeat_at IS NOT NULL
               AND e.last_heartbeat_at >= now() - make_interval(secs => $1)
-            ) AS env_offline
+            ) AS env_offline,
+            p.endpoint->'readyReplicaIds' AS ready_replica_ids
        FROM workspace_placements p
        JOIN environments e ON e.id = p.environment_id
       WHERE e.is_builtin = false

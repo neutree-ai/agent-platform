@@ -13,15 +13,17 @@ import { getRemoteProxyPort } from './remote-proxy'
  * StatefulSet pod's stable per-ordinal DNS.
  *
  * A workspace on a remote (BYOI) environment is reached through that
- * environment's tunnel instead. cp keeps a localhost forward proxy per
- * reachable remote workspace (lib/remote-proxy); this stays a synchronous O(1)
- * map lookup — built-in workspaces are never in the map, so their path is
- * byte-identical. Per-replica remote addressing (a proxy keyed by (ws, replica),
- * with the ordinal carried in the tunnel meta) is a later stage, so today the
- * remote proxy is per-workspace and `replicaId` does not yet reach it.
+ * environment's tunnel instead. cp keeps localhost forward proxies per reachable
+ * remote workspace (lib/remote-proxy) — one per replica for an auto-scaling
+ * workspace, carrying the ordinal in the tunnel meta so the runner dials the
+ * right pod. This stays a synchronous O(1) map lookup — built-in workspaces are
+ * never in the map, so their path is byte-identical. `replicaId` is threaded
+ * through so a session-bound turn reaches its own replica; if that replica's
+ * proxy isn't up yet (observe lag), the lookup misses and we fall through, which
+ * fails fast rather than mis-routing the turn to another replica.
  */
 export function getWorkspaceAddress(workspaceId: string, replicaId?: number): string {
-  const remotePort = getRemoteProxyPort(workspaceId)
+  const remotePort = getRemoteProxyPort(workspaceId, replicaId)
   if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
   return builtinReplicaAddress(defaultCfg, workspaceId, replicaId)
 }
