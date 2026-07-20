@@ -22,9 +22,13 @@ export class HttpClient {
   async fetch(path: string, init?: RequestInit): Promise<Response> {
     const headers: Record<string, string> = {}
 
-    // Don't set Content-Type for FormData (let browser handle boundary)
+    // Only declare a JSON body when there actually is one. Announcing
+    // application/json on a bodyless POST makes routes with an optional body
+    // try to parse an empty string and fail — e.g. POST /workspaces/:id/
+    // sync-template answered 500 "Malformed JSON in request body".
+    // FormData is left alone so the runtime sets its own multipart boundary.
     const isFormData = init?.body instanceof FormData
-    if (!isFormData) {
+    if (init?.body !== undefined && init?.body !== null && !isFormData) {
       headers['Content-Type'] = 'application/json'
     }
 

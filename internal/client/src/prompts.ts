@@ -16,14 +16,21 @@ export class PromptsApi {
     return this.http.fetchJson(`/api/prompts/${id}`)
   }
 
-  async create(params: { name: string; content: string; is_public?: boolean }): Promise<ApiPrompt> {
+  async create(params: {
+    name: string
+    content: string
+    visibility?: 'private' | 'team' | 'public'
+  }): Promise<ApiPrompt> {
     return this.http.fetchJson('/api/prompts', {
       method: 'POST',
       body: JSON.stringify(params),
     })
   }
 
-  async update(id: string, params: Partial<{ name: string; content: string; is_public: boolean }>): Promise<ApiPrompt> {
+  async update(
+    id: string,
+    params: Partial<{ name: string; content: string; visibility: 'private' | 'team' | 'public' }>,
+  ): Promise<ApiPrompt> {
     return this.http.fetchJson(`/api/prompts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(params),
