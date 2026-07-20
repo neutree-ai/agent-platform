@@ -175,7 +175,10 @@ interface IdleWorkspace {
  * workspace's "last used" is the latest of: any session's last_active_at, any
  * message's created_at, and the workspace's own created_at (the fallback for a
  * workspace created but never chatted). System workspaces are excluded — they
- * are platform infrastructure and must not be GC'd. Ordered oldest-idle first.
+ * are platform infrastructure and must not be GC'd. Auto-scaling workspaces are
+ * excluded too — the autoscaler owns their scale-to-zero, and letting the
+ * day-scale GC also stop them would be double control on the same lifecycle.
+ * Ordered oldest-idle first.
  */
 export async function listIdleRunningWorkspaces(idleDays: number): Promise<IdleWorkspace[]> {
   const { rows } = await pool.query(
@@ -194,6 +197,10 @@ export async function listIdleRunningWorkspaces(idleDays: number): Promise<IdleW
          ) AS last_used
        FROM workspaces w
        WHERE w.status = 'running' AND w.is_system = false
+         AND NOT EXISTS (
+           SELECT 1 FROM workspace_config wc
+            WHERE wc.workspace_id = w.id AND wc.auto_scaling IS NOT NULL
+         )
      )
      SELECT id, name, last_used FROM activity
      WHERE last_used < NOW() - make_interval(days => $1::int)

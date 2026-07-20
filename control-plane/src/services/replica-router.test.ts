@@ -3,6 +3,8 @@ import {
   __resetReplicaRouter,
   perReplicaCapacity,
   pickReplicaForTurn,
+  readyReplicaIds,
+  setDraining,
   syncReadyReplicas,
 } from './replica-router'
 
@@ -57,6 +59,57 @@ describe('syncReadyReplicas', () => {
   it('treats an empty replica list as no auto-scaling replicas', () => {
     syncReadyReplicas(snapshot({ ws1: [] }))
     expect(pickReplicaForTurn('ws1')).toBeUndefined()
+  })
+})
+
+describe('setDraining', () => {
+  it('steers new picks away from a draining replica', () => {
+    syncReadyReplicas(snapshot({ ws1: [0, 1, 2] }))
+    setDraining('ws1', [2])
+    // round-robin now spreads over the non-draining pool {0,1} only
+    expect(pickReplicaForTurn('ws1')).toBe(0)
+    expect(pickReplicaForTurn('ws1')).toBe(1)
+    expect(pickReplicaForTurn('ws1')).toBe(0)
+  })
+
+  it('rebinds a session off a replica that started draining', () => {
+    syncReadyReplicas(snapshot({ ws1: [0, 1, 2] }))
+    expect(pickReplicaForTurn('ws1', 2)).toBe(2) // affinity holds while healthy
+    setDraining('ws1', [2])
+    expect(pickReplicaForTurn('ws1', 2)).not.toBe(2) // now moved off
+  })
+
+  it('falls back to the full set when every ready replica is draining', () => {
+    syncReadyReplicas(snapshot({ ws1: [0, 1] }))
+    setDraining('ws1', [0, 1])
+    expect([0, 1]).toContain(pickReplicaForTurn('ws1'))
+  })
+
+  it('ignores drain targets that are not in the ready set, and clears on []', () => {
+    syncReadyReplicas(snapshot({ ws1: [0, 1] }))
+    setDraining('ws1', [9]) // stale ordinal → no effect
+    expect(pickReplicaForTurn('ws1', 1)).toBe(1)
+    setDraining('ws1', [1])
+    expect(pickReplicaForTurn('ws1', 1)).not.toBe(1)
+    setDraining('ws1', []) // clear
+    expect(pickReplicaForTurn('ws1', 1)).toBe(1)
+  })
+
+  it('drops draining marks for replicas that leave the ready set on re-sync', () => {
+    syncReadyReplicas(snapshot({ ws1: [0, 1, 2] }))
+    setDraining('ws1', [2])
+    syncReadyReplicas(snapshot({ ws1: [0, 1] })) // 2 removed
+    // 2 is gone; a later 2 (unlikely, but) would not be treated as draining
+    syncReadyReplicas(snapshot({ ws1: [0, 1, 2] }))
+    expect(pickReplicaForTurn('ws1', 2)).toBe(2)
+  })
+})
+
+describe('readyReplicaIds', () => {
+  it('returns the sorted ready ids, empty for a static workspace', () => {
+    expect(readyReplicaIds('static-ws')).toEqual([])
+    syncReadyReplicas(snapshot({ ws1: [2, 0, 1] }))
+    expect(readyReplicaIds('ws1')).toEqual([0, 1, 2])
   })
 })
 
