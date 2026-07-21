@@ -31,7 +31,7 @@ export function SecretReveal({ value, warning }: SecretRevealProps) {
         <span>{warning ?? t('components.secretReveal.saveNow')}</span>
       </div>
       <div className="relative">
-        <pre className="overflow-x-auto rounded-md border border-foreground/[0.08] bg-foreground/[0.04] p-3 pr-12 font-mono text-xs">
+        <pre className="whitespace-pre-wrap break-all rounded-md border border-foreground/[0.08] bg-foreground/[0.04] p-3 pr-12 font-mono text-xs">
           {value}
         </pre>
         <button
