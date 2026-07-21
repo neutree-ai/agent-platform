@@ -94,7 +94,7 @@ RUN case "$TARGETARCH" in amd64) AB_ARCH=x64 ;; arm64) AB_ARCH=arm64 ;; \
 # the AAIF org after the Linux Foundation donation).
 RUN case "$TARGETARCH" in amd64) GOOSE_ARCH=x86_64 ;; arm64) GOOSE_ARCH=aarch64 ;; \
         *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; esac \
-    && curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://github.com/block/goose/releases/download/v1.41.0/goose-${GOOSE_ARCH}-unknown-linux-gnu.tar.bz2 \
+    && curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://github.com/block/goose/releases/download/v1.43.0/goose-${GOOSE_ARCH}-unknown-linux-gnu.tar.bz2 \
     | tar xj -C /usr/local/bin ./goose \
     && chmod +x /usr/local/bin/goose \
     && /usr/local/bin/goose --version
