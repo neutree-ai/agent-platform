@@ -68,9 +68,12 @@ export IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 # --- Naming -----------------------------------------------------------------
 # Prefix on every first-party k8s object name (${APP_PREFIX}-cp, ${APP_PREFIX}-pg,
-# …) and on the first-party image sub-paths (${REGISTRY}/${APP_PREFIX}-cp). A
-# redistribution can rebrand by overriding this; existing installs keep their
-# names by pinning it. DB_NAME is the application database created in postgres.
+# …) and on the first-party image sub-paths (${REGISTRY}/${APP_PREFIX}-cp).
+# For REDISTRIBUTORS ONLY: a non-default prefix requires every first-party
+# image to exist under that prefix in your own registry — the public registry
+# only hosts nap-* images, so a connected install must keep the default.
+# check_app_prefix enforces both this and never changing the prefix of an
+# existing install. DB_NAME is the application database created in postgres.
 export APP_PREFIX="${APP_PREFIX:-nap}"
 export DB_NAME="${DB_NAME:-nap}"
 
@@ -258,6 +261,30 @@ check_prereqs() {
   done
   if [ ${#missing[@]} -gt 0 ]; then
     die "Missing required tools: ${missing[*]}"
+  fi
+}
+
+# APP_PREFIX is for redistributors only: a non-default prefix implies every
+# first-party image was rebuilt or mirrored under that prefix in your own
+# registry. Two guards keep it from being mistaken for a cosmetic setting.
+check_app_prefix() {
+  # A non-default prefix against the default public registry references images
+  # that cannot exist there (it only hosts nap-*). Refuse before applying.
+  if [ "$APP_PREFIX" != "nap" ] && [ "$REGISTRY" = "ghcr.io/neutree-ai/agent-platform" ]; then
+    die "APP_PREFIX=${APP_PREFIX} with the default public REGISTRY, which only hosts nap-* images.
+       A non-default APP_PREFIX is for redistributions that rebuild every first-party image
+       under that prefix in their own registry. Unset APP_PREFIX unless that is you."
+  fi
+  # Never change the prefix of an existing install: the render would come up as
+  # a second, empty ${APP_PREFIX}-* stack (empty database included) beside the
+  # old objects. Detect the existing prefix from its control-plane deployment.
+  local existing
+  existing=$(kubectl -n "${NAMESPACE}" get deploy -o name 2>/dev/null \
+    | sed -n 's|^deployment.apps/\(.*\)-cp$|\1|p' | head -1)
+  if [ -n "$existing" ] && [ "$existing" != "$APP_PREFIX" ]; then
+    die "namespace '${NAMESPACE}' already has an install with prefix '${existing}' (deployment ${existing}-cp).
+       Changing APP_PREFIX on an existing install would deploy a second, empty '${APP_PREFIX}-*' stack
+       beside it. Set APP_PREFIX=${existing} to keep the existing install."
   fi
 }
 
@@ -922,6 +949,7 @@ export DEPLOY_PROFILE
 MODE="${1:-full}"
 
 check_prereqs
+check_app_prefix
 
 if [ "$DEPLOY_PROFILE" = "single-node" ]; then
   log "DEPLOY_PROFILE=single-node — 1-node k3s. Connected: pulls from the public"
