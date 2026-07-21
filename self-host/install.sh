@@ -757,6 +757,10 @@ apply_manifests() {
   create_regcred "${NAMESPACE}"
   attach_pull_secret_to_sa "${NAMESPACE}" default
   attach_pull_secret_to_sa "${NAMESPACE}" "${APP_PREFIX}-cp"
+  # env-runner-k8s runs under its own SA (it needs RBAC), so it does not
+  # inherit the default SA's pull secret — without this, its image pull is
+  # anonymous and an authenticated registry rejects it (ImagePullBackOff).
+  attach_pull_secret_to_sa "${NAMESPACE}" "${APP_PREFIX}-env-runner-k8s"
   kapply -f "$RENDERED_DIR/secrets.yaml"
 
   log "Creating PostgreSQL cluster ..."
