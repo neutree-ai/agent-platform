@@ -10,7 +10,19 @@
  * Streamed write paths (upload, save-draft) pass the raw request body
  * straight to scs without materializing in cp memory.
  */
+import {
+  MAX_SKILL_SLUG_LENGTH,
+  deriveSkillSlug,
+  isValidSkillSlug,
+} from '../../../internal/types/skill-slug'
 import type { AgentNotifier, ReloadEnqueuer } from './agent-notifier'
+import {
+  DEFAULT_EXPORT_TTL_DAYS,
+  type SkillExportToken,
+  createSkillExportToken,
+  deleteSkillExportToken,
+  listSkillExportTokens,
+} from './db/skill-export-tokens'
 import type { SkillMeta, SkillSource, SkillVersion, SkillVisibility } from './db/types'
 import type {
   ListSkillsFilters,
@@ -555,6 +567,72 @@ export class SkillsService {
     await this.assertOwnTeams(userId, grants)
     await this.repo.setSkillGrants(skillId, grants, userId)
     return this.repo.listSkillGrants(skillId)
+  }
+
+  // ─── public shares (local-agent registry) ────────────────────────────────
+  //
+  // Owner-only, like grants: a share hands the skill to anyone holding the
+  // URL, so it is a wider act than the `editor` permission is meant to cover.
+  // Non-owners get 404 rather than 403 so the surface doesn't confirm that a
+  // skill they can read is shareable by someone else.
+
+  async listExports(userId: string, skillId: string): Promise<SkillExportToken[]> {
+    const existing = await this.repo.getSkillForUser(skillId, userId)
+    if (!existing || !existing.is_owner) throw new SkillNotFoundError()
+    return listSkillExportTokens(skillId)
+  }
+
+  /**
+   * Mint a share. `ttlDays === null` means permanent; omitting it applies the
+   * default window. There is no renew — see createSkillExportToken.
+   *
+   * The slug is derived from the skill name when that produces something the
+   * discovery protocol accepts. When it doesn't — a CJK or emoji name leaves
+   * nothing behind — the caller must supply one. We deliberately don't invent
+   * an id-derived fallback: the slug becomes a directory name on the
+   * installer's machine, and `skill-3f2a1b9c` is a poor thing to hand someone.
+   */
+  async createExport(
+    userId: string,
+    skillId: string,
+    opts: { slug?: string; ttlDays?: number | null; label?: string } = {},
+  ): Promise<SkillExportToken> {
+    const existing = await this.repo.getSkillForUser(skillId, userId)
+    if (!existing || !existing.is_owner) throw new SkillNotFoundError()
+    if (!existing.active_version_id) {
+      throw new InvalidInputError('Publish the skill before sharing it')
+    }
+
+    // Stated in full on both failure paths — the UI surfaces these verbatim
+    // when prompting for a slug.
+    const rules = `${MAX_SKILL_SLUG_LENGTH} lowercase letters, digits, and single hyphens (not leading or trailing)`
+
+    let slug: string
+    if (opts.slug !== undefined) {
+      // Explicit input is validated, never silently repaired — a user who
+      // typed a name should get it or be told why not.
+      if (!isValidSkillSlug(opts.slug)) {
+        throw new InvalidInputError(`Invalid slug "${opts.slug}": use 1-${rules}`)
+      }
+      slug = opts.slug
+    } else {
+      const derived = deriveSkillSlug(existing.name)
+      if (!derived) {
+        throw new InvalidInputError(
+          `Cannot derive a share name from "${existing.name}" — provide a slug: 1-${rules}`,
+        )
+      }
+      slug = derived
+    }
+
+    const ttlDays = opts.ttlDays === undefined ? DEFAULT_EXPORT_TTL_DAYS : opts.ttlDays
+    return createSkillExportToken(skillId, userId, slug, ttlDays, opts.label ?? '')
+  }
+
+  async revokeExport(userId: string, skillId: string, token: string): Promise<boolean> {
+    const existing = await this.repo.getSkillForUser(skillId, userId)
+    if (!existing || !existing.is_owner) throw new SkillNotFoundError()
+    return deleteSkillExportToken(skillId, token)
   }
 
   // ─── workspace ↔ skill ───────────────────────────────────────────────────

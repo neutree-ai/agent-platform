@@ -868,7 +868,8 @@
           "syncFromGit": "Sync from Git",
           "previewSkills": "Preview",
           "chooseFile": "Choose file",
-          "back": "Back"
+          "back": "Back",
+          "export": "Export"
         },
         "detail": {
           "unpackingHint": "Skill is large — unpacking on the server, please wait…",
@@ -992,6 +993,42 @@
           "blockedOwn": "Detach this skill from your workspaces below before deleting it.",
           "blockedExternal": "This skill is still used by other users' workspaces or templates; it can't be deleted until they're all detached.",
           "clear": "This can't be undone."
+        },
+        "exportDialog": {
+          "title": "Export to local agent",
+          "description": "Create an install link so a local agent can add \"{{name}}\" with npx skills add.",
+          "warning": "Anyone with this link can download the skill until it expires — no login required. Make sure the contents are safe to share.",
+          "warningPermanent": "This link never expires. Anyone who ever sees the URL can keep downloading the latest published version of this skill. Revoke it once you're done.",
+          "newLinkLabel": "Install command",
+          "existingLabel": "Existing links",
+          "loading": "Loading…",
+          "empty": "No export links yet.",
+          "expiresNever": "Never expires",
+          "expiresAt": "Expires {{value}}",
+          "lastUsed": "Last used {{value}}",
+          "neverUsed": "Never used",
+          "copyCommand": "Copy install command",
+          "revoke": "Revoke",
+          "revokeConfirm": "Confirm revoke",
+          "slugLabel": "Install name",
+          "slugPlaceholder": "e.g. code-review",
+          "slugHint": "The directory name on the installer's machine. Fixed once the link is created.",
+          "slugInvalid": "Use lowercase letters, digits, and single hyphens (not leading or trailing), up to {{max}} characters.",
+          "ttlLabel": "Expires after",
+          "ttlOptions": {
+            "7days": "7 days",
+            "30days": "30 days",
+            "90days": "90 days",
+            "permanent": "Never (permanent)"
+          },
+          "create": "Create link",
+          "creating": "Creating…",
+          "toasts": {
+            "revoked": "Link revoked"
+          },
+          "errors": {
+            "revokeFailed": "Failed to revoke"
+          }
         }
       },
       "sources": {

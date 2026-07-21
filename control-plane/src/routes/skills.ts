@@ -17,6 +17,8 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import {
   type ApiSkill,
+  type ApiSkillExport,
+  ApiSkillExportSchema,
   ApiSkillGrantSchema,
   ApiSkillSchema,
   type ApiSkillSource,
@@ -26,6 +28,7 @@ import {
   SkillActiveVersionBodySchema,
   SkillCreateNativeBodySchema,
   SkillDependentsSchema,
+  SkillExportCreateBodySchema,
   SkillFromGitErrorSchema,
   SkillGrantsBodySchema,
   SkillImportFromGitBodySchema,
@@ -41,6 +44,7 @@ import {
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
 import { getUserCredentialValue } from '../services/db/credentials'
+import type { SkillExportToken } from '../services/db/skill-export-tokens'
 import type { SkillMeta, SkillSource, SkillVersion } from '../services/db/types'
 import type { SkillWithAccess } from '../services/skill-repository'
 import { skillsService } from '../services/skills-composition'
@@ -1562,6 +1566,130 @@ skills.openapi(setGrantsRoute, async (c) => {
   const { grants } = c.req.valid('json')
   const rows = await skillsService.setGrants(user.sub, id, grants)
   return c.json(rows, 200)
+})
+
+// ── shares (public registry for local agents) ─────────────────────────────
+//
+// Owner-only. A share is a capability URL: holding it is sufficient to
+// download the skill, so these handlers return the full token — the listing
+// endpoint is a credential-listing endpoint by design, same as the export
+// token list.
+
+function exportToApi(s: SkillExportToken): ApiSkillExport {
+  const base = (process.env.WEB_PUBLIC_URL || '').replace(/\/$/, '')
+  return {
+    token: s.token,
+    url: `${base}/sk/${s.token}`,
+    slug: s.slug,
+    label: s.label,
+    expires_at: s.expires_at ? new Date(s.expires_at).toISOString() : null,
+    last_used_at: s.last_used_at ? new Date(s.last_used_at).toISOString() : null,
+    created_at: new Date(s.created_at).toISOString(),
+  }
+}
+
+const listExportsRoute = createRoute({
+  method: 'get',
+  path: '/{id}/exports',
+  tags: ['skills'],
+  summary: 'List active public shares for a skill (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: { params: IdParam },
+  responses: {
+    200: {
+      description: 'Share list',
+      content: { 'application/json': { schema: z.array(ApiSkillExportSchema) } },
+    },
+    404: {
+      description: 'Skill not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+skills.openapi(listExportsRoute, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const rows = await skillsService.listExports(user.sub, id)
+  return c.json(rows.map(exportToApi), 200)
+})
+
+const createExportRoute = createRoute({
+  method: 'post',
+  path: '/{id}/exports',
+  tags: ['skills'],
+  summary: 'Mint a public share URL for a skill (owner only)',
+  description:
+    'Returns a capability URL installable with `npx skills add <url>`. Defaults to a ' +
+    '90-day lifetime; pass `ttl_days: null` for a permanent share. Shares cannot be ' +
+    'extended — mint a replacement and revoke the old one. `slug` is derived from the ' +
+    'skill name; when the name yields nothing usable (e.g. all-CJK) the call returns ' +
+    '400 and `slug` must be supplied.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: IdParam,
+    body: { content: { 'application/json': { schema: SkillExportCreateBodySchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Share created',
+      content: { 'application/json': { schema: ApiSkillExportSchema } },
+    },
+    400: {
+      description: 'Skill has no published version',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    404: {
+      description: 'Skill not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+skills.openapi(createExportRoute, async (c) => {
+  const user = c.get('user')
+  const { id } = c.req.valid('param')
+  const body = c.req.valid('json')
+  try {
+    const share = await skillsService.createExport(user.sub, id, {
+      slug: body.slug,
+      ttlDays: body.ttl_days,
+      label: body.label,
+    })
+    return c.json(exportToApi(share), 200)
+  } catch (e) {
+    if (e instanceof InvalidInputError) return c.json({ error: e.message }, 400)
+    throw e
+  }
+})
+
+const TokenParam = z.object({
+  id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
+  token: z.string().openapi({ param: { name: 'token', in: 'path' } }),
+})
+
+const revokeExportRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/exports/{token}',
+  tags: ['skills'],
+  summary: 'Revoke a public share (owner only)',
+  security: [{ bearerAuth: [] }],
+  request: { params: TokenParam },
+  responses: {
+    204: { description: 'Revoked' },
+    404: {
+      description: 'Skill or share not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+skills.openapi(revokeExportRoute, async (c) => {
+  const user = c.get('user')
+  const { id, token } = c.req.valid('param')
+  const removed = await skillsService.revokeExport(user.sub, id, token)
+  if (!removed) return c.json({ error: 'Share not found' }, 404)
+  return c.body(null, 204)
 })
 
 export default skills
