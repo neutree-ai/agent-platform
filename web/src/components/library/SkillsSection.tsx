@@ -1,3 +1,4 @@
+import { SkillExportDialog } from '@/components/dialogs/SkillExportDialog'
 import {
   INITIAL_SKILL_FORM,
   SkillFormFields,
@@ -53,6 +54,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   GitBranch,
+  Link2,
   MoreVertical,
   Pencil,
   Plus,
@@ -134,6 +136,7 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [shareSkill, setShareSkill] = useState<ApiSkill | null>(null)
+  const [exportSkill, setExportSkill] = useState<ApiSkill | null>(null)
   const [deletingSkill, setDeletingSkill] = useState<ApiSkill | null>(null)
 
   const importFromGit = useImportSkillFromGit()
@@ -709,6 +712,21 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
                         <Share2 className="h-3 w-3" />
                       </Button>
                     )}
+                    {/* Distinct from Share2 above: that governs who inside the
+                        platform can see the skill, this hands it to a local
+                        agent over a public URL. Different verbs on purpose. */}
+                    {s.is_own && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        onClick={() => setExportSkill(s)}
+                        title={t('components.library.skills.actions.export')}
+                      >
+                        <Link2 className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -964,6 +982,12 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
         skill={shareSkill}
         open={!!shareSkill}
         onOpenChange={(o) => !o && setShareSkill(null)}
+      />
+
+      <SkillExportDialog
+        skill={exportSkill}
+        open={!!exportSkill}
+        onOpenChange={(o) => !o && setExportSkill(null)}
       />
 
       <SkillDeleteDialog

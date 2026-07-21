@@ -427,7 +427,7 @@ export type SkillPermission = z.infer<typeof SkillPermissionSchema>
 
 const SkillMyPermissionSchema = z.enum(['owner', 'editor', 'viewer', 'public'])
 
-const SkillSharedTeamSchema = z.object({
+const SkillExportTokendTeamSchema = z.object({
   id: z.string(),
   name: z.string(),
   permission: SkillPermissionSchema,
@@ -494,7 +494,7 @@ export const ApiSkillSchema = z.object({
   is_public: z.boolean(),
   visibility: SkillVisibilitySchema,
   my_permission: SkillMyPermissionSchema,
-  shared_via_teams: z.array(SkillSharedTeamSchema),
+  shared_via_teams: z.array(SkillExportTokendTeamSchema),
   owner_name: z.string(),
   is_own: z.boolean(),
   category: z.string().nullable(),
@@ -531,6 +531,38 @@ export const SkillDependentsSchema = z.object({
   template_version_count: z.number(),
 })
 export type SkillDependents = z.infer<typeof SkillDependentsSchema>
+
+// Public share of a single skill, consumed by local agents via
+// `npx skills add <url>`. The URL *is* the credential — anyone holding it can
+// download the skill — so `url` is only ever returned to the owner.
+export const ApiSkillExportSchema = z.object({
+  token: z.string(),
+  url: z.string(),
+  /** Name the skill installs under, and its directory name on disk. */
+  slug: z.string(),
+  label: z.string(),
+  /** null = permanent; stays valid until revoked. */
+  expires_at: z.string().nullable(),
+  /** null until someone actually installs from it. */
+  last_used_at: z.string().nullable(),
+  created_at: z.string(),
+})
+export type ApiSkillExport = z.infer<typeof ApiSkillExportSchema>
+
+// Expiry is expressed in days (not seconds like export_tokens): these are
+// long-lived credentials that live on a developer machine, so the useful
+// range is weeks-to-months rather than minutes.
+export const SkillExportCreateBodySchema = z.object({
+  /** Omit for the 90-day default; explicit null mints a permanent share. */
+  ttl_days: z.number().int().min(1).max(3650).nullable().optional(),
+  label: z.string().max(200).optional(),
+  /**
+   * Omit to derive it from the skill name. Required when the name yields
+   * nothing usable (CJK, emoji, punctuation-only) — the API answers 400 with
+   * the rules when that happens, so the UI can prompt for one.
+   */
+  slug: z.string().max(64).optional(),
+})
 
 // ── request schemas ───────────────────────────────────────────────────────
 

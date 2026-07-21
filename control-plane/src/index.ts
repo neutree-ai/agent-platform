@@ -49,6 +49,7 @@ import { publicExportsApp } from './routes/public-exports'
 import saasProxyRoutes from './routes/saas-proxy'
 import serviceTokenRoutes from './routes/service-tokens'
 import sharesRoutes from './routes/shares'
+import { skillRegistryApp, wellKnownRootApp } from './routes/skill-registry'
 import skillsRoutes from './routes/skills'
 import systemWorkspacesRoutes from './routes/system-workspaces'
 import tagsRoutes from './routes/tags'
@@ -160,6 +161,8 @@ app.use('/*', async (c, next) => {
     path === '/api/auth/wecom/callback' ||
     path.startsWith('/api/shares/public/') ||
     path.startsWith('/s/') ||
+    path.startsWith('/sk/') ||
+    path.startsWith('/.well-known/agent-skills') ||
     path.startsWith('/api/docs') ||
     path.startsWith('/_cp/') ||
     path.startsWith('/_cg/') ||
@@ -345,6 +348,10 @@ app.route('/api/asr', asrRoutes)
 app.route('/api/memory-stores', memoryStoresRoutes)
 app.route('/api/workspaces', workspaceMemoryAttachmentRoutes)
 app.route('/api/skills', skillsRoutes)
+// Public skill registry (`.well-known` discovery for `npx skills add`).
+// No auth — the share token in the path is the capability.
+app.route('/sk', skillRegistryApp)
+app.route('/.well-known/agent-skills', wellKnownRootApp)
 app.route('/api/plugins', pluginsRoutes)
 app.route('/api/mcp-catalog', mcpCatalogRoutes)
 app.route('/api/system-workspaces', systemWorkspacesRoutes)

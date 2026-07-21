@@ -898,7 +898,8 @@
           "syncFromGit": "从 Git 同步",
           "chooseFile": "选择文件",
           "back": "返回",
-          "previewSkills": "预览"
+          "previewSkills": "预览",
+          "export": "导出"
         },
         "detail": {
           "unpackingHint": "Skill 较大,服务端正在解压,稍候…",
@@ -1017,6 +1018,42 @@
           "blockedOwn": "请先把此 Skill 从下列你的 workspace 中移除，再执行删除。",
           "blockedExternal": "此 Skill 仍被其他用户的 workspace 或模板引用，需全部解除挂载后才能删除。",
           "clear": "此操作不可撤销。"
+        },
+        "exportDialog": {
+          "title": "导出到本地 agent",
+          "description": "生成安装链接，让本地 agent 通过 npx skills add 安装「{{name}}」。",
+          "warning": "拿到链接的任何人都可在有效期内下载这个 skill，无需登录。请确认内容可以公开。",
+          "warningPermanent": "永久链接没有有效期。只要任何人拿到 URL，就能一直下载这个 skill 的最新已发布版本。用完请及时撤销。",
+          "newLinkLabel": "安装命令",
+          "existingLabel": "已有链接",
+          "loading": "加载中…",
+          "empty": "还没有导出链接。",
+          "expiresNever": "永久有效",
+          "expiresAt": "过期时间 {{value}}",
+          "lastUsed": "最近使用 {{value}}",
+          "neverUsed": "从未使用",
+          "copyCommand": "复制安装命令",
+          "revoke": "撤销",
+          "revokeConfirm": "确认撤销",
+          "slugLabel": "安装名称",
+          "slugPlaceholder": "例如 code-review",
+          "slugHint": "对方机器上的目录名。链接生成后不可修改。",
+          "slugInvalid": "只能用小写字母、数字和单个连字符（不能在首尾），最长 {{max}} 个字符。",
+          "ttlLabel": "有效期",
+          "ttlOptions": {
+            "7days": "7 天",
+            "30days": "30 天",
+            "90days": "90 天",
+            "permanent": "永不过期"
+          },
+          "create": "生成链接",
+          "creating": "生成中…",
+          "toasts": {
+            "revoked": "链接已撤销"
+          },
+          "errors": {
+            "revokeFailed": "撤销失败"
+          }
         }
       },
       "sources": {
