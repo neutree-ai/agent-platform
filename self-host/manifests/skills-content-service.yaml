@@ -43,10 +43,16 @@ spec:
               mountPath: /var/cache/skills-content
           resources:
             requests:
-              memory: "128Mi"
+              memory: "256Mi"
               cpu: "50m"
+            # Steady state is ~130Mi, but /package reads each skill tarball
+            # fully into memory, so a burst of concurrent downloads (many
+            # workspaces reloading at once, plus npx-skills export fetches)
+            # stacks tarballs and OOM-killed the pod at 512Mi. Raised for
+            # headroom; the real fix is streaming /package from pg rather
+            # than buffering (tracked separately).
             limits:
-              memory: "512Mi"
+              memory: "1Gi"
               cpu: "500m"
           livenessProbe:
             httpGet:

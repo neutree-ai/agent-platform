@@ -21,16 +21,19 @@ import {
   findSkillByOwnerName,
   getActiveVersionHash,
   getActiveVersionPackage,
+  getActiveVersionPackageHead,
   getDraftPackage,
   getSkillById,
   getSourceById,
   getVersionPackage,
+  getVersionPackageHead,
   insertSkill,
   insertSkillSource,
   insertVersion,
   patchSkill,
   patchSource,
   pool,
+  readPackageChunk,
   saveDraftPackage,
   setActiveVersion,
   withTx,
@@ -46,6 +49,7 @@ import {
 import { DUFS_ORIGIN, startDufs } from './dufs'
 import { importFromGit, scanGit, scanTarballBytes, switchSourceToGit, syncSource } from './from-git'
 import { startLruSweep } from './lru'
+import { packageStream } from './package-stream'
 
 const MAX_SKILL_PACKAGE_BYTES = Number(process.env.MAX_SKILL_PACKAGE_BYTES || 50 * 1024 * 1024)
 
@@ -1325,27 +1329,29 @@ const skillPackageRoute = createRoute({
 
 app.openapi(skillPackageRoute, async (c) => {
   const { id } = c.req.valid('param')
-  // Conditional download: probe the active version's content hash first (cheap,
-  // no bytea read). The agent-skills client at workspace boot/reload sends the
-  // ETag it last extracted; when it still matches we 304 and skip streaming the
-  // package entirely. Fanout reloads (one skill edit reloads every workspace
-  // that has it) make almost every package request a no-change probe.
-  const hashRow = await getActiveVersionHash(id)
-  if (!hashRow) return c.json({ error: 'Skill or active version not found' }, 404)
-  const etag = `"${hashRow.content_hash}"`
+  // Conditional download: the head probe carries the content hash (plus the
+  // byte length and version id the 200 path needs) without reading a single
+  // package byte. The agent-skills client at workspace boot/reload sends the
+  // ETag it last extracted; when it still matches we 304 and skip the body
+  // entirely. Fanout reloads (one skill edit reloads every workspace that
+  // has it) make almost every package request a no-change probe.
+  const head = await getActiveVersionPackageHead(id)
+  if (!head) return c.json({ error: 'Skill or active version not found' }, 404)
+  const etag = `"${head.content_hash}"`
   if (c.req.header('If-None-Match') === etag) {
     return new Response(null, { status: 304, headers: { ETag: etag } })
   }
-  const row = await getActiveVersionPackage(id)
-  if (!row) return c.json({ error: 'Skill or active version not found' }, 404)
-  const view = new Uint8Array(row.package.byteLength)
-  view.set(row.package)
-  return new Response(view, {
+  // Chunks address the immutable version row resolved above, not the active
+  // pointer — a concurrent set-active can't tear the stream.
+  const body = packageStream(head.byte_length, (offset, length) =>
+    readPackageChunk(head.version_id, offset, length),
+  )
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': 'application/gzip',
-      'Content-Length': String(row.package.byteLength),
-      'Content-Disposition': packageDisposition(row.name),
+      'Content-Length': String(head.byte_length),
+      'Content-Disposition': packageDisposition(head.name),
       ETag: etag,
     },
   })
@@ -1367,18 +1373,19 @@ const versionPackageRoute = createRoute({
 
 app.openapi(versionPackageRoute, async (c) => {
   const { id, vid } = c.req.valid('param')
-  const row = await getVersionPackage(vid)
-  if (!row || row.skill_id !== id) return c.json({ error: 'Version not found' }, 404)
-  const view = new Uint8Array(row.package.byteLength)
-  view.set(row.package)
-  return new Response(view, {
+  const head = await getVersionPackageHead(vid)
+  if (!head || head.skill_id !== id) return c.json({ error: 'Version not found' }, 404)
+  const body = packageStream(head.byte_length, (offset, length) =>
+    readPackageChunk(vid, offset, length),
+  )
+  return new Response(body, {
     status: 200,
     headers: {
       'Content-Type': 'application/gzip',
-      'Content-Length': String(row.package.byteLength),
+      'Content-Length': String(head.byte_length),
       // Tag historical downloads with a short content hash so multiple
       // versions of the same skill don't collide in the downloads folder.
-      'Content-Disposition': packageDisposition(row.name, `-${row.content_hash.slice(0, 8)}`),
+      'Content-Disposition': packageDisposition(head.name, `-${head.content_hash.slice(0, 8)}`),
     },
   })
 })
