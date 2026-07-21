@@ -83,10 +83,13 @@ if (rc) {
 
 // ── ACP bridge factory (1 bridge : 1 session : 1 data dir) ──
 
-// --with-builtin developer: when session/new carries mcpServers (always, for
-// tos-platform), goose REPLACES the config-file extension set with that list —
-// only CLI-pinned builtins survive (initial_session_extensions in goose's ACP
-// server). Without this flag the agent has no shell/edit tools.
+// --with-builtin developer,summon: when session/new carries mcpServers
+// (always, for tos-platform), goose REPLACES the config-file extension set
+// with that list — only CLI-pinned builtins survive
+// (initial_session_extensions in goose's ACP server). Without developer the
+// agent has no shell/edit tools; summon adds the delegate/load subagent tools
+// (in-process platform extension — subagents run as child sessions inside the
+// same goose process, inheriting the parent's extensions and provider).
 //
 // GOOSE_PATH_ROOT: every session runs against its own private goose store —
 // the platform session id (acp-server's draft UUID for new sessions) names
@@ -106,7 +109,7 @@ setBridgeFactory(async (sessionId: string) => {
   const dataDir = prepareSessionDir(sessionId)
   const b = new AcpBridge({
     program: 'goose',
-    args: ['acp', '--with-builtin', 'developer'],
+    args: ['acp', '--with-builtin', 'developer,summon'],
     cwd: WORKSPACE_DIR,
     env: { GOOSE_PATH_ROOT: dataDir },
     sessionIdCodec: sessionDirCodec(sessionId),
