@@ -1,0 +1,75 @@
+/* Air-gap delta block: same calm accent-tinted language as .sh-callout-airgap,
+   but collapsible — the connected flow reads straight through; air-gapped
+   readers expand once and every block remembers it. */
+.ag-block {
+  margin: 0.75rem 0;
+  border-radius: 0.5rem;
+  border-left: 3px solid var(--sl-color-accent);
+  background: color-mix(in srgb, var(--sl-color-accent) 8%, var(--sl-color-bg-nav));
+  font-size: var(--sl-text-sm);
+  line-height: 1.6;
+}
+
+.ag-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: 0;
+  background: none;
+  color: var(--sl-color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ag-icon {
+  flex: none;
+  color: var(--sl-color-accent);
+}
+
+.ag-label {
+  flex: none;
+}
+
+.ag-hint {
+  overflow: hidden;
+  color: var(--sl-color-gray-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ag-chevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--sl-color-gray-3);
+  transition: transform 0.15s ease;
+}
+
+.ag-open .ag-chevron {
+  transform: rotate(180deg);
+}
+
+.ag-body {
+  padding: 0 1rem 0.75rem;
+}
+
+.ag-body > :first-child {
+  margin-top: 0;
+}
+
+.ag-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* Print always shows the air-gap content, expanded or not. */
+@media print {
+  .ag-body[hidden] {
+    display: block;
+  }
+
+  .ag-chevron {
+    display: none;
+  }
+}

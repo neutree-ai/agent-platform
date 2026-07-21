@@ -1,16 +1,16 @@
 ---
-title: 代码沙箱 / 远程浏览器
-description: 启用平台的代码沙箱与远程浏览器服务，包括 OAuth client 自动注册和公网 URL 覆盖。
+title: Code Sandbox / Agent Browser
+description: 启用平台的Code Sandbox 与 Agent Browser 服务，包括 OAuth client 自动注册和公网 URL 覆盖。
 ---
 
-代码沙箱（sandbox-service）和远程浏览器（browser-service）是两个可选的高级服务，默认关闭。两者都通过平台的 OAuth 流程登录。本页介绍如何启用、OAuth client 自动注册，以及外部 ingress 场景下的公网 URL 覆盖。
+Code Sandbox（sandbox-service）和 Agent Browser（browser-service）是两个可选的高级服务，默认关闭。Code Sandbox 让 Agent 运行代码并提供临时 web 预览；Agent Browser 是自托管的 browser as a service —— Agent 驱动真实浏览器，用户实时观看。两者都通过平台的 OAuth 流程登录。本页介绍如何启用、OAuth client 自动注册，以及外部 ingress 场景下的公网 URL 覆盖。
 
 ## 两个服务
 
 | 服务 | 能力 | 依赖 |
 | --- | --- | --- |
-| 代码沙箱 | 让 agent 运行代码并提供临时 web 预览 | 第三方 OpenSandbox（你自行安装；平台通过 `OPENSANDBOX_URL` 指向它） |
-| 远程浏览器 | 让 agent 驱动真实浏览器，用户通过 WebRTC 实时观看 | 内置的 TURN relay（coturn），随 `BROWSER_ENABLED` 一起启用 |
+| Code Sandbox | 让 agent 运行代码并提供临时 web 预览 | 第三方 OpenSandbox（你自行安装；平台通过 `OPENSANDBOX_URL` 指向它） |
+| Agent Browser | 让 agent 驱动真实浏览器，用户通过 WebRTC 实时观看 | 内置的 TURN relay（coturn），随 `BROWSER_ENABLED` 一起启用 |
 
 在[配置生成器](/zh-cn/self-host/#configure)中切换对应模块即可生成带这些段落的 `values.env`，或手动把 `SANDBOX_ENABLED` / `BROWSER_ENABLED` 设为 `true`。
 
@@ -25,7 +25,7 @@ SANDBOX_NODE_PORT=30086
 SANDBOX_JWT_SECRET=      # openssl rand -hex 32
 SANDBOX_SERVICE_KEY=     # openssl rand -hex 32, shared between browser and sandbox
 
-# Remote Browser (incl. TURN)
+# Agent Browser (incl. TURN)
 BROWSER_ENABLED=true
 BROWSER_NODE_PORT=30085
 BROWSER_JWT_SECRET=      # openssl rand -hex 32
@@ -37,7 +37,7 @@ TURN_AUTH_SECRET=        # openssl rand -hex 32
 
 ## 安装 OpenSandbox
 
-代码沙箱由 **OpenSandbox**（[github.com/alibaba/OpenSandbox](https://github.com/alibaba/OpenSandbox)）驱动，这是一个**第三方**组件，平台安装器**不会**为你安装。当 `SANDBOX_ENABLED=true` 时，`install.sh` 部署 `nap-sandbox`，并假定 OpenSandbox 已安装好且可在 `OPENSANDBOX_URL` 处访问。
+Code Sandbox 由 **OpenSandbox**（[github.com/alibaba/OpenSandbox](https://github.com/alibaba/OpenSandbox)）驱动，这是一个**第三方**组件，平台安装器**不会**为你安装。当 `SANDBOX_ENABLED=true` 时，`install.sh` 部署 `nap-sandbox`，并假定 OpenSandbox 已安装好且可在 `OPENSANDBOX_URL` 处访问。
 
 从 OpenSandbox 上游 Helm charts 安装它（controller + server），然后把平台指向它：
 
@@ -49,7 +49,7 @@ helm install opensandbox ./opensandbox \
   -f <path-to>/optional/sandbox/opensandbox-values.yaml
 ```
 
-把 OpenSandbox 装在 `nap` namespace 里，平台默认的 `OPENSANDBOX_URL` 才能解析。如果你把 OpenSandbox 装到独立 namespace，需显式设置 `OPENSANDBOX_URL`（例如 `http://opensandbox-server.opensandbox-system.svc:80`）。完整参考（包括挂载平台的 sandbox pod 模板）见 self-host README 的 "Enabling Code Sandbox"。
+把 OpenSandbox 装在 `nap` namespace 里，平台默认的 `OPENSANDBOX_URL` 才能解析。如果你把 OpenSandbox 装到独立 namespace，需显式设置 `OPENSANDBOX_URL`（例如 `http://opensandbox-server.opensandbox-system.svc:80`）。完整参考（包括挂载平台的 sandbox pod 模板）见 [self-host README 的 "Enabling Code Sandbox"](https://github.com/neutree-ai/agent-platform/blob/main/self-host/README.md)。
 
 ## OAuth client 自动注册
 

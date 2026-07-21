@@ -1,17 +1,19 @@
 ---
 title: Single-Node k3s Quick Deploy
-description: Bring up the full Neutree Agent Platform on one machine with k3s — the quickest install path. Pulls images from the public registry.
+description: Bring up the full Neutree Agent Platform on one machine with k3s — the quickest install path, connected or fully air-gapped.
 ---
 
-Install Neutree Agent Platform on a single-node k3s cluster — the quickest way to get the full platform running. The single-node profile matches the full one, just with a single PostgreSQL instance and an in-cluster NFS server for shared storage. By default every image is pulled from the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`), so the node needs internet access. For a node with **no internet access**, jump to [Air-gapped install](#air-gapped-install) — it brings up an in-cluster registry seeded from an image bundle, so nothing is pulled from the internet.
+import AirgapBlock from '../../../components/self-host/AirgapBlock.tsx'
 
-Recommended spec: **8 vCPU / 32 GB / 200 GB disk** — comfortable for roughly **10 concurrent workspaces**. When you need HA or horizontal scale, use the [production deployment](/self-host/).
+Install Neutree Agent Platform on a single-node k3s cluster — the quickest way to get the full platform running. The single-node profile matches the full one, just with a single PostgreSQL instance and an in-cluster NFS server for shared storage.
 
-## One-line install
+The same flow serves two kinds of nodes. **Connected**, every image is pulled from the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`). For a node with **no internet access**, the extra steps sit inline in collapsible **Air-gapped** blocks — expand one and they all stay open; that path installs from an image bundle via an in-cluster registry, so nothing is pulled from the internet.
 
-### On a bare Linux machine (no Kubernetes)
+Recommended spec: **8 vCPU / 32 GB / 200 GB disk** — comfortable for roughly **10 concurrent workspaces**. When you need HA or horizontal scale, use the [production deployment](/self-host/), which also covers [installing into an existing Kubernetes cluster](/self-host/#install).
 
-k3s is **not** required — the script installs it. Run as root:
+## One-line install (connected)
+
+On a bare Linux machine with internet access, k3s is **not** required — the script installs it. Run as root:
 
 ```bash
 curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
@@ -31,32 +33,39 @@ curl -sfL https://nap.docs.neutree.ai/get.sh \
   | sudo sh -s -- --prepare-only
 ```
 
-`get.sh --help` lists all flags (`--version=` to pin a release, `--dir=` to relocate the install dir).
+`get.sh --help` lists all flags (`--version=` to pin a release, `--dir=` to relocate the install dir). An air-gapped node can't run the one-liner — follow the manual flow below.
 
-### Into an existing Kubernetes cluster
+## Manual install
 
-Uses your current kubeconfig (`$KUBECONFIG`, default `~/.kube/config`). Two things can't be autodetected and must be named: the host users will reach the platform at, and RWX storage — either an external NFS export or an RWX-capable StorageClass that already exists in the cluster:
+The same steps the one-liner automates, under your control — and the path for air-gapped nodes. Run everything on the node itself.
+
+### 1. Get the materials
 
 ```bash
-# with an external NFS server
-curl -sfL https://nap.docs.neutree.ai/get.sh \
-  | sh -s -- --k8s --host=<ip-or-hostname> --nfs-server=<ip> --nfs-path=</export/path>
-
-# with an existing RWX StorageClass
-curl -sfL https://nap.docs.neutree.ai/get.sh \
-  | sh -s -- --k8s --host=<ip-or-hostname> --storage-class=<rwx-storageclass>
+git clone https://github.com/neutree-ai/agent-platform
+cd agent-platform/self-host
 ```
 
-This installs the full profile (3-replica PostgreSQL) with defaults; add `--prepare-only` to review `/opt/nap/values.env` before installing. For production-grade planning — architecture, ingress, sizing — use the [production deployment guide](/self-host/).
+If you already ran the one-liner (even with `--prepare-only`), the same directory is at `/opt/nap/self-host` — work there instead.
 
-## Manual deployment
+<AirgapBlock client:load locale="en" summary="build two bundles on a connected host, then stage them on the node">
 
-The same steps the one-liner automates, under your control. Run this on a host that has a working k3s with its kubeconfig at `/etc/rancher/k3s/k3s.yaml` (the default in the single-node example).
-
-### 1. Prepare values.env
+On any internet-connected machine, from the `self-host/` directory:
 
 ```bash
-cd self-host
+./offline/save-images.sh                         # → offline/nap-images.tar.gz + prereq charts
+./single-node-prep/package-prep.sh --arch amd64  # → k3s + helm/envsubst/crane + airgap images
+```
+
+`save-images.sh` writes `offline/nap-images.tar.gz` (every first-party and third-party image, plus `registry:2`) and the CNPG / NFS-provisioner charts under `prereqs/`. `package-prep.sh` bundles the k3s binary, its airgap images, and the CLI tools `install.sh` depends on — pick the `--arch` (`amd64` / `arm64`) that matches the target node. If a vendor delivered these bundles, skip this step.
+
+Copy the `self-host/` directory (with `offline/nap-images.tar.gz` inside) and the prep tarball to the air-gapped node, and extract the prep tarball **inside `self-host/`**, so it lands at `self-host/single-node-prep/` — that's where `preinstall.sh` expects to find `../offline/nap-images.tar.gz` (extracting it as a sibling of `self-host/` also works; the script checks both layouts).
+
+</AirgapBlock>
+
+### 2. Prepare values.env
+
+```bash
 cp values.env.single-node.example values.env
 ./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
 vi values.env           # set NAP_HOST + ADMIN_PASSWORD
@@ -69,73 +78,56 @@ vi values.env           # set NAP_HOST + ADMIN_PASSWORD
 
 Everything else (PG replica count, storage classes, NFS backend) is preset for the single-node shape.
 
-### 2. Install
+<AirgapBlock client:load locale="en" summary="NAP_HOST must be set before the next step">
+
+Set `NAP_HOST` **before** step 3 — `preinstall.sh` writes the containerd config that lets the node reach the in-cluster registry over HTTP, and it needs the host.
+
+</AirgapBlock>
+
+### 3. Prepare the node (k3s)
+
+The install needs a working k3s with its kubeconfig at `/etc/rancher/k3s/k3s.yaml` (the default). If the node doesn't have k3s yet:
 
 ```bash
-./install.sh --profile=single-node
+curl -sfL https://get.k3s.io | sh -
 ```
 
-`install.sh` first brings up the in-cluster NFS server (`nap-nfs-server` pod, backed by `local-path`), installs the CloudNativePG operator and the NFS subdir provisioner from their public sources, renders and applies the manifests, then seeds the admin user, OAuth clients, and the MCP catalog. All images are pulled from the public registry.
+<AirgapBlock client:load locale="en" summary="preinstall.sh installs k3s and imports the images — no internet">
 
-### 3. Log in
-
-```
-http://<NAP_HOST>:30080
-admin / <ADMIN_PASSWORD>
-```
-
-## Air-gapped install
-
-A node with **no internet access** installs from two bundles built on a connected host — the platform image bundle and a k3s prep bundle. `install.sh` brings up an in-cluster registry (`nap-registry`) and seeds it from the image bundle, so the node never reaches the internet and you need no external registry.
-
-### 1. Build the bundles (connected host)
-
-On any internet-connected machine, from the `self-host/` directory:
-
-```bash
-./offline/save-images.sh                         # → offline/nap-images.tar.gz + prereq charts
-./single-node-prep/package-prep.sh --arch amd64  # → k3s + helm/envsubst/crane + airgap images
-```
-
-`save-images.sh` writes `offline/nap-images.tar.gz` (every first-party and third-party image, plus `registry:2`) and the CNPG / NFS-provisioner charts under `prereqs/`. `package-prep.sh` bundles the k3s binary, its airgap images, and the CLI tools `install.sh` depends on — pick the `--arch` (`amd64` / `arm64`) that matches the target node. If a vendor delivered these bundles, skip this step.
-
-### 2. Stage on the node
-
-Copy both bundles to the air-gapped node and extract them so `single-node-prep/` sits alongside `self-host/offline/nap-images.tar.gz` — `preinstall.sh` looks for the image bundle there.
-
-### 3. Prepare values.env
-
-```bash
-cd self-host
-cp values.env.single-node.example values.env
-./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
-vi values.env           # set NAP_HOST + ADMIN_PASSWORD
-```
-
-Set `NAP_HOST` **before** the next step — `preinstall.sh` writes the containerd config that lets the node reach the in-cluster registry over HTTP, and it needs the host.
-
-### 4. Preinstall — install k3s and import images
+Instead of the online k3s installer, run:
 
 ```bash
 cd single-node-prep
 sudo ./preinstall.sh
+cd ..
 ```
 
-This installs k3s from the bundle, drops in helm / envsubst / crane, imports `nap-images.tar.gz` into k3s containerd (priming `registry:2` and the third-party images), and configures containerd to treat the in-cluster registry as plain HTTP. Re-run it any time after editing `values.env`.
+This installs k3s from the bundle, drops in `helm` / `envsubst` / `crane`, imports `nap-images.tar.gz` into k3s containerd (priming `registry:2` and the third-party images), and configures containerd to treat the in-cluster registry as plain HTTP. Re-run it any time after editing `values.env`.
 
-### 5. Install
+</AirgapBlock>
+
+### 4. Install
 
 ```bash
-cd ..
 ./install.sh --profile=single-node
 ```
 
-Because `offline/nap-images.tar.gz` is present, `install.sh` brings up the in-cluster `nap-registry`, seeds it from the bundle, and points every workload at it — no external registry, no internet. Everything else (in-cluster NFS server, CloudNativePG, seeding the admin user and MCP catalog) matches the connected flow. Log in the same way:
+`install.sh` first brings up the in-cluster NFS server (`nap-nfs-server` pod, backed by `local-path`), installs the CloudNativePG operator and the NFS subdir provisioner, renders and applies the manifests, then seeds the admin user, OAuth clients, and the MCP catalog. Connected, all images are pulled from the public registry.
+
+<AirgapBlock client:load locale="en" summary="the image bundle switches install.sh to the in-cluster registry">
+
+Because `offline/nap-images.tar.gz` is present, `install.sh` brings up the in-cluster `nap-registry`, seeds it from the bundle, and points every workload at it — no external registry, no internet. Everything else matches the connected flow.
+
+</AirgapBlock>
+
+### 5. Log in
 
 ```
 http://<NAP_HOST>:30080
 admin / <ADMIN_PASSWORD>
 ```
+
+`30080` is the `NAP_NODE_PORT` default baked into `values.env.single-node.example`.
 
 ## Key differences from the standard deploy
 
@@ -175,7 +167,13 @@ If `modprobe` reports `module not found`, the kernel lacks the NFS module packag
 
 - **Data lives on the node** — PVCs (including AFS shared files) use `local-path`, bound to the node's disk. Back up externally if the data matters
 - **Run the installer on the node itself** — the single-node profile pulls images into the local cluster
-- **Upgrades restart pods** — expect a brief window while images roll; the flow matches the [standard upgrade](/self-host/#upgrade): re-run the one-liner or `./install.sh --profile=single-node`
+- **Upgrades restart pods** — expect a brief window while images roll. Connected: re-run the one-liner, or update the repo (`git pull`) and re-run `./install.sh --profile=single-node`
+
+<AirgapBlock client:load locale="en" summary="upgrading an air-gapped node needs fresh bundles">
+
+On the connected host, rebuild the image bundle from the new release (`./offline/save-images.sh`; the prep tarball usually doesn't change), copy the new `self-host/` directory with the bundle to the node, re-run `sudo ./preinstall.sh` to import the new images, then `./install.sh --profile=single-node`.
+
+</AirgapBlock>
 
 ## What's next
 
