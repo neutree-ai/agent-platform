@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
+import AirgapBlock from './AirgapBlock'
 import CodeBlock from './CodeBlock'
 import ValuesGenerator from './ValuesGenerator'
 import './self-host-shell.css'
@@ -242,7 +243,7 @@ const PANEL_STR = {
     ovCapH2: 'What one install gives you',
     ovIntro: (
       <>
-        The same <code>./install.sh</code> brings up the platform either way — the only difference is where the images come from. Every node pulls them from a registry it can reach: <strong>connected</strong>, that's a public registry (<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>) or a mirror you point <code>REGISTRY</code> at; <strong>air-gapped</strong>, it's your own private registry, seeded from an image bundle you build on a connected host with <code>offline/save-images.sh</code> and push in with <code>offline/load-images.sh</code>. For a single machine, see the <a href="/self-host/single-node/">single-node profile</a>, which brings up an in-cluster registry so no external one is needed at all.
+        The same <code>./install.sh</code> brings up the platform connected (images pulled from a public registry) or fully air-gapped (from your own registry) — the Install tab covers both. What it installs:
       </>
     ),
     ovCoreH3: 'Core platform (always installed)',
@@ -252,7 +253,7 @@ const PANEL_STR = {
     ovCoreRuntime: <><strong>Agent workspace runtime</strong> — one pod per workspace runs the agent; agents can <code>@</code> each other, share files, and share a memory store</>,
     ovOptH3: 'Optional modules (off by default)',
     ovOptSandbox: <><strong>Code Sandbox</strong> — lets agents run code and serve temporary web previews. Powered by the third-party <a href="https://github.com/alibaba/OpenSandbox">OpenSandbox</a>, which you install yourself; the platform points at it via <code>OPENSANDBOX_URL</code></>,
-    ovOptBrowser: <><strong>Remote Browser</strong> — lets agents drive a real browser while users watch live over WebRTC. Ships a bundled TURN relay (coturn) and a published headful Chromium image</>,
+    ovOptBrowser: <><strong>Agent Browser</strong> — self-hosted browser as a service: agents drive a real browser while users watch live over WebRTC. Ships a bundled TURN relay (coturn) and a published headful Chromium image</>,
     ovOptLdap: <><strong>LDAP</strong> — let users sign in with their LDAP account</>,
     ovPrereqH2: 'Prerequisites',
     ovInfraH3: 'Infrastructure',
@@ -279,9 +280,9 @@ const PANEL_STR = {
     ovNodeIp: 'Node IP',
     ovNodeIpReq: 'At least one worker IP reachable by users (NodePort uses it)',
     ovNodePort: 'NodePort',
-    ovNodePortReq: <>3 free ports in 30000–32767: <code>NAP_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
+    ovNodePortReq: <>Free ports in 30000–32767: <code>NAP_NODE_PORT</code>, plus <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code> when the corresponding optional module is enabled</>,
     ovTurnPorts: 'TURN ports',
-    ovTurnPortsReq: <>When the Remote Browser's TURN relay is enabled: open <code>3478/tcp+udp</code> and <code>49152-49252/udp</code> on the coturn node</>,
+    ovTurnPortsReq: <>When the Agent Browser's TURN relay is enabled: open <code>3478/tcp+udp</code> and <code>49152-49252/udp</code> on the coturn node</>,
     ovStorageReach: 'Storage reachability',
     ovStorageReachReq: 'All nodes can mount the two storage classes above (NFS / block-storage CSI, etc.)',
     ovRegReach: 'Registry reachability',
@@ -292,7 +293,8 @@ const PANEL_STR = {
     ovThApiProto: 'API protocol required',
     ovCodexProto: <>OpenAI <strong>Responses API</strong> (note: not Chat Completions)</>,
     ovClaudeProto: 'Anthropic API',
-    ovLlmNote: <>If your existing model service only supports the <strong>OpenAI Chat Completions API</strong>, one option is to put a translating proxy in front of it that converts the OpenAI Chat protocol to the Anthropic protocol, then point Claude Code-style agents at the proxy.</>,
+    ovGooseProto: <>OpenAI <strong>Chat Completions API</strong></>,
+    ovLlmNote: <>If your existing model service only supports the <strong>OpenAI Chat Completions API</strong>, Goose agents can use it directly. To also run Claude Code-style agents against it, put a translating proxy in front that converts the OpenAI Chat protocol to the Anthropic protocol.</>,
     ovKubeH3: 'kubeconfig permissions',
     ovKubeP1: <>Installation requires <strong>cluster-admin</strong> — <code>install.sh</code> touches resources that a namespace-scoped admin cannot (CRDs, webhooks, ClusterRoles, StorageClasses, etc.). You can revoke it immediately after install; at steady state the control plane authenticates via its own in-cluster ServiceAccount with tightly scoped permissions (normal read/write within the namespace + cluster-scoped get/list on <code>nodes</code> only).</>,
     ovKubeP2: <>The operator's kubeconfig is never mounted into any platform pod. If a temporary cluster-admin is not acceptable, here is an equivalent minimal ClusterRole.</>,
@@ -321,11 +323,15 @@ const PANEL_STR = {
     inToolsNote: <>The cluster nodes (not the operator machine) must be able to pull from your <code>REGISTRY</code>. Connected, that's a public registry (<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>); air-gapped, it's your own registry and they never touch the internet.</>,
     inQuickH2: 'Quick start',
     inQuickAfter: <>When it finishes, open <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code> and log in with the admin username / password from <code>values.env</code>.</>,
+    inQuickAltP: <>Or skip the clone — the bootstrap script fetches the installer itself and targets your current kubeconfig. Two things can't be autodetected: the host users will reach the platform at, and RWX storage (an external NFS export, or an RWX-capable StorageClass that already exists in the cluster):</>,
+    inQuickAltNote: <>This installs the full profile with defaults; add <code>--prepare-only</code> to review <code>/opt/nap/values.env</code> first, then re-run without it.</>,
     inStepsH2: 'Step by step',
     inStep1H3: 'Get the installer',
     inStep1Note: <>For a connected install, all first-party images are pulled from the public registry (<code>${'{'}REGISTRY{'}'}</code>, default <code>ghcr.io/neutree-ai/agent-platform</code>). Override <code>REGISTRY</code> only if you mirror the images elsewhere.</>,
-    inAirgapLead: 'Air-gapped —',
-    inAirgapBody: <> on a connected host run <code>./offline/save-images.sh</code> to build <code>offline/nap-images.tar.gz</code> plus the prerequisite charts, move it to the air-gapped side, then <code>./offline/load-images.sh --registry &lt;your-registry&gt;</code> loads, retags, and pushes every image into your registry and prints the exact <code>REGISTRY=</code> / <code>*_IMAGE=</code> lines to paste into <code>values.env</code>. Vendor delivered a bundle? Skip <code>save-images</code> and start at <code>load-images</code>.</>,
+    agInstallSummary: 'build the image bundle and push it into your registry',
+    agInstall1: <>On a connected host, <code>./offline/save-images.sh</code> pulls every first-party and prerequisite image and writes <code>offline/nap-images.tar.gz</code> plus the prereq charts under <code>prereqs/</code>. Move it to the air-gapped side, then <code>./offline/load-images.sh --registry &lt;your-registry&gt;</code> (add <code>--insecure-registry</code> for a plain-HTTP registry) loads, retags, and pushes every image into your registry and prints the exact <code>REGISTRY=</code> / <code>*_IMAGE=</code> lines to paste into <code>values.env</code>. If a vendor delivered a prebuilt bundle, skip <code>save-images</code> and start at <code>load-images</code>.</>,
+    agInstall2: <>With those set, the remaining steps run exactly as they do online — <code>./install.sh</code> auto-detects the offline prereq bundles and builds the pull secret from <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code>. For a single machine with no external registry, use the <a href="/self-host/single-node/">single-node profile</a> instead.</>,
+    agPrefix: <><strong>Naming.</strong> Every first-party image carries the <code>values.env</code> <code>APP_PREFIX</code> (default <code>nap</code>, as in <code>nap-cp</code>). A rebranded or migrated deployment that kept a different prefix sets it in <code>values.env</code>; build the bundle with that file, and run <code>load-images.sh --app-prefix &lt;prefix&gt;</code> so it finds and pushes the prefixed images. Never change <code>APP_PREFIX</code> on an existing install — it would rebuild every object under new names.</>,
     inRegAuthNote: <>If your registry needs a login, set <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> in <code>values.env</code> — the installer builds a <code>regcred</code> imagePullSecret from them automatically and attaches it to the platform, CNPG, and the workspace pods.</>,
     inStep2H3: 'Prepare values.env',
     inStep2GenBtn: 'configuration generator',
@@ -340,30 +346,14 @@ const PANEL_STR = {
     inSubH2: 'install.sh subcommands',
     inSubIntro: <>For running stages separately; a single <code>./install.sh</code> is enough for the normal case.</>,
     inSingleH2: 'Single-node profile',
-    inSingleP: <>A single k3s node — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). <strong>Connected</strong>, it pulls every image from the public registry. <strong>Air-gapped</strong>, it brings up an in-cluster registry and seeds it from the image bundle, so no external registry is needed at all. See the <a href="/self-host/single-node/">single-node page</a> for both paths.</>,
-    inSingleNote: <>Run this on a host that has a working k3s with its kubeconfig at <code>/etc/rancher/k3s/k3s.yaml</code> (the default in the single-node example).</>,
-    inOfflineH2: 'Air-gapped: build the image bundle',
-    inOfflineP: <>On a connected host, <code>./offline/save-images.sh</code> pulls every first-party and prerequisite image and writes <code>offline/nap-images.tar.gz</code> plus the prereq charts under <code>prereqs/</code>. Move that to the air-gapped side and load it with <code>./offline/load-images.sh --registry &lt;your-registry&gt;</code> (add <code>--insecure-registry</code> for a plain-HTTP registry) — it pushes every image into your registry and prints the <code>values.env</code> overrides to paste. Set those, then <code>./install.sh</code> runs exactly as it does online — it auto-detects the offline prereq bundles and wires the pull secret from <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code>. If a vendor delivered a prebuilt bundle, skip <code>save-images</code> and start at <code>load-images</code>. For a single machine with no external registry, use the <a href="/self-host/single-node/">single-node profile</a> instead.</>,
-    inAppPrefixNote: <><strong>Naming.</strong> Every first-party image carries the <code>values.env</code> <code>APP_PREFIX</code> (default <code>nap</code>, as in <code>nap-cp</code>). A rebranded or migrated deployment that kept a different prefix sets it in <code>values.env</code>; build the bundle with that file, and run <code>load-images.sh --app-prefix &lt;prefix&gt;</code> so it finds and pushes the prefixed images. Never change <code>APP_PREFIX</code> on an existing install — it would rebuild every object under new names.</>,
+    inSingleP: <>A single k3s node — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). <strong>Connected</strong>, it pulls every image from the public registry. <strong>Air-gapped</strong>, it brings up an in-cluster registry and seeds it from the image bundle, so no external registry is needed at all. The <a href="/self-host/single-node/">single-node page</a> covers both paths end to end.</>,
     // Upgrade
     upPathH2: 'Upgrade',
-    upPathP1: <>Upgrading is the same command as a first install. Pin <code>IMAGE_TAG</code> to the new release tag (or keep <code>latest</code>) in your existing <code>values.env</code>, then re-run:</>,
+    upPathP1: <>Upgrading is the same command as a first install. First refresh the installer itself to the new release (<code>git pull</code> in the cloned repo — the new manifests ship with it), pin <code>IMAGE_TAG</code> to the new release tag (or keep <code>latest</code>) in your existing <code>values.env</code>, then re-run:</>,
     upPathP2: <><code>install.sh</code> is idempotent, so the upgrade path matches the first install. It re-renders and re-applies the manifests and refreshes the first-party deployments to pick up new image digests. SQL migrations run automatically when <code>nap-cp</code> starts.</>,
     upCallout: <><strong>Do not change secrets</strong> · Reuse the <code>values.env</code> from your first install. If a machine-internal secret (e.g. <code>JWT_SECRET</code>) changes, all issued session tokens are invalidated and the existing database can no longer be reached.</>,
-    upAirgapNote: <><strong>Air-gapped</strong> — before an air-gapped upgrade, re-run <code>offline/save-images.sh</code> / <code>offline/load-images.sh</code> to push the new image tags into your registry first, then the same <code>./install.sh</code>.</>,
-    upCompatH2: 'Upgrading from a pre-2026-05 release',
-    upCompatP: <>Optional-module defaults changed from "enabled unless configured" to "disabled unless configured". If the following <code>_ENABLED</code> fields aren't set explicitly in <code>values.env</code>, the corresponding capabilities are off after the upgrade:</>,
-    upThCapability: 'Capability',
-    upThOldDefault: 'Old default',
-    upThNewDefault: 'New default',
-    upThKeepOn: 'Keep it on with',
-    upBrowserCap: 'Remote Browser (incl. TURN)',
-    upSandboxCap: 'Code Sandbox',
-    upLdapCap: 'LDAP login',
-    upOn: 'On',
-    upOff: 'Off',
-    upLdapOldDefault: <>Whether <code>LDAP_URL</code> is non-empty</>,
-    upCompatNote: <><code>COTURN_ENABLED</code> is now part of the browser module and tracks <code>BROWSER_ENABLED</code> automatically — no separate configuration.</>,
+    agUpgradeSummary: 'refresh the installer and the registry contents first',
+    agUpgrade: <>Refresh both halves first: on the connected host re-run <code>offline/save-images.sh</code> to build a bundle with the new tags, copy the new <code>self-host/</code> directory together with the bundle to the air-gapped side, push with <code>offline/load-images.sh</code>, then run the same <code>./install.sh</code>.</>,
     // Troubleshoot
     tsErrH2: 'install.sh fails',
     tsErrIntro: <>First find the deployment that isn't ready (replace <code>$NAMESPACE</code> with{' '}<code>NAMESPACE</code> from <code>values.env</code>, default <code>nap</code>):</>,
@@ -378,8 +368,6 @@ const PANEL_STR = {
     tsReachP: <>The browser gets no response at <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code>. Two common causes:</>,
     tsReachHost: <><strong><code>NAP_HOST</code> is unreachable</strong> — the configured IP is not a worker node reachable from the browser. Set the correct node IP and re-run <code>install.sh</code></>,
     tsReachPort: <><strong>NodePort not open</strong> — the node firewall blocks the port; ask your SRE to open it</>,
-    tsGoneH2: 'Browser / Sandbox missing after upgrade',
-    tsGoneP: <>Optional-module defaults changed to "disabled unless configured" as of 2026-05. If you previously enabled the browser or sandbox, set{' '}<code>BROWSER_ENABLED=true</code> / <code>SANDBOX_ENABLED=true</code> explicitly in{' '}<code>values.env</code>. See the compatibility section on the Upgrade tab.</>,
     tsEaccesH2: <>Agent fails to start: <code>mkdir /workspace/.home/.claude: EACCES</code></>,
     tsEaccesP1: <>The agent container runs as a non-root user (<code>node</code>, uid 1000), and <code>/workspace</code> is a mounted PVC.
           If that PVC is backed by the community <code>nfs.csi.k8s.io</code> driver, <strong>that driver does not chmod the provisioned subdirectory by default</strong>
@@ -391,17 +379,17 @@ const PANEL_STR = {
     tsEaccesBullet2: <>Returns <code>nfs.csi.k8s.io</code> (or another CSI driver such as SFS) — apply the{' '}<code>mountPermissions: "0777"</code> fix above.</>,
     tsEaccesPitfall: <><strong>Common pitfall</strong>: the installer's NFS provisioner step has a "<strong>skip if a StorageClass of the same name already exists</strong>" check (see <code>install_nfs_provisioner</code>). If a StorageClass named{' '}<code>NFS_STORAGE_CLASS</code> (default <code>nfs-nap</code>) already exists before install and is backed by <code>nfs.csi.k8s.io</code> / SFS,
           the installer <strong>silently skips</strong> and does not deploy the bundled nfs-subdir provisioner, so agent workspaces land on a 0755 backend and hit this error.
-          In that case <code>kubectl get deploy -n nap nfs-subdir-external-provisioner</code> returns NotFound.
+          In that case <code>kubectl get deploy -n $NAMESPACE nfs-subdir-external-provisioner</code> returns NotFound.
           Fix either way: add <code>mountPermissions: "0777"</code> to that SC (as above), or delete the pre-existing SC / use a different <code>NFS_STORAGE_CLASS</code> name and re-run the installer so nfs-subdir actually installs.</>,
-    tsVideoH2: 'Browser live view doesn\'t render',
-    tsVideoP: <>Enable Remote Browser in the configuration generator, set{' '}<code>TURN_HOST</code> (a LAN or public IP browsers can reach) and{' '}<code>TURN_AUTH_SECRET</code>, and re-run{' '}<code>install.sh</code>. The TURN relay is bundled with the browser and starts/stops together with it.</>,
+    tsVideoH2: 'Agent Browser live view doesn\'t render',
+    tsVideoP: <>Usually TURN is unreachable. Set <code>TURN_HOST</code> to an IP the user's browser can actually reach and re-run{' '}<code>install.sh</code>; the full checklist is in <a href="/self-host/sandbox-browser/">Code Sandbox / Agent Browser</a> → Debugging.</>,
   },
   'zh-CN': {
     // Overview
     ovCapH2: '一次安装能得到什么',
     ovIntro: (
       <>
-        无论哪种方式，都是同一条 <code>./install.sh</code> 把平台装起来 —— 唯一的区别是镜像从哪里来。每个节点都从一个它能访问的仓库拉取镜像：<strong>联网</strong> 时是公共仓库（<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>）或你用 <code>REGISTRY</code> 指向的镜像源；<strong>隔离网络</strong> 时是你自己的私有仓库，由你在一台联网机器上用 <code>offline/save-images.sh</code> 构建、再用 <code>offline/load-images.sh</code> 推入的镜像包填充。若只有一台机器，见 <a href="/self-host/single-node/">单节点 profile</a>，它会启动集群内仓库，完全不需要外部仓库。
+        同一条 <code>./install.sh</code> 既支持联网安装（镜像来自公共仓库），也支持完全隔离网络（镜像来自你自己的仓库）—— 两条路径都在「安装」标签页。它会装出：
       </>
     ),
     ovCoreH3: '核心平台（始终安装）',
@@ -411,7 +399,7 @@ const PANEL_STR = {
     ovCoreRuntime: <><strong>Agent Workspace 运行时</strong> — 每个 Workspace 一个 pod 运行 Agent；Agent 之间可以互相 <code>@</code>、共享文件并共用记忆存储</>,
     ovOptH3: '可选模块（默认关闭）',
     ovOptSandbox: <><strong>Code Sandbox</strong> — 让 Agent 运行代码并提供临时 web 预览。由第三方 <a href="https://github.com/alibaba/OpenSandbox">OpenSandbox</a> 提供能力，需自行安装；平台通过 <code>OPENSANDBOX_URL</code> 指向它</>,
-    ovOptBrowser: <><strong>Remote Browser</strong> — 让 Agent 驱动真实浏览器，用户通过 WebRTC 实时观看。内置 TURN 中继（coturn）和已发布的有头 Chromium 镜像</>,
+    ovOptBrowser: <><strong>Agent Browser</strong> — 自托管的 browser as a service：Agent 驱动真实浏览器，用户通过 WebRTC 实时观看。内置 TURN 中继（coturn）和已发布的有头 Chromium 镜像</>,
     ovOptLdap: <><strong>LDAP</strong> — 让用户用 LDAP 账号登录</>,
     ovPrereqH2: '前置条件',
     ovInfraH3: '基础设施',
@@ -438,9 +426,9 @@ const PANEL_STR = {
     ovNodeIp: '节点 IP',
     ovNodeIpReq: '至少一个用户可达的 worker IP（NodePort 会用到）',
     ovNodePort: 'NodePort',
-    ovNodePortReq: <>30000–32767 范围内 3 个空闲端口：<code>NAP_NODE_PORT</code> / <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
+    ovNodePortReq: <>30000–32767 范围内的空闲端口：<code>NAP_NODE_PORT</code>；启用对应可选模块时还需 <code>BROWSER_NODE_PORT</code> / <code>SANDBOX_NODE_PORT</code></>,
     ovTurnPorts: 'TURN 端口',
-    ovTurnPortsReq: <>启用 Remote Browser 的 TURN 中继时：在 coturn 节点上开放 <code>3478/tcp+udp</code> 和 <code>49152-49252/udp</code></>,
+    ovTurnPortsReq: <>启用 Agent Browser 的 TURN 中继时：在 coturn 节点上开放 <code>3478/tcp+udp</code> 和 <code>49152-49252/udp</code></>,
     ovStorageReach: '存储可达性',
     ovStorageReachReq: '所有节点都能挂载上面两个 storage class（NFS / 块存储 CSI 等）',
     ovRegReach: '仓库可达性',
@@ -451,7 +439,8 @@ const PANEL_STR = {
     ovThApiProto: '所需 API 协议',
     ovCodexProto: <>OpenAI <strong>Responses API</strong>（注意：不是 Chat Completions）</>,
     ovClaudeProto: 'Anthropic API',
-    ovLlmNote: <>如果你现有的模型服务只支持 <strong>OpenAI Chat Completions API</strong>，一种做法是在其前面加一个转换代理，把 OpenAI Chat 协议转成 Anthropic 协议，再让 Claude Code 类的 Agent 指向该代理。</>,
+    ovGooseProto: <>OpenAI <strong>Chat Completions API</strong></>,
+    ovLlmNote: <>如果你现有的模型服务只支持 <strong>OpenAI Chat Completions API</strong>，Goose Agent 可以直接使用；若还想运行 Claude Code 类 Agent，可在其前面加一个把 OpenAI Chat 协议转成 Anthropic 协议的转换代理。</>,
     ovKubeH3: 'kubeconfig 权限',
     ovKubeP1: <>安装需要 <strong>cluster-admin</strong> — <code>install.sh</code> 会操作命名空间级管理员无法操作的资源（CRD、webhook、ClusterRole、StorageClass 等）。安装完成后可立即回收该权限；稳态运行时，control plane 通过它自己的集群内 ServiceAccount 鉴权，权限范围收得很紧（命名空间内的常规读写 + 仅对 <code>nodes</code> 的集群级 get/list）。</>,
     ovKubeP2: <>操作者的 kubeconfig 永远不会挂载进任何平台 pod。如果无法接受临时的 cluster-admin，这里给出一个等价的最小 ClusterRole。</>,
@@ -480,11 +469,15 @@ const PANEL_STR = {
     inToolsNote: <>集群节点（而非操作者机器）必须能从你的 <code>REGISTRY</code> 拉取镜像。联网时是公共仓库（<code>ghcr.io</code> / <code>docker.io</code> / <code>registry.k8s.io</code>）；隔离网络时是你自己的仓库，节点完全不碰公网。</>,
     inQuickH2: '快速开始',
     inQuickAfter: <>完成后打开 <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code>，用 <code>values.env</code> 里的管理员用户名 / 密码登录。</>,
+    inQuickAltP: <>也可以不 clone —— 引导脚本会自行下载安装器并作用于当前 kubeconfig。有两件事无法自动探测，需要显式指明：用户访问平台的主机名，以及 RWX 存储（外部 NFS 导出，或集群中已有的支持 RWX 的 StorageClass）：</>,
+    inQuickAltNote: <>这会按默认值安装完整 profile；加 <code>--prepare-only</code> 可先检查 <code>/opt/nap/values.env</code>，再去掉该参数重新执行。</>,
     inStepsH2: '分步操作',
     inStep1H3: '获取安装器',
     inStep1Note: <>联网安装时，所有第一方镜像都从公共仓库拉取（<code>${'{'}REGISTRY{'}'}</code>，默认 <code>ghcr.io/neutree-ai/agent-platform</code>）。仅当你把镜像放到别处镜像源时才覆盖 <code>REGISTRY</code>。</>,
-    inAirgapLead: '隔离网络 ——',
-    inAirgapBody: <> 在一台联网机器上执行 <code>./offline/save-images.sh</code> 构建 <code>offline/nap-images.tar.gz</code> 及前置 chart，拷到隔离侧，再用 <code>./offline/load-images.sh --registry &lt;你的仓库&gt;</code> 加载、重打 tag 并把所有镜像推入你的仓库，同时打印出需要粘贴进 <code>values.env</code> 的 <code>REGISTRY=</code> / <code>*_IMAGE=</code> 各行。厂商已交付镜像包？跳过 <code>save-images</code>，直接从 <code>load-images</code> 开始。</>,
+    agInstallSummary: '构建镜像包并推入你的仓库',
+    agInstall1: <>在一台联网机器上，<code>./offline/save-images.sh</code> 会拉取全部第一方与前置镜像，产出 <code>offline/nap-images.tar.gz</code> 以及 <code>prereqs/</code> 下的前置 chart。把它拷到隔离侧，再用 <code>./offline/load-images.sh --registry &lt;你的仓库&gt;</code>（纯 HTTP 仓库加 <code>--insecure-registry</code>）加载、重打 tag 并把所有镜像推入你的仓库，同时打印出需要粘贴进 <code>values.env</code> 的 <code>REGISTRY=</code> / <code>*_IMAGE=</code> 各行。若厂商已交付预构建镜像包，跳过 <code>save-images</code>，直接从 <code>load-images</code> 开始。</>,
+    agInstall2: <>设好之后，后续步骤与联网时完全一致 —— <code>./install.sh</code> 会自动识别离线前置包，并据 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> 生成 pull secret。若是单台机器、没有外部仓库，改用 <a href="/zh-cn/self-host/single-node/">单节点 profile</a>。</>,
+    agPrefix: <><strong>命名</strong>：每个第一方镜像都带 <code>values.env</code> 里的 <code>APP_PREFIX</code>（默认 <code>nap</code>，即 <code>nap-cp</code>）。经过 rebrand 或迁移、沿用其他前缀的部署，在 <code>values.env</code> 里设好它；用该文件构建镜像包，并以 <code>load-images.sh --app-prefix &lt;前缀&gt;</code> 加载，脚本才能找到并推送带前缀的镜像。现有部署<strong>切勿</strong>修改 <code>APP_PREFIX</code> —— 会把所有对象按新名重建。</>,
     inRegAuthNote: <>若你的仓库需要登录，在 <code>values.env</code> 里设置 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> —— 安装器会据此自动创建 <code>regcred</code> imagePullSecret，并挂到平台、CNPG 与 workspace pod 上。</>,
     inStep2H3: '准备 values.env',
     inStep2GenBtn: '配置生成器',
@@ -499,30 +492,14 @@ const PANEL_STR = {
     inSubH2: 'install.sh 子命令',
     inSubIntro: <>用于单独运行各阶段；通常情况下一条 <code>./install.sh</code> 就够了。</>,
     inSingleH2: 'Single-node profile',
-    inSingleP: <>单个 k3s 节点 —— 与完整 profile 相同，只是改成 <code>PG_INSTANCES=1</code> 并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。<strong>联网</strong> 时所有镜像直接从公共仓库拉取。<strong>隔离网络</strong> 时它会启动集群内仓库并用镜像包填充，完全不需要外部仓库。两种路径详见 <a href="/self-host/single-node/">单节点页面</a>。</>,
-    inSingleNote: <>在一台已经跑好 k3s、kubeconfig 位于 <code>/etc/rancher/k3s/k3s.yaml</code>（single-node 示例中的默认值）的主机上运行。</>,
-    inOfflineH2: '隔离网络：构建镜像包',
-    inOfflineP: <>在一台联网机器上，<code>./offline/save-images.sh</code> 会拉取全部第一方与前置镜像，产出 <code>offline/nap-images.tar.gz</code> 以及 <code>prereqs/</code> 下的前置 chart。把它拷到隔离侧，用 <code>./offline/load-images.sh --registry &lt;你的仓库&gt;</code> 加载（纯 HTTP 仓库加 <code>--insecure-registry</code>）—— 它会把所有镜像推入你的仓库并打印出需要粘贴的 <code>values.env</code> 覆盖项。设好之后，<code>./install.sh</code> 的运行方式与联网时完全一致 —— 它会自动识别离线前置包，并据 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> 接好 pull secret。若厂商已交付预构建镜像包，跳过 <code>save-images</code>，直接从 <code>load-images</code> 开始。若是单台机器、没有外部仓库，改用 <a href="/self-host/single-node/">单节点 profile</a>。</>,
-    inAppPrefixNote: <><strong>命名</strong>：每个第一方镜像都带 <code>values.env</code> 里的 <code>APP_PREFIX</code>（默认 <code>nap</code>，即 <code>nap-cp</code>）。经过 rebrand 或迁移、沿用其他前缀的部署，在 <code>values.env</code> 里设好它；用该文件构建镜像包，并以 <code>load-images.sh --app-prefix &lt;前缀&gt;</code> 加载，脚本才能找到并推送带前缀的镜像。现有部署<strong>切勿</strong>修改 <code>APP_PREFIX</code> —— 会把所有对象按新名重建。</>,
+    inSingleP: <>单个 k3s 节点 —— 与完整 profile 相同，只是改成 <code>PG_INSTANCES=1</code> 并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。<strong>联网</strong> 时所有镜像直接从公共仓库拉取。<strong>隔离网络</strong> 时它会启动集群内仓库并用镜像包填充，完全不需要外部仓库。<a href="/zh-cn/self-host/single-node/">单节点页面</a> 完整覆盖两条路径。</>,
     // Upgrade
     upPathH2: '升级',
-    upPathP1: <>升级与首次安装用的是同一条命令。在现有 <code>values.env</code> 里把 <code>IMAGE_TAG</code> 固定到新的发布 tag（或保持 <code>latest</code>），然后重新运行：</>,
+    upPathP1: <>升级与首次安装用的是同一条命令。先把安装器本身更新到新版本（在 clone 的 repo 里 <code>git pull</code> —— 新的 manifest 随之而来），在现有 <code>values.env</code> 里把 <code>IMAGE_TAG</code> 固定到新的发布 tag（或保持 <code>latest</code>），然后重新运行：</>,
     upPathP2: <><code>install.sh</code> 是幂等的，所以升级路径与首次安装一致。它会重新渲染并重新 apply manifest，并刷新第一方 deployment 以拉取新的镜像 digest。<code>nap-cp</code> 启动时会自动运行 SQL 迁移。</>,
     upCallout: <><strong>不要修改密钥</strong> · 复用首次安装时的 <code>values.env</code>。如果机器内部密钥（例如 <code>JWT_SECRET</code>）发生变化，所有已签发的会话 token 都会失效，现有数据库也将无法访问。</>,
-    upAirgapNote: <><strong>隔离网络</strong> —— 隔离网络升级前，先重新执行 <code>offline/save-images.sh</code> / <code>offline/load-images.sh</code> 把新的镜像 tag 推入你的仓库，然后再跑同一条 <code>./install.sh</code>。</>,
-    upCompatH2: '从 2026-05 之前的版本升级',
-    upCompatP: <>可选模块的默认值从"未配置即启用"改为"未配置即禁用"。如果以下 <code>_ENABLED</code> 字段没有在 <code>values.env</code> 里显式设置，升级后对应能力将处于关闭状态：</>,
-    upThCapability: '能力',
-    upThOldDefault: '旧默认值',
-    upThNewDefault: '新默认值',
-    upThKeepOn: '保持开启的方式',
-    upBrowserCap: 'Remote Browser（含 TURN）',
-    upSandboxCap: 'Code Sandbox',
-    upLdapCap: 'LDAP 登录',
-    upOn: '开',
-    upOff: '关',
-    upLdapOldDefault: <>取决于 <code>LDAP_URL</code> 是否非空</>,
-    upCompatNote: <><code>COTURN_ENABLED</code> 现已并入浏览器模块，自动跟随 <code>BROWSER_ENABLED</code> — 无需单独配置。</>,
+    agUpgradeSummary: '先更新安装器与仓库内容',
+    agUpgrade: <>两样都要先更新：在联网机器上重新执行 <code>offline/save-images.sh</code> 构建含新 tag 的镜像包，把新的 <code>self-host/</code> 目录连同镜像包一起拷到隔离侧，用 <code>offline/load-images.sh</code> 推入仓库，再跑同一条 <code>./install.sh</code>。</>,
     // Troubleshoot
     tsErrH2: 'install.sh 失败',
     tsErrIntro: <>先找出未就绪的 deployment（把 <code>$NAMESPACE</code> 替换为{' '}<code>values.env</code> 里的 <code>NAMESPACE</code>，默认 <code>nap</code>）：</>,
@@ -537,8 +514,6 @@ const PANEL_STR = {
     tsReachP: <>浏览器在 <code>http://&lt;NAP_HOST&gt;:&lt;NAP_NODE_PORT&gt;</code> 得不到任何响应。两个常见原因：</>,
     tsReachHost: <><strong><code>NAP_HOST</code> 不可达</strong> — 配置的 IP 不是浏览器能访问到的 worker 节点。设置正确的节点 IP 并重新运行 <code>install.sh</code></>,
     tsReachPort: <><strong>NodePort 未开放</strong> — 节点防火墙拦截了该端口；请让 SRE 开放它</>,
-    tsGoneH2: '升级后 Browser / Sandbox 不见了',
-    tsGoneP: <>自 2026-05 起，可选模块的默认值改为"未配置即禁用"。如果你之前启用过 browser 或 sandbox，请在 <code>values.env</code> 里显式设置{' '}<code>BROWSER_ENABLED=true</code> / <code>SANDBOX_ENABLED=true</code>。详见 Upgrade 标签页的兼容性章节。</>,
     tsEaccesH2: <>Agent 启动失败：<code>mkdir /workspace/.home/.claude: EACCES</code></>,
     tsEaccesP1: <>Agent 容器以非 root 用户（<code>node</code>，uid 1000）运行，而 <code>/workspace</code> 是挂载的 PVC。
           如果该 PVC 由社区版 <code>nfs.csi.k8s.io</code> 驱动提供，<strong>该驱动默认不会对所分配的子目录执行 chmod</strong>
@@ -550,10 +525,10 @@ const PANEL_STR = {
     tsEaccesBullet2: <>返回 <code>nfs.csi.k8s.io</code>（或 SFS 等其他 CSI 驱动）— 应用上面的{' '}<code>mountPermissions: "0777"</code> 修复。</>,
     tsEaccesPitfall: <><strong>常见坑</strong>：安装器的 NFS provisioner 步骤有一个"<strong>同名 StorageClass 已存在则跳过</strong>"的检查（见 <code>install_nfs_provisioner</code>）。如果安装前就已存在一个名为{' '}<code>NFS_STORAGE_CLASS</code>（默认 <code>nfs-nap</code>）且后端是 <code>nfs.csi.k8s.io</code> / SFS 的 StorageClass，
           安装器会<strong>静默跳过</strong>，不部署自带的 nfs-subdir provisioner，于是 Agent Workspace 落到 0755 的后端上并触发该错误。
-          此时 <code>kubectl get deploy -n nap nfs-subdir-external-provisioner</code> 返回 NotFound。
+          此时 <code>kubectl get deploy -n $NAMESPACE nfs-subdir-external-provisioner</code> 返回 NotFound。
           两种修法皆可：给该 SC 加上 <code>mountPermissions: "0777"</code>（如上），或删除已存在的 SC / 改用一个不同的 <code>NFS_STORAGE_CLASS</code> 名称并重新运行安装器，让 nfs-subdir 真正装上。</>,
-    tsVideoH2: 'Browser 实时画面不显示',
-    tsVideoP: <>在配置生成器里启用 Remote Browser，设置{' '}<code>TURN_HOST</code>（浏览器能访问到的局域网或公网 IP）和{' '}<code>TURN_AUTH_SECRET</code>，并重新运行{' '}<code>install.sh</code>。TURN 中继与浏览器捆绑，随其一起启停。</>,
+    tsVideoH2: 'Agent Browser 实时画面不显示',
+    tsVideoP: <>通常是 TURN 不可达。把 <code>TURN_HOST</code> 设为用户浏览器真正能访问到的 IP 并重新运行{' '}<code>install.sh</code>；完整排查清单见 <a href="/zh-cn/self-host/sandbox-browser/">Code Sandbox / Agent Browser</a> 的调试一节。</>,
   },
 } as const
 
@@ -678,6 +653,10 @@ function Overview({ onGo, locale = 'en' }: { onGo: (id: TabId) => void; locale?:
                 <td>Claude Code</td>
                 <td>{t.ovClaudeProto}</td>
               </tr>
+              <tr>
+                <td>Goose</td>
+                <td>{t.ovGooseProto}</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -772,12 +751,22 @@ function Install({ onGo, locale = 'en' }: { onGo: (id: TabId) => void; locale?: 
 
       <section>
         <h2 id="quick-start">{t.inQuickH2}</h2>
-        <CodeBlock locale={locale}>{`git clone <this-repo> && cd self-host
+        <CodeBlock locale={locale}>{`git clone https://github.com/neutree-ai/agent-platform
+cd agent-platform/self-host
 cp values.env.example values.env
 ./gen-secrets.sh                # fills random machine secrets
 vi values.env                   # set NAP_HOST, ADMIN_PASSWORD, storage, etc.
 ./install.sh`}</CodeBlock>
         <p>{t.inQuickAfter}</p>
+        <p>{t.inQuickAltP}</p>
+        <CodeBlock locale={locale}>{`# with an external NFS server
+curl -sfL https://nap.docs.neutree.ai/get.sh \\
+  | sh -s -- --k8s --host=<ip-or-hostname> --nfs-server=<ip> --nfs-path=</export/path>
+
+# with an existing RWX StorageClass
+curl -sfL https://nap.docs.neutree.ai/get.sh \\
+  | sh -s -- --k8s --host=<ip-or-hostname> --storage-class=<rwx-storageclass>`}</CodeBlock>
+        <p class="sh-muted">{t.inQuickAltNote}</p>
       </section>
 
       <section>
@@ -785,15 +774,14 @@ vi values.env                   # set NAP_HOST, ADMIN_PASSWORD, storage, etc.
         <ol class="sh-steps">
           <li>
             <h3>{t.inStep1H3}</h3>
-            <CodeBlock locale={locale}>{`git clone <this-repo> && cd self-host`}</CodeBlock>
+            <CodeBlock locale={locale}>{`git clone https://github.com/neutree-ai/agent-platform
+cd agent-platform/self-host`}</CodeBlock>
             <p class="sh-muted">{t.inStep1Note}</p>
-            <div class="sh-callout sh-callout-airgap">
-              <svg class="sh-callout-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <strong>{t.inAirgapLead}</strong>{t.inAirgapBody}
-            </div>
+            <AirgapBlock locale={locale} summary={t.agInstallSummary}>
+              <p>{t.agInstall1}</p>
+              <p>{t.agInstall2}</p>
+              <p>{t.agPrefix}</p>
+            </AirgapBlock>
           </li>
           <li>
             <h3>{t.inStep2H3}</h3>
@@ -835,17 +823,6 @@ vi values.env                   # set NAP_HOST, ADMIN_PASSWORD, storage, etc.
       <section>
         <h2 id="single-node">{t.inSingleH2}</h2>
         <p>{t.inSingleP}</p>
-        <CodeBlock locale={locale}>{`cp values.env.single-node.example values.env
-./gen-secrets.sh
-vi values.env                 # set NAP_HOST + ADMIN_PASSWORD
-./install.sh --profile=single-node`}</CodeBlock>
-        <p class="sh-muted">{t.inSingleNote}</p>
-      </section>
-
-      <section>
-        <h2 id="offline">{t.inOfflineH2}</h2>
-        <p class="sh-muted">{t.inOfflineP}</p>
-        <p class="sh-muted">{t.inAppPrefixNote}</p>
       </section>
     </div>
   )
@@ -861,45 +838,9 @@ function Upgrade({ locale = 'en' }: { locale?: string }) {
         <CodeBlock locale={locale}>{`./install.sh`}</CodeBlock>
         <p>{t.upPathP2}</p>
         <div class="sh-callout sh-callout-warn">{t.upCallout}</div>
-        <div class="sh-callout sh-callout-airgap">{t.upAirgapNote}</div>
-      </section>
-
-      <section>
-        <h2 id="compat">{t.upCompatH2}</h2>
-        <p>{t.upCompatP}</p>
-        <div class="sh-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{t.upThCapability}</th>
-                <th>{t.upThOldDefault}</th>
-                <th>{t.upThNewDefault}</th>
-                <th>{t.upThKeepOn}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>{t.upBrowserCap}</td>
-                <td>{t.upOn}</td>
-                <td>{t.upOff}</td>
-                <td><code>BROWSER_ENABLED=true</code></td>
-              </tr>
-              <tr>
-                <td>{t.upSandboxCap}</td>
-                <td>{t.upOn}</td>
-                <td>{t.upOff}</td>
-                <td><code>SANDBOX_ENABLED=true</code></td>
-              </tr>
-              <tr>
-                <td>{t.upLdapCap}</td>
-                <td>{t.upLdapOldDefault}</td>
-                <td>{t.upOff}</td>
-                <td><code>LDAP_ENABLED=true</code></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="sh-muted">{t.upCompatNote}</p>
+        <AirgapBlock locale={locale} summary={t.agUpgradeSummary}>
+          <p>{t.agUpgrade}</p>
+        </AirgapBlock>
       </section>
     </div>
   )
@@ -936,11 +877,6 @@ kubectl -n $NAMESPACE logs deploy/<deployment>`}</CodeBlock>
           <li>{t.tsReachHost}</li>
           <li>{t.tsReachPort}</li>
         </ul>
-      </section>
-
-      <section>
-        <h2 id="capability-gone">{t.tsGoneH2}</h2>
-        <p>{t.tsGoneP}</p>
       </section>
 
       <section>

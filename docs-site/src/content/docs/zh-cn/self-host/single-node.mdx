@@ -1,17 +1,19 @@
 ---
 title: 单节点 k3s 快速部署
-description: 在一台机器上用 k3s 拉起完整的 Neutree Agent Platform —— 最快的安装路径。镜像从公共 registry 拉取。
+description: 在一台机器上用 k3s 拉起完整的 Neutree Agent Platform —— 最快的安装路径，联网与隔离网络皆可。
 ---
 
-在单节点 k3s 集群上安装 Neutree Agent Platform —— 让完整平台跑起来的最快方式。单节点 profile 与完整 profile 一致，只是 PostgreSQL 为单实例、共享存储由集群内 NFS server 提供。默认所有镜像都从公共 registry（`ghcr.io` / `docker.io` / `registry.k8s.io`）拉取，节点需要能访问互联网。若节点**完全无法访问互联网**，直接看[隔离网络安装](#隔离网络安装) —— 它会启动集群内仓库并用镜像包填充，全程不从互联网拉取任何镜像。
+import AirgapBlock from '../../../../components/self-host/AirgapBlock.tsx'
 
-推荐配置：**8 vCPU / 32 GB / 200 GB 磁盘**，约可支撑 **10 个并发 workspace**。需要 HA 或横向扩展时，走[生产部署](/zh-cn/self-host/)。
+在单节点 k3s 集群上安装 Neutree Agent Platform —— 让完整平台跑起来的最快方式。单节点 profile 与完整 profile 一致，只是 PostgreSQL 为单实例、共享存储由集群内 NFS server 提供。
 
-## 一行命令安装
+同一条流程覆盖两类节点。**联网**时，所有镜像都从公共 registry（`ghcr.io` / `docker.io` / `registry.k8s.io`）拉取。若节点**完全无法访问互联网**，额外步骤以可折叠的 **隔离网络** 块内嵌在流程中 —— 展开一个即全部保持展开；该路径通过集群内仓库从镜像包安装，全程不从互联网拉取任何镜像。
 
-### 裸 Linux 主机（无 Kubernetes）
+推荐配置：**8 vCPU / 32 GB / 200 GB 磁盘**，约可支撑 **10 个并发 workspace**。需要 HA 或横向扩展时，走[生产部署](/zh-cn/self-host/)，其中也覆盖[安装进已有 Kubernetes 集群](/zh-cn/self-host/#install)。
 
-**不需要**预装 k3s，脚本会自动安装。以 root 执行：
+## 一行命令安装（联网）
+
+在一台可访问互联网的裸 Linux 主机上，**不需要**预装 k3s，脚本会自动安装。以 root 执行：
 
 ```bash
 curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
@@ -31,32 +33,39 @@ curl -sfL https://nap.docs.neutree.ai/get.sh \
   | sudo sh -s -- --prepare-only
 ```
 
-`get.sh --help` 列出全部 flag（`--version=` 固定发布版本、`--dir=` 更换安装目录）。
+`get.sh --help` 列出全部 flag（`--version=` 固定发布版本、`--dir=` 更换安装目录）。隔离网络节点无法执行一行命令 —— 走下面的手动流程。
 
-### 已有 Kubernetes 集群
+## 手动安装
 
-使用当前 kubeconfig（`$KUBECONFIG`，默认 `~/.kube/config`）。有两样东西无法自动探测、必须显式给出：用户访问平台的 host，以及 RWX 存储 —— 外部 NFS export 或集群里已有的 RWX StorageClass，二选一：
+与一行命令等价的分步流程，便于逐项掌控 —— 也是隔离网络节点的安装路径。所有步骤都在节点本机执行。
+
+### 1. 获取部署物料
 
 ```bash
-# 使用外部 NFS server
-curl -sfL https://nap.docs.neutree.ai/get.sh \
-  | sh -s -- --k8s --host=<ip-or-hostname> --nfs-server=<ip> --nfs-path=</export/path>
-
-# 使用已有的 RWX StorageClass
-curl -sfL https://nap.docs.neutree.ai/get.sh \
-  | sh -s -- --k8s --host=<ip-or-hostname> --storage-class=<rwx-storageclass>
+git clone https://github.com/neutree-ai/agent-platform
+cd agent-platform/self-host
 ```
 
-这会以默认配置安装完整 profile（3 副本 PostgreSQL）；加 `--prepare-only` 可先审阅 `/opt/nap/values.env` 再安装。生产级的规划 —— 架构、Ingress、容量 —— 请走[生产部署指南](/zh-cn/self-host/)。
+如果你已经跑过一行命令（哪怕只是 `--prepare-only`），同样的目录已在 `/opt/nap/self-host` —— 直接在那里操作即可。
 
-## 手动部署
+<AirgapBlock client:load locale="zh-CN" summary="在联网机器上构建两个物料包，再拷到节点就位">
 
-与一行命令等价的分步流程，便于逐项掌控。在一台已就绪的 k3s 主机上执行，其 kubeconfig 位于 `/etc/rancher/k3s/k3s.yaml`（单节点示例中的默认路径）。
-
-### 1. 准备 values.env
+在任意联网机器上，进入 `self-host/` 目录：
 
 ```bash
-cd self-host
+./offline/save-images.sh                         # → offline/nap-images.tar.gz + 前置 chart
+./single-node-prep/package-prep.sh --arch amd64  # → k3s + helm/envsubst/crane + airgap 镜像
+```
+
+`save-images.sh` 产出 `offline/nap-images.tar.gz`（全部第一方、第三方镜像及 `registry:2`）以及 `prereqs/` 下的 CNPG / NFS provisioner chart。`package-prep.sh` 打包 k3s 二进制、其 airgap 镜像和 `install.sh` 依赖的 CLI 工具 —— 按目标节点架构选择 `--arch`（`amd64` / `arm64`）。若厂商已交付这些物料包，可跳过此步。
+
+把 `self-host/` 目录（内含 `offline/nap-images.tar.gz`）和 prep 包一起拷到隔离节点，并把 prep 包解压到 **`self-host/` 内部**，使其落在 `self-host/single-node-prep/` —— `preinstall.sh` 会按 `../offline/nap-images.tar.gz` 查找镜像包（解压成 `self-host/` 的同级目录也可以，脚本两种布局都会检查）。
+
+</AirgapBlock>
+
+### 2. 准备 values.env
+
+```bash
 cp values.env.single-node.example values.env
 ./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
 vi values.env           # set NAP_HOST + ADMIN_PASSWORD
@@ -69,73 +78,56 @@ vi values.env           # set NAP_HOST + ADMIN_PASSWORD
 
 其余所有项（PG 副本数、storage class、NFS 后端）都已按单节点形态预置。
 
-### 2. 安装
+<AirgapBlock client:load locale="zh-CN" summary="NAP_HOST 必须在下一步之前设好">
+
+请在第 3 步**之前**设好 `NAP_HOST` —— `preinstall.sh` 会写入让节点通过 HTTP 访问集群内仓库的 containerd 配置，而它需要该 host。
+
+</AirgapBlock>
+
+### 3. 准备节点（k3s）
+
+安装需要一个可用的 k3s，kubeconfig 位于 `/etc/rancher/k3s/k3s.yaml`（默认路径）。若节点还没有 k3s：
 
 ```bash
-./install.sh --profile=single-node
+curl -sfL https://get.k3s.io | sh -
 ```
 
-`install.sh` 会先拉起集群内 NFS server（`nap-nfs-server` pod，以 `local-path` 为后端），从公共源安装 CloudNativePG operator 和 NFS subdir provisioner，渲染并应用 manifest，然后初始化（seed）admin 用户、OAuth client 和 MCP 目录。所有镜像都从公共 registry 拉取。
+<AirgapBlock client:load locale="zh-CN" summary="preinstall.sh 从物料包安装 k3s 并导入镜像，全程离线">
 
-### 3. 登录
-
-```
-http://<NAP_HOST>:30080
-admin / <ADMIN_PASSWORD>
-```
-
-## 隔离网络安装
-
-**完全无法访问互联网**的节点，从两个在联网机器上构建的物料包安装 —— 平台镜像包和 k3s 准备包。`install.sh` 会启动集群内仓库（`nap-registry`）并用镜像包填充，节点全程不碰互联网，也无需外部仓库。
-
-### 1. 构建物料包（联网机器）
-
-在任意联网机器上，进入 `self-host/` 目录：
-
-```bash
-./offline/save-images.sh                         # → offline/nap-images.tar.gz + 前置 chart
-./single-node-prep/package-prep.sh --arch amd64  # → k3s + helm/envsubst/crane + airgap 镜像
-```
-
-`save-images.sh` 产出 `offline/nap-images.tar.gz`（全部第一方、第三方镜像及 `registry:2`）以及 `prereqs/` 下的 CNPG / NFS provisioner chart。`package-prep.sh` 打包 k3s 二进制、其 airgap 镜像和 `install.sh` 依赖的 CLI 工具 —— 按目标节点架构选择 `--arch`（`amd64` / `arm64`）。若厂商已交付这些物料包，可跳过此步。
-
-### 2. 在节点上就位
-
-把两个物料包拷到隔离节点并解压，使 `single-node-prep/` 与 `self-host/offline/nap-images.tar.gz` 相邻 —— `preinstall.sh` 会在那里查找镜像包。
-
-### 3. 准备 values.env
-
-```bash
-cd self-host
-cp values.env.single-node.example values.env
-./gen-secrets.sh        # fills random JWT / PG / TURN / SANDBOX secrets
-vi values.env           # set NAP_HOST + ADMIN_PASSWORD
-```
-
-请在下一步**之前**设好 `NAP_HOST` —— `preinstall.sh` 会写入让节点通过 HTTP 访问集群内仓库的 containerd 配置，而它需要该 host。
-
-### 4. Preinstall —— 安装 k3s 并导入镜像
+不使用在线 k3s 安装器，改为执行：
 
 ```bash
 cd single-node-prep
 sudo ./preinstall.sh
+cd ..
 ```
 
-它会从物料包安装 k3s，放入 helm / envsubst / crane，把 `nap-images.tar.gz` 导入 k3s containerd（预置 `registry:2` 和第三方镜像），并配置 containerd 将集群内仓库视为纯 HTTP。修改 `values.env` 后可随时重跑。
+它会从物料包安装 k3s，放入 `helm` / `envsubst` / `crane`，把 `nap-images.tar.gz` 导入 k3s containerd（预置 `registry:2` 和第三方镜像），并配置 containerd 将集群内仓库视为纯 HTTP。修改 `values.env` 后可随时重跑。
 
-### 5. 安装
+</AirgapBlock>
+
+### 4. 安装
 
 ```bash
-cd ..
 ./install.sh --profile=single-node
 ```
 
-由于 `offline/nap-images.tar.gz` 存在，`install.sh` 会启动集群内 `nap-registry`、用镜像包填充，并把所有工作负载指向它 —— 无需外部仓库、不碰互联网。其余流程（集群内 NFS server、CloudNativePG、初始化 admin 用户和 MCP 目录）与联网流程一致。登录方式相同：
+`install.sh` 会先拉起集群内 NFS server（`nap-nfs-server` pod，以 `local-path` 为后端），安装 CloudNativePG operator 和 NFS subdir provisioner，渲染并应用 manifest，然后初始化（seed）admin 用户、OAuth client 和 MCP 目录。联网时，所有镜像都从公共 registry 拉取。
+
+<AirgapBlock client:load locale="zh-CN" summary="镜像包的存在会让 install.sh 切换到集群内仓库">
+
+由于 `offline/nap-images.tar.gz` 存在，`install.sh` 会启动集群内 `nap-registry`、用镜像包填充，并把所有工作负载指向它 —— 无需外部仓库、不碰互联网。其余流程与联网时完全一致。
+
+</AirgapBlock>
+
+### 5. 登录
 
 ```
 http://<NAP_HOST>:30080
 admin / <ADMIN_PASSWORD>
 ```
+
+`30080` 是 `values.env.single-node.example` 内置的 `NAP_NODE_PORT` 默认值。
 
 ## 与标准部署的关键差异
 
@@ -175,7 +167,13 @@ lsmod | grep -E 'nfs|nfsd'   # confirm loaded
 
 - **数据在节点上** —— PVC（含 AFS 共享文件）使用 `local-path`，绑定节点磁盘；重要数据请做外部备份
 - **安装器在节点本机运行** —— 单节点 profile 把镜像拉到本地集群
-- **升级会重启 pod** —— 镜像滚动期间有短暂窗口；流程与[标准升级](/zh-cn/self-host/#upgrade)一致：重跑一行命令或 `./install.sh --profile=single-node`
+- **升级会重启 pod** —— 镜像滚动期间有短暂窗口。联网时：重跑一行命令，或更新 repo（`git pull`）后重跑 `./install.sh --profile=single-node`
+
+<AirgapBlock client:load locale="zh-CN" summary="隔离网络节点升级需要新的物料包">
+
+在联网机器上按新版本重新构建镜像包（`./offline/save-images.sh`；prep 包通常不变），把新的 `self-host/` 目录连同镜像包拷到节点，重跑 `sudo ./preinstall.sh` 导入新镜像，再执行 `./install.sh --profile=single-node`。
+
+</AirgapBlock>
 
 ## 下一步
 

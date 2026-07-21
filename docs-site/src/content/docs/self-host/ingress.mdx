@@ -19,7 +19,7 @@ Pick one **main domain** for the platform control plane (Service `nap-cp` in the
 | --- | --- | --- | --- |
 | nap-cp | `<main-domain>` | 3000 | Web UI + API, SSE / WebSocket |
 | nap-cp | `files.<main-domain>` | 3000 | Public file export, anonymous access, control plane routes by host |
-| nap-browser | `browsers.<main-domain>` | 3005 | Remote Browser WebRTC signaling + WebSocket |
+| nap-browser | `browsers.<main-domain>` | 3005 | Agent Browser WebRTC signaling + WebSocket |
 | nap-sandbox | `sandbox.<main-domain>` | 3006 | Sandbox API + WebSocket |
 | nap-sandbox subdomain preview | `*.sandbox.<main-domain>` | 3006 | Temporary web services users start in the sandbox; wildcard subdomain, needs a wildcard cert |
 
@@ -104,7 +104,7 @@ spec:
         - name: nap-cp
           port: 3000
 ---
-# Remote Browser: WebRTC signaling + WebSocket.
+# Agent Browser: WebRTC signaling + WebSocket.
 apiVersion: projectcontour.io/v1
 kind: HTTPProxy
 metadata:
