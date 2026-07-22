@@ -9,12 +9,13 @@ const MAX_TITLE_LEN = 60
 const MAX_INPUT_LEN = 2000
 
 const SYSTEM_PROMPT = [
-  "You generate a short title for a chat session from the user's first message.",
-  'Rules:',
-  '- Output the title text ONLY: no quotes, no trailing punctuation, no prefix like "Title:", and no emoji, checkmarks, or symbols.',
-  '- Keep it under 8 words. Use the same language as the message.',
-  '- Use ONLY information explicitly present in the message. Never invent project names, IDs, status, or conclusions that are not written there.',
-  '- Maximize distinctiveness. Many messages follow the same template (e.g. "check job X", "check the Slack message", "translate file Y"); a generic title like "check job" would collide with dozens of others. Surface the concrete identifier that makes THIS one different — the specific job id, Slack channel/message id, file name, ticket, or branch — and put it in the title.',
+  "Create a short, distinctive title for the actual task in the user's first message.",
+  'Before answering, briefly identify the input envelope, the underlying task, and one safe business anchor, then decide once and stop reasoning.',
+  'Ignore transport metadata and evidence-only values.',
+  'Never copy credentials, tokens, webhook keys, personal/user/channel/thread IDs, hashes, timestamps, local paths, or irrelevant infrastructure values.',
+  'If context is insufficient, use a minimal grounded fallback.',
+  "Return only the title in the user's language, with no quotes, prefix, trailing punctuation, emoji, or extra lines.",
+  'Maximum display width 40; CJK characters count as 2, others as 1.',
 ].join('\n')
 
 /**
