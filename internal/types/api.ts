@@ -1166,7 +1166,7 @@ export function extractSkeletonFromProfile(
 
 /**
  * Materialize a skeleton into the profile `slots` shape, minting instance ids
- * via the injected factory (server uses generateId, client uses crypto UUID).
+ * via the injected factory (server mints deterministic ids, client random ones).
  * Each slot's first instance becomes active. Returns the `{ layout_id, slots }`
  * patch to merge into a workspace_profile payload.
  */
