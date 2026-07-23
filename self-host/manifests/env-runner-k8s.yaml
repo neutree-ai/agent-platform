@@ -58,7 +58,7 @@ spec:
       serviceAccountName: ${APP_PREFIX}-env-runner-k8s
       containers:
         - name: env-runner-k8s
-          image: ${REGISTRY}/${APP_PREFIX}-env-runner-k8s:${IMAGE_TAG}
+          image: ${PLATFORM_IMAGE_PREFIX}-env-runner-k8s:${IMAGE_TAG}
           imagePullPolicy: Always
           # Provider config MUST match control-plane.yaml exactly, so both build
           # byte-identical workspace pods. Keep this block in sync.
@@ -87,7 +87,7 @@ spec:
             - name: AFS_CONTROLLER_ADDR
               value: "afs-controller.${NAMESPACE}.svc:9100"
             - name: MEMORY_FUSE_IMAGE
-              value: "${REGISTRY}/${APP_PREFIX}-memory-fuse:${IMAGE_TAG}"
+              value: "${PLATFORM_IMAGE_PREFIX}-memory-fuse:${IMAGE_TAG}"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
