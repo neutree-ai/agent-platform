@@ -3,8 +3,6 @@ import { useRequiredSlotContext } from '@/contexts/SlotContext'
 import { api } from '@/lib/api/client'
 import type { ApiWorkspaceLayout } from '@/lib/api/types'
 import { useWorkspaceProfile, useWorkspaceProfileStore } from '@/stores/workspace-profile-store'
-import { useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo } from 'react'
 import {
   type LayoutSkeleton,
   POPOUT_SLOT_ID,
@@ -12,6 +10,8 @@ import {
   normalizeLayoutSkeleton,
   skeletonToProfilePatch,
 } from '@neutree-ai/types'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCallback, useMemo } from 'react'
 import { useWorkspaceLayouts, workspaceLayoutsQueryKey } from './useWorkspaceLayouts'
 
 type LayoutKind = 'builtin' | 'template' | 'custom'
@@ -37,8 +37,11 @@ function builtinSkeletonFor(id: LayoutId): LayoutSkeleton {
   return s
 }
 
+// Not crypto.randomUUID(): that API only exists in secure contexts, and
+// self-hosted deployments are commonly reached over plain HTTP — it being
+// undefined there made every layout switch throw before writing the profile.
 const mkInstanceId = (slotId: string, appId: string, i: number) =>
-  `${slotId}:${appId}:${i}:${crypto.randomUUID().slice(0, 8)}`
+  `${slotId}:${appId}:${i}:${Math.random().toString(36).slice(2, 10)}`
 
 interface LayoutState {
   /** Current live arrangement as a normalized skeleton. */
@@ -73,7 +76,7 @@ interface LayoutState {
 export function useLayoutState(workspaceId: string): LayoutState {
   const ctx = useRequiredSlotContext()
   const profile = useWorkspaceProfile(workspaceId)
-  const { layouts } = useWorkspaceLayouts()
+  const { layouts, isLoading: layoutsLoading } = useWorkspaceLayouts()
   const qc = useQueryClient()
 
   const layoutId = (
@@ -90,9 +93,16 @@ export function useLayoutState(workspaceId: string): LayoutState {
     return normalizeLayoutSkeleton({ layout_id: layoutId, slots })
   }, [ctx.slots, ctx.getState, layoutId])
 
-  const selectedId =
+  const storedSelectedId =
     typeof profile.selected_layout_id === 'string' ? profile.selected_layout_id : null
-  const selectedLayout = selectedId ? (layouts.find((l) => l.id === selectedId) ?? null) : null
+  const selectedLayout = storedSelectedId
+    ? (layouts.find((l) => l.id === storedSelectedId) ?? null)
+    : null
+  // A stored selection pointing at a layout that no longer exists (deleted
+  // while selected, removed template copy) collapses to the built-in default
+  // once the list has loaded — otherwise the switcher highlights no row at
+  // all and Reset re-stamps a reference that can never resolve.
+  const selectedId = selectedLayout || layoutsLoading ? storedSelectedId : null
   const selected = selectedLayout
     ? normalizeLayoutSkeleton(selectedLayout.skeleton)
     : builtinSkeletonFor(layoutId)

@@ -19,6 +19,7 @@ import {
 import type { ApiWorkspaceLayout } from '@/lib/api/types'
 import { isCommitEnter } from '@/lib/keyboard'
 import { cn } from '@/lib/utils'
+import { useWorkspaceProfileStore } from '@/stores/workspace-profile-store'
 import { Check, LayoutPanelLeft, Pencil, Plus, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -120,7 +121,11 @@ export function LayoutSwitcher({
         <SaveLayoutDialog workspaceId={workspaceId} open={saveOpen} onOpenChange={setSaveOpen} />
       )}
       <EditLayoutDialog layout={editing} onClose={() => setEditing(null)} />
-      <DeleteLayoutDialog layout={deleting} onClose={() => setDeleting(null)} />
+      <DeleteLayoutDialog
+        layout={deleting}
+        profileId={profileId}
+        onClose={() => setDeleting(null)}
+      />
     </>
   )
 }
@@ -519,9 +524,12 @@ function EditLayoutDialog({
 
 function DeleteLayoutDialog({
   layout,
+  profileId,
   onClose,
 }: {
   layout: ApiWorkspaceLayout | null
+  /** Profile whose selection should be cleared if it points at the deleted layout. */
+  profileId: string | undefined
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -530,6 +538,14 @@ function DeleteLayoutDialog({
   async function confirm() {
     if (!layout) return
     await del.mutateAsync(layout.id)
+    // Deleting the currently-selected layout would leave the profile's
+    // selection dangling — drop it so the built-in default becomes active.
+    if (profileId) {
+      const store = useWorkspaceProfileStore.getState()
+      if (store.byWorkspace[profileId]?.selected_layout_id === layout.id) {
+        store.patch(profileId, { selected_layout_id: null })
+      }
+    }
     onClose()
   }
 
