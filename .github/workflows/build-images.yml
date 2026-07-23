@@ -9,6 +9,10 @@ name: Build & push images
 #     empty builds all.
 #   - push of a per-service tag `<image>-v<x.y.z>` (e.g. nap-cp-v1.2.0):
 #     builds only that image and also tags it with the version.
+#
+# Images are multi-arch (amd64 + arm64), built on native runners — one
+# by-digest push per arch, then a merge job stitches the manifest list under
+# the final tags. No QEMU: arm64 legs run on ubuntu-24.04-arm.
 
 on:
   workflow_dispatch:
@@ -26,29 +30,120 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.platform.runner }}
     permissions:
       contents: read
       packages: write
     strategy:
       fail-fast: false
       matrix:
-        include:
+        platform:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+        entry:
           - { image: nap-cp, dockerfile: control-plane/Dockerfile, context: . }
           - { image: nap-cg, dockerfile: channel-gateway/Dockerfile, context: . }
           - { image: nap-scheduler, dockerfile: scheduler/Dockerfile, context: . }
+          - { image: nap-env-runner-k8s, dockerfile: env-runner-k8s/Dockerfile, context: . }
           - { image: nap-skills-content-service, dockerfile: skills-content-service/Dockerfile, context: . }
           - { image: nap-sandbox, dockerfile: sandbox-service/Dockerfile, context: . }
           - { image: nap-browser, dockerfile: browser-service/Dockerfile, context: . }
           - { image: nap-memory-fuse, dockerfile: memory-fuse/Dockerfile, context: memory-fuse }
           - { image: nap-agent-claude-code, dockerfile: agents/claude-code/Dockerfile, context: . }
           - { image: nap-agent-codex, dockerfile: agents/codex/Dockerfile, context: . }
+          - { image: nap-agent-goose, dockerfile: agents/goose/Dockerfile, context: . }
     steps:
       - uses: actions/checkout@v4
 
-      # Decide whether this leg builds, and with which tags.
+      # Decide whether this leg builds.
       #   dispatch: `service` input (empty = all)
-      #   tag push: tag `<image>-v<ver>` selects one image + adds the :<ver> tag
+      #   tag push: tag `<image>-v<ver>` selects one image
+      - name: Gate
+        id: g
+        run: |
+          img="${{ matrix.entry.image }}"
+          build=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            want="${{ github.event.inputs.service }}"
+            if [ -z "$want" ] || [ "$want" = "$img" ]; then build=true; fi
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            ref="${GITHUB_REF_NAME}"     # e.g. nap-cp-v1.2.0
+            tagimg="${ref%-v*}"          # nap-cp
+            if [ "$tagimg" = "$img" ]; then build=true; fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "$img/${{ matrix.platform.arch }} -> build=$build"
+
+      - name: Set up Buildx
+        if: steps.g.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.g.outputs.build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Sub-context builds (memory-fuse) COPY .npmrc relative to their own dir.
+      - name: Stage .npmrc into sub-context
+        if: steps.g.outputs.build == 'true' && matrix.entry.context != '.'
+        run: cp .npmrc "${{ matrix.entry.context }}/.npmrc"
+
+      # Push by digest only — the merge job attaches the human-facing tags.
+      - name: Build & push by digest
+        id: build
+        if: steps.g.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.entry.context }}
+          file: ${{ matrix.entry.dockerfile }}
+          platforms: linux/${{ matrix.platform.arch }}
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}/${{ matrix.entry.image }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.entry.image }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,scope=${{ matrix.entry.image }}-${{ matrix.platform.arch }},mode=max
+
+      - name: Export digest
+        if: steps.g.outputs.build == 'true'
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: steps.g.outputs.build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.entry.image }}-${{ matrix.platform.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - nap-cp
+          - nap-cg
+          - nap-scheduler
+          - nap-env-runner-k8s
+          - nap-skills-content-service
+          - nap-sandbox
+          - nap-browser
+          - nap-memory-fuse
+          - nap-agent-claude-code
+          - nap-agent-codex
+          - nap-agent-goose
+    steps:
+      # Same gate as the build job, plus the final tag set.
       - name: Gate & tags
         id: g
         run: |
@@ -73,6 +168,14 @@ jobs:
           { echo "tags<<EOF"; echo "$tags"; echo "EOF"; } >> "$GITHUB_OUTPUT"
           echo "$img -> build=$build"
 
+      - name: Download digests
+        if: steps.g.outputs.build == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digests-${{ matrix.image }}-*
+          path: /tmp/digests
+          merge-multiple: true
+
       - name: Set up Buildx
         if: steps.g.outputs.build == 'true'
         uses: docker/setup-buildx-action@v3
@@ -85,21 +188,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Sub-context builds (memory-fuse) COPY .npmrc relative to their own dir.
-      - name: Stage .npmrc into sub-context
-        if: steps.g.outputs.build == 'true' && matrix.context != '.'
-        run: cp .npmrc "${{ matrix.context }}/.npmrc"
-
-      - name: Build & push
+      - name: Create multi-arch manifest
         if: steps.g.outputs.build == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: true
-          platforms: linux/amd64
-          tags: ${{ steps.g.outputs.tags }}
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+        run: |
+          cd /tmp/digests
+          tag_args=""
+          while IFS= read -r t; do
+            tag_args="$tag_args -t $t"
+          done <<< "${{ steps.g.outputs.tags }}"
+          # shellcheck disable=SC2086
+          docker buildx imagetools create $tag_args \
+            $(printf "${IMAGE_PREFIX}/${{ matrix.image }}@sha256:%s " *)
+
+      - name: Inspect
+        if: steps.g.outputs.build == 'true'
+        run: docker buildx imagetools inspect "${IMAGE_PREFIX}/${{ matrix.image }}:${GITHUB_SHA::12}"
