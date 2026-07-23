@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: skills-content-service
-          image: ${REGISTRY}/${APP_PREFIX}-skills-content-service:${IMAGE_TAG}
+          image: ${PLATFORM_IMAGE_PREFIX}-skills-content-service:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3008

@@ -10,7 +10,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: seed
-          image: ${REGISTRY}/${APP_PREFIX}-cp:${IMAGE_TAG}
+          image: ${PLATFORM_IMAGE_PREFIX}-cp:${IMAGE_TAG}
           command: ["node", "dist/seed-oauth-clients.js"]
           env:
             - name: POSTGRES_PASSWORD

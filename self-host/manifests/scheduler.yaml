@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: scheduler
-          image: ${REGISTRY}/${APP_PREFIX}-scheduler:${IMAGE_TAG}
+          image: ${PLATFORM_IMAGE_PREFIX}-scheduler:${IMAGE_TAG}
           imagePullPolicy: Always
           env:
             - name: POSTGRES_PASSWORD

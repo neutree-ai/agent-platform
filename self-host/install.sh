@@ -77,6 +77,13 @@ export IMAGE_TAG="${IMAGE_TAG:-latest}"
 export APP_PREFIX="${APP_PREFIX:-nap}"
 export DB_NAME="${DB_NAME:-nap}"
 
+# First-party image prefix, decoupled from the k8s object prefix. Defaults to
+# ${REGISTRY}/${APP_PREFIX} (image names match object names). Override when an
+# existing install keeps its historical APP_PREFIX for object names but pulls
+# the public nap-* images, e.g.:
+#   PLATFORM_IMAGE_PREFIX=ghcr.io/neutree-ai/agent-platform/nap
+export PLATFORM_IMAGE_PREFIX="${PLATFORM_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}}"
+
 # --- Third-party images -----------------------------------------------------
 # Non-first-party images (language runtimes, pause, gotenberg, coturn, nfs).
 # Default to their public upstreams; an offline/mirrored install overrides each
@@ -96,7 +103,7 @@ export PAUSE_IMAGE="${PAUSE_IMAGE:-registry.k8s.io/pause:3.9}"
 export AFS_IMAGE="${AFS_IMAGE:-ghcr.io/neutree-ai/afs:latest}"
 
 # Resolve AGENT_IMAGE_PREFIX if it references REGISTRY
-AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}-agent}"
+AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${PLATFORM_IMAGE_PREFIX}-agent}"
 export AGENT_IMAGE_PREFIX
 
 # Registry authentication. Blank for a public / anonymous registry. When both
@@ -268,12 +275,17 @@ check_prereqs() {
 # first-party image was rebuilt or mirrored under that prefix in your own
 # registry. Two guards keep it from being mistaken for a cosmetic setting.
 check_app_prefix() {
-  # A non-default prefix against the default public registry references images
-  # that cannot exist there (it only hosts nap-*). Refuse before applying.
-  if [ "$APP_PREFIX" != "nap" ] && [ "$REGISTRY" = "ghcr.io/neutree-ai/agent-platform" ]; then
-    die "APP_PREFIX=${APP_PREFIX} with the default public REGISTRY, which only hosts nap-* images.
-       A non-default APP_PREFIX is for redistributions that rebuild every first-party image
-       under that prefix in their own registry. Unset APP_PREFIX unless that is you."
+  # A non-default prefix whose image prefix still resolves against the default
+  # public registry references images that cannot exist there (it only hosts
+  # nap-*). Refuse before applying. Setting PLATFORM_IMAGE_PREFIX explicitly
+  # (e.g. to .../nap while keeping historical object names) sidesteps this.
+  if [ "$APP_PREFIX" != "nap" ] \
+    && [ "$PLATFORM_IMAGE_PREFIX" = "ghcr.io/neutree-ai/agent-platform/${APP_PREFIX}" ]; then
+    die "APP_PREFIX=${APP_PREFIX} resolves PLATFORM_IMAGE_PREFIX to the default public REGISTRY,
+       which only hosts nap-* images. Either rebuild every first-party image under that prefix
+       in your own registry (redistributors), or set
+       PLATFORM_IMAGE_PREFIX=ghcr.io/neutree-ai/agent-platform/nap to keep your object names
+       while pulling the public images."
   fi
   # Never change the prefix of an existing install: the render would come up as
   # a second, empty ${APP_PREFIX}-* stack (empty database included) beside the
@@ -297,7 +309,7 @@ render_manifests() {
 
   # Explicit variable list — prevents envsubst from replacing k8s $(VAR)
   # references like $(POSTGRES_PASSWORD)
-  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${DB_NAME}${NAP_HOST}${NAP_NODE_PORT}'
+  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${PLATFORM_IMAGE_PREFIX}${DB_NAME}${NAP_HOST}${NAP_NODE_PORT}'
   VARS+='${IMAGE_PULL_SECRET}'
   VARS+='${POSTGRES_IMAGE}${GOTENBERG_IMAGE}${COTURN_IMAGE}${NFS_SERVER_IMAGE}'
   VARS+='${RUNTIME_NODE_IMAGE}${RUNTIME_PYTHON_IMAGE}${RUNTIME_GOLANG_IMAGE}${PAUSE_IMAGE}'
