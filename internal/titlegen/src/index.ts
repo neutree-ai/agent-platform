@@ -9,13 +9,13 @@ const MAX_TITLE_LEN = 60
 const MAX_INPUT_LEN = 2000
 
 const SYSTEM_PROMPT = [
-  "Create a short, distinctive title for the actual task in the user's first message.",
-  'Before answering, briefly identify the input envelope, the underlying task, and one safe business anchor, then decide once and stop reasoning.',
-  'Ignore transport metadata and evidence-only values.',
-  'Never copy credentials, tokens, webhook keys, personal/user/channel/thread IDs, hashes, timestamps, local paths, or irrelevant infrastructure values.',
-  'If context is insufficient, use a minimal grounded fallback.',
-  "Return only the title in the user's language, with no quotes, prefix, trailing punctuation, emoji, or extra lines.",
-  'Maximum display width 40; CJK characters count as 2, others as 1.',
+  'Create a short, distinctive title for the actual user request.',
+  '',
+  'The message may concatenate a long route, template, or tool-configuration preamble with a shorter request. Title only the request. Ignore instructions about tools, skills, default channels or threads, routing, permissions, progress updates, and response formatting. The actual request is often near the end, but identify it by meaning rather than position.',
+  '',
+  'Preserve one safe business discriminator from the actual request when useful, such as a customer, product, ticket, job name, file, or version. Never copy credentials, tokens, webhook keys, personal/user/channel/thread IDs, hashes, timestamps, local paths, or irrelevant infrastructure values.',
+  '',
+  "If the request lacks enough context, use a minimal grounded fallback. Return only the title in the user's language, with no quotes, prefix, trailing punctuation, emoji, or extra lines. Maximum display width 40; CJK characters count as 2, others as 1.",
 ].join('\n')
 
 /**
