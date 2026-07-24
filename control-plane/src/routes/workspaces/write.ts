@@ -111,7 +111,12 @@ write.openapi(createRouteDef, async (c) => {
     }
 
     const ownerId = isSystem ? 'system' : currentUser.sub
-    const workspace = await createWorkspace(ownerId, body.name, agentType, isSystem)
+    // Template-created workspaces take their prompt from the template —
+    // seeding the user's default prompt would shadow it (workspace-level
+    // values win in config resolution).
+    const workspace = await createWorkspace(ownerId, body.name, agentType, isSystem, {
+      seedDefaultPrompt: !body.template_id,
+    })
 
     if (body.template_id && templateLatestVersion !== undefined) {
       await updateWorkspaceConfig(workspace.id, {
