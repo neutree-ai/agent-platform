@@ -450,6 +450,17 @@ export class SkillsService {
       throw new NotAllowedError('Only the owner can change visibility or grants')
     }
 
+    // Rename is owner-only: the name keys the mounted directory in every
+    // dependent workspace, so an editor rename would ripple far beyond the
+    // content-edit rights they were granted.
+    let nextName: string | undefined
+    if (input.name !== undefined) {
+      if (!isOwner) throw new NotAllowedError('Only the owner can rename a skill')
+      const trimmed = input.name.trim()
+      if (!trimmed) throw new InvalidInputError('Skill name cannot be empty')
+      if (trimmed !== existing.name) nextName = trimmed
+    }
+
     const nextVisibility = input.visibility
     const effectiveVisibility = nextVisibility ?? existing.visibility
     const nextGrants = input.grants
@@ -476,14 +487,23 @@ export class SkillsService {
       await this.assertOwnTeams(input.userId, nextGrants)
     }
 
-    // scs owns the skills row write — delegate.
+    // scs owns the skills row write — delegate. (`nextName` is undefined when
+    // the name is unchanged, keeping the write — and the reload below — a
+    // no-op for pure description/category edits.)
     const result = await scsPatchSkill(input.skillId, {
-      name: input.name,
+      name: nextName,
       description: input.description,
       visibility: nextVisibility,
       category: input.category,
     })
     this.unwrap(result)
+
+    // Dependent workspaces mount the skill under a directory keyed by its
+    // name — fan out a reload so running agents drop the old directory and
+    // fetch the new one.
+    if (nextName !== undefined) {
+      await this.notifyAffectedWorkspaces(input.skillId)
+    }
 
     if (isOwner && nextGrants !== undefined) {
       await this.repo.setSkillGrants(input.skillId, nextGrants, input.userId)

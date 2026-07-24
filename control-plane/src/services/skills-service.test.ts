@@ -417,6 +417,58 @@ describe('SkillsService.patchMeta', () => {
     })
     expect(h.repo._peekGrants().filter((g) => g.skill_id === skill.id)).toEqual([])
   })
+
+  it('owner rename delegates trimmed name to scs and enqueues dependent reload', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'old-name' })
+    vi.mocked(scsPatchSkill).mockResolvedValue(ok({ skill: { ...skill, name: 'new-name' } }))
+
+    await h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: '  new-name  ' })
+    expect(vi.mocked(scsPatchSkill)).toHaveBeenCalledWith(skill.id, {
+      name: 'new-name',
+      description: undefined,
+      visibility: undefined,
+      category: undefined,
+    })
+    expect(h.reloadQueue.calls).toEqual([skill.id])
+  })
+
+  it('unchanged name is a no-op: no rename write, no reload', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 's', description: 'old' })
+    vi.mocked(scsPatchSkill).mockResolvedValue(ok({ skill }))
+
+    await h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: 's', description: 'new' })
+    expect(vi.mocked(scsPatchSkill)).toHaveBeenCalledWith(skill.id, {
+      name: undefined,
+      description: 'new',
+      visibility: undefined,
+      category: undefined,
+    })
+    expect(h.reloadQueue.calls).toEqual([])
+  })
+
+  it('rejects empty rename', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 's' })
+    await expect(
+      h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: '   ' }),
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(vi.mocked(scsPatchSkill)).not.toHaveBeenCalled()
+  })
+
+  it('editor cannot rename (owner-only)', async () => {
+    const h = setup()
+    h.repo.seedUser({ id: 'bob', display_name: 'Bob' })
+    seedTeam(h.repo, { id: 't', name: 'T' }, ['alice', 'bob'])
+    const { skill } = seedSkill(h.repo, { userId: 'bob', name: 's', visibility: 'team' })
+    await h.repo.setSkillGrants(skill.id, [{ team_id: 't', permission: 'editor' }], 'bob')
+
+    await expect(
+      h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: 'renamed' }),
+    ).rejects.toBeInstanceOf(NotAllowedError)
+    expect(vi.mocked(scsPatchSkill)).not.toHaveBeenCalled()
+  })
 })
 
 // ── tests: remove ──────────────────────────────────────────────────────────
