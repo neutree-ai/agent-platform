@@ -791,7 +791,9 @@
           "delete": "删除",
           "fork": "Fork",
           "createNew": "创建新 Prompt",
-          "rollbackTo": "回滚到 v{{version}}"
+          "rollbackTo": "回滚到 v{{version}}",
+          "setDefault": "设为新工作空间的默认 Prompt",
+          "clearDefault": "取消默认"
         },
         "empty": {
           "noPrompts": {

@@ -761,7 +761,9 @@
           "delete": "Delete",
           "fork": "Fork",
           "createNew": "Create new prompt",
-          "rollbackTo": "Rollback to v{{version}}"
+          "rollbackTo": "Rollback to v{{version}}",
+          "setDefault": "Set as default prompt for new workspaces",
+          "clearDefault": "Clear default"
         },
         "empty": {
           "noPrompts": {
