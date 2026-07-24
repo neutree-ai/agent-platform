@@ -751,7 +751,7 @@ function CandidatePicker({
   const { t } = useTranslation()
   if (candidates.length === 0) {
     return (
-      <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+      <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
         {t('components.library.skills.scan.empty')}
       </div>
     )
