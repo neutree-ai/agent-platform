@@ -223,7 +223,7 @@ export function SkillShareDialog({ skill, open, onOpenChange }: SkillShareDialog
           )}
 
           {blockedByOthers && dependents && (
-            <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-tiny text-warning-foreground">
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-tiny text-warning">
               {t('components.skillShare.narrowWarning', {
                 count: dependents.other_workspace_count,
               })}
