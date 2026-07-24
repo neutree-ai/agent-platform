@@ -120,8 +120,9 @@ interface SkillFormFieldsProps {
   form: SkillFormState
   setForm: (next: (prev: SkillFormState) => SkillFormState) => void
   credentials: ApiCredentialMeta[]
-  /** Set when this is the edit flow — locks the name, makes the file
-   *  optional ("keep current"), and shows the git last-synced banner. */
+  /** Set when this is the edit flow — locks the name for non-owners, makes
+   *  the file optional ("keep current"), and shows the git last-synced
+   *  banner. */
   editingSkill?: ApiSkill | null
   /** Resolved source for `editingSkill`. Required when `editingSkill.source_id`
    *  points at a `kind='git'` row so the git fields can be prefilled and the
@@ -147,6 +148,10 @@ export function SkillFormFields({
 }: SkillFormFieldsProps) {
   const { t } = useTranslation()
   const isEditing = !!editingSkill
+  // Renaming propagates to every workspace that mounts the skill (the name
+  // keys the mounted directory), so the field stays locked for editors —
+  // only the owner can rename. Server enforces the same rule.
+  const nameLocked = isEditing && editingSkill?.my_permission !== 'owner'
   // p3: a skill's "origin kind" lives on its source row, not the skill row.
   // While the source is still loading we conservatively assume native
   // (single-mode UI) — it'll re-render with the toggle once the source lands.
@@ -548,7 +553,7 @@ export function SkillFormFields({
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder={t('components.library.skills.placeholders.autoDetectedName')}
-                  disabled={isEditing}
+                  disabled={nameLocked}
                 />
               </Field>
               <Field
@@ -580,7 +585,7 @@ export function SkillFormFields({
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               placeholder={t('components.library.skills.placeholders.name')}
-              disabled={isEditing}
+              disabled={nameLocked}
             />
           </Field>
           <Field

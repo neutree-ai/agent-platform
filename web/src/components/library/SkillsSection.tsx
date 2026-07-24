@@ -277,10 +277,18 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
         })
         // Category isn't part of the from-git body — server doesn't take it
         // on insert. Fold it into a follow-up PATCH when the user picked one
-        // that differs from what the row already has.
+        // that differs from what the row already has. Same for rename on
+        // re-import: from-git keeps the existing row's name, so a changed
+        // name goes through the meta PATCH (owner-only, server-enforced).
         const catPatch = categoryPatch(imported.category)
-        if (catPatch !== undefined) {
-          await updateMeta.mutateAsync({ id: imported.id, meta: { category: catPatch } })
+        const nextName = form.name.trim()
+        const namePatch =
+          editingSkill && nextName && nextName !== imported.name ? nextName : undefined
+        if (catPatch !== undefined || namePatch !== undefined) {
+          await updateMeta.mutateAsync({
+            id: imported.id,
+            meta: { category: catPatch, name: namePatch },
+          })
         }
         setDialogOpen(false)
         toast.success(
@@ -337,9 +345,14 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
     try {
       if (editingSkill) {
         const catPatch = categoryPatch(editingSkill.category)
+        // Rename rides the same meta PATCH (owner-only, server-enforced).
+        // Patch before any re-upload: upload upserts by (user_id, name), so
+        // it must see the new name or it would fork a second skill.
+        const nextName = form.name.trim()
+        const namePatch = nextName && nextName !== editingSkill.name ? nextName : undefined
         await updateMeta.mutateAsync({
           id: editingSkill.id,
-          meta: { description: form.description, category: catPatch },
+          meta: { name: namePatch, description: form.description, category: catPatch },
         })
         if (form.file) {
           // p3 dropped the per-skill `PUT /skills/:name` re-upload endpoint.
@@ -348,7 +361,7 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
           // which upserts by (user_id, name) and creates a fresh version.
           const buf = await form.file.arrayBuffer()
           await upload.mutateAsync({
-            name: editingSkill.name,
+            name: namePatch ?? editingSkill.name,
             description: form.description,
             buffer: buf,
             visibility: editingSkill.visibility,
