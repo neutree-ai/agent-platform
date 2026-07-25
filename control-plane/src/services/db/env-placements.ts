@@ -112,6 +112,31 @@ export async function listWorkspaceReplicaSets(): Promise<
   return rows
 }
 
+/**
+ * Ready/desired replica counts for an auto-scaling workspace, for the status
+ * API (e.g. rendering "running (2/3)"). `desired` is the autoscaler-owned
+ * `spec.replicas`; `ready` is how many the runner reports Ready
+ * (`endpoint.readyReplicaIds`). Returns null for a static workspace — its spec
+ * has no `runtimeMode: 'auto-scaling'` — so callers show replica counts only
+ * where they mean something. Uniform across built-in and remote (both write the
+ * same columns), so no live-k8s read is needed.
+ */
+export async function getWorkspaceReplicaStatus(
+  workspaceId: string,
+): Promise<{ ready: number; desired: number } | null> {
+  const { rows } = await pool.query(
+    `SELECT spec->>'runtimeMode' AS mode,
+            COALESCE((spec->>'replicas')::int, 0) AS desired,
+            COALESCE(jsonb_array_length(endpoint->'readyReplicaIds'), 0) AS ready
+       FROM workspace_placements
+      WHERE workspace_id = $1`,
+    [workspaceId],
+  )
+  const row = rows[0]
+  if (!row || row.mode !== 'auto-scaling') return null
+  return { ready: row.ready, desired: row.desired }
+}
+
 /** Remove a placement after destroy, scoped to the environment. */
 export async function deletePlacementForEnvironment(
   environmentId: string,
