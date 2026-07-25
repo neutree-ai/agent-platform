@@ -112,6 +112,23 @@ describe('buildWorkspacePodTemplate', () => {
     )
     expect(dep.spec?.template).toEqual(template)
   })
+
+  // Service-link env injection scales with the namespace's Service count, and
+  // every workspace adds one. Left on, bash's quadratic export-environment
+  // rebuild adds seconds to every external command the agent runs. Assert it
+  // explicitly rather than leaning on the golden master, which is easy to
+  // re-record away.
+  it('disables service-link env injection', () => {
+    const template = buildWorkspacePodTemplate(
+      labels,
+      'ws1',
+      'claude-code',
+      'nap-ws1-workspace',
+      undefined,
+      baseCfg,
+    )
+    expect(template.spec?.enableServiceLinks).toBe(false)
+  })
 })
 
 // Minimal Deployment shapes for the status/annotation readers. Cast through

@@ -32,7 +32,16 @@ import { type K8sConfig, agentImageFor, defaultCfg } from './config'
 //     changed in buildDeploymentSpec without a version bump, so existing
 //     v5 Deployments kept the old 1s-timeout / no-startupProbe config and
 //     CrashLoopBackOff'd; bumping forces reconcile to rebuild them.
-export const CURRENT_TEMPLATE_VERSION = 6
+// v7: enableServiceLinks: false. kubelet was injecting the legacy Docker-link
+//     env vars for every Service in the namespace (~15 vars each). Since every
+//     workspace owns a Service, the env grew with the workspace count — at ~950
+//     Services that is ~15k vars / ~600KB, and bash rebuilds its export
+//     environment quadratically before every external command, so each shell
+//     tool call in every workspace paid a fixed ~3s (measured: `bash -c
+//     /bin/true` 2.9s vs 0.008s with a clean env; builtins and non-bash shells
+//     were unaffected, which is why it read as "workspace IO is slow"). Nothing
+//     consumes these vars — service discovery goes through DNS.
+export const CURRENT_TEMPLATE_VERSION = 7
 export const TEMPLATE_VERSION_ANNOTATION = 'agent-platform/workspace-version'
 export const MEMORY_FUSE_CONTAINER_NAME = 'memory-fuse'
 
@@ -217,6 +226,14 @@ export function buildWorkspacePodTemplate(
         fsGroup: 1000,
         fsGroupChangePolicy: 'OnRootMismatch',
       },
+      // Each workspace owns a Service, so the default service-link injection
+      // makes every workspace's environment grow with the total workspace
+      // count — and bash rebuilds its export environment quadratically before
+      // each external command, which turns into seconds of latency per agent
+      // shell call once the cluster has a few hundred workspaces. Nothing in
+      // the pod reads these vars; the agent resolves the control plane and the
+      // fuse sidecars by DNS / explicit env.
+      enableServiceLinks: false,
       nodeSelector: cfg.nodeSelector,
       ...(cfg.imagePullSecret ? { imagePullSecrets: [{ name: cfg.imagePullSecret }] } : {}),
       containers: [agentContainer, afsSidecar, memoryFuseSidecar].filter(
