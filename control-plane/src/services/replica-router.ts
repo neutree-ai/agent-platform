@@ -168,10 +168,28 @@ export function setDraining(workspaceId: string, ids: number[]): void {
 /**
  * The ready replica ids of a workspace, sorted ascending (empty for a static or
  * scaled-to-zero workspace). The autoscaler reads this to compute which ordinals
- * a scale-down would remove.
+ * a scale-down would remove; the address seam fans a reload out across it.
  */
 export function readyReplicaIds(workspaceId: string): readonly number[] {
   return readyReplicas.get(workspaceId) ?? []
+}
+
+/**
+ * Any one ready replica of a workspace to serve a workspace-scoped (no session
+ * affinity) call — health, config/skills reload, usage pull, file export. All
+ * replicas share the workspace volume, so any answers; a non-draining one is
+ * preferred so the pick doesn't land on a replica about to be removed. undefined
+ * for a static or scaled-to-zero workspace (the caller then uses the default
+ * address). This is what lets a built-in auto-scaling workspace — which has no
+ * ClusterIP Service, only per-ordinal headless DNS — be reached without a
+ * replica binding.
+ */
+export function anyReadyReplica(workspaceId: string): number | undefined {
+  const ready = readyReplicas.get(workspaceId)
+  if (!ready || ready.length === 0) return undefined
+  const draining = drainingReplicas.get(workspaceId)
+  if (!draining) return ready[0]
+  return ready.find((id) => !draining.has(id)) ?? ready[0]
 }
 
 /**
