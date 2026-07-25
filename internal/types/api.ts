@@ -296,6 +296,11 @@ export const ApiK8sStatusSchema = z.object({
   conditions: z.array(
     z.object({ type: z.string(), status: z.boolean(), message: z.string().optional() }),
   ),
+  // Auto-scaling workspaces only: how many replicas are Ready vs desired, for a
+  // "running (ready/desired)" display. Sourced from the placement row (uniform
+  // for built-in and remote), not from the live-k8s Deployment read above, which
+  // an auto-scaling (StatefulSet) workspace has none of. Omitted for static.
+  replicas: z.object({ ready: z.number().int(), desired: z.number().int() }).nullable().optional(),
 })
 
 export type ApiK8sStatus = z.infer<typeof ApiK8sStatusSchema>
