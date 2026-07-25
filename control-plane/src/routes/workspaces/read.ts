@@ -7,6 +7,7 @@ import {
   ApiWorkspaceSchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { getWorkspaceReplicaStatus } from '../../services/db/env-placements'
 import { listAttachmentsForWorkspace } from '../../services/db/memory'
 import { getMessagesWithBlocks } from '../../services/db/messages'
 import { listSessions } from '../../services/db/sessions'
@@ -267,7 +268,12 @@ read.openapi(getStatusRoute, async (c) => {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   try {
-    const status = await k8s.getInstanceStatus(workspace.id)
+    const [status, replicas] = await Promise.all([
+      k8s.getInstanceStatus(workspace.id),
+      // Auto-scaling replica counts come from the placement row, not the live-k8s
+      // read above (a StatefulSet workspace has no Deployment); null for static.
+      getWorkspaceReplicaStatus(workspace.id),
+    ])
     return c.json(
       {
         deployment: status.deployment.exists
@@ -281,6 +287,7 @@ read.openapi(getStatusRoute, async (c) => {
         pods: { total: status.pods.total, ready: status.pods.ready },
         warnings: status.warnings,
         conditions: status.conditions,
+        replicas,
       },
       200,
     )
