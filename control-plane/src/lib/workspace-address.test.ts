@@ -5,12 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // resolveAgentAddress must stay identity-equal to getWorkspaceAddress for
 // every route context while workspaces are single-replica.
 
-const { getRemoteProxyPortMock } = vi.hoisted(() => ({
+const { getRemoteProxyPortMock, anyReadyReplicaMock, readyReplicaIdsMock } = vi.hoisted(() => ({
   getRemoteProxyPortMock: vi.fn<(workspaceId: string, replicaId?: number) => number | undefined>(),
+  anyReadyReplicaMock: vi.fn<(workspaceId: string) => number | undefined>(),
+  readyReplicaIdsMock: vi.fn<(workspaceId: string) => readonly number[]>(),
 }))
 
 vi.mock('./remote-proxy', () => ({
   getRemoteProxyPort: getRemoteProxyPortMock,
+}))
+
+vi.mock('../services/replica-router', () => ({
+  anyReadyReplica: anyReadyReplicaMock,
+  readyReplicaIds: readyReplicaIdsMock,
 }))
 
 import {
@@ -22,6 +29,8 @@ import {
 
 beforeEach(() => {
   getRemoteProxyPortMock.mockReturnValue(undefined)
+  anyReadyReplicaMock.mockReturnValue(undefined) // static: no ready replicas
+  readyReplicaIdsMock.mockReturnValue([])
 })
 
 afterEach(() => {
@@ -43,6 +52,14 @@ describe('getWorkspaceAddress', () => {
   it('resolves remote workspaces to their localhost forward proxy', () => {
     getRemoteProxyPortMock.mockReturnValue(41234)
     expect(getWorkspaceAddress('ws1')).toBe('http://127.0.0.1:41234')
+  })
+
+  it('resolves a built-in auto-scaling workspace (no replica) to any ready replica', () => {
+    // no ClusterIP Service exists → the bare name would not resolve; pick a ready one
+    anyReadyReplicaMock.mockReturnValue(1)
+    expect(getWorkspaceAddress('ws1')).toBe(
+      'http://tos-ws1-1.tos-ws1-hl.default.svc.cluster.local:3001',
+    )
   })
 })
 
@@ -110,5 +127,32 @@ describe('notifyAgentReload', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
     expect(await notifyAgentReload('ws1', ['config'])).toBe(false)
+  })
+
+  it('fans out to every ready replica of an auto-scaling workspace', async () => {
+    readyReplicaIdsMock.mockReturnValue([0, 1, 2])
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await notifyAgentReload('ws1', ['config'])).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    const urls = fetchMock.mock.calls.map((c) => c[0])
+    expect(urls).toEqual([
+      'http://tos-ws1-0.tos-ws1-hl.default.svc.cluster.local:3001/reload-config',
+      'http://tos-ws1-1.tos-ws1-hl.default.svc.cluster.local:3001/reload-config',
+      'http://tos-ws1-2.tos-ws1-hl.default.svc.cluster.local:3001/reload-config',
+    ])
+  })
+
+  it('reports false when any replica in the fan-out fails (caller retries)', async () => {
+    readyReplicaIdsMock.mockReturnValue([0, 1])
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('err', { status: 500 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await notifyAgentReload('ws1', ['config'])).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
