@@ -6,7 +6,8 @@ async function waitForJobDone(wsId: string, jobId: string, maxWaitMs = 120_000) 
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
     const job = await client.jobs.get(wsId, jobId)
-    if (job.status === 'completed' || job.status === 'failed') return job
+    // pg-boss calls it `state`, and reports cancelled jobs as terminal too.
+    if (job.state === 'completed' || job.state === 'failed' || job.state === 'cancelled') return job
     await new Promise((r) => setTimeout(r, 3000))
   }
   throw new Error(`Job ${jobId} did not complete within ${maxWaitMs}ms`)
@@ -49,16 +50,16 @@ describeEachCore('jobs', (agentType) => {
     expect(typeof job.id).toBe('string')
   })
 
-  // Blocked on neutree-ai/agent-platform#152 — GET /workspaces/:id/jobs answers
-  // 500 because listJobs selects `expire_in`, a column pg-boss v12 removed.
-  // Both tests below read that endpoint. Re-enable with the fix.
-  test.skip('list jobs contains created job', async () => {
+  test('list jobs contains created job', async () => {
     const job = await client.jobs.create(wsId, {
       prompt: 'Reply with: JOB_LIST_TEST',
       trigger: { type: 'manual' },
     })
     const jobs = await client.jobs.list(wsId)
-    expect(jobs.some((j) => j.id === job.id)).toBe(true)
+    const listed = jobs.find((j) => j.id === job.id)
+    expect(listed).toBeDefined()
+    // The queue payload carries the caller's platform token; it must not surface.
+    expect((listed?.data as { service_token?: string }).service_token).toBeUndefined()
   })
 
   test('get job matches', async () => {
@@ -70,13 +71,13 @@ describeEachCore('jobs', (agentType) => {
     expect(job.id).toBe(created.id)
   })
 
-  test.skip('wait for job completion', async () => {
+  test('wait for job completion', async () => {
     const created = await client.jobs.create(wsId, {
       prompt: 'Reply with: JOB_COMPLETE',
       trigger: { type: 'manual' },
     })
     const job = await waitForJobDone(wsId, created.id, 120_000)
-    expect(['completed', 'failed']).toContain(job.status as string)
+    expect(['completed', 'failed']).toContain(job.state as string)
   }, 300_000)
 
   test('create schedule', async () => {
