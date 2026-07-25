@@ -360,6 +360,8 @@ export class SkillManager {
     // 2. Ensure skillsDir exists
     await this.fs.mkdir(this.skillsDir)
 
+    const enabledSet = new Set(skills)
+
     // 3. Pre-sweep dangling symlinks on the NFS skillsDir.
     // After a pod restart /tmp is wiped, leaving every dest → localBase symlink
     // dangling. Removing them up front means a download failure later won't
@@ -376,6 +378,14 @@ export class SkillManager {
         if (name.startsWith('.')) continue
         if (RESERVED_SKILL_NAMES.has(name)) continue
         if (this.isEditing(name)) continue
+        // Leave enabled skills alone: step 4 re-materialises each idempotently
+        // (`ln -sfn` to the canonical target). Sweeping it here would, under
+        // auto-scaling, delete a sibling replica's still-valid symlink just
+        // because THIS pod's /tmp hasn't extracted the content yet — churning
+        // (or, if this pod's download then fails, breaking) a skill the other
+        // replica already has. A dangling symlink left in place is harmless:
+        // listLocal() filters it and readKnownEtag() forces a full re-download.
+        if (enabledSet.has(name)) continue
         // Only symlinks are ours to sweep here: a real directory at destDir is
         // user-created content (dropped in by hand, never registered), which
         // the orphan cleanup below also preserves. Deleting it would eat data.
@@ -458,7 +468,6 @@ export class SkillManager {
     // downloaded, never marked) are therefore never auto-removed; the worst a
     // missing marker can do is leave a disabled skill on disk (harmless, and
     // self-healing on the next restart's pre-sweep).
-    const enabledSet = new Set(skills)
     let onDisk: string[] = []
     try {
       onDisk = await this.fs.readdir(this.skillsDir)
@@ -616,11 +625,16 @@ export class SkillManager {
     await this.fs.rm(local)
     await this.fs.rename(staging, local)
 
-    // Refresh symlink (idempotent under ln -sfn would be nicer, but our Shell
-    // interface doesn't model flags; rm-then-ln is what we have).
+    // Refresh the shared-home symlink idempotently. `ln -sfn` replaces an
+    // existing link in place: -f overwrites, -n treats an existing
+    // symlink-to-dir as a file so we don't nest inside it. This matters for
+    // auto-scaling — several replicas materialise the SAME shared skillsDir
+    // entry at once, and a plain `rm(dest); ln -s` would race (one replica's
+    // `ln` hits a dest another just created → EEXIST → the skill fails → the pod
+    // crash-loops at boot). `ln -sfn` is safe to run concurrently: last writer
+    // wins, and every writer sets the identical canonical target.
     if (this.useSymlink) {
-      await this.fs.rm(dest)
-      await this.shell.exec('ln', ['-s', local, dest])
+      await this.shell.exec('ln', ['-sfn', local, dest])
     }
 
     // Record the version we just extracted so the next load can skip an
@@ -738,15 +752,43 @@ export class SkillManager {
   // ── Platform skill ──
 
   /**
+   * A deterministic content version of the platform files. Every replica of a
+   * workspace renders identical platform content (same workspace id / user /
+   * agent kind), so they compute the same version and converge on skipping a
+   * redundant reinstall. Non-cryptographic (djb2) is fine here: a collision only
+   * risks skipping an install of byte-different content, and the input is our own
+   * rendered templates, not adversarial.
+   */
+  private static platformVersion(files: Record<string, string>): string {
+    let h = 5381
+    for (const k of Object.keys(files).sort()) {
+      const s = `${k} ${files[k]} `
+      for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0
+    }
+    return (h >>> 0).toString(16)
+  }
+
+  /** Sidecar recording the installed platform version (beside dest, hidden). */
+  private platformVersionPath(): string {
+    return `${this.skillsDir}/.__platform__.version`
+  }
+
+  /**
    * Stamp the platform-managed `__platform__` skill onto disk. Caller passes a
-   * map of relative paths → content; SkillManager owns the lifecycle:
+   * map of relative paths → content; SkillManager owns the lifecycle.
    *
-   *   1. Sweep any prior install (chmod u+w to undo prior readonly, then rm)
-   *      so OSS bumps refresh cleanly.
-   *   2. Write each file (parent dirs first).
-   *   3. Lock the entire tree readonly via `chmod -R a-w` — files end at 0444,
-   *      directories at 0555. Defense in depth on top of the route-level
-   *      reserved-name guards.
+   * Safe for concurrent callers sharing one skillsDir (auto-scaling replicas all
+   * boot and install at once):
+   *   1. Idempotent skip — if the recorded version already matches, do nothing.
+   *      Since all replicas render identical content they agree on the version,
+   *      so all-but-one skip and no one races the shared tree in steady state.
+   *   2. Otherwise build the whole tree in a per-pid staging dir on the same
+   *      filesystem, lock it readonly, then publish with a single atomic rename —
+   *      a reader never sees a half-written `__platform__`. A racer that
+   *      published first is detected (rename throws) and its identical content is
+   *      trusted; ours is discarded.
+   *   3. The version sidecar is written last, so a crash mid-install never marks
+   *      a partial tree as current.
    *
    * The skill name is hard-coded (`__platform__`) — intentionally non-
    * parametric so the protection model stays unambiguous. Caller renders any
@@ -755,17 +797,25 @@ export class SkillManager {
   async installPlatformSkill(files: Record<string, string>): Promise<void> {
     const name = '__platform__'
     const dest = this.destDir(name)
+    const version = SkillManager.platformVersion(files)
+    const verPath = this.platformVersionPath()
 
-    // Undo readonly from a previous install (no-op if first run).
-    try {
-      await this.shell.exec('chmod', ['-R', 'u+w', dest])
-    } catch {
-      // Path may not exist yet — fine.
+    // 1. Idempotent skip: this exact version is already installed (by us on a
+    // prior boot, or by a sibling replica in this cold-start wave).
+    if (this.fs.exists(dest)) {
+      let installed: string | null = null
+      try {
+        installed = (await this.fs.readFile(verPath)).toString().trim()
+      } catch {
+        // No sidecar — fall through and (re)install.
+      }
+      if (installed === version) return
     }
-    await this.fs.rm(dest)
-    await this.fs.mkdir(dest)
 
-    // Write parent dirs first so nested paths land cleanly.
+    // 2. Stage the full tree on the same filesystem as dest.
+    const staging = `${this.skillsDir}/.__platform__.staging-${process.pid}-${Date.now()}`
+    await this.fs.rm(staging) // clear a leaked staging from a crashed prior boot
+    await this.fs.mkdir(staging)
     const sorted = Object.entries(files).sort(
       ([a], [b]) => a.split('/').length - b.split('/').length,
     )
@@ -775,13 +825,34 @@ export class SkillManager {
       }
       const slash = rel.lastIndexOf('/')
       if (slash !== -1) {
-        await this.fs.mkdir(`${dest}/${rel.slice(0, slash)}`)
+        await this.fs.mkdir(`${staging}/${rel.slice(0, slash)}`)
       }
-      await this.fs.writeFile(`${dest}/${rel}`, content)
+      await this.fs.writeFile(`${staging}/${rel}`, content)
+    }
+    // Lock the staged tree readonly before publishing (files 0444, dirs 0555).
+    await this.shell.exec('chmod', ['-R', 'a-w', staging])
+
+    // 3. Publish. Clear any prior install (undo its readonly lock first), then
+    // rename the staged tree into place. The rm→rename window is cold-start-only
+    // and pre-serving. A sibling replica that published between our skip-check
+    // and here makes the rename throw; its content is identical, so discard ours.
+    try {
+      if (this.fs.exists(dest)) {
+        await this.shell.exec('chmod', ['-R', 'u+w', dest]).catch(() => {})
+        await this.fs.rm(dest)
+      }
+      await this.fs.rename(staging, dest)
+    } catch {
+      await this.fs.rm(staging).catch(() => {})
     }
 
-    // Lock down: clears write for owner/group/other on every file + dir.
-    await this.shell.exec('chmod', ['-R', 'a-w', dest])
+    // 4. Record the version last (best-effort: a missing marker only costs a
+    // redundant reinstall next boot).
+    try {
+      await this.fs.writeFile(verPath, version)
+    } catch {
+      // Best-effort.
+    }
   }
 
   async pack(name: string): Promise<Buffer> {

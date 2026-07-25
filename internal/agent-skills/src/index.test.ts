@@ -35,9 +35,14 @@ function createMemFs(): Fs & {
       return Buffer.isBuffer(content) ? content : Buffer.from(content)
     },
     async rm(path) {
+      // Recursive, matching node's rm({ recursive: true, force: true }).
       files.delete(path)
       dirs.delete(path)
       symlinks.delete(path)
+      const prefix = path.endsWith('/') ? path : `${path}/`
+      for (const k of [...files.keys()]) if (k.startsWith(prefix)) files.delete(k)
+      for (const d of [...dirs]) if (d.startsWith(prefix)) dirs.delete(d)
+      for (const s of [...symlinks]) if (s.startsWith(prefix)) symlinks.delete(s)
     },
     async readdir(path) {
       const prefix = path.endsWith('/') ? path : `${path}/`
@@ -177,10 +182,11 @@ describe('SkillManager', () => {
       const tarCall = shell.calls.find((c) => c.cmd === 'tar' && c.args[0] === 'xzf')
       expect(tarCall).toBeTruthy()
       expect(tarCall!.args[1]).toMatch(/\/tmp\/skill-my-skill\.staging-.+\/\.skill\.tar\.gz$/)
-      // Symlink points at the canonical localDir after the staging swap.
+      // Symlink points at the canonical localDir after the staging swap, created
+      // idempotently with `ln -sfn` so concurrent replicas don't race rm/ln.
       expect(shell.calls).toContainEqual({
         cmd: 'ln',
-        args: ['-s', '/tmp/skill-my-skill', '/workspace/.claude/skills/my-skill'],
+        args: ['-sfn', '/tmp/skill-my-skill', '/workspace/.claude/skills/my-skill'],
       })
     })
 
@@ -711,6 +717,90 @@ describe('SkillManager draft persistence (draftBase)', () => {
     const tarCall = shell.calls.find((c) => c.cmd === 'tar' && c.args[0] === 'xzf')
     expect(tarCall!.args[1]).toMatch(/^\/tmp\/skill-done\.staging-/)
     expect(result.loaded).toEqual(['done'])
+  })
+
+  // installPlatformSkill runs on every agent boot. Under auto-scaling, N replicas
+  // boot in parallel and install into the SAME shared skillsDir, so it must be
+  // idempotent and never expose a half-written tree.
+  describe('installPlatformSkill (concurrent-safe)', () => {
+    const DEST = `${SKILLS_DIR}/__platform__`
+    const VER = `${SKILLS_DIR}/.__platform__.version`
+    const mgr = () =>
+      createManager(async () => {
+        throw new Error('installPlatformSkill must not fetch')
+      })
+
+    test('installs the tree, locks it readonly, and records a version', async () => {
+      await mgr().installPlatformSkill({ 'SKILL.md': 'body', 'ref/a.md': 'A' })
+      expect(fs.files.get(`${DEST}/SKILL.md`)).toBe('body')
+      expect(fs.files.get(`${DEST}/ref/a.md`)).toBe('A')
+      expect(fs.files.get(VER)).toBeTruthy()
+      // The staged tree was chmod'd readonly before publishing.
+      expect(shell.calls.some((c) => c.cmd === 'chmod' && c.args.includes('a-w'))).toBe(true)
+      // No staging dir left behind.
+      expect([...fs.dirs].some((d) => d.includes('.__platform__.staging-'))).toBe(false)
+    })
+
+    test('is a no-op when the same version is already installed (idempotent skip)', async () => {
+      await mgr().installPlatformSkill({ 'SKILL.md': 'body' })
+      shell.calls.length = 0
+      const before = new Map(fs.files)
+      // A second replica with identical content agrees on the version and skips.
+      await mgr().installPlatformSkill({ 'SKILL.md': 'body' })
+      expect(shell.calls).toEqual([])
+      expect(fs.files).toEqual(before)
+    })
+
+    test('reinstalls and drops stale files when the content version changes', async () => {
+      await mgr().installPlatformSkill({ 'SKILL.md': 'v1', 'old.md': 'gone' })
+      const v1 = fs.files.get(VER)
+      await mgr().installPlatformSkill({ 'SKILL.md': 'v2' })
+      expect(fs.files.get(`${DEST}/SKILL.md`)).toBe('v2')
+      expect(fs.files.has(`${DEST}/old.md`)).toBe(false)
+      expect(fs.files.get(VER)).not.toBe(v1)
+    })
+
+    test('rejects a path-traversal entry', async () => {
+      await expect(mgr().installPlatformSkill({ '../evil': 'x' })).rejects.toThrow(
+        /Invalid platform skill path/,
+      )
+    })
+
+    test('discards its staging and does not throw when a racer publishes first', async () => {
+      // Model a sibling replica winning the publish: the rename into dest fails.
+      const realRename = fs.rename
+      fs.rename = async (from, to) => {
+        if (to === DEST) throw new Error('EEXIST: published by a racer')
+        return realRename(from, to)
+      }
+      await expect(mgr().installPlatformSkill({ 'SKILL.md': 'body' })).resolves.toBeUndefined()
+      expect([...fs.dirs].some((d) => d.includes('.__platform__.staging-'))).toBe(false)
+      expect([...fs.files.keys()].some((k) => k.includes('.__platform__.staging-'))).toBe(false)
+      fs.rename = realRename
+    })
+  })
+
+  // Pre-sweep must not delete a still-enabled skill's symlink just because THIS
+  // pod hasn't extracted its /tmp copy yet — under auto-scaling that symlink may
+  // belong to a sibling replica that is already serving it.
+  describe('pre-sweep (auto-scaling safe)', () => {
+    test('preserves an enabled skill’s symlink when this pod has no local copy', async () => {
+      // Sibling created skillsDir/foo → /tmp/skill-foo; here /tmp is empty, so it
+      // is dangling on this pod. foo stays enabled and its download fails this
+      // round — the symlink must survive rather than be swept.
+      fs.dirs.add(`${SKILLS_DIR}/foo`)
+      fs.symlinks.add(`${SKILLS_DIR}/foo`)
+      const fetchImpl = async (url: string) => {
+        if (url.includes('/workspaces/ws-1/skills'))
+          return jsonResponse({ skills: [{ name: 'foo', id: 'sk-foo' }] })
+        if (url.includes('/_cp/skills/sk-foo/package')) return errorResponse(500)
+        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'foo' }])
+        throw new Error(`Unexpected fetch: ${url}`)
+      }
+      const result = await createManager(fetchImpl).load()
+      expect(result.failed).toEqual(['foo'])
+      expect(fs.symlinks.has(`${SKILLS_DIR}/foo`)).toBe(true)
+    })
   })
 })
 
