@@ -26,6 +26,19 @@ import {
 } from './skills-errors'
 import { SkillsService, type SkillsServiceDeps } from './skills-service'
 
+// ── share persistence mock ──────────────────────────────────────────────────
+//
+// Share writes are a thin insert against the pool; what's worth testing here
+// is the slug decision in front of them, so we capture the call args instead
+// of reaching for a database.
+const createSkillExportTokenMock = vi.hoisted(() => vi.fn())
+vi.mock('./db/skill-export-tokens', () => ({
+  DEFAULT_EXPORT_TTL_DAYS: 90,
+  createSkillExportToken: createSkillExportTokenMock,
+  listSkillExportTokens: vi.fn().mockResolvedValue([]),
+  deleteSkillExportToken: vi.fn().mockResolvedValue(true),
+}))
+
 // ── scs mock ────────────────────────────────────────────────────────────────
 //
 // All scs helpers are vi.fn()s by default. Tests override `mockResolvedValue`
@@ -403,6 +416,58 @@ describe('SkillsService.patchMeta', () => {
       visibility: 'private',
     })
     expect(h.repo._peekGrants().filter((g) => g.skill_id === skill.id)).toEqual([])
+  })
+
+  it('owner rename delegates trimmed name to scs and enqueues dependent reload', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'old-name' })
+    vi.mocked(scsPatchSkill).mockResolvedValue(ok({ skill: { ...skill, name: 'new-name' } }))
+
+    await h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: '  new-name  ' })
+    expect(vi.mocked(scsPatchSkill)).toHaveBeenCalledWith(skill.id, {
+      name: 'new-name',
+      description: undefined,
+      visibility: undefined,
+      category: undefined,
+    })
+    expect(h.reloadQueue.calls).toEqual([skill.id])
+  })
+
+  it('unchanged name is a no-op: no rename write, no reload', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 's', description: 'old' })
+    vi.mocked(scsPatchSkill).mockResolvedValue(ok({ skill }))
+
+    await h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: 's', description: 'new' })
+    expect(vi.mocked(scsPatchSkill)).toHaveBeenCalledWith(skill.id, {
+      name: undefined,
+      description: 'new',
+      visibility: undefined,
+      category: undefined,
+    })
+    expect(h.reloadQueue.calls).toEqual([])
+  })
+
+  it('rejects empty rename', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 's' })
+    await expect(
+      h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: '   ' }),
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(vi.mocked(scsPatchSkill)).not.toHaveBeenCalled()
+  })
+
+  it('editor cannot rename (owner-only)', async () => {
+    const h = setup()
+    h.repo.seedUser({ id: 'bob', display_name: 'Bob' })
+    seedTeam(h.repo, { id: 't', name: 'T' }, ['alice', 'bob'])
+    const { skill } = seedSkill(h.repo, { userId: 'bob', name: 's', visibility: 'team' })
+    await h.repo.setSkillGrants(skill.id, [{ team_id: 't', permission: 'editor' }], 'bob')
+
+    await expect(
+      h.service.patchMeta({ userId: 'alice', skillId: skill.id, name: 'renamed' }),
+    ).rejects.toBeInstanceOf(NotAllowedError)
+    expect(vi.mocked(scsPatchSkill)).not.toHaveBeenCalled()
   })
 })
 
@@ -1116,6 +1181,106 @@ describe('SkillsService.listVersions', () => {
       visibility: 'private',
     })
     await expect(h.service.listVersions('alice', skill.id)).rejects.toBeInstanceOf(
+      SkillNotFoundError,
+    )
+  })
+})
+
+// ── shares ─────────────────────────────────────────────────────────────────
+
+describe('createExport', () => {
+  beforeEach(() => {
+    createSkillExportTokenMock.mockReset()
+    createSkillExportTokenMock.mockImplementation(
+      async (skillId: string, userId: string, slug: string) => ({
+        token: 'skexp_x',
+        skill_id: skillId,
+        user_id: userId,
+        slug,
+        label: '',
+        expires_at: null,
+        last_used_at: null,
+        created_at: new Date(0),
+      }),
+    )
+  })
+
+  /** The slug the service decided on, as passed to the insert. */
+  function mintedSlug(): string {
+    return createSkillExportTokenMock.mock.calls[0][2]
+  }
+
+  it('derives the slug from the skill name', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'Code Review' })
+    await h.service.createExport('alice', skill.id)
+    expect(mintedSlug()).toBe('code-review')
+  })
+
+  it('applies the default TTL when none is given', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'Code Review' })
+    await h.service.createExport('alice', skill.id)
+    expect(createSkillExportTokenMock.mock.calls[0][3]).toBe(90)
+  })
+
+  it('mints a permanent share on explicit null', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'Code Review' })
+    await h.service.createExport('alice', skill.id, { ttlDays: null })
+    expect(createSkillExportTokenMock.mock.calls[0][3]).toBeNull()
+  })
+
+  it('demands a slug when the name yields nothing usable', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: '术语检查' })
+    await expect(h.service.createExport('alice', skill.id)).rejects.toBeInstanceOf(
+      InvalidInputError,
+    )
+    expect(createSkillExportTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts a caller-supplied slug for a name that cannot be derived', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: '术语检查' })
+    await h.service.createExport('alice', skill.id, { slug: 'glossary-check' })
+    expect(mintedSlug()).toBe('glossary-check')
+  })
+
+  it('prefers an explicit slug over the derivable one', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'Code Review' })
+    await h.service.createExport('alice', skill.id, { slug: 'cr' })
+    expect(mintedSlug()).toBe('cr')
+  })
+
+  it('rejects an invalid explicit slug instead of repairing it', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'Code Review' })
+    // Silently normalizing would hand back a name the user did not choose.
+    await expect(
+      h.service.createExport('alice', skill.id, { slug: 'Code Review' }),
+    ).rejects.toBeInstanceOf(InvalidInputError)
+    expect(createSkillExportTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses to share a skill with no published version', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 'Code Review' })
+    // Unpublished state: the row exists but points at no version.
+    const row = h.repo._peek(skill.id)
+    if (!row) throw new Error('seeded skill missing')
+    row.active_version_id = null
+    await expect(h.service.createExport('alice', skill.id)).rejects.toBeInstanceOf(
+      InvalidInputError,
+    )
+  })
+
+  it('throws SkillNotFoundError for a non-owner', async () => {
+    const h = setup()
+    h.repo.seedUser({ id: 'bob', display_name: 'Bob' })
+    const { skill } = seedSkill(h.repo, { userId: 'bob', name: 'Code Review' })
+    await expect(h.service.createExport('alice', skill.id)).rejects.toBeInstanceOf(
       SkillNotFoundError,
     )
   })

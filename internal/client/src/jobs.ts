@@ -1,3 +1,4 @@
+import type { ApiSchedule } from '../../types/api'
 import type { HttpClient } from './http'
 
 export interface CreateJobParams {
@@ -10,10 +11,7 @@ export interface Job {
   [key: string]: unknown
 }
 
-export interface JobSchedule {
-  name: string
-  [key: string]: unknown
-}
+export type JobSchedule = ApiSchedule
 
 export class JobsApi {
   constructor(private http: HttpClient) {}
@@ -31,24 +29,42 @@ export class JobsApi {
   }
 
   async get(workspaceId: string, jobId: string): Promise<Job> {
-    const res = await this.http.fetchJson<{ job: Job }>(`/api/workspaces/${workspaceId}/jobs/${jobId}`)
+    const res = await this.http.fetchJson<{ job: Job }>(
+      `/api/workspaces/${workspaceId}/jobs/${jobId}`,
+    )
     return res.job
   }
 
-  async createSchedule(workspaceId: string, params: Record<string, unknown>): Promise<JobSchedule> {
-    return this.http.fetchJson(`/api/workspaces/${workspaceId}/jobs/schedules`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    })
+  // Schedules are mounted at /workspaces/:id/schedules, not under /jobs.
+  async createSchedule(
+    workspaceId: string,
+    params: {
+      name: string
+      /** Exactly one of cron or run_at. */
+      cron?: string | null
+      run_at?: string | null
+      timezone?: string
+      prompt?: string
+      prompt_id?: string | null
+    },
+  ): Promise<JobSchedule> {
+    const res = await this.http.fetchJson<{ schedule: JobSchedule }>(
+      `/api/workspaces/${workspaceId}/schedules`,
+      { method: 'POST', body: JSON.stringify(params) },
+    )
+    return res.schedule
   }
 
   async listSchedules(workspaceId: string): Promise<JobSchedule[]> {
-    const res = await this.http.fetchJson<{ schedules: JobSchedule[] }>(`/api/workspaces/${workspaceId}/jobs/schedules`)
+    const res = await this.http.fetchJson<{ schedules: JobSchedule[] }>(
+      `/api/workspaces/${workspaceId}/schedules`,
+    )
     return res.schedules
   }
 
-  async deleteSchedule(workspaceId: string, name: string): Promise<void> {
-    await this.http.fetch(`/api/workspaces/${workspaceId}/jobs/schedules/${name}`, {
+  // Addressed by schedule id — the route has never keyed on name.
+  async deleteSchedule(workspaceId: string, scheduleId: string): Promise<void> {
+    await this.http.fetch(`/api/workspaces/${workspaceId}/schedules/${scheduleId}`, {
       method: 'DELETE',
     })
   }

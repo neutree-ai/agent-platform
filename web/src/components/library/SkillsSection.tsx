@@ -1,3 +1,4 @@
+import { SkillExportDialog } from '@/components/dialogs/SkillExportDialog'
 import {
   INITIAL_SKILL_FORM,
   SkillFormFields,
@@ -53,6 +54,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   GitBranch,
+  Link2,
   MoreVertical,
   Pencil,
   Plus,
@@ -134,6 +136,7 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [shareSkill, setShareSkill] = useState<ApiSkill | null>(null)
+  const [exportSkill, setExportSkill] = useState<ApiSkill | null>(null)
   const [deletingSkill, setDeletingSkill] = useState<ApiSkill | null>(null)
 
   const importFromGit = useImportSkillFromGit()
@@ -274,10 +277,18 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
         })
         // Category isn't part of the from-git body — server doesn't take it
         // on insert. Fold it into a follow-up PATCH when the user picked one
-        // that differs from what the row already has.
+        // that differs from what the row already has. Same for rename on
+        // re-import: from-git keeps the existing row's name, so a changed
+        // name goes through the meta PATCH (owner-only, server-enforced).
         const catPatch = categoryPatch(imported.category)
-        if (catPatch !== undefined) {
-          await updateMeta.mutateAsync({ id: imported.id, meta: { category: catPatch } })
+        const nextName = form.name.trim()
+        const namePatch =
+          editingSkill && nextName && nextName !== imported.name ? nextName : undefined
+        if (catPatch !== undefined || namePatch !== undefined) {
+          await updateMeta.mutateAsync({
+            id: imported.id,
+            meta: { category: catPatch, name: namePatch },
+          })
         }
         setDialogOpen(false)
         toast.success(
@@ -334,9 +345,14 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
     try {
       if (editingSkill) {
         const catPatch = categoryPatch(editingSkill.category)
+        // Rename rides the same meta PATCH (owner-only, server-enforced).
+        // Patch before any re-upload: upload upserts by (user_id, name), so
+        // it must see the new name or it would fork a second skill.
+        const nextName = form.name.trim()
+        const namePatch = nextName && nextName !== editingSkill.name ? nextName : undefined
         await updateMeta.mutateAsync({
           id: editingSkill.id,
-          meta: { description: form.description, category: catPatch },
+          meta: { name: namePatch, description: form.description, category: catPatch },
         })
         if (form.file) {
           // p3 dropped the per-skill `PUT /skills/:name` re-upload endpoint.
@@ -345,7 +361,7 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
           // which upserts by (user_id, name) and creates a fresh version.
           const buf = await form.file.arrayBuffer()
           await upload.mutateAsync({
-            name: editingSkill.name,
+            name: namePatch ?? editingSkill.name,
             description: form.description,
             buffer: buf,
             visibility: editingSkill.visibility,
@@ -709,6 +725,21 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
                         <Share2 className="h-3 w-3" />
                       </Button>
                     )}
+                    {/* Distinct from Share2 above: that governs who inside the
+                        platform can see the skill, this hands it to a local
+                        agent over a public URL. Different verbs on purpose. */}
+                    {s.is_own && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        onClick={() => setExportSkill(s)}
+                        title={t('components.library.skills.actions.export')}
+                      >
+                        <Link2 className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -964,6 +995,12 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
         skill={shareSkill}
         open={!!shareSkill}
         onOpenChange={(o) => !o && setShareSkill(null)}
+      />
+
+      <SkillExportDialog
+        skill={exportSkill}
+        open={!!exportSkill}
+        onOpenChange={(o) => !o && setExportSkill(null)}
       />
 
       <SkillDeleteDialog

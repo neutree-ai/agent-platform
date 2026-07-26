@@ -113,9 +113,18 @@ export async function cancelScheduleTimer(schedule: {
   }
 }
 
+/** Job payloads carry the requesting user's platform token so the worker can
+ *  act as them — strip it before anything leaves through the API. */
+function redactJobData<T>(data: T): T {
+  if (!data || typeof data !== 'object') return data
+  const { service_token: _token, ...rest } = data as unknown as JobData
+  return rest as T
+}
+
 /** Get a job by ID */
 export async function getJob(id: string) {
-  return boss.getJobById(QUEUE_NAME, id)
+  const job = await boss.getJobById<JobData>(QUEUE_NAME, id)
+  return job && { ...job, data: redactJobData(job.data) }
 }
 
 /** Find the job that produced a given session (if any) */
@@ -135,14 +144,17 @@ export async function listJobs(
   workspaceId: string,
   { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
 ) {
+  // No expiry column here on purpose: pg-boss v12 renamed `expire_in` to
+  // `expire_seconds`, and it is a creation-time input knob (`expire_in_seconds`)
+  // rather than job state worth echoing back.
   const { rows } = await pool.query(
     `SELECT id, name, data, state, output, retry_count,
-            created_on, started_on, completed_on, expire_in
+            created_on, started_on, completed_on
      FROM pgboss.job
      WHERE name = $1 AND data->>'workspace_id' = $2
      ORDER BY created_on DESC
      LIMIT $3 OFFSET $4`,
     [QUEUE_NAME, workspaceId, limit, offset],
   )
-  return rows
+  return rows.map((row) => ({ ...row, data: redactJobData(row.data) }))
 }

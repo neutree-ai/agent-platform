@@ -1,8 +1,8 @@
 {
   "workspaces": {
     "control-plane": {
-      "entry": ["scripts/*.ts", "src/services/db/mcp-catalog.ts"],
-      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
+      "entry": ["scripts/*.ts", "src/services/db/mcp-catalog.ts", "e2e/global-setup.ts", "e2e/setup.ts"],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "e2e/**/*.ts"],
       "ignoreDependencies": ["tsx", "multiplex"]
     },
     "web": {

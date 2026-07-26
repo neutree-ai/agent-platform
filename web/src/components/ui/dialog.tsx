@@ -38,6 +38,9 @@ const DialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 p-6 duration-200",
+        // minmax(0,1fr): long nowrap content (e.g. truncated CJK titles) otherwise inflates the
+        // implicit auto column's min-content and overflows the dialog
+        "grid-cols-[minmax(0,1fr)]",
         "rounded-xl border border-foreground/[0.08] bg-card text-card-foreground",
         "shadow-2xl shadow-foreground/[0.08] ring-1 ring-inset ring-foreground/[0.03]",
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",

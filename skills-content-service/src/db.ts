@@ -153,6 +153,65 @@ export async function getActiveVersionHash(
   return rows[0] ?? null
 }
 
+/**
+ * Package metadata for the streaming download path: everything the response
+ * headers need plus the immutable version id the chunk reads will address.
+ * `octet_length` is computed server-side — no package bytes cross the wire.
+ */
+interface PackageHead {
+  version_id: string
+  skill_id: string
+  content_hash: string
+  name: string
+  byte_length: number
+}
+
+const PACKAGE_HEAD_COLS = `
+  v.id AS version_id, v.skill_id, v.content_hash, s.name,
+  octet_length(v.package) AS byte_length
+`
+
+export async function getActiveVersionPackageHead(skillId: string): Promise<PackageHead | null> {
+  const { rows } = await pool.query<PackageHead>(
+    `SELECT ${PACKAGE_HEAD_COLS}
+       FROM skills s
+       JOIN skill_versions v ON v.id = s.active_version_id
+      WHERE s.id = $1`,
+    [skillId],
+  )
+  return rows[0] ?? null
+}
+
+export async function getVersionPackageHead(versionId: string): Promise<PackageHead | null> {
+  const { rows } = await pool.query<PackageHead>(
+    `SELECT ${PACKAGE_HEAD_COLS}
+       FROM skill_versions v
+       JOIN skills s ON s.id = v.skill_id
+      WHERE v.id = $1`,
+    [versionId],
+  )
+  return rows[0] ?? null
+}
+
+/**
+ * One slice of a version's package, `offset` 0-based. Sliced TOAST fetch —
+ * O(length), not O(package) — because the column stores uncompressed
+ * (gzip data defeats pglz; migration 127 pins STORAGE EXTERNAL). Returns
+ * null when the version row is gone (deleted mid-stream).
+ */
+export async function readPackageChunk(
+  versionId: string,
+  offset: number,
+  length: number,
+): Promise<Buffer | null> {
+  const { rows } = await pool.query<{ chunk: Buffer }>(
+    // substring() is 1-based.
+    'SELECT substring(package FROM $2 FOR $3) AS chunk FROM skill_versions WHERE id = $1',
+    [versionId, offset + 1, length],
+  )
+  return rows[0]?.chunk ?? null
+}
+
 export async function getVersionPackage(
   versionId: string,
 ): Promise<{ content_hash: string; package: Buffer; skill_id: string; name: string } | null> {
@@ -524,9 +583,7 @@ export async function deleteSkill(skillId: string): Promise<boolean> {
     const del = await client.query('DELETE FROM skills WHERE id = $1', [skillId])
     const deleted = (del.rowCount ?? 0) > 0
     if (deleted && source_kind === 'native') {
-      await client.query("DELETE FROM skill_sources WHERE id = $1 AND kind = 'native'", [
-        source_id,
-      ])
+      await client.query("DELETE FROM skill_sources WHERE id = $1 AND kind = 'native'", [source_id])
     }
     return deleted
   })

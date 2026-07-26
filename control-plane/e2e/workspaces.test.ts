@@ -1,26 +1,21 @@
-import { afterAll, describe, expect, test } from 'vitest'
-import { client } from './setup'
+import { afterAll, expect, test } from 'vitest'
+import { createLlmProvider, useLlm, waitForStatus } from './fixtures'
+import { agentCores, client, describeIfK8s, scoped } from './setup'
 
-async function waitForStatus(wsId: string, target: 'running' | 'stopped', maxWaitMs = 120_000) {
-  const start = Date.now()
-  while (Date.now() - start < maxWaitMs) {
-    const list = await client.workspaces.list()
-    const ws = list.find((w) => w.id === wsId)
-    if (ws?.status === target) return ws
-    await new Promise((r) => setTimeout(r, 3000))
-  }
-  throw new Error(`Workspace did not reach ${target} within ${maxWaitMs}ms`)
-}
-
-describe('workspace lifecycle', () => {
+describeIfK8s('workspace lifecycle', () => {
   let wsId: string
   let providerId: string
   let tagId: string
 
   afterAll(async () => {
-    // Clean up resources created during tests
+    // Stop before delete so the reconciler reclaims the workspace's Kubernetes
+    // resources instead of leaving them orphaned.
     try {
-      if (wsId) await client.workspaces.delete(wsId)
+      if (wsId) {
+        await client.workspaces.stop(wsId).catch(() => {})
+        await waitForStatus(wsId, 'stopped', 90_000).catch(() => {})
+        await client.workspaces.delete(wsId)
+      }
     } catch {}
     try {
       if (providerId) await client.providers.delete(providerId)
@@ -31,9 +26,9 @@ describe('workspace lifecycle', () => {
   })
 
   test('create workspace', async () => {
-    const ws = await client.workspaces.create({ name: 'e2e-test-ws' })
+    const ws = await client.workspaces.create({ name: scoped('ws') })
     expect(ws.id).toBeDefined()
-    expect(ws.name).toBe('e2e-test-ws')
+    expect(ws.name).toBe(scoped('ws'))
     expect(ws.status).toBeDefined()
     wsId = ws.id
   })
@@ -42,7 +37,7 @@ describe('workspace lifecycle', () => {
     const all = await client.workspaces.list()
     expect(all.some((w) => w.id === wsId)).toBe(true)
 
-    const filtered = await client.workspaces.list({ search: 'e2e-test-ws' })
+    const filtered = await client.workspaces.list({ search: scoped('ws') })
     expect(filtered.some((w) => w.id === wsId)).toBe(true)
 
     const noMatch = await client.workspaces.list({ search: 'nonexistent-workspace-xyz' })
@@ -50,10 +45,10 @@ describe('workspace lifecycle', () => {
   })
 
   test('rename workspace', async () => {
-    await client.workspaces.rename(wsId, 'e2e-test-ws-renamed')
-    const list = await client.workspaces.list({ search: 'e2e-test-ws-renamed' })
+    await client.workspaces.rename(wsId, scoped('ws-renamed'))
+    const list = await client.workspaces.list({ search: scoped('ws-renamed') })
     const ws = list.find((w) => w.id === wsId)
-    expect(ws?.name).toBe('e2e-test-ws-renamed')
+    expect(ws?.name).toBe(scoped('ws-renamed'))
   })
 
   test('getConfig returns config object', async () => {
@@ -82,29 +77,18 @@ describe('workspace lifecycle', () => {
   })
 
   test('create provider and configure workspace for start', async () => {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-    if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY env var is required')
-
-    const provider = await client.providers.create({
-      name: 'e2e-openrouter',
-      provider_type: 'anthropic-oauth',
-      base_url: 'https://openrouter.ai/api/v1',
-      api_key: OPENROUTER_API_KEY,
-    })
+    const provider = await createLlmProvider('ws-provider')
     expect(provider.id).toBeDefined()
     providerId = provider.id
 
-    await client.workspaces.updateConfig(wsId, {
-      model: 'stepfun/step-3.5-flash:free',
-      provider_id: providerId,
-    })
+    await useLlm(wsId, providerId, agentCores[0])
   })
 
   test('start workspace and wait for running', async () => {
     await client.workspaces.start(wsId)
-    const ws = await waitForStatus(wsId, 'running', 120_000)
+    const ws = await waitForStatus(wsId, 'running')
     expect(ws.status).toBe('running')
-  }, 130_000)
+  }, 300_000)
 
   test('status shows k8s status', async () => {
     const status = await client.workspaces.status(wsId)
@@ -116,46 +100,56 @@ describe('workspace lifecycle', () => {
     await client.workspaces.stop(wsId)
     const ws = await waitForStatus(wsId, 'stopped', 120_000)
     expect(ws.status).toBe('stopped')
-  }, 130_000)
+  }, 300_000)
 
   test('template config resolution', async () => {
-    // Create a template with a version that has specific config
+    // A fresh workspace, not the shared one. A workspace's own values
+    // deliberately win over its template's (see the upgrade test below), and by
+    // this point the shared workspace carries a system_prompt and model from
+    // earlier tests — which would mask exactly what this test is checking.
+    const tplWs = await client.workspaces.create({ name: scoped('tpl-ws') })
+    const seededAgentType = (await client.workspaces.getConfig(tplWs.id)).agent_type
+
     const template = await client.templates.create({
-      name: 'e2e-config-tpl',
+      name: scoped('config-tpl'),
       description: 'Template for config resolution test',
     })
 
     const version = await client.templates.createVersion(template.id, {
-      agent_type: 'claude-code',
+      agent_type: agentCores[0],
       system_prompt: 'You are a template-resolved assistant.',
       model: 'test-model-from-template',
       small_model: 'test-small-model-from-template',
-      mcp_config: {},
-      agent_settings: {},
+      mcp_config: '{}',
+      agent_settings: '{}',
       compute_resources: {},
     })
 
-    // Bind workspace to template
-    await client.workspaces.updateConfig(wsId, {
+    await client.workspaces.updateConfig(tplWs.id, {
       template_id: template.id,
       template_version: version.version,
     })
 
-    // Verify config resolves from template
-    const config = await client.workspaces.getConfig(wsId)
+    const config = await client.workspaces.getConfig(tplWs.id)
     expect(config.template_id).toBe(template.id)
     expect(config.template_version).toBe(version.version)
-    expect(config.template_name).toBe('e2e-config-tpl')
-    expect(config.agent_type).toBe('claude-code')
+    expect(config.template_name).toBe(scoped('config-tpl'))
     expect(config.system_prompt).toBe('You are a template-resolved assistant.')
     expect(config.model).toBe('test-model-from-template')
     expect(config.small_model).toBe('test-small-model-from-template')
 
-    // Clean up: unbind template, delete template
-    await client.workspaces.updateConfig(wsId, {
-      template_id: null,
-      template_version: null,
-    })
+    // agent_type is the exception, and it is structural: workspace creation
+    // seeds model / small_model / system_prompt as '' but writes a concrete
+    // agent_type. Resolution is COALESCE(NULLIF(wc.agent_type, ''),
+    // tv.agent_type), so the workspace's own value always wins and a template
+    // can never supply the agent core unless the workspace clears it first.
+    expect(config.agent_type).toBe(seededAgentType)
+
+    await client.workspaces.updateConfig(tplWs.id, { agent_type: '' })
+    const cleared = await client.workspaces.getConfig(tplWs.id)
+    expect(cleared.agent_type).toBe(agentCores[0])
+
+    await client.workspaces.delete(tplWs.id)
     await client.templates.delete(template.id)
   })
 
@@ -169,10 +163,10 @@ describe('workspace lifecycle', () => {
       description: 'Template upgrade override-preservation test',
     })
     const v1 = await client.templates.createVersion(template.id, {
-      agent_type: 'claude-code',
+      agent_type: agentCores[0],
       system_prompt: '',
-      mcp_config: {},
-      agent_settings: {},
+      mcp_config: '{}',
+      agent_settings: '{}',
       compute_resources: {},
     })
 
@@ -187,11 +181,11 @@ describe('workspace lifecycle', () => {
       content: 'TEMPLATE LIBRARY PROMPT',
     })
     await client.templates.createVersion(template.id, {
-      agent_type: 'claude-code',
+      agent_type: agentCores[0],
       system_prompt: '',
       prompt_id: libPrompt.id,
-      mcp_config: {},
-      agent_settings: {},
+      mcp_config: '{}',
+      agent_settings: '{}',
       compute_resources: {},
     })
 

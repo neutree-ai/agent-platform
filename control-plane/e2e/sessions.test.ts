@@ -1,44 +1,19 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import { client } from './setup'
+import { afterAll, beforeAll, expect, test } from 'vitest'
+import { createLlmProvider, createRunningWorkspace, waitForStatus } from './fixtures'
+import { client, describeEachCore } from './setup'
 
-async function waitForStatus(wsId: string, target: 'running' | 'stopped', maxWaitMs = 120_000) {
-  const start = Date.now()
-  while (Date.now() - start < maxWaitMs) {
-    const list = await client.workspaces.list()
-    const ws = list.find((w) => w.id === wsId)
-    if (ws?.status === target) return ws
-    await new Promise((r) => setTimeout(r, 3000))
-  }
-  throw new Error(`Workspace did not reach ${target} within ${maxWaitMs}ms`)
-}
-
-// Skip: agent containers connect to production CP, not test CP
-describe.skip('sessions', () => {
+describeEachCore('sessions', (agentType) => {
   let wsId: string
   let providerId: string
   let firstSessionId: string
 
   beforeAll(async () => {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-    if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY env var is required')
-
-    const provider = await client.providers.create({
-      name: 'e2e-session-provider',
-      provider_type: 'anthropic-oauth',
-      base_url: 'https://openrouter.ai/api/v1',
-      api_key: OPENROUTER_API_KEY,
-    })
+    const provider = await createLlmProvider(`session-provider-${agentType}`)
     providerId = provider.id
 
-    const ws = await client.workspaces.create({ name: 'e2e-session-ws' })
+    const ws = await createRunningWorkspace(`session-ws-${agentType}`, providerId, agentType)
     wsId = ws.id
-    await client.workspaces.updateConfig(wsId, {
-      model: 'stepfun/step-3.5-flash:free',
-      provider_id: providerId,
-    })
-    await client.workspaces.start(wsId)
-    await waitForStatus(wsId, 'running', 120_000)
-  }, 180_000)
+  }, 300_000)
 
   afterAll(async () => {
     try {
@@ -70,7 +45,7 @@ describe.skip('sessions', () => {
   }, 90_000)
 
   test('getMessages has user and assistant messages', async () => {
-    const messages = await client.sessions.getMessages(wsId)
+    const messages = await client.sessions.getMessages(wsId, firstSessionId)
     expect(messages.length).toBeGreaterThanOrEqual(2)
 
     const roles = messages.map((m) => m.role)
@@ -96,18 +71,7 @@ describe.skip('sessions', () => {
     expect(hasSessionTwo).toBe(true)
   }, 90_000)
 
-  test('restart session clears messages', async () => {
-    const messagesBefore = await client.sessions.getMessages(wsId, firstSessionId)
-    expect(messagesBefore.length).toBeGreaterThan(0)
-
-    await client.sessions.restart(wsId, firstSessionId)
-
-    const messagesAfter = await client.sessions.getMessages(wsId, firstSessionId)
-    expect(messagesAfter.length).toBe(0)
-  })
-
   test('delete session', async () => {
-    // Use firstSessionId which was restarted (cleared) — safe to delete
     await client.sessions.delete(wsId, firstSessionId)
 
     const sessions = await client.sessions.list(wsId)

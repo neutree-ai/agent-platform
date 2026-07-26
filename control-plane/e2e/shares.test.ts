@@ -1,51 +1,26 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import { client } from './setup'
+import { afterAll, beforeAll, expect, test } from 'vitest'
+import { createLlmProvider, createRunningWorkspace, waitForStatus } from './fixtures'
+import { client, describeEachCore } from './setup'
 
-async function waitForStatus(wsId: string, target: 'running' | 'stopped', maxWaitMs = 120_000) {
-  const start = Date.now()
-  while (Date.now() - start < maxWaitMs) {
-    const list = await client.workspaces.list()
-    const ws = list.find((w) => w.id === wsId)
-    if (ws?.status === target) return ws
-    await new Promise((r) => setTimeout(r, 3000))
-  }
-  throw new Error(`Workspace did not reach ${target} within ${maxWaitMs}ms`)
-}
-
-// Skip: agent containers connect to production CP, not test CP
-describe.skip('shares', () => {
+describeEachCore('shares', (agentType) => {
   let wsId: string
   let providerId: string
   let sessionId: string
   let shareId: string
 
   beforeAll(async () => {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-    if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY env var is required')
-
-    const provider = await client.providers.create({
-      name: 'e2e-shares-provider',
-      provider_type: 'anthropic-oauth',
-      base_url: 'https://openrouter.ai/api/v1',
-      api_key: OPENROUTER_API_KEY,
-    })
+    const provider = await createLlmProvider(`shares-provider-${agentType}`)
     providerId = provider.id
 
-    const ws = await client.workspaces.create({ name: 'e2e-shares-ws' })
+    const ws = await createRunningWorkspace(`shares-ws-${agentType}`, providerId, agentType)
     wsId = ws.id
-    await client.workspaces.updateConfig(wsId, {
-      model: 'stepfun/step-3.5-flash:free',
-      provider_id: providerId,
-    })
-    await client.workspaces.start(wsId)
-    await waitForStatus(wsId, 'running', 120_000)
 
     // Chat to create messages that can be shared
     const result = await client.sessions.chat(wsId, 'Reply with exactly: SHARE_TEST', {
       timeout: 60_000,
     })
     sessionId = result.sessionId!
-  }, 180_000)
+  }, 300_000)
 
   afterAll(async () => {
     try {

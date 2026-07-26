@@ -47,3 +47,8 @@ web/.prebundled/
 /scheduler/.npmrc
 /tm-service/.npmrc
 /translation-service/.npmrc
+
+# E2E: local target profile (credentials) and failure diagnostics
+/control-plane/e2e/profile.*.json
+!/control-plane/e2e/profile.example.json
+/control-plane/e2e-artifacts/

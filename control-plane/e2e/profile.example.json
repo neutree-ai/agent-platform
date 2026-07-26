@@ -1,0 +1,37 @@
+{
+  "$comment": [
+    "Copy to a gitignored file and point E2E_PROFILE at it:",
+    "  E2E_PROFILE=./e2e/profile.local.json npm run test:e2e",
+    "Every field can also be supplied as an environment variable (E2E_BASE_URL,",
+    "E2E_ADMIN_PASSWORD, E2E_LLM_API_KEY, …) so CI can inject secrets without a file.",
+    "This suite runs against a DEPLOYED control plane and creates real data on it."
+  ],
+
+  "baseUrl": "http://127.0.0.1:30080",
+
+  "admin": {
+    "username": "admin",
+    "password": ""
+  },
+
+  "llm": {
+    "$comment": "An endpoint the target can reach, plus every agent core to exercise — the live-agent specs run once per entry, so this sets the matrix width.",
+    "providerType": "openai-compatible",
+    "baseUrl": "https://example.invalid/v1",
+    "apiKey": "",
+    "model": "your-model-id",
+    "agentTypes": ["goose"]
+  },
+
+  "capabilities": {
+    "$comment": "Match these to the deployment under test; a capability turned off skips its specs rather than failing them.",
+    "kubernetes": true,
+    "sandbox": true,
+    "browser": true
+  },
+
+  "confirmMutatesTarget": false,
+  "allowNonPristineTarget": false,
+
+  "artifactsDir": "./e2e-artifacts"
+}

@@ -74,7 +74,7 @@ spec:
       terminationGracePeriodSeconds: 150
       containers:
         - name: control-plane
-          image: ${REGISTRY}/${APP_PREFIX}-cp:${IMAGE_TAG}
+          image: ${PLATFORM_IMAGE_PREFIX}-cp:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
@@ -134,7 +134,7 @@ spec:
             - name: AFS_CONTROLLER_ADDR
               value: "afs-controller.${NAMESPACE}.svc:9100"
             - name: MEMORY_FUSE_IMAGE
-              value: "${REGISTRY}/${APP_PREFIX}-memory-fuse:${IMAGE_TAG}"
+              value: "${PLATFORM_IMAGE_PREFIX}-memory-fuse:${IMAGE_TAG}"
             - name: OFFICE_CONVERTER_URL
               value: "http://${APP_PREFIX}-office-converter:3007"
             - name: WEB_PUBLIC_URL

@@ -6,8 +6,12 @@ import { type AgentActions, parseSSEStream } from './sse'
 export class SessionsApi {
   constructor(private http: HttpClient) {}
 
+  // The endpoint answers a paginated envelope; callers want the rows.
   async list(workspaceId: string): Promise<ApiSession[]> {
-    return this.http.fetchJson(`/api/workspaces/${workspaceId}/sessions`)
+    const res = await this.http.fetchJson<{ items: ApiSession[] }>(
+      `/api/workspaces/${workspaceId}/sessions`,
+    )
+    return res.items
   }
 
   async create(workspaceId: string, params?: { name?: string }): Promise<ApiSession> {
@@ -29,12 +33,6 @@ export class SessionsApi {
     })
   }
 
-  async restart(workspaceId: string, sessionId: string): Promise<void> {
-    await this.http.fetch(`/api/workspaces/${workspaceId}/sessions/${sessionId}/restart`, {
-      method: 'POST',
-    })
-  }
-
   async chat(
     workspaceId: string,
     message: string,
@@ -50,11 +48,16 @@ export class SessionsApi {
     const timer = setTimeout(() => controller.abort(), timeout)
 
     try {
-      const res = await this.http.fetch(`/_proxy/agent/${workspaceId}/chat`, {
+      // The documented entry point. The older `/_proxy/agent/:id/chat` is a raw
+      // passthrough to the agent pod: same UniversalEvent frames, but the turn
+      // never reaches the control plane's persistence, so the session and its
+      // messages are invisible to /sessions and /messages afterwards.
+      const res = await this.http.fetch(`/api/workspaces/${workspaceId}/chat`, {
         method: 'POST',
         body: JSON.stringify({
           message,
-          sessionId: options?.sessionId ?? null,
+          mode: 'stream',
+          session_id: options?.sessionId ?? null,
           ...(options?.images?.length ? { images: options.images } : {}),
         }),
         signal: controller.signal,
@@ -86,9 +89,12 @@ export class SessionsApi {
     const timer = setTimeout(() => controller.abort(), timeout)
 
     try {
-      const res = await this.http.fetch(`/_proxy/agent/${workspaceId}/sessions/${sessionId}/reconnect`, {
-        signal: controller.signal,
-      })
+      const res = await this.http.fetch(
+        `/_proxy/agent/${workspaceId}/sessions/${sessionId}/reconnect`,
+        {
+          signal: controller.signal,
+        },
+      )
 
       if (!res.body) {
         throw new Error('No response body (expected SSE stream)')
@@ -111,11 +117,15 @@ export class SessionsApi {
   }
 
   async pendingQuestion(workspaceId: string, sessionId: string): Promise<unknown> {
-    return this.http.fetchJson(`/_proxy/agent/${workspaceId}/sessions/${sessionId}/pending-question`)
+    return this.http.fetchJson(
+      `/_proxy/agent/${workspaceId}/sessions/${sessionId}/pending-question`,
+    )
   }
 
-  async getMessages(workspaceId: string, sessionId?: string): Promise<ApiMessage[]> {
-    const params = sessionId ? `?session_id=${sessionId}` : ''
-    return this.http.fetchJson(`/api/workspaces/${workspaceId}/messages${params}`)
+  // session_id is required by the server — messages are always read per session.
+  async getMessages(workspaceId: string, sessionId: string): Promise<ApiMessage[]> {
+    return this.http.fetchJson(
+      `/api/workspaces/${workspaceId}/messages?session_id=${encodeURIComponent(sessionId)}`,
+    )
   }
 }

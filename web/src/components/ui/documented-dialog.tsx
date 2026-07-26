@@ -52,7 +52,10 @@ export function DocumentedDialog({
             than `w-3/5` / `w-2/5`: under content pressure Safari treats
             fractional widths as suggestions and can collapse the docs
             panel to ~0 when the form column has long content. */}
-        <div className={cn("flex min-h-0", hasDocs && s.height)}>
+        {/* `min-w-0` because this is a grid item of DialogContent: without it
+            the automatic minimum size lets long unbreakable content (secrets,
+            install commands) push the whole dialog past its `max-w-*`. */}
+        <div className={cn("flex min-h-0 min-w-0", hasDocs && s.height)}>
           {/* Left: form */}
           <div
             className={cn(
@@ -63,7 +66,7 @@ export function DocumentedDialog({
             <DialogHeader className="shrink-0 px-6 pt-5 pb-3">
               <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
             </DialogHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">{children}</div>
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pb-4">{children}</div>
             {footer && <DialogFooter className="shrink-0 px-6 pb-5 pt-0">{footer}</DialogFooter>}
           </div>
 

@@ -39,10 +39,10 @@ import {
   Globe,
   Lock,
   Pencil,
+  Pin,
   Plus,
   RotateCcw,
   Share2,
-  Star,
   Trash2,
   Users,
 } from 'lucide-react'
@@ -310,7 +310,9 @@ export function PromptsSection({ instanceId }: { instanceId: string }) {
                   onSelect={() => handleSelect(p.id)}
                   leading={
                     user?.default_prompt_id === p.id ? (
-                      <Star className="h-3 w-3 fill-warning text-warning" />
+                      // Pin (not Star) marks the default prompt — the star is
+                      // reserved platform-wide for favorites (e.g. sessions).
+                      <Pin className="h-3 w-3 fill-primary/25 text-primary" />
                     ) : (
                       <VisIcon className="h-3 w-3 text-muted-foreground/60" />
                     )
@@ -479,19 +481,19 @@ export function PromptsSection({ instanceId }: { instanceId: string }) {
                   size="icon"
                   className={`h-7 w-7 hover:text-foreground ${
                     user?.default_prompt_id === selectedPrompt.id
-                      ? 'text-warning'
+                      ? 'text-primary'
                       : 'text-muted-foreground'
                   }`}
                   onClick={() => handleToggleDefault(selectedPrompt.id)}
                   title={
                     user?.default_prompt_id === selectedPrompt.id
-                      ? t('components.library.prompts.toasts.defaultCleared')
-                      : t('components.library.prompts.toasts.defaultSet')
+                      ? t('components.library.prompts.actions.clearDefault')
+                      : t('components.library.prompts.actions.setDefault')
                   }
                 >
-                  <Star
+                  <Pin
                     className={`h-3.5 w-3.5 ${
-                      user?.default_prompt_id === selectedPrompt.id ? 'fill-current' : ''
+                      user?.default_prompt_id === selectedPrompt.id ? 'fill-primary/25' : ''
                     }`}
                   />
                 </Button>

@@ -68,11 +68,21 @@ export IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 # --- Naming -----------------------------------------------------------------
 # Prefix on every first-party k8s object name (${APP_PREFIX}-cp, ${APP_PREFIX}-pg,
-# …) and on the first-party image sub-paths (${REGISTRY}/${APP_PREFIX}-cp). A
-# redistribution can rebrand by overriding this; existing installs keep their
-# names by pinning it. DB_NAME is the application database created in postgres.
+# …) and on the first-party image sub-paths (${REGISTRY}/${APP_PREFIX}-cp).
+# For REDISTRIBUTORS ONLY: a non-default prefix requires every first-party
+# image to exist under that prefix in your own registry — the public registry
+# only hosts nap-* images, so a connected install must keep the default.
+# check_app_prefix enforces both this and never changing the prefix of an
+# existing install. DB_NAME is the application database created in postgres.
 export APP_PREFIX="${APP_PREFIX:-nap}"
 export DB_NAME="${DB_NAME:-nap}"
+
+# First-party image prefix, decoupled from the k8s object prefix. Defaults to
+# ${REGISTRY}/${APP_PREFIX} (image names match object names). Override when an
+# existing install keeps its historical APP_PREFIX for object names but pulls
+# the public nap-* images, e.g.:
+#   PLATFORM_IMAGE_PREFIX=ghcr.io/neutree-ai/agent-platform/nap
+export PLATFORM_IMAGE_PREFIX="${PLATFORM_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}}"
 
 # --- Third-party images -----------------------------------------------------
 # Non-first-party images (language runtimes, pause, gotenberg, coturn, nfs).
@@ -93,7 +103,7 @@ export PAUSE_IMAGE="${PAUSE_IMAGE:-registry.k8s.io/pause:3.9}"
 export AFS_IMAGE="${AFS_IMAGE:-ghcr.io/neutree-ai/afs:latest}"
 
 # Resolve AGENT_IMAGE_PREFIX if it references REGISTRY
-AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${REGISTRY}/${APP_PREFIX}-agent}"
+AGENT_IMAGE_PREFIX="${AGENT_IMAGE_PREFIX:-${PLATFORM_IMAGE_PREFIX}-agent}"
 export AGENT_IMAGE_PREFIX
 
 # Registry authentication. Blank for a public / anonymous registry. When both
@@ -123,7 +133,7 @@ export AGENT_NODE_SELECTOR="${AGENT_NODE_SELECTOR:-}"
 
 export DEPLOY_PROFILE="${DEPLOY_PROFILE:-multi-node}"
 # In-cluster registry config, consumed only by the single-node offline path
-# (single_node_load_registry + manifests/registry.yaml). Safe to render in any
+# (single_node_load_registry + offline/registry.yaml). Safe to render in any
 # profile.
 export REGISTRY_NODE_PORT="${REGISTRY_NODE_PORT:-30500}"
 export REGISTRY_STORAGE_SIZE="${REGISTRY_STORAGE_SIZE:-20Gi}"
@@ -261,6 +271,35 @@ check_prereqs() {
   fi
 }
 
+# APP_PREFIX is for redistributors only: a non-default prefix implies every
+# first-party image was rebuilt or mirrored under that prefix in your own
+# registry. Two guards keep it from being mistaken for a cosmetic setting.
+check_app_prefix() {
+  # A non-default prefix whose image prefix still resolves against the default
+  # public registry references images that cannot exist there (it only hosts
+  # nap-*). Refuse before applying. Setting PLATFORM_IMAGE_PREFIX explicitly
+  # (e.g. to .../nap while keeping historical object names) sidesteps this.
+  if [ "$APP_PREFIX" != "nap" ] \
+    && [ "$PLATFORM_IMAGE_PREFIX" = "ghcr.io/neutree-ai/agent-platform/${APP_PREFIX}" ]; then
+    die "APP_PREFIX=${APP_PREFIX} resolves PLATFORM_IMAGE_PREFIX to the default public REGISTRY,
+       which only hosts nap-* images. Either rebuild every first-party image under that prefix
+       in your own registry (redistributors), or set
+       PLATFORM_IMAGE_PREFIX=ghcr.io/neutree-ai/agent-platform/nap to keep your object names
+       while pulling the public images."
+  fi
+  # Never change the prefix of an existing install: the render would come up as
+  # a second, empty ${APP_PREFIX}-* stack (empty database included) beside the
+  # old objects. Detect the existing prefix from its control-plane deployment.
+  local existing
+  existing=$(kubectl -n "${NAMESPACE}" get deploy -o name 2>/dev/null \
+    | sed -n 's|^deployment.apps/\(.*\)-cp$|\1|p' | head -1)
+  if [ -n "$existing" ] && [ "$existing" != "$APP_PREFIX" ]; then
+    die "namespace '${NAMESPACE}' already has an install with prefix '${existing}' (deployment ${existing}-cp).
+       Changing APP_PREFIX on an existing install would deploy a second, empty '${APP_PREFIX}-*' stack
+       beside it. Set APP_PREFIX=${existing} to keep the existing install."
+  fi
+}
+
 # --- Render templates ------------------------------------------------------
 
 render_manifests() {
@@ -270,7 +309,7 @@ render_manifests() {
 
   # Explicit variable list — prevents envsubst from replacing k8s $(VAR)
   # references like $(POSTGRES_PASSWORD)
-  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${DB_NAME}${NAP_HOST}${NAP_NODE_PORT}'
+  local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${PLATFORM_IMAGE_PREFIX}${DB_NAME}${NAP_HOST}${NAP_NODE_PORT}'
   VARS+='${IMAGE_PULL_SECRET}'
   VARS+='${POSTGRES_IMAGE}${GOTENBERG_IMAGE}${COTURN_IMAGE}${NFS_SERVER_IMAGE}'
   VARS+='${RUNTIME_NODE_IMAGE}${RUNTIME_PYTHON_IMAGE}${RUNTIME_GOLANG_IMAGE}${PAUSE_IMAGE}'
@@ -300,6 +339,13 @@ render_manifests() {
     envsubst "$VARS" < "$tmpl" > "$RENDERED_DIR/$name"
     log "  rendered $name"
   done
+
+  # registry.yaml is single-node-only offline infra and lives under offline/,
+  # not manifests/, so downstream consumers that treat manifests/ as the
+  # platform-service set don't render it as a service. Render it into the same
+  # output dir so single_node_load_registry can apply it.
+  envsubst "$VARS" < "$SCRIPT_DIR/offline/registry.yaml" > "$RENDERED_DIR/registry.yaml"
+  log "  rendered registry.yaml (offline)"
 
   # External ingress mode: strip `nodePort:` lines from Service specs.
   # k8s rejects nodePort on ClusterIP, but we keep the value in values.env
@@ -723,6 +769,10 @@ apply_manifests() {
   create_regcred "${NAMESPACE}"
   attach_pull_secret_to_sa "${NAMESPACE}" default
   attach_pull_secret_to_sa "${NAMESPACE}" "${APP_PREFIX}-cp"
+  # env-runner-k8s runs under its own SA (it needs RBAC), so it does not
+  # inherit the default SA's pull secret — without this, its image pull is
+  # anonymous and an authenticated registry rejects it (ImagePullBackOff).
+  attach_pull_secret_to_sa "${NAMESPACE}" "${APP_PREFIX}-env-runner-k8s"
   kapply -f "$RENDERED_DIR/secrets.yaml"
 
   log "Creating PostgreSQL cluster ..."
@@ -915,6 +965,7 @@ export DEPLOY_PROFILE
 MODE="${1:-full}"
 
 check_prereqs
+check_app_prefix
 
 if [ "$DEPLOY_PROFILE" = "single-node" ]; then
   log "DEPLOY_PROFILE=single-node — 1-node k3s. Connected: pulls from the public"

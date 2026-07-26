@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: sandbox
-          image: ${REGISTRY}/${APP_PREFIX}-sandbox:${IMAGE_TAG}
+          image: ${PLATFORM_IMAGE_PREFIX}-sandbox:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3006

@@ -1,53 +1,30 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import { client } from './setup'
-
-async function waitForStatus(wsId: string, target: 'running' | 'stopped', maxWaitMs = 120_000) {
-  const start = Date.now()
-  while (Date.now() - start < maxWaitMs) {
-    const list = await client.workspaces.list()
-    const ws = list.find((w) => w.id === wsId)
-    if (ws?.status === target) return ws
-    await new Promise((r) => setTimeout(r, 3000))
-  }
-  throw new Error(`Workspace did not reach ${target} within ${maxWaitMs}ms`)
-}
+import { afterAll, beforeAll, expect, test } from 'vitest'
+import { createLlmProvider, createRunningWorkspace, waitForStatus } from './fixtures'
+import { client, describeEachCore, scoped } from './setup'
 
 async function waitForJobDone(wsId: string, jobId: string, maxWaitMs = 120_000) {
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
     const job = await client.jobs.get(wsId, jobId)
-    if (job.status === 'completed' || job.status === 'failed') return job
+    // pg-boss calls it `state`, and reports cancelled jobs as terminal too.
+    if (job.state === 'completed' || job.state === 'failed' || job.state === 'cancelled') return job
     await new Promise((r) => setTimeout(r, 3000))
   }
   throw new Error(`Job ${jobId} did not complete within ${maxWaitMs}ms`)
 }
 
-// Skip: pg-boss schema issues in test DB + job execution needs agent
-describe.skip('jobs', () => {
+describeEachCore('jobs', (agentType) => {
   let wsId: string
   let providerId: string
+  let scheduleId: string
 
   beforeAll(async () => {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-    if (!OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY env var is required')
-
-    const provider = await client.providers.create({
-      name: 'e2e-jobs-provider',
-      provider_type: 'anthropic-oauth',
-      base_url: 'https://openrouter.ai/api/v1',
-      api_key: OPENROUTER_API_KEY,
-    })
+    const provider = await createLlmProvider(`jobs-provider-${agentType}`)
     providerId = provider.id
 
-    const ws = await client.workspaces.create({ name: 'e2e-jobs-ws' })
+    const ws = await createRunningWorkspace(`jobs-ws-${agentType}`, providerId, agentType)
     wsId = ws.id
-    await client.workspaces.updateConfig(wsId, {
-      model: 'stepfun/step-3.5-flash:free',
-      provider_id: providerId,
-    })
-    await client.workspaces.start(wsId)
-    await waitForStatus(wsId, 'running', 120_000)
-  }, 180_000)
+  }, 300_000)
 
   afterAll(async () => {
     try {
@@ -79,7 +56,10 @@ describe.skip('jobs', () => {
       trigger: { type: 'manual' },
     })
     const jobs = await client.jobs.list(wsId)
-    expect(jobs.some((j) => j.id === job.id)).toBe(true)
+    const listed = jobs.find((j) => j.id === job.id)
+    expect(listed).toBeDefined()
+    // The queue payload carries the caller's platform token; it must not surface.
+    expect((listed?.data as { service_token?: string }).service_token).toBeUndefined()
   })
 
   test('get job matches', async () => {
@@ -97,26 +77,27 @@ describe.skip('jobs', () => {
       trigger: { type: 'manual' },
     })
     const job = await waitForJobDone(wsId, created.id, 120_000)
-    expect(['completed', 'failed']).toContain(job.status as string)
-  }, 130_000)
+    expect(['completed', 'failed']).toContain(job.state as string)
+  }, 300_000)
 
   test('create schedule', async () => {
     const schedule = await client.jobs.createSchedule(wsId, {
-      name: 'test-cron',
+      name: scoped('cron'),
       cron: '0 0 * * *',
       prompt: 'test scheduled job',
     })
-    expect(schedule.name).toBe('test-cron')
+    expect(schedule.name).toBe(scoped('cron'))
+    scheduleId = schedule.id
   })
 
   test('list schedules contains created schedule', async () => {
     const schedules = await client.jobs.listSchedules(wsId)
-    expect(schedules.some((s) => s.name === 'test-cron')).toBe(true)
+    expect(schedules.some((s) => s.id === scheduleId)).toBe(true)
   })
 
   test('delete schedule', async () => {
-    await client.jobs.deleteSchedule(wsId, 'test-cron')
+    await client.jobs.deleteSchedule(wsId, scheduleId)
     const schedules = await client.jobs.listSchedules(wsId)
-    expect(schedules.some((s) => s.name === 'test-cron')).toBe(false)
+    expect(schedules.some((s) => s.id === scheduleId)).toBe(false)
   })
 })

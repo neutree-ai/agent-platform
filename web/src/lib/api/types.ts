@@ -82,6 +82,7 @@ export type {
 
 export type {
   ApiSkill,
+  ApiSkillExport,
   ApiSkillGrant,
   ApiSkillSource,
   ApiSkillVersion,

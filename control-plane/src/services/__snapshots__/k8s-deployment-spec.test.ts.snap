@@ -6,7 +6,7 @@ exports[`buildDeploymentSpec golden master > afs enabled 1`] = `
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "6",
+      "agent-platform/workspace-version": "7",
     },
     "labels": {
       "app": "nap",
@@ -159,6 +159,7 @@ exports[`buildDeploymentSpec golden master > afs enabled 1`] = `
             ],
           },
         ],
+        "enableServiceLinks": false,
         "nodeSelector": undefined,
         "securityContext": {
           "fsGroup": 1000,
@@ -206,7 +207,7 @@ exports[`buildDeploymentSpec golden master > full: afs + memory + resources + no
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "6",
+      "agent-platform/workspace-version": "7",
     },
     "labels": {
       "app": "nap",
@@ -406,6 +407,7 @@ exports[`buildDeploymentSpec golden master > full: afs + memory + resources + no
             ],
           },
         ],
+        "enableServiceLinks": false,
         "imagePullSecrets": [
           {
             "name": "regcred",
@@ -468,7 +470,7 @@ exports[`buildDeploymentSpec golden master > memory-fuse enabled 1`] = `
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "6",
+      "agent-platform/workspace-version": "7",
     },
     "labels": {
       "app": "nap",
@@ -617,6 +619,7 @@ exports[`buildDeploymentSpec golden master > memory-fuse enabled 1`] = `
             ],
           },
         ],
+        "enableServiceLinks": false,
         "nodeSelector": undefined,
         "securityContext": {
           "fsGroup": 1000,
@@ -656,7 +659,7 @@ exports[`buildDeploymentSpec golden master > minimal: afs off, memory off, no no
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "6",
+      "agent-platform/workspace-version": "7",
     },
     "labels": {
       "app": "nap",
@@ -758,6 +761,7 @@ exports[`buildDeploymentSpec golden master > minimal: afs off, memory off, no no
             ],
           },
         ],
+        "enableServiceLinks": false,
         "nodeSelector": undefined,
         "securityContext": {
           "fsGroup": 1000,

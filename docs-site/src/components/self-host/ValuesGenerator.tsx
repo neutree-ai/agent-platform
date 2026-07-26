@@ -205,7 +205,7 @@ const SCHEMA_ZH: {
       desc: '让 agent 运行代码并提供临时的 web 预览',
     },
     browser: {
-      title: 'Remote Browser',
+      title: 'Agent Browser',
       desc: '让 agent 操作真实浏览器，用户可实时观看。TURN relay 与浏览器捆绑，同步启用',
     },
     ldap: {
@@ -657,8 +657,8 @@ const SCHEMA: SectionDef[] = [
   },
   {
     id: 'browser',
-    title: 'Remote Browser',
-    envTitle: 'Remote Browser + TURN Relay',
+    title: 'Agent Browser',
+    envTitle: 'Agent Browser + TURN Relay',
     desc:
       'Lets agents drive a real browser while users watch live. The TURN relay is bundled with the browser and enabled together',
     optional: true,

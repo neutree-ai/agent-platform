@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: channel-gateway
-          image: ${REGISTRY}/${APP_PREFIX}-cg:${IMAGE_TAG}
+          image: ${PLATFORM_IMAGE_PREFIX}-cg:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 3002

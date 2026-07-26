@@ -40,6 +40,7 @@ import type {
   ApiShare,
   ApiShareData,
   ApiSkill,
+  ApiSkillExport,
   ApiSkillGrant,
   ApiSkillSource,
   ApiSkillVersion,
@@ -757,6 +758,37 @@ class ApiClient {
 
   async deleteSkill(id: string): Promise<void> {
     await this.request<void>(`/skills/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  /**
+   * Skill exports — capability URLs a local agent installs from with
+   * `npx skills add <url>`. Owner-only. The URL is the credential, so the
+   * list endpoint returns full tokens by design.
+   */
+  async listSkillExports(id: string): Promise<ApiSkillExport[]> {
+    return this.request<ApiSkillExport[]>(`/skills/${encodeURIComponent(id)}/exports`)
+  }
+
+  /**
+   * `slug` may be omitted when the skill name yields a valid one; the server
+   * answers 400 with the rules when it can't derive one (CJK names, emoji),
+   * and the caller should then prompt for it.
+   */
+  async createSkillExport(
+    id: string,
+    body: { slug?: string; ttl_days?: number | null; label?: string },
+  ): Promise<ApiSkillExport> {
+    return this.request<ApiSkillExport>(`/skills/${encodeURIComponent(id)}/exports`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  async revokeSkillExport(id: string, token: string): Promise<void> {
+    await this.request<void>(
+      `/skills/${encodeURIComponent(id)}/exports/${encodeURIComponent(token)}`,
+      { method: 'DELETE' },
+    )
   }
 
   /**

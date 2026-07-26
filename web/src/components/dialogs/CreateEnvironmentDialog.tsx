@@ -123,7 +123,7 @@ export default function CreateEnvironmentDialog({ open, onOpenChange }: DialogPr
           <SecretReveal value={created.token} />
           <div className="space-y-1.5">
             <div className="text-xs font-medium">{t('components.createEnvironment.helmTitle')}</div>
-            <pre className="overflow-x-auto rounded-md border border-foreground/[0.08] bg-foreground/[0.04] p-3 font-mono text-tiny leading-relaxed text-muted-foreground">
+            <pre className="whitespace-pre-wrap break-all rounded-md border border-foreground/[0.08] bg-foreground/[0.04] p-3 font-mono text-tiny leading-relaxed text-muted-foreground">
               {`helm install my-env ./charts/env-runner-k8s \\
   --namespace agent-runner --create-namespace \\
   --set controlPlane.url=${controlPlaneUrl} \\

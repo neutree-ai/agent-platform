@@ -19,7 +19,7 @@ description: 用你已有的 ingress controller 替换默认的 NodePort，为 N
 | --- | --- | --- | --- |
 | nap-cp | `<main-domain>` | 3000 | Web UI + API，SSE / WebSocket |
 | nap-cp | `files.<main-domain>` | 3000 | 公开文件导出，匿名访问，控制面按 host 路由 |
-| nap-browser | `browsers.<main-domain>` | 3005 | Remote Browser WebRTC 信令 + WebSocket |
+| nap-browser | `browsers.<main-domain>` | 3005 | Agent Browser WebRTC 信令 + WebSocket |
 | nap-sandbox | `sandbox.<main-domain>` | 3006 | Sandbox API + WebSocket |
 | nap-sandbox 子域名预览 | `*.sandbox.<main-domain>` | 3006 | 用户在 sandbox 中启动的临时 web 服务；通配子域名，需要通配证书 |
 
@@ -95,7 +95,7 @@ spec:
         - name: nap-cp
           port: 3000
 ---
-# Remote Browser: WebRTC signaling + WebSocket.
+# Agent Browser: WebRTC signaling + WebSocket.
 apiVersion: projectcontour.io/v1
 kind: HTTPProxy
 metadata:

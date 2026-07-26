@@ -1,16 +1,16 @@
 ---
-title: Code Sandbox / Remote Browser
-description: Enable the platform's Code Sandbox and Remote Browser services, including OAuth client auto-registration and public-URL overrides.
+title: Code Sandbox / Agent Browser
+description: Enable the platform's Code Sandbox and Agent Browser services, including OAuth client auto-registration and public-URL overrides.
 ---
 
-Code Sandbox (sandbox-service) and Remote Browser (browser-service) are two optional advanced services, off by default. Both log in via the platform's OAuth flow. This page covers enabling them, OAuth client auto-registration, and public-URL overrides for external-ingress scenarios.
+Code Sandbox (sandbox-service) and Agent Browser (browser-service) are two optional advanced services, off by default. Code Sandbox lets agents run code and serve temporary web previews; Agent Browser is self-hosted browser as a service — agents drive a real browser while users watch live. Both log in via the platform's OAuth flow. This page covers enabling them, OAuth client auto-registration, and public-URL overrides for external-ingress scenarios.
 
 ## The two services
 
 | Service | Capability | Dependency |
 | --- | --- | --- |
 | Code Sandbox | Lets agents run code and serve temporary web previews | The third-party OpenSandbox (you install it yourself; the platform points at it via `OPENSANDBOX_URL`) |
-| Remote Browser | Lets agents drive a real browser while users watch live over WebRTC | The bundled TURN relay (coturn), enabled together with `BROWSER_ENABLED` |
+| Agent Browser | Lets agents drive a real browser while users watch live over WebRTC | The bundled TURN relay (coturn), enabled together with `BROWSER_ENABLED` |
 
 In the [configuration generator](/self-host/#configure), toggle the corresponding module to produce a `values.env` with these sections, or set `SANDBOX_ENABLED` / `BROWSER_ENABLED` to `true` by hand.
 
@@ -25,7 +25,7 @@ SANDBOX_NODE_PORT=30086
 SANDBOX_JWT_SECRET=      # openssl rand -hex 32
 SANDBOX_SERVICE_KEY=     # openssl rand -hex 32, shared between browser and sandbox
 
-# Remote Browser (incl. TURN)
+# Agent Browser (incl. TURN)
 BROWSER_ENABLED=true
 BROWSER_NODE_PORT=30085
 BROWSER_JWT_SECRET=      # openssl rand -hex 32
@@ -49,7 +49,7 @@ helm install opensandbox ./opensandbox \
   -f <path-to>/optional/sandbox/opensandbox-values.yaml
 ```
 
-Running OpenSandbox in the `nap` namespace lets the platform's default `OPENSANDBOX_URL` resolve. If you install OpenSandbox into its own namespace, set `OPENSANDBOX_URL` explicitly (e.g. `http://opensandbox-server.opensandbox-system.svc:80`). See the self-host README "Enabling Code Sandbox" for the full reference, including mounting the platform's sandbox pod template.
+Running OpenSandbox in the `nap` namespace lets the platform's default `OPENSANDBOX_URL` resolve. If you install OpenSandbox into its own namespace, set `OPENSANDBOX_URL` explicitly (e.g. `http://opensandbox-server.opensandbox-system.svc:80`). For the full reference, including mounting the platform's sandbox pod template, see ["Enabling Code Sandbox" in the self-host README](https://github.com/neutree-ai/agent-platform/blob/main/self-host/README.md).
 
 ## OAuth client auto-registration
 

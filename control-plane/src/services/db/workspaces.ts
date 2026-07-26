@@ -6,7 +6,9 @@ export async function createWorkspace(
   name: string,
   agentType = 'claude-code',
   isSystem = false,
+  opts: { seedDefaultPrompt?: boolean } = {},
 ): Promise<Workspace> {
+  const { seedDefaultPrompt = true } = opts
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -16,13 +18,19 @@ export async function createWorkspace(
       [id, userId, name, isSystem],
     )
 
-    // Resolve default system prompt from user's default prompt (if set)
-    const { rows: dpRows } = await client.query(
-      `SELECT p.id, p.content FROM users u
-       LEFT JOIN prompts p ON u.default_prompt_id = p.id
-       WHERE u.id = $1`,
-      [userId],
-    )
+    // Resolve default system prompt from user's default prompt (if set).
+    // Skipped for template-created workspaces: config resolution prefers
+    // workspace-level values, so a seeded default would shadow the
+    // template's prompt (or fill in one the template deliberately left
+    // empty).
+    const { rows: dpRows } = seedDefaultPrompt
+      ? await client.query(
+          `SELECT p.id, p.content FROM users u
+           LEFT JOIN prompts p ON u.default_prompt_id = p.id
+           WHERE u.id = $1`,
+          [userId],
+        )
+      : { rows: [] }
     const defaultPrompt = dpRows[0]?.id ? dpRows[0] : null
     const promptId = defaultPrompt ? defaultPrompt.id : null
 
