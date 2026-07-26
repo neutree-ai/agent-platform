@@ -787,7 +787,7 @@ exports[`buildStatefulSetSpec > golden master: shared RWX PVC, headless serviceN
   "kind": "StatefulSet",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "6",
+      "agent-platform/workspace-version": "7",
     },
     "labels": {
       "app": "nap",
@@ -888,6 +888,7 @@ exports[`buildStatefulSetSpec > golden master: shared RWX PVC, headless serviceN
             ],
           },
         ],
+        "enableServiceLinks": false,
         "nodeSelector": undefined,
         "securityContext": {
           "fsGroup": 1000,
