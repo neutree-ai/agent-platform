@@ -2644,13 +2644,17 @@
       "actions": {
         "newDraft": "New draft",
         "publish": "Publish",
+        "discard": "Discard changes",
+        "discardConfirm": "Click again to confirm",
         "remove": "Remove",
         "removeConfirm": "Click again to confirm"
       },
       "tooltips": {
         "publish": "Publish changes to the library so other workspaces can use the updated version.",
         "publishGitSource": "Publish changes to the library. Warning: this Skill was imported from Git, and publishing will be overwritten on the next Git sync.",
-        "remove": "Remove this Skill from the workspace. The Skill stays in your library."
+        "remove": "Remove this Skill from the workspace. The Skill stays in your library.",
+        "discard": "Throw away the in-container edits and restore this Skill to the version published in the library.",
+        "discardNoPublished": "This Skill has never been published, so there is no version to restore. Publish it first, or remove it."
       },
       "empty": {
         "noSkills": {
@@ -2674,6 +2678,7 @@
         "renamed": "Renamed to {{name}}",
         "createdDraft": "Draft \"{{name}}\" created",
         "published": "Published {{name}}",
+        "discarded": "Restored {{name}} to its published version",
         "removed": "Removed {{name}}"
       },
       "errors": {
@@ -2681,6 +2686,7 @@
         "createFolderFailed": "Failed to create folder: {{status}}",
         "createDraftFailed": "Failed to create draft",
         "packFailed": "Failed to pack Skill",
+        "discardFailed": "Failed to discard changes",
         "uploadFailed": "Failed to upload Skill",
         "removeFailed": "Failed to remove Skill"
       }

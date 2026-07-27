@@ -14,6 +14,7 @@
  */
 import { AppHeaderButton } from '@/components/shell/windows/AppHeaderButton'
 import { Button } from '@/components/ui/button'
+import { ConfirmButton } from '@/components/ui/confirm-button'
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { isCommitEnter } from '@/lib/keyboard'
 import { skillsRefresh } from '@/plugins/skills'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Plus, Trash2, Upload } from 'lucide-react'
+import { Check, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -102,19 +103,34 @@ export function WorkspaceSkillsPanel({ workspaceId, instanceId }: WorkspaceSkill
   // enabled skill — we keep both around because publish/remove still match
   // by name (the in-container filesystem identity), but the PUT body now
   // requires UUIDs.
+  const fetchEnabledSkillsResponse =
+    useCallback(async (): Promise<WorkspaceEnabledSkillsResponse> => {
+      const resp = await fetch(workspaceSkillUrls.workspaceSkills(workspaceId), {
+        credentials: 'include',
+      })
+      if (!resp.ok) return { skills: [] }
+      return resp.json()
+    }, [workspaceId])
+
   const fetchEnabledSkills = useCallback(async (): Promise<WorkspaceEnabledSkillEntry[]> => {
     const data = await qc.fetchQuery<WorkspaceEnabledSkillsResponse>({
       queryKey: enabledSkillsQueryKey(workspaceId),
-      queryFn: async () => {
-        const resp = await fetch(workspaceSkillUrls.workspaceSkills(workspaceId), {
-          credentials: 'include',
-        })
-        if (!resp.ok) return { skills: [] }
-        return resp.json()
-      },
+      queryFn: fetchEnabledSkillsResponse,
     })
     return data.skills ?? []
-  }, [qc, workspaceId])
+  }, [qc, workspaceId, fetchEnabledSkillsResponse])
+
+  // Skills the library has a published version of. Discard restores *that*
+  // version, so a locally created draft that was never published has nothing
+  // to restore from — the action stays disabled for it.
+  const enabledSkillsQuery = useQuery<WorkspaceEnabledSkillsResponse>({
+    queryKey: enabledSkillsQueryKey(workspaceId),
+    queryFn: fetchEnabledSkillsResponse,
+  })
+  const publishedNames = useMemo(
+    () => new Set((enabledSkillsQuery.data?.skills ?? []).map((s) => s.name)),
+    [enabledSkillsQuery.data],
+  )
 
   // ── lifecycle mutations ──────────────────────────────────────────────────
   const createDraftMutation = useMutation({
@@ -253,6 +269,32 @@ export function WorkspaceSkillsPanel({ workspaceId, instanceId }: WorkspaceSkill
     onError: (e: any) => toast.error(e.message),
   })
 
+  // Cache-buster for the open file: discard rewrites the skill directory in
+  // the container behind the viewer's back, so bump it to force a re-read.
+  const [viewerRefreshToken, setViewerRefreshToken] = useState(0)
+
+  const discardSkillMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const resp = await fetch(
+        `${workspaceSkillUrls.skillsApi(workspaceId)}/${encodeURIComponent(name)}/discard`,
+        { method: 'POST', credentials: 'include' },
+      )
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        throw new Error(err.error || t('components.workspaceSkillsPanel.errors.discardFailed'))
+      }
+      return name
+    },
+    onSuccess: async (name) => {
+      // Whole namespace: the skill's editing flag, its file tree and every
+      // cached directory under it just changed on disk.
+      await qc.invalidateQueries({ queryKey: source.cacheNamespace })
+      setViewerRefreshToken((n) => n + 1)
+      toast.success(t('components.workspaceSkillsPanel.toasts.discarded', { name }))
+    },
+    onError: (e: any) => toast.error(e.message),
+  })
+
   const removingName = removeSkillMutation.isPending
     ? (removeSkillMutation.variables ?? null)
     : null
@@ -300,13 +342,15 @@ export function WorkspaceSkillsPanel({ workspaceId, instanceId }: WorkspaceSkill
           const tooltipText = selectedSkill.gitSource
             ? t('components.workspaceSkillsPanel.tooltips.publishGitSource')
             : t('components.workspaceSkillsPanel.tooltips.publish')
+          const hasPublished = publishedNames.has(selectedSkill.name)
+          const discarding = discardSkillMutation.isPending
           return (
-            <div className="border-b border-foreground/[0.06] px-2 py-1.5">
+            <div className="flex items-center gap-1.5 border-b border-foreground/[0.06] px-2 py-1.5">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     size="sm"
-                    className="h-7 w-full text-xs gap-1.5"
+                    className="h-7 flex-1 text-xs gap-1.5"
                     disabled={packingName === selectedSkill.name}
                     onClick={() => publishSkillMutation.mutate(selectedSkill.name)}
                   >
@@ -322,6 +366,35 @@ export function WorkspaceSkillsPanel({ workspaceId, instanceId }: WorkspaceSkill
                   {tooltipText}
                 </TooltipContent>
               </Tooltip>
+              {/* Destructive: arm-then-confirm, same as the remove button. The
+                  tooltip lives outside ConfirmButton (rather than using its
+                  own `tooltip` prop) because a disabled button swallows the
+                  hover events — and "nothing published yet" is exactly the
+                  case we most need to explain. */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex">
+                    <ConfirmButton
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-xs gap-1.5"
+                      disabled={!hasPublished || discarding}
+                      icon={
+                        discarding ? <Spinner size="sm" /> : <RotateCcw className="h-3.5 w-3.5" />
+                      }
+                      confirmLabel={t('components.workspaceSkillsPanel.actions.discardConfirm')}
+                      onConfirm={() => discardSkillMutation.mutate(selectedSkill.name)}
+                    >
+                      {t('components.workspaceSkillsPanel.actions.discard')}
+                    </ConfirmButton>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-64 text-xs">
+                  {hasPublished
+                    ? t('components.workspaceSkillsPanel.tooltips.discard')
+                    : t('components.workspaceSkillsPanel.tooltips.discardNoPublished')}
+                </TooltipContent>
+              </Tooltip>
             </div>
           )
         }}
@@ -330,6 +403,7 @@ export function WorkspaceSkillsPanel({ workspaceId, instanceId }: WorkspaceSkill
             workspaceId={workspaceId}
             instanceId={instanceId}
             filePath={fileLocator}
+            refreshToken={viewerRefreshToken}
             // FileViewer's save PUTs the file directly through agent dufs
             // (bypassing source.writes). We splice markEditing in here so
             // the .editing lockfile stays fresh on every save, matching

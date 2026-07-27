@@ -396,6 +396,92 @@ describe('SkillManager', () => {
     })
   })
 
+  describe('discardChanges', () => {
+    const ETAG = '"v1"'
+
+    /**
+     * Manager with `name` loaded from CP at ETag `v1`, in editing mode, plus a
+     * stray file an agent wrote into the skill dir. `requests` records the
+     * If-None-Match header of every package fetch.
+     */
+    async function editedManager(name: string) {
+      const requests: (string | null)[] = []
+      const tarBuf = Buffer.from('published-tar-gz')
+      const fetchImpl = async (url: string, init?: { headers?: Record<string, string> }) => {
+        if (url.includes('/workspaces/ws-1/skills'))
+          return jsonResponse({ skills: [{ name, id: 'sk-1', editable: true }] })
+        if (url.includes('/_cp/skills/sk-1/package')) {
+          const inm = init?.headers?.['If-None-Match'] ?? null
+          requests.push(inm)
+          return inm === ETAG ? notModifiedResponse(ETAG) : binaryResponse(tarBuf, ETAG)
+        }
+        throw new Error(`Unexpected fetch: ${url}`)
+      }
+      const mgr = createManager(fetchImpl)
+      await mgr.load()
+      // The in-memory shell's `ln` is a no-op; materialize the dest so the
+      // ETag sidecar would be trusted (that's what discard has to defeat).
+      fs.dirs.add(`${SKILLS_DIR}/${name}`)
+      await mgr.startEditing(name)
+      fs.files.set(`${LOCAL_BASE}/skill-${name}/rogue.md`, 'written by the agent')
+      shell.calls.length = 0
+      return { mgr, requests }
+    }
+
+    test('restores the published version, dropping local edits and the lock', async () => {
+      const { mgr, requests } = await editedManager('test')
+
+      await mgr.discardChanges('test')
+
+      // Unconditional re-download: a 304 would have left the edits in place.
+      expect(requests).toEqual([null, null])
+      expect(fs.files.has('/tmp/skill-test/rogue.md')).toBe(false)
+      expect(mgr.isEditing('test')).toBe(false)
+      // Fresh extraction, and the ETag sidecar is back in sync.
+      expect(shell.calls.find((c) => c.cmd === 'tar' && c.args[0] === 'xzf')).toBeTruthy()
+      expect(fs.files.get('/tmp/.skill-etag-test')).toBe(ETAG)
+      expect(fs.files.has('/tmp/.skill-managed-test')).toBe(true)
+    })
+
+    test('rejects a skill CP does not know, keeping the only copy intact', async () => {
+      const mgr = createManager(async () => {
+        throw new Error('discardChanges must not fetch for an unpublished draft')
+      })
+      await mgr.createDraft('brand-new')
+
+      await expect(mgr.discardChanges('brand-new')).rejects.toThrow('No published version')
+      expect(fs.files.has('/tmp/skill-brand-new/SKILL.md')).toBe(true)
+      expect(mgr.isEditing('brand-new')).toBe(true)
+    })
+
+    test('rejects a reserved platform skill name', async () => {
+      const mgr = createManager(async () => { throw new Error('no fetch') })
+      await expect(mgr.discardChanges('__platform__')).rejects.toThrow('reserved')
+    })
+
+    test('leaves edits untouched when the download exhausts its retries', async () => {
+      const tarBuf = Buffer.from('published-tar-gz')
+      let failDownloads = false
+      const fetchImpl = async (url: string) => {
+        if (url.includes('/workspaces/ws-1/skills'))
+          return jsonResponse({ skills: [{ name: 'flaky', id: 'sk-1', editable: true }] })
+        if (url.includes('/_cp/skills/sk-1/package'))
+          return failDownloads ? errorResponse(503) : binaryResponse(tarBuf)
+        throw new Error(`Unexpected fetch: ${url}`)
+      }
+      const mgr = createManager(fetchImpl)
+      await mgr.load()
+      await mgr.startEditing('flaky')
+      fs.files.set('/tmp/skill-flaky/rogue.md', 'written by the agent')
+      failDownloads = true
+
+      await expect(mgr.discardChanges('flaky')).rejects.toThrow('Failed to fetch published version')
+      // Nothing was swapped out: the user still has their work and their lock.
+      expect(fs.files.get('/tmp/skill-flaky/rogue.md')).toBe('written by the agent')
+      expect(mgr.isEditing('flaky')).toBe(true)
+    })
+  })
+
   describe('createDraft', () => {
     test('creates directory with SKILL.md template and enters editing mode', async () => {
       const mgr = createManager(async () => { throw new Error('no fetch') })
@@ -777,6 +863,38 @@ describe('SkillManager draft persistence (draftBase)', () => {
     const tarCall = shell.calls.find((c) => c.cmd === 'tar' && c.args[0] === 'xzf')
     expect(tarCall!.args[1]).toMatch(/^\/tmp\/skill-done\.staging-/)
     expect(result.loaded).toEqual(['done'])
+  })
+
+  test('discardChanges reclaims the persistent draft of a git-imported skill', async () => {
+    const tarBuf = Buffer.from('published-tar-gz')
+    const fetchImpl = async (url: string) => {
+      if (url.includes('/workspaces/ws-1/skills'))
+        return jsonResponse({
+          skills: [{ name: 'imported', id: 'sk-g', editable: true, gitSource: true }],
+        })
+      if (url.includes('/_cp/skills/sk-g/package')) return binaryResponse(tarBuf)
+      throw new Error(`Unexpected fetch: ${url}`)
+    }
+    const mgr = createManager(fetchImpl)
+    await mgr.load()
+    fs.dirs.add('/workspace/.claude/skills/imported')
+    // Editing promotes the skill onto the persistent draftBase.
+    await mgr.startEditing('imported')
+    fs.files.set('/workspace/.skills-draft/skill-imported/rogue.md', 'written by the agent')
+    shell.calls.length = 0
+
+    await mgr.discardChanges('imported')
+
+    // Draft reclaimed; content re-materialised on tmpfs and re-symlinked there.
+    expect(fs.dirs.has('/workspace/.skills-draft/skill-imported')).toBe(false)
+    expect(fs.files.has('/workspace/.skills-draft/skill-imported/rogue.md')).toBe(false)
+    expect(shell.calls).toContainEqual({
+      cmd: 'ln',
+      args: ['-sfn', '/tmp/skill-imported', '/workspace/.claude/skills/imported'],
+    })
+    expect(mgr.isEditing('imported')).toBe(false)
+    // Restoring from CP doesn't change where the skill came from.
+    expect(mgr.isGitSource('imported')).toBe(true)
   })
 
   // installPlatformSkill runs on every agent boot. Under auto-scaling, N replicas
