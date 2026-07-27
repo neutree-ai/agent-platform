@@ -386,6 +386,12 @@ interface TitleGenCandidate {
  * exchange (a first user message and at least one assistant reply). Restricted
  * to sessions quiet for `quietSeconds` so we don't title a half-finished first
  * turn. Returns the session id plus its first user message (the title source).
+ *
+ * Quietness comes from the liveness beat (session_activity), falling back to the
+ * durable column when a session has no beat yet. `quietSeconds` is well under a
+ * minute, and the durable column only advances on message persist — so reading
+ * it alone would call a turn quiet while the agent is still inside a long tool
+ * call and title a half-finished exchange.
  */
 export async function getTitleGenCandidates(
   limit: number,
@@ -394,6 +400,7 @@ export async function getTitleGenCandidates(
   const { rows } = await pool.query(
     `SELECT s.id, fm.content AS first_user_message
        FROM sessions s
+       LEFT JOIN session_activity a ON a.session_id = s.id
        JOIN LATERAL (
          SELECT content FROM messages m
          WHERE m.session_id = s.id AND m.role = 'user'
@@ -401,7 +408,7 @@ export async function getTitleGenCandidates(
        ) fm ON true
       WHERE s.name = ''
         AND s.status = 'active'
-        AND s.last_active_at < now() - make_interval(secs => $1)
+        AND COALESCE(a.last_active_at, s.last_active_at) < now() - make_interval(secs => $1)
         AND EXISTS (
           SELECT 1 FROM messages m
           WHERE m.session_id = s.id AND m.role = 'assistant'

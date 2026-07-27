@@ -7,6 +7,7 @@ import {
   updateMessageContent,
   upsertEvent,
 } from '../services/db/messages'
+import { touchSessionActivity } from '../services/db/session-activity'
 import {
   createSession,
   setSessionReplicaOrdinal,
@@ -500,11 +501,17 @@ export function createInterceptedSSEResponse(
   // the shared queue before broadcast's deferred emits, ensuring emits
   // observe a consistent DB state.
   // Tap the raw agent stream: any byte from the agent — a real event OR the
-  // acp-adapter heartbeat comment — proves the session is alive, so bump
-  // last_active_at (throttled). Previously last_active_at only advanced when a
+  // acp-adapter heartbeat comment — proves the session is alive, so record a
+  // liveness beat (throttled). Previously liveness only advanced when a
   // message/tool_result was persisted, so a single long operation (a slow tool,
   // a long inference with no streamed text) starved it and looked "stalled" to
   // the orchestrator's stall detector even while the agent was working.
+  //
+  // The beat goes to session_activity, not sessions.last_active_at: it fires
+  // every 10s per live session and the durable column is indexed, so writing it
+  // here defeated HOT and put this on the hot WAL/sync-replication path for a
+  // fact that expires in a minute. The durable column still advances on message
+  // persist and at turn start.
   let lastActivityTouchAt = 0
   const ACTIVITY_TOUCH_THROTTLE_MS = 10_000
   const tapActivity = (resp: Response | null): Response | null => {
@@ -515,7 +522,7 @@ export function createInterceptedSSEResponse(
         const now = Date.now()
         if (sid && now - lastActivityTouchAt >= ACTIVITY_TOUCH_THROTTLE_MS) {
           lastActivityTouchAt = now
-          void updateSessionActivity(sid).catch(() => {})
+          touchSessionActivity(sid)
         }
         controller.enqueue(chunk)
       },

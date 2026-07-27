@@ -378,13 +378,19 @@ export async function listActiveSessionIds(workspaceId: string): Promise<string[
  * to skip workspaces a user is actively streaming with, so a rollout doesn't
  * kill a live turn. `withinInterval` is a Postgres interval literal
  * (e.g. '10 minutes'), bound as a parameter.
+ *
+ * Reads the liveness beat, falling back to the durable column for sessions that
+ * have no beat yet. The distinction matters here: a turn spent inside one long
+ * tool call persists no messages, so the durable column alone would report it
+ * idle and the sweep would rebuild the pod out from under a live turn.
  */
 export async function listStreamingWorkspaceIds(withinInterval: string): Promise<string[]> {
   const { rows } = await pool.query(
-    `SELECT DISTINCT workspace_id FROM sessions
-      WHERE status = 'active'
-        AND chat_status = 'agent'
-        AND last_active_at >= NOW() - $1::interval`,
+    `SELECT DISTINCT s.workspace_id FROM sessions s
+       LEFT JOIN session_activity a ON a.session_id = s.id
+      WHERE s.status = 'active'
+        AND s.chat_status = 'agent'
+        AND COALESCE(a.last_active_at, s.last_active_at) >= NOW() - $1::interval`,
     [withinInterval],
   )
   return rows.map((r: { workspace_id: string }) => r.workspace_id)
