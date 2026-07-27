@@ -1,0 +1,22 @@
+-- Reclaim the index bloat left by the pre-128 liveness write pattern.
+--
+-- Every 10s beat on sessions.last_active_at was a non-HOT update, and a non-HOT
+-- update writes a new entry into *all* of the table's indexes — not just the one
+-- on the column being written. So all four bloated together: on a deployment
+-- running since early 2026, idx_sessions_last_active_at had reached ~15x and
+-- sessions_pkey ~4x the size their row counts warrant. Autovacuum does not
+-- shrink an already-bloated btree; only a rebuild does.
+--
+-- Ordering matters: 128 has to have moved the beat off this table first, or the
+-- rebuild starts re-bloating immediately. Migrations run in filename order at
+-- control-plane boot, so 128 precedes this within the same startup.
+--
+-- Plain REINDEX, not CONCURRENTLY: the runner wraps every migration in a
+-- transaction and CONCURRENTLY cannot run inside one. The lock this takes is
+-- SHARE on sessions (plus ACCESS EXCLUSIVE on each index), so reads continue and
+-- only writes to sessions pause. `sessions` holds one narrow row per session and
+-- the whole table with its indexes is tens of MB, making the rebuild
+-- sub-second — bounded, and paid once at boot.
+--
+-- A fresh install has nothing to reclaim and this is a no-op there.
+REINDEX TABLE public.sessions;
