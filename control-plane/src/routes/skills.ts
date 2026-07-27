@@ -515,6 +515,7 @@ skills.openapi(fromGitRoute, async (c) => {
       description: body.description,
       visibility: body.visibility ?? 'private',
       category: body.category ?? null,
+      skillId: body.skill_id,
     })
     return c.json(ownerSkillMetaToApi(skill), 201)
   } catch (e) {

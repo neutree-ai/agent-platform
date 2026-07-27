@@ -509,6 +509,25 @@ describe('SkillsService.remove', () => {
     expect(vi.mocked(scsDeleteSkill)).not.toHaveBeenCalled()
   })
 
+  // A template version the user has since replaced is immutable history with
+  // no edit affordance — counting it would make the skill undeletable forever.
+  it('deletes past a superseded template version, pruning its stale ref', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 's' })
+    h.repo.seedTemplateVersionSkill('tv-1', skill.id, true)
+
+    vi.mocked(scsDeleteSkill).mockResolvedValue(ok({ ok: true }))
+    await h.service.remove('alice', skill.id)
+
+    expect(vi.mocked(scsDeleteSkill)).toHaveBeenCalledWith(skill.id)
+    // Pruned, or scs's delete would hit the RESTRICT FK on the stale row.
+    expect(await h.repo.getDeleteBlockers(skill.id)).toEqual({
+      workspace_ids: [],
+      template_version_ids: [],
+    })
+    expect(await h.repo.pruneSupersededTemplateRefs(skill.id)).toBe(0)
+  })
+
   it('rejects non-owner', async () => {
     const h = setup()
     h.repo.seedUser({ id: 'bob', display_name: 'Bob' })
@@ -570,6 +589,16 @@ describe('SkillsService.getDependents', () => {
       { id: 'w-a2', name: 'Beta' },
     ])
     expect(dep.other_workspace_count).toBe(2)
+    expect(dep.template_version_count).toBe(1)
+  })
+
+  it('counts only current template versions as dependents', async () => {
+    const h = setup()
+    const { skill } = seedSkill(h.repo, { name: 's' })
+    h.repo.seedTemplateVersionSkill('tv-1', skill.id, true)
+    h.repo.seedTemplateVersionSkill('tv-2', skill.id)
+
+    const dep = await h.service.getDependents('alice', skill.id)
     expect(dep.template_version_count).toBe(1)
   })
 

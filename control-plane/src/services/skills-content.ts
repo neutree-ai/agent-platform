@@ -142,6 +142,9 @@ export interface ImportFromGitInput {
   description?: string
   visibility: 'private' | 'team' | 'public'
   category?: string | null
+  /** Re-import in place: target this skill instead of resolving one from
+   *  `(source, subpath)`. Set by the edit flow. */
+  skill_id?: string
 }
 
 /**

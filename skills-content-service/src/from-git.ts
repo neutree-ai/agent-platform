@@ -162,6 +162,12 @@ interface ImportFromGitArgs {
   descriptionOverride?: string
   visibility: 'private' | 'team' | 'public'
   category?: string | null
+  /** Re-import in place: the caller is editing THIS skill, so it is the
+   *  target no matter what `(source, subpath)` resolves to. Without it we
+   *  fall back to locating the row by coordinates, which silently retargets
+   *  a different skill when the same repo has more than one source row
+   *  (e.g. one imported with ref unset, one with ref 'main'). */
+  skillId?: string
 }
 
 interface ImportFromGitResult {
@@ -178,6 +184,17 @@ interface ImportFromGitResult {
 export async function importFromGit(
   args: ImportFromGitArgs,
 ): Promise<{ ok: true; data: ImportFromGitResult } | { ok: false; status: number; error: string }> {
+  // Ownership guard for the in-place path, before we spend a repo fetch. cp
+  // gates ACL upstream; re-check here so a forged id can't append a version
+  // to someone else's skill.
+  let target: SkillMeta | null = null
+  if (args.skillId) {
+    target = await getSkillById(args.skillId)
+    if (!target || target.user_id !== args.userId) {
+      return { ok: false, status: 404, error: 'Skill not found' }
+    }
+  }
+
   const fetched = await fetchRepo({
     url: args.url,
     type: args.type,
@@ -248,10 +265,20 @@ export async function importFromGit(
     }
   }
 
-  // If a skill already exists at this (source_id, subpath), append a new
-  // version instead of creating a duplicate skill. Pre-existing rows can land
-  // here when the same monorepo is re-imported at the same subpath.
-  const existingSkill = await findSkillBySourceSubpath(source.id, subpath)
+  // The edit flow names its target explicitly. Otherwise fall back to the
+  // coordinates: if a skill already exists at this (source_id, subpath),
+  // append a new version instead of creating a duplicate skill. Pre-existing
+  // rows can land here when the same monorepo is re-imported at the same
+  // subpath.
+  const occupant = await findSkillBySourceSubpath(source.id, subpath)
+  if (target && occupant && occupant.id !== target.id) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Another skill ("${occupant.name}") already tracks subpath "${subpath}" at this ref. Point one of them elsewhere first.`,
+    }
+  }
+  const existingSkill = target ?? occupant
 
   // Name-collision pre-flight: a skill with this `name` may already exist
   // under a DIFFERENT source (e.g. same url + different ref → new source
@@ -283,6 +310,16 @@ export async function importFromGit(
         visibility: args.visibility,
         category: args.category ?? null,
       })
+    } else if (skill.source_id !== ensuredSource.id || skill.subpath !== subpath) {
+      // In-place re-import where the user changed the ref or subpath: move
+      // the row onto the resolved coordinates so it stays findable there.
+      // Only reachable via the explicit-target path — the coordinate lookup
+      // returns a row that already matches by construction.
+      await client.query(
+        'UPDATE skills SET source_id = $1, subpath = $2, updated_at = NOW() WHERE id = $3',
+        [ensuredSource.id, subpath, skill.id],
+      )
+      skill = { ...skill, source_id: ensuredSource.id, subpath }
     }
     const { version } = await insertVersion(client, {
       skillId: skill.id,

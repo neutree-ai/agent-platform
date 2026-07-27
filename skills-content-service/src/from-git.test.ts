@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
   const findSkillByOwnerName = vi.fn()
   const findSkillBySourceSubpath = vi.fn()
   const getActiveVersionHash = vi.fn()
+  const getSkillById = vi.fn()
   const getSourceById = vi.fn()
   const insertSkill = vi.fn()
   const insertSkillSource = vi.fn()
@@ -30,6 +31,7 @@ const mocks = vi.hoisted(() => {
     findSkillByOwnerName,
     findSkillBySourceSubpath,
     getActiveVersionHash,
+    getSkillById,
     getSourceById,
     insertSkill,
     insertSkillSource,
@@ -54,6 +56,7 @@ vi.mock('./db', () => ({
   findSkillByOwnerName: mocks.findSkillByOwnerName,
   findSkillBySourceSubpath: mocks.findSkillBySourceSubpath,
   getActiveVersionHash: mocks.getActiveVersionHash,
+  getSkillById: mocks.getSkillById,
   getSourceById: mocks.getSourceById,
   insertSkill: mocks.insertSkill,
   insertSkillSource: mocks.insertSkillSource,
@@ -183,6 +186,128 @@ describe('importFromGit', () => {
     })
     expect(r.ok).toBe(true)
     expect(mocks.insertSkillSource).not.toHaveBeenCalled()
+  })
+
+  // The edit flow's target is the row being edited, NOT whatever sits at the
+  // resolved (source, subpath). A repo with two source rows — one imported
+  // with ref unset, one with 'main' — used to send an edit into the other
+  // row's skill, silently forking content away from the one on screen.
+  it('appends to the skill named by skillId, not the one at (source, subpath)', async () => {
+    mocks.fetchTarball.mockResolvedValueOnce(await singleSkillTarball())
+    mocks.fetchCommitSha.mockResolvedValueOnce(null)
+    mocks.getSkillById.mockResolvedValueOnce({
+      id: 'sk-target',
+      user_id: 'u1',
+      name: 'target',
+      source_id: 'src1',
+      subpath: '',
+    })
+    mocks.findGitSource.mockResolvedValueOnce({ id: 'src1', kind: 'git' })
+    mocks.findSkillBySourceSubpath.mockResolvedValueOnce(null)
+    mocks.insertVersion.mockResolvedValueOnce({
+      version: { id: 'v2', skill_id: 'sk-target', source_id: 'src1', content_hash: 'h' },
+      created: true,
+    })
+    mocks.setActiveVersion.mockResolvedValueOnce({ id: 'sk-target', active_version_id: 'v2' })
+
+    const r = await importFromGit({
+      userId: 'u1',
+      url: 'https://github.com/owner/repo',
+      subpath: '',
+      visibility: 'private',
+      nameOverride: 'target',
+      skillId: 'sk-target',
+    })
+
+    expect(r.ok).toBe(true)
+    expect(mocks.insertSkill).not.toHaveBeenCalled()
+    expect(mocks.findSkillByOwnerName).not.toHaveBeenCalled()
+    expect(mocks.insertVersion).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ skillId: 'sk-target', note: 're-import from git' }),
+    )
+  })
+
+  it('refuses when another skill already tracks the resolved subpath', async () => {
+    mocks.fetchTarball.mockResolvedValueOnce(await singleSkillTarball())
+    mocks.fetchCommitSha.mockResolvedValueOnce(null)
+    mocks.getSkillById.mockResolvedValueOnce({
+      id: 'sk-target',
+      user_id: 'u1',
+      name: 'target',
+      source_id: 'src0',
+      subpath: '',
+    })
+    mocks.findGitSource.mockResolvedValueOnce({ id: 'src1', kind: 'git' })
+    mocks.findSkillBySourceSubpath.mockResolvedValueOnce({ id: 'sk-other', name: 'other' })
+
+    const r = await importFromGit({
+      userId: 'u1',
+      url: 'https://github.com/owner/repo',
+      subpath: '',
+      visibility: 'private',
+      skillId: 'sk-target',
+    })
+
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.status).toBe(409)
+    expect(r.error).toContain('other')
+    expect(mocks.insertVersion).not.toHaveBeenCalled()
+  })
+
+  it('rejects a skillId owned by someone else before fetching the repo', async () => {
+    mocks.getSkillById.mockResolvedValueOnce({ id: 'sk-target', user_id: 'u2', name: 'target' })
+
+    const r = await importFromGit({
+      userId: 'u1',
+      url: 'https://github.com/owner/repo',
+      subpath: '',
+      visibility: 'private',
+      skillId: 'sk-target',
+    })
+
+    expect(r.ok).toBe(false)
+    if (r.ok) return
+    expect(r.status).toBe(404)
+    expect(mocks.fetchTarball).not.toHaveBeenCalled()
+  })
+
+  it('re-points the target row when the edit changed ref or subpath', async () => {
+    const query = vi.fn()
+    mocks.withTx.mockImplementation(async (fn) => fn({ query }))
+    mocks.fetchTarball.mockResolvedValueOnce(await singleSkillTarball())
+    mocks.fetchCommitSha.mockResolvedValueOnce(null)
+    mocks.getSkillById.mockResolvedValueOnce({
+      id: 'sk-target',
+      user_id: 'u1',
+      name: 'target',
+      source_id: 'src-old',
+      subpath: '',
+    })
+    mocks.findGitSource.mockResolvedValueOnce({ id: 'src-new', kind: 'git' })
+    mocks.findSkillBySourceSubpath.mockResolvedValueOnce(null)
+    mocks.insertVersion.mockResolvedValueOnce({
+      version: { id: 'v2', skill_id: 'sk-target', source_id: 'src-new', content_hash: 'h' },
+      created: true,
+    })
+    mocks.setActiveVersion.mockResolvedValueOnce({ id: 'sk-target', active_version_id: 'v2' })
+
+    const r = await importFromGit({
+      userId: 'u1',
+      url: 'https://github.com/owner/repo',
+      ref: 'main',
+      subpath: '',
+      visibility: 'private',
+      skillId: 'sk-target',
+    })
+
+    expect(r.ok).toBe(true)
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('UPDATE skills SET source_id'), [
+      'src-new',
+      '',
+      'sk-target',
+    ])
   })
 
   it('returns 400 when SKILL.md is missing at the subpath', async () => {
