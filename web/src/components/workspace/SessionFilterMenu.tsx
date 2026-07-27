@@ -22,9 +22,9 @@ import {
   activeFacetCount,
   normalizeStatuses,
 } from '@/lib/session-filter'
-import { sortSources, sourceVisual } from '@/lib/session-source'
+import { sortSources, sourceLabel, sourceVisual } from '@/lib/session-source'
 import { cn } from '@/lib/utils'
-import { Filter, Star } from 'lucide-react'
+import { Filter } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -107,7 +107,7 @@ export function SessionFilterMenu({ workspaceId, filter, onChange }: SessionFilt
 
       <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger inset>
             <span>{t('components.sessions.filter.source')}</span>
             <span className="ml-auto text-muted-foreground text-xs tabular-nums">
               {facetSummary(
@@ -118,7 +118,7 @@ export function SessionFilterMenu({ workspaceId, filter, onChange }: SessionFilt
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-48">
             {knownSources.map((source) => {
-              const { Icon, labelKey } = sourceVisual(source)
+              const { Icon } = sourceVisual(source)
               return (
                 <DropdownMenuCheckboxItem
                   key={source}
@@ -128,7 +128,7 @@ export function SessionFilterMenu({ workspaceId, filter, onChange }: SessionFilt
                   onSelect={keepOpen}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
-                  <span className="truncate">{t(`components.sessions.source.${labelKey}`)}</span>
+                  <span className="truncate">{sourceLabel(source, t)}</span>
                   <span className="ml-auto text-muted-foreground text-xs tabular-nums">
                     {facets?.source[source] ?? 0}
                   </span>
@@ -139,7 +139,7 @@ export function SessionFilterMenu({ workspaceId, filter, onChange }: SessionFilt
         </DropdownMenuSub>
 
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger inset>
             <span>{t('components.sessions.filter.status')}</span>
             <span className="ml-auto text-muted-foreground text-xs tabular-nums">
               {facetSummary(statusesKept, SESSION_STATUS_BUCKETS.length)}
@@ -165,7 +165,7 @@ export function SessionFilterMenu({ workspaceId, filter, onChange }: SessionFilt
         </DropdownMenuSub>
 
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger inset>
             <span>{t('components.sessions.filter.time')}</span>
             <span className="ml-auto text-muted-foreground text-xs">
               {t(`components.sessions.filter.timeValue.${filter.time}`)}
@@ -188,12 +188,10 @@ export function SessionFilterMenu({ workspaceId, filter, onChange }: SessionFilt
         <DropdownMenuSeparator />
 
         <DropdownMenuCheckboxItem
-          className="gap-2"
           checked={filter.starredOnly}
           onCheckedChange={(next) => onChange({ ...filter, starredOnly: next === true })}
           onSelect={keepOpen}
         >
-          <Star className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
           <span className="truncate">{t('components.sessions.filterStarred')}</span>
           <span className="ml-auto text-muted-foreground text-xs tabular-nums">
             {facets?.starred ?? 0}

@@ -3555,7 +3555,10 @@
         "schedule": "计划任务",
         "slack": "Slack",
         "wecom": "企业微信",
-        "webhook": "Webhook"
+        "webhook": "Webhook",
+        "api": "API 调用",
+        "batch": "批量任务",
+        "teamwork": "协作任务"
       }
     },
     "automation": {
