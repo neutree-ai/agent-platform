@@ -3531,7 +3531,10 @@
         "schedule": "Scheduled",
         "slack": "Slack",
         "wecom": "WeCom",
-        "webhook": "Webhook"
+        "webhook": "Webhook",
+        "api": "API",
+        "batch": "Batch",
+        "teamwork": "Teamwork"
       }
     },
     "automation": {

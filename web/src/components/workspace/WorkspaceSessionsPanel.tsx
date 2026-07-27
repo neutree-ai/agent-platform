@@ -19,7 +19,7 @@ import {
   activeFacetCount,
   normalizeSessionFilter,
 } from '@/lib/session-filter'
-import { sourceVisual } from '@/lib/session-source'
+import { sourceLabel, sourceVisual } from '@/lib/session-source'
 import { cleanSessionPreview } from '@/lib/session-utils'
 import { cn } from '@/lib/utils'
 import { useActiveSession } from '@/stores/active-session-store'
@@ -90,8 +90,8 @@ function SessionRow({
   const { t, i18n } = useTranslation()
   const status = classifyStatus(session.chat_status)
   const starred = !!session.starred_at
-  const { Icon: SourceIcon, labelKey: sourceLabelKey } = sourceVisual(session.source)
-  const sourceLabel = t(`components.sessions.source.${sourceLabelKey}`)
+  const { Icon: SourceIcon } = sourceVisual(session.source)
+  const sourceText = sourceLabel(session.source, t)
   const relTime = useMemo(
     () => formatRelativeTime(session.created_at, i18n.language),
     [session.created_at, i18n.language],
@@ -221,9 +221,9 @@ function SessionRow({
       <SourceIcon
         className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50"
         strokeWidth={2}
-        aria-label={sourceLabel}
+        aria-label={sourceText}
       >
-        <title>{sourceLabel}</title>
+        <title>{sourceText}</title>
       </SourceIcon>
       <div className="min-w-0 flex-1">{titleNode}</div>
       {starred && (
