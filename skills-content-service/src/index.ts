@@ -317,6 +317,9 @@ const ImportGitBody = z.object({
   description: z.string().optional(),
   visibility: VisibilityEnum,
   category: z.string().nullable().optional(),
+  // Re-import in place: the edit flow's target skill. Absent = plain import,
+  // target resolved from (source, subpath).
+  skill_id: z.string().optional(),
 })
 
 const importGitRoute = createRoute({
@@ -359,9 +362,11 @@ app.openapi(importGitRoute, async (c) => {
       descriptionOverride: body.description,
       visibility: body.visibility,
       category: body.category ?? null,
+      skillId: body.skill_id,
     })
     if (!r.ok) {
       if (r.status === 400) return c.json({ error: r.error }, 400)
+      if (r.status === 404) return c.json({ error: r.error }, 404 as never)
       if (r.status === 409) return c.json({ error: r.error }, 409)
       if (r.status === 413) return c.json({ error: r.error }, 413)
       if (r.status === 502) return c.json({ error: r.error }, 502)

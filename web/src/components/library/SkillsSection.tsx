@@ -266,7 +266,10 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
           token: form.tokenSource === 'manual' ? form.gitToken.trim() || undefined : undefined,
           credential_name:
             form.tokenSource === 'credential' ? form.selectedCredential || undefined : undefined,
-          name: form.name.trim() || undefined,
+          // On edit, send the CURRENT name and the row's id: the name is not
+          // the selector (the id is), and sending the new one would make a
+          // fresh import under it if the id path ever falls through.
+          name: (editingSkill ? editingSkill.name : form.name.trim()) || undefined,
           description: form.description.trim() || undefined,
           visibility: editingSkill?.visibility ?? 'private',
           // SkillsSection's git form is a re-import / single-skill path (Edit
@@ -274,6 +277,7 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
           // picked subpath; multi-select lives in CreateSkillDialog. Guarded
           // non-empty above, so this is always a concrete string ('' = root).
           subpath: form.subpaths[0],
+          skill_id: editingSkill?.id,
         })
         // Category isn't part of the from-git body — server doesn't take it
         // on insert. Fold it into a follow-up PATCH when the user picked one

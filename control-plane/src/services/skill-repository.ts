@@ -121,6 +121,7 @@ export interface SkillRepository {
 
   /** Pre-flight for DELETE: any workspace / template_version still using this skill? */
   getDeleteBlockers(skillId: string): Promise<SkillDeleteBlockers>
+  pruneSupersededTemplateRefs(skillId: string): Promise<number>
 
   /** Occupancy preview for the owner: own workspaces by name, others by count. */
   getSkillDependents(skillId: string, ownerId: string): Promise<SkillDependents>
@@ -174,6 +175,19 @@ const VERSION_COLS = `id, skill_id, source_id, content_hash, commit_sha, note,
  * category "uncategorized" is unambiguous (they'd pass the column's NULL).
  */
 export const UNCATEGORIZED_SENTINEL = 'uncategorized'
+
+/**
+ * Template versions that still reference a skill AND are the version their
+ * template currently hands out. Superseded versions are deliberately excluded:
+ * they are immutable history with no edit affordance in the UI, so counting
+ * them makes a skill permanently undeletable once any template ever used it.
+ * `remove()` clears those stale rows instead (they FK with RESTRICT).
+ */
+const CURRENT_TEMPLATE_REFS_SQL = `SELECT tvs.template_version_id
+   FROM template_version_skills tvs
+   JOIN template_versions tv ON tv.id = tvs.template_version_id
+   JOIN templates t ON t.id = tv.template_id AND t.latest_version = tv.version
+  WHERE tvs.skill_id = $1`
 
 export class PgSkillRepository implements SkillRepository {
   // ─── skills (read) ───────────────────────────────────────────────────────
@@ -396,18 +410,34 @@ export class PgSkillRepository implements SkillRepository {
   // ─── delete blockers ─────────────────────────────────────────────────────
 
   async getDeleteBlockers(skillId: string): Promise<SkillDeleteBlockers> {
+    // Only CURRENT template versions block — see CURRENT_TEMPLATE_REFS_SQL.
     const { rows: wsRows } = await pool.query(
       'SELECT workspace_id FROM workspace_skills WHERE skill_id = $1',
       [skillId],
     )
-    const { rows: tvRows } = await pool.query(
-      'SELECT template_version_id FROM template_version_skills WHERE skill_id = $1',
-      [skillId],
-    )
+    const { rows: tvRows } = await pool.query(CURRENT_TEMPLATE_REFS_SQL, [skillId])
     return {
       workspace_ids: wsRows.map((r) => r.workspace_id),
       template_version_ids: tvRows.map((r) => r.template_version_id),
     }
+  }
+
+  /**
+   * Drop a skill's rows from superseded template versions so the RESTRICT FK
+   * doesn't block the delete. Call only once getDeleteBlockers has cleared —
+   * the current version's row (if any) is left alone and would still block.
+   */
+  async pruneSupersededTemplateRefs(skillId: string): Promise<number> {
+    const { rowCount } = await pool.query(
+      `DELETE FROM template_version_skills tvs
+        USING template_versions tv, templates t
+        WHERE tvs.skill_id = $1
+          AND tv.id = tvs.template_version_id
+          AND t.id = tv.template_id
+          AND t.latest_version <> tv.version`,
+      [skillId],
+    )
+    return rowCount ?? 0
   }
 
   async getSkillDependents(skillId: string, ownerId: string): Promise<SkillDependents> {
@@ -424,14 +454,11 @@ export class PgSkillRepository implements SkillRepository {
         WHERE ws.skill_id = $1 AND w.user_id != $2`,
       [skillId, ownerId],
     )
-    const { rows: tvRows } = await pool.query(
-      'SELECT COUNT(*) AS count FROM template_version_skills WHERE skill_id = $1',
-      [skillId],
-    )
+    const { rows: tvRows } = await pool.query(CURRENT_TEMPLATE_REFS_SQL, [skillId])
     return {
       own_workspaces: ownRows.map((r) => ({ id: r.id as string, name: r.name as string })),
       other_workspace_count: Number.parseInt(otherRows[0].count, 10),
-      template_version_count: Number.parseInt(tvRows[0].count, 10),
+      template_version_count: tvRows.length,
     }
   }
 

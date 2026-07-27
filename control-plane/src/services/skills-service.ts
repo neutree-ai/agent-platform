@@ -114,6 +114,8 @@ interface ImportSkillInput {
   description?: string
   visibility: SkillVisibility
   category?: string | null
+  /** Re-import in place: the skill being edited. Absent = plain import. */
+  skillId?: string
 }
 
 interface SwitchSkillToGitInput {
@@ -255,6 +257,7 @@ export class SkillsService {
       description: input.description,
       visibility: input.visibility,
       category: input.category ?? null,
+      skill_id: input.skillId,
     }
     const result = await scsImportFromGit(body)
     this.unwrap(result)
@@ -554,6 +557,10 @@ export class SkillsService {
     if (blockers.workspace_ids.length > 0 || blockers.template_version_ids.length > 0) {
       throw new ConflictError(this.formatDeleteBlockers(blockers))
     }
+    // Nothing current references it. Superseded template versions still can,
+    // and they FK with RESTRICT — clear them or scs's delete fails on a
+    // constraint the user has no way to satisfy.
+    await this.repo.pruneSupersededTemplateRefs(skillId)
 
     const result = await scsDeleteSkill(skillId)
     this.unwrap(result)

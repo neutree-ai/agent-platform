@@ -818,6 +818,8 @@ class ApiClient {
     grants?: SkillGrant[]
     subpath: string
     ref?: string
+    /** Re-import in place — the skill being edited. Omit for new imports. */
+    skill_id?: string
   }): Promise<ApiSkill> {
     return this.request<ApiSkill>('/skills/from-git', {
       method: 'POST',

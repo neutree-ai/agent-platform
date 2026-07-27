@@ -619,6 +619,13 @@ export const SkillImportFromGitBodySchema = z.object({
   description: z.string().optional(),
   visibility: SkillVisibilitySchema.optional(),
   category: z.string().nullable().optional(),
+  /**
+   * Re-import an existing skill in place. The edit dialog sends the skill it
+   * is editing; the server then appends a version to THAT row instead of
+   * resolving a target from `(source, subpath)` — which retargets the wrong
+   * skill when a repo has several source rows (ref unset vs ref 'main').
+   */
+  skill_id: z.string().optional(),
 })
 
 /**

@@ -59,6 +59,9 @@ interface TeamRow {
 interface TemplateVersionRef {
   template_version_id: string
   skill_id: string
+  /** Version superseded by a newer one on the same template. Such rows are
+   *  history: they never block a delete, and remove() prunes them. */
+  superseded: boolean
 }
 
 export class InMemorySkillRepository implements SkillRepository {
@@ -86,8 +89,12 @@ export class InMemorySkillRepository implements SkillRepository {
   seedWorkspace(ws: Workspace): void {
     this.workspaces.set(ws.id, ws)
   }
-  seedTemplateVersionSkill(templateVersionId: string, skillId: string): void {
-    this.templateVersionSkills.push({ template_version_id: templateVersionId, skill_id: skillId })
+  seedTemplateVersionSkill(templateVersionId: string, skillId: string, superseded = false): void {
+    this.templateVersionSkills.push({
+      template_version_id: templateVersionId,
+      skill_id: skillId,
+      superseded,
+    })
   }
 
   /**
@@ -302,12 +309,20 @@ export class InMemorySkillRepository implements SkillRepository {
       if (sid === skillId) workspaceIds.push(wsId)
     }
     const templateVersionIds = this.templateVersionSkills
-      .filter((r) => r.skill_id === skillId)
+      .filter((r) => r.skill_id === skillId && !r.superseded)
       .map((r) => r.template_version_id)
     return {
       workspace_ids: workspaceIds,
       template_version_ids: templateVersionIds,
     }
+  }
+
+  async pruneSupersededTemplateRefs(skillId: string): Promise<number> {
+    const before = this.templateVersionSkills.length
+    this.templateVersionSkills = this.templateVersionSkills.filter(
+      (r) => !(r.skill_id === skillId && r.superseded),
+    )
+    return before - this.templateVersionSkills.length
   }
 
   async getSkillDependents(skillId: string, ownerId: string): Promise<SkillDependents> {
@@ -323,7 +338,7 @@ export class InMemorySkillRepository implements SkillRepository {
     }
     ownWorkspaces.sort((a, b) => a.name.localeCompare(b.name))
     const templateVersionCount = this.templateVersionSkills.filter(
-      (r) => r.skill_id === skillId,
+      (r) => r.skill_id === skillId && !r.superseded,
     ).length
     return {
       own_workspaces: ownWorkspaces,
