@@ -326,4 +326,14 @@ describe('readyReplicaIdsFromPods', () => {
     ]
     expect(readyReplicaIdsFromPods(pods, 'tos-ws1')).toEqual([0])
   })
+
+  it('excludes a terminating pod even while its containers still report ready', () => {
+    // A StatefulSet pod deleted (or an ordinal being recreated) keeps a stale
+    // Ready condition for its whole grace period. It must not stay a routing
+    // target, or cp keeps sending turns to a dying agent and never rebinds.
+    const terminating = pod('tos-ws1-1', [true])
+    terminating.metadata!.deletionTimestamp = new Date('2026-07-27T07:00:18Z')
+    const pods = [pod('tos-ws1-0', [true]), terminating, pod('tos-ws1-2', [true])]
+    expect(readyReplicaIdsFromPods(pods, 'tos-ws1')).toEqual([0, 2])
+  })
 })

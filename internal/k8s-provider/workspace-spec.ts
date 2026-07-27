@@ -446,12 +446,20 @@ function podReplicaOrdinal(podName: string, stsName: string): number | null {
 /**
  * The replica ids of the Ready pods of a StatefulSet — the readiness signal cp
  * routes on (reported via the endpoint's readyReplicaIds). Returned sorted.
+ *
+ * A pod being deleted is excluded even while its containers still report ready:
+ * once `deletionTimestamp` is set the pod is terminating (SIGTERM in flight, or
+ * a StatefulSet ordinal being recreated), but its Ready condition lingers for
+ * the whole grace period. Routing a turn there hits a dying agent (connection
+ * refused / 502) and, because the ordinal never leaves the ready set, cp never
+ * rebinds the session to a healthy replica. Kubernetes' own Endpoints controller
+ * drops terminating pods for exactly this reason — we mirror it.
  */
 export function readyReplicaIdsFromPods(pods: k8s.V1Pod[], stsName: string): number[] {
   const ids: number[] = []
   for (const pod of pods) {
     const ordinal = podReplicaOrdinal(pod.metadata?.name ?? '', stsName)
-    if (ordinal !== null && isPodReady(pod)) ids.push(ordinal)
+    if (ordinal !== null && isPodReady(pod) && !pod.metadata?.deletionTimestamp) ids.push(ordinal)
   }
   return ids.sort((a, b) => a - b)
 }
