@@ -3473,6 +3473,26 @@
       "unstar": "Unstar",
       "starred": "Starred",
       "filterStarred": "Show starred only",
+      "filter": {
+        "title": "Filter",
+        "activeLabel": "Filter ({{count}} active)",
+        "source": "Source",
+        "status": "Status",
+        "time": "Time",
+        "all": "All",
+        "clear": "Clear all filters",
+        "statusValue": {
+          "human": "Needs you",
+          "agent": "Running",
+          "idle": "Idle"
+        },
+        "timeValue": {
+          "any": "Any time",
+          "today": "Today",
+          "7d": "Last 7 days",
+          "30d": "Last 30 days"
+        }
+      },
       "unreadCount_one": "{{count}} needs you",
       "unreadCount_other": "{{count}} need you",
       "locateUnread": "Jump to next session that needs you",
@@ -3486,9 +3506,9 @@
         "title": "No matching sessions",
         "description": "Try a different search term."
       },
-      "starredEmpty": {
-        "title": "No starred sessions",
-        "description": "Star a session to keep it within easy reach."
+      "filteredEmpty": {
+        "title": "No sessions match these filters",
+        "description": "Adjust or clear the filters to see other sessions."
       },
       "toasts": {
         "renamed": "Session renamed",

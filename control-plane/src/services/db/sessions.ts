@@ -29,16 +29,78 @@ export async function getSession(id: string): Promise<Session | null> {
   return (rows[0] as Session) ?? null
 }
 
+/**
+ * View filter for the session list. Every facet is applied server-side: the
+ * list is paginated, so filtering client-side would only ever narrow the pages
+ * already fetched — a facet that excludes most rows would return a near-empty
+ * list while infinite scroll kept paging.
+ */
+interface SessionListFilter {
+  /** Restrict to starred sessions. */
+  starredOnly?: boolean
+  /**
+   * Sources to leave out. Exclusion rather than inclusion so a filter saved
+   * today doesn't silently hide a connector type added tomorrow.
+   */
+  excludeSources?: string[]
+  /**
+   * Coarse statuses to keep — 'human' (needs you), 'agent' (running), 'idle'.
+   * Empty/undefined means all. Anything not 'agent'/'human' counts as idle,
+   * mirroring how the client classifies chat_status.
+   */
+  statuses?: string[]
+  /** Only sessions active at or after this instant. */
+  activeAfter?: string
+}
+
+/** SQL expression collapsing chat_status into the three coarse buckets. */
+const STATUS_BUCKET_SQL = `CASE WHEN s.chat_status IN ('agent', 'human') THEN s.chat_status ELSE 'idle' END`
+
+/**
+ * Builds the shared WHERE predicate for every session-list query. The page
+ * query, the total count and the facet counts must all agree, so they take
+ * their conditions from here rather than each assembling their own.
+ *
+ * Returns the clause plus the positional params it consumed; callers append
+ * their own params (limit/offset) after these.
+ *
+ * Exported for tests: a drift between the page query's placeholders and the
+ * params array is silent at type level and only shows up as a wrong list.
+ */
+export function buildSessionListWhere(
+  workspaceId: string,
+  filter: SessionListFilter | undefined,
+): { where: string; params: unknown[] } {
+  const params: unknown[] = [workspaceId]
+  let where = `s.workspace_id = $1 AND s.status = 'active'`
+
+  if (filter?.starredOnly) where += ' AND s.starred_at IS NOT NULL'
+
+  if (filter?.excludeSources?.length) {
+    params.push(filter.excludeSources)
+    where += ` AND s.source <> ALL($${params.length})`
+  }
+
+  if (filter?.statuses?.length) {
+    params.push(filter.statuses)
+    where += ` AND ${STATUS_BUCKET_SQL} = ANY($${params.length})`
+  }
+
+  if (filter?.activeAfter) {
+    params.push(filter.activeAfter)
+    where += ` AND s.last_active_at >= $${params.length}`
+  }
+
+  return { where, params }
+}
+
 export async function listSessions(
   workspaceId: string,
-  opts?: { limit?: number; offset?: number; starredOnly?: boolean },
+  opts?: { limit?: number; offset?: number } & SessionListFilter,
 ): Promise<PaginatedSessions> {
   const limit = opts?.limit ?? 20
   const offset = opts?.offset ?? 0
-  // When set, restricts the list to starred sessions. Filtering happens
-  // server-side so "show all my starred" stays complete regardless of how many
-  // pages the client has scrolled.
-  const starredClause = opts?.starredOnly ? ' AND s.starred_at IS NOT NULL' : ''
+  const { where, params } = buildSessionListWhere(workspaceId, opts)
 
   const [{ rows }, countResult] = await Promise.all([
     pool.query(
@@ -57,21 +119,61 @@ export async function listSessions(
          ORDER BY m.created_at ASC LIMIT 1
        ) fm ON true
        LEFT JOIN workspaces cw ON cw.id = s.caller_workspace_id
-       WHERE s.workspace_id = $1 AND s.status = 'active'${starredClause}
+       WHERE ${where}
        ORDER BY s.last_active_at DESC
-       LIMIT $2 OFFSET $3`,
-      [workspaceId, limit, offset],
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset],
     ),
-    pool.query(
-      `SELECT COUNT(*)::int AS total FROM sessions s
-       WHERE s.workspace_id = $1 AND s.status = 'active'${starredClause}`,
-      [workspaceId],
-    ),
+    pool.query(`SELECT COUNT(*)::int AS total FROM sessions s WHERE ${where}`, params),
   ])
 
   return {
     items: rows as SessionWithPreview[],
     total: countResult.rows[0]?.total ?? 0,
+  }
+}
+
+interface SessionFacetCounts {
+  source: Record<string, number>
+  status: Record<string, number>
+  starred: number
+  total: number
+}
+
+/**
+ * Per-facet session counts for the filter menu. Counts are unconditioned
+ * beyond the workspace itself — they answer "what is in this workspace", which
+ * is what makes the menu explain a crowded list. Conditioning each facet on
+ * the *other* active filters would cost one query per facet; not worth it
+ * until someone asks.
+ */
+export async function getSessionFacets(workspaceId: string): Promise<SessionFacetCounts> {
+  const { where, params } = buildSessionListWhere(workspaceId, undefined)
+
+  const [bySource, byStatus, starred] = await Promise.all([
+    pool.query(
+      `SELECT s.source AS key, COUNT(*)::int AS n FROM sessions s WHERE ${where} GROUP BY 1`,
+      params,
+    ),
+    pool.query(
+      `SELECT ${STATUS_BUCKET_SQL} AS key, COUNT(*)::int AS n FROM sessions s WHERE ${where} GROUP BY 1`,
+      params,
+    ),
+    pool.query(
+      `SELECT COUNT(*)::int AS n FROM sessions s WHERE ${where} AND s.starred_at IS NOT NULL`,
+      params,
+    ),
+  ])
+
+  const tally = (rows: { key: string; n: number }[]) =>
+    Object.fromEntries(rows.map((r) => [r.key, r.n]))
+
+  const source = tally(bySource.rows)
+  return {
+    source,
+    status: tally(byStatus.rows),
+    starred: starred.rows[0]?.n ?? 0,
+    total: Object.values(source).reduce((a, b) => a + b, 0),
   }
 }
 

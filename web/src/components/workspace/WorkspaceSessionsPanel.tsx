@@ -1,9 +1,11 @@
 import { AppHeaderButton } from '@/components/shell/windows/AppHeaderButton'
 import { useAppHeaderSlot } from '@/components/shell/windows/AppWindow'
+import { Button } from '@/components/ui/button'
 import { EmptyHero } from '@/components/ui/empty-hero'
 import { EmptyIllustration } from '@/components/ui/empty-illustration'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { SessionFilterMenu } from '@/components/workspace/SessionFilterMenu'
 import { ShareSessionButton } from '@/components/workspace/ShareSessionButton'
 import { sessionKeys, useInvalidateSessions, useSessions } from '@/hooks/useSessions'
 import { useMarkSeen, useUnreadCount } from '@/hooks/useUnread'
@@ -11,29 +13,19 @@ import { api } from '@/lib/api/client'
 import type { Session } from '@/lib/api/types'
 import { isCommitEnter } from '@/lib/keyboard'
 import { formatFullTime, formatRelativeTime } from '@/lib/relative-time'
+import {
+  EMPTY_SESSION_FILTER,
+  type SessionFilter,
+  activeFacetCount,
+  normalizeSessionFilter,
+} from '@/lib/session-filter'
+import { sourceVisual } from '@/lib/session-source'
 import { cleanSessionPreview } from '@/lib/session-utils'
 import { cn } from '@/lib/utils'
 import { useActiveSession } from '@/stores/active-session-store'
-import { useInstanceState } from '@/stores/instance-state-store'
+import { useInstancePersistentState, useInstanceState } from '@/stores/instance-state-store'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Bot,
-  CalendarClock,
-  Check,
-  CheckCheck,
-  Globe,
-  type LucideIcon,
-  MessageCircle,
-  Pencil,
-  Search,
-  Share2,
-  Slack,
-  SquarePen,
-  Star,
-  Trash2,
-  Webhook,
-  X,
-} from 'lucide-react'
+import { Check, CheckCheck, Pencil, Search, Share2, SquarePen, Star, Trash2, X } from 'lucide-react'
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -49,27 +41,6 @@ function classifyStatus(chatStatus: string): SessionStatus {
   if (s === 'agent') return 'running'
   if (s.includes('error') || s.includes('fail')) return 'error'
   return 'idle'
-}
-
-// Per-source leading icon. Every row carries one so titles stay left-aligned.
-// Literal switch (not `icons[source]`) keeps each source greppable and lets
-// new connector types fail loudly into the muted fallback.
-function sourceVisual(source: string): { Icon: LucideIcon; labelKey: string } {
-  switch (source) {
-    case 'schedule':
-      return { Icon: CalendarClock, labelKey: 'schedule' }
-    case 'slack':
-      return { Icon: Slack, labelKey: 'slack' }
-    case 'wecom':
-      return { Icon: MessageCircle, labelKey: 'wecom' }
-    case 'webhook':
-      return { Icon: Webhook, labelKey: 'webhook' }
-    case 'agent':
-      return { Icon: Bot, labelKey: 'agent' }
-    default:
-      // 'web' (manual) and any unknown source.
-      return { Icon: Globe, labelKey: 'web' }
-  }
 }
 
 type Bucket = 'today' | 'week' | 'month' | 'earlier'
@@ -394,20 +365,26 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const headerSlot = useAppHeaderSlot()
-  // Starred-only filter. Memory instance state — survives a layout switch but
-  // resets on refresh, so reopening the panel always shows the full list.
-  const [starredOnly, setStarredOnly] = useInstanceState<boolean>(
+  // Filter is view config, so it persists (workspace_profile) rather than
+  // resetting on refresh: someone who never wants scheduled sessions in their
+  // list unchecks that source once instead of us guessing a default for
+  // everyone. The badge on the filter button keeps the state visible.
+  const [storedFilter, setFilter] = useInstancePersistentState<SessionFilter>(
     instanceId,
-    'starredOnly',
-    () => false,
+    'sessionFilter',
+    () => EMPTY_SESSION_FILTER,
   )
+  // The stored value round-trips through jsonb and may predate the current
+  // facet set, so it's coerced before it can reach a query key.
+  const filter = useMemo(() => normalizeSessionFilter(storedFilter), [storedFilter])
+  const filtering = activeFacetCount(filter) > 0
   const {
     data: sessions,
     isLoading,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useSessions(workspaceId, { starred: starredOnly })
+  } = useSessions(workspaceId, filter)
   const invalidateSessions = useInvalidateSessions()
   const activeSessionId = useActiveSession((s) =>
     s.workspaceId === workspaceId ? s.sessionId : undefined,
@@ -527,7 +504,7 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
   const handleToggleStar = useCallback(
     async (session: Session) => {
       const next = !session.starred_at
-      const key = sessionKeys.listVariant(workspaceId, starredOnly)
+      const key = sessionKeys.listVariant(workspaceId, filter)
       // Optimistic: flip the flag in cache so the star reacts instantly. When
       // the starred-only filter is on, un-starring drops the row outright.
       await queryClient.cancelQueries({ queryKey: key })
@@ -539,7 +516,7 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
           pages: old.pages.map((p: any) => ({
             ...p,
             items:
-              starredOnly && !next
+              filter.starredOnly && !next
                 ? p.items.filter((s: Session) => s.id !== session.id)
                 : p.items.map((s: Session) =>
                     s.id === session.id
@@ -561,7 +538,7 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
         invalidateSessions(workspaceId)
       }
     },
-    [workspaceId, starredOnly, queryClient, invalidateSessions],
+    [workspaceId, filter, queryClient, invalidateSessions],
   )
 
   const { human: unreadCount } = useUnreadCount({ kind: 'ws', workspaceId })
@@ -650,21 +627,7 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
             </button>
           )}
         </div>
-        <button
-          type="button"
-          aria-label={t('components.sessions.filterStarred')}
-          title={t('components.sessions.filterStarred')}
-          aria-pressed={starredOnly}
-          onClick={() => setStarredOnly(!starredOnly)}
-          className={cn(
-            'flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors',
-            starredOnly
-              ? 'bg-warning/15 text-warning'
-              : 'bg-foreground/[0.04] text-muted-foreground/70 hover:bg-foreground/[0.07] hover:text-foreground',
-          )}
-        >
-          <Star className={cn('h-3.5 w-3.5', starredOnly && 'fill-current')} strokeWidth={2} />
-        </button>
+        <SessionFilterMenu workspaceId={workspaceId} filter={filter} onChange={setFilter} />
       </div>
 
       {isLoading ? (
@@ -675,20 +638,35 @@ export function WorkspaceSessionsPanel({ workspaceId, instanceId }: WorkspaceSes
       ) : filteredSessions.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           <EmptyHero
-            illustration={<EmptyIllustration src={query ? 'search' : 'sessions'} size="h-32" />}
+            illustration={
+              <EmptyIllustration src={query || filtering ? 'search' : 'sessions'} size="h-32" />
+            }
             title={
               query
                 ? t('components.sessions.noMatch.title')
-                : starredOnly
-                  ? t('components.sessions.starredEmpty.title')
+                : filtering
+                  ? t('components.sessions.filteredEmpty.title')
                   : t('components.sessions.empty.title')
             }
             description={
               query
                 ? t('components.sessions.noMatch.description')
-                : starredOnly
-                  ? t('components.sessions.starredEmpty.description')
+                : filtering
+                  ? t('components.sessions.filteredEmpty.description')
                   : t('components.sessions.empty.description')
+            }
+            action={
+              !query && filtering ? (
+                // Without a chip row, a filtered-empty list is the one state
+                // with no visible way back — this is that way back.
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilter({ ...EMPTY_SESSION_FILTER })}
+                >
+                  {t('components.sessions.filter.clear')}
+                </Button>
+              ) : undefined
             }
           />
         </div>

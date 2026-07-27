@@ -242,6 +242,20 @@ export const ApiSessionListSchema = z.object({
 export type ApiSessionList = z.infer<typeof ApiSessionListSchema>
 
 /**
+ * Session counts per filter facet, used to label the session-list filter menu.
+ * Keys are open (source is whatever connector types the workspace has seen),
+ * so both maps are plain records rather than enums.
+ */
+export const ApiSessionFacetsSchema = z.object({
+  source: z.record(z.string(), z.number().int()),
+  status: z.record(z.string(), z.number().int()),
+  starred: z.number().int(),
+  total: z.number().int(),
+})
+
+export type ApiSessionFacets = z.infer<typeof ApiSessionFacetsSchema>
+
+/**
  * Lightweight session shape returned by the single-session GET. Strict subset
  * of ApiSession plus a `preview` snippet derived from the first user message.
  * Used by the sidebar — does not include workspace_id, created_at, message_count, etc.
