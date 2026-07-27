@@ -83,6 +83,18 @@ export function registerSkillRoutes(
     }
   })
 
+  // Discard in-container edits: restore the skill from its published version
+  app.post(`${prefix}/:name/discard`, async (c: any) => {
+    try {
+      const name = c.req.param('name')
+      await mgr().discardChanges(name)
+      return c.json({ success: true })
+    } catch (e: any) {
+      console.error(`[skills] discard_failed name=${c.req.param('name')} error=${e?.message}`)
+      return c.json({ error: e.message }, 500)
+    }
+  })
+
   // Create a new draft skill
   app.post(`${prefix}`, async (c: any) => {
     try {

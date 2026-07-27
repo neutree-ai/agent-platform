@@ -705,6 +705,62 @@ export class SkillManager {
     }
   }
 
+  /**
+   * Throw away in-container edits and restore the skill directory to the
+   * version currently published on CP.
+   *
+   * Deliberately reuses the normal load path (download → extractAtomic) rather
+   * than reimplementing fetch/unpack: the result is byte-identical to what a
+   * fresh pod would materialise for this skill. The only extra steps are
+   * dropping the ETag sidecar first — so an unchanged active version still
+   * comes back as a full package instead of a 304 that would leave the edited
+   * files in place — and reclaiming the persistent draft dir, so the skill
+   * ends up back on tmpfs as a plain published skill.
+   *
+   * A skill CP doesn't know about (a draft created locally and never
+   * published) has no version to restore to, so this rejects instead of
+   * silently wiping the user's only copy. Same for a download that exhausts
+   * its retries: the current content is left untouched.
+   *
+   * Afterwards the skill is no longer "editing" — the extracted package never
+   * contains the `.editing` lock (pack excludes it), and we clear any lock
+   * left over from a draft location.
+   */
+  async discardChanges(name: string): Promise<void> {
+    assertNotReserved(name)
+    if (!this._knownSkills.has(name)) {
+      throw new Error(`No published version to restore for skill: ${name}`)
+    }
+
+    // Force a full download: readKnownEtag would otherwise make CP answer 304
+    // for the version we are trying to restore.
+    try {
+      await this.fs.rm(this.etagPath(name))
+    } catch {
+      // Best-effort: a surviving sidecar only risks a redundant 304 below,
+      // which we surface as a failure rather than a silent no-op.
+    }
+
+    const res = await this.downloadWithRetry(name)
+    if (res.kind !== 'ok') {
+      throw new Error(`Failed to fetch published version for skill: ${name}`)
+    }
+
+    // Serialize disk mutations against a concurrent load()/pack() for the same
+    // name, exactly as load() does around its own extract.
+    await this.withNameLock(name, async () => {
+      if (this.draftBase && this.isDraft(name)) {
+        // Drop the persistent draft copy before extracting so localDir()
+        // resolves back to tmpfs and the symlink is re-pointed there.
+        await this.fs.rm(this.draftDir(name))
+        await this.fs.rm(this.destDir(name))
+      }
+      await this.extractAtomic(name, res.buf, res.etag)
+      await this.markManaged(name)
+      await this.stopEditing(name)
+    })
+  }
+
   // ── Create draft ──
 
   /** Create a new empty skill with a template SKILL.md. */

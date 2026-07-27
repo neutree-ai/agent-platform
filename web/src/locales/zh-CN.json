@@ -2668,13 +2668,17 @@
       "actions": {
         "newDraft": "新建草稿",
         "publish": "发布",
+        "discard": "丢弃改动",
+        "discardConfirm": "再点一次确认",
         "remove": "移除",
         "removeConfirm": "再点一次确认"
       },
       "tooltips": {
         "publish": "将修改发布到资源库，其他工作空间即可使用更新后的版本。",
         "publishGitSource": "将修改发布到资源库。注意：该 Skill 来自 Git 导入，下一次 Git 同步时会覆盖发布结果。",
-        "remove": "从当前工作空间移除该 Skill；资源库中的 Skill 不会被删除。"
+        "remove": "从当前工作空间移除该 Skill；资源库中的 Skill 不会被删除。",
+        "discard": "放弃容器内的改动，把该 Skill 恢复成资源库中已发布的版本。",
+        "discardNoPublished": "该 Skill 尚未发布过，没有可恢复的版本。请先发布，或直接移除。"
       },
       "empty": {
         "noSkills": {
@@ -2698,6 +2702,7 @@
         "renamed": "已重命名为 {{name}}",
         "createdDraft": "已创建草稿“{{name}}”",
         "published": "已发布 {{name}}",
+        "discarded": "已将 {{name}} 恢复为已发布版本",
         "removed": "已移除 {{name}}"
       },
       "errors": {
@@ -2705,6 +2710,7 @@
         "createFolderFailed": "创建文件夹失败：{{status}}",
         "createDraftFailed": "创建草稿失败",
         "packFailed": "打包 Skill 失败",
+        "discardFailed": "丢弃改动失败",
         "uploadFailed": "上传 Skill 失败",
         "removeFailed": "移除 Skill 失败"
       }
