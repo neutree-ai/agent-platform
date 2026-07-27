@@ -66,11 +66,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
 
   // Admit the turn before doing any work. Auto-scaling workspaces are capped at
   // readyReplicas × target (queue / 503 over the cap); static workspaces are
-  // only accounted, never blocked. The slot must be released exactly once when
-  // the turn ends: the streaming path hands it to the interceptor (onTurnEnd),
-  // and EVERY early return below releases it inline first. release() is
-  // idempotent, so any belt-and-suspenders double-release is harmless — but a
-  // missed one leaks capacity, so a new early return must release too.
+  // only accounted, never blocked.
   let slot: TurnSlot
   try {
     slot = await acquireTurn(workspaceId)
@@ -81,165 +77,178 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     throw e
   }
 
-  // Auto-start a stopped workspace before dispatching the turn. Covers every
-  // trigger source that funnels through executeChat — interactive chat,
-  // scheduled jobs, connector events, batch. Blocks until the agent /health
-  // passes (cold-start budget ~90s). Honors the per-workspace auto_start
-  // opt-out and fails fast on the error state.
+  // The slot must be released exactly once. On the streaming path the
+  // interceptor takes ownership (onTurnEnd) and releases when the turn ends;
+  // every other exit — an early return OR a thrown error during setup (a
+  // transient DB failure in getSession / ensureTokenForSession /
+  // transitionSessionStatus / addMessage would otherwise reach neither the
+  // handoff nor an inline release, silently leaking a unit of capacity) —
+  // funnels through this finally. `handedOff` is set true right before the
+  // interceptor return so only that path skips the release here.
+  let handedOff = false
   try {
-    await ensureWorkspaceRunning(workspace)
-  } catch (e) {
-    slot.release()
-    if (e instanceof WorkspaceStartError) {
-      return jsonError(e.message, 503)
+    // Auto-start a stopped workspace before dispatching the turn. Covers every
+    // trigger source that funnels through executeChat — interactive chat,
+    // scheduled jobs, connector events, batch. Blocks until the agent /health
+    // passes (cold-start budget ~90s). Honors the per-workspace auto_start
+    // opt-out and fails fast on the error state.
+    try {
+      await ensureWorkspaceRunning(workspace)
+    } catch (e) {
+      if (e instanceof WorkspaceStartError) {
+        return jsonError(e.message, 503)
+      }
+      console.error(`[chat] auto-start failed workspace=${workspaceId}:`, e)
+      return jsonError('Failed to start workspace', 503)
     }
-    console.error(`[chat] auto-start failed workspace=${workspaceId}:`, e)
-    return jsonError('Failed to start workspace', 503)
-  }
 
-  // Reject cross-workspace session ids before we touch the agent. Without
-  // this a caller could drive messages belonging to another workspace's
-  // session, or create orphan rows with `session_id` pointing at a
-  // session that lives under a different workspace_id.
-  let boundReplica: number | undefined
-  if (sessionId) {
-    const session = await getSession(sessionId)
-    if (!session || session.workspace_id !== workspaceId) {
-      slot.release()
-      return jsonError('Session not found for this workspace', 400)
-    }
-    boundReplica = session.replica_ordinal ?? undefined
-  }
-
-  // For an auto-scaling workspace, pin this turn to a specific replica: keep the
-  // session's existing binding while its replica is still ready, else rebind /
-  // pick fresh (a new session, or a replica that dropped out). Static workspaces
-  // report no ready set → undefined → the workspace's default address,
-  // byte-identical to before. The chosen id is threaded to the interceptor so
-  // `session.started` persists the binding for the session's next turns.
-  const replicaId = pickReplicaForTurn(workspaceId, boundReplica)
-  const address = resolveAgentAddress(workspaceId, { sessionId, replicaId })
-
-  // Mint (or look up) the session_token before dispatching. For a resume
-  // the same token follows the session across turns; for a new session we
-  // mint with NULL session_id and the persist plugin binds the SDK-revealed
-  // id on `session.started`. The agent threads this through to the MCP
-  // transport as `X-Session-Token`.
-  const sessionToken = sessionId
-    ? await ensureTokenForSession(workspaceId, sessionId)
-    : await mintToken({ workspaceId })
-
-  const agentBody = JSON.stringify(
-    buildAgentChatBody({
-      message: userMessageText,
-      sessionId,
-      images,
-      source,
-      sessionToken,
-    }),
-  )
-
-  // 24-hour hard cap. Deliberately decoupled from the client's signal —
-  // see `createInterceptedSSEResponse` for why: the agent turn is
-  // broadcast to any client attached via cp-reconnect, so losing the
-  // initiating client shouldn't kill the turn.
-  const fetchSignal = AbortSignal.timeout(24 * 60 * 60 * 1000)
-
-  const agentHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  }
-
-  let response: Response
-  try {
-    response = await fetch(`${address}/chat`, {
-      method: 'POST',
-      headers: agentHeaders,
-      body: agentBody,
-      signal: fetchSignal,
-    })
-  } catch (e: any) {
-    console.error(`[chat] Agent fetch failed workspace=${workspaceId}:`, e.message)
-    slot.release()
+    // Reject cross-workspace session ids before we touch the agent. Without
+    // this a caller could drive messages belonging to another workspace's
+    // session, or create orphan rows with `session_id` pointing at a
+    // session that lives under a different workspace_id.
+    let boundReplica: number | undefined
     if (sessionId) {
-      await transitionSessionStatus(sessionId, 'idle').catch(() => {})
+      const session = await getSession(sessionId)
+      if (!session || session.workspace_id !== workspaceId) {
+        return jsonError('Session not found for this workspace', 400)
+      }
+      boundReplica = session.replica_ordinal ?? undefined
     }
-    return jsonError('Agent unavailable', 502)
-  }
 
-  if (!response.headers.get('Content-Type')?.includes('text/event-stream')) {
-    // Non-SSE error from the agent (e.g. 4xx/5xx JSON). Pass the body
-    // through so the caller can see what the agent said.
-    slot.release()
-    const text = await response.text().catch(() => '')
-    return new Response(text || JSON.stringify({ error: 'Agent returned non-SSE response' }), {
-      status: response.status || 502,
-      headers: {
-        'Content-Type': response.headers.get('Content-Type') || 'application/json',
+    // For an auto-scaling workspace, pin this turn to a specific replica: keep
+    // the session's existing binding while its replica is still ready, else
+    // rebind / pick fresh (a new session, or a replica that dropped out). Static
+    // workspaces report no ready set → undefined → the workspace's default
+    // address, byte-identical to before. The chosen id is threaded to the
+    // interceptor so `session.started` persists the binding for later turns.
+    const replicaId = pickReplicaForTurn(workspaceId, boundReplica)
+    const address = resolveAgentAddress(workspaceId, { sessionId, replicaId })
+
+    // Mint (or look up) the session_token before dispatching. For a resume
+    // the same token follows the session across turns; for a new session we
+    // mint with NULL session_id and the persist plugin binds the SDK-revealed
+    // id on `session.started`. The agent threads this through to the MCP
+    // transport as `X-Session-Token`.
+    const sessionToken = sessionId
+      ? await ensureTokenForSession(workspaceId, sessionId)
+      : await mintToken({ workspaceId })
+
+    const agentBody = JSON.stringify(
+      buildAgentChatBody({
+        message: userMessageText,
+        sessionId,
+        images,
+        source,
+        sessionToken,
+      }),
+    )
+
+    // 24-hour hard cap. Deliberately decoupled from the client's signal —
+    // see `createInterceptedSSEResponse` for why: the agent turn is
+    // broadcast to any client attached via cp-reconnect, so losing the
+    // initiating client shouldn't kill the turn.
+    const fetchSignal = AbortSignal.timeout(24 * 60 * 60 * 1000)
+
+    const agentHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+
+    let response: Response
+    try {
+      response = await fetch(`${address}/chat`, {
+        method: 'POST',
+        headers: agentHeaders,
+        body: agentBody,
+        signal: fetchSignal,
+      })
+    } catch (e: any) {
+      console.error(`[chat] Agent fetch failed workspace=${workspaceId}:`, e.message)
+      if (sessionId) {
+        await transitionSessionStatus(sessionId, 'idle').catch(() => {})
+      }
+      return jsonError('Agent unavailable', 502)
+    }
+
+    if (!response.headers.get('Content-Type')?.includes('text/event-stream')) {
+      // Non-SSE error from the agent (e.g. 4xx/5xx JSON). Pass the body
+      // through so the caller can see what the agent said.
+      const text = await response.text().catch(() => '')
+      return new Response(text || JSON.stringify({ error: 'Agent returned non-SSE response' }), {
+        status: response.status || 502,
+        headers: {
+          'Content-Type': response.headers.get('Content-Type') || 'application/json',
+        },
+      })
+    }
+
+    if (sessionId) {
+      await transitionSessionStatus(sessionId, 'agent')
+      // Eagerly persist the user message while the agent turn is running,
+      // so a page refresh can't lose it. For new sessions we defer to
+      // `createInterceptedSSEResponse`, which stores the message once
+      // `session.started` assigns an id.
+      if (userMessageText) {
+        const blocks = buildUserMessageBlocks(userMessageText, images)
+        const msg = await addMessage(workspaceId, sessionId, 'user', userMessageText)
+        await insertUserMessageBlocks(msg.id, sessionId, blocks)
+        userMessageText = null // prevent the interceptor from persisting a duplicate
+      }
+    }
+
+    // Teamwork: when resuming an existing session that wasn't yet registered
+    // (e.g. an older session pre-dating this code path), ensure the row is
+    // present so MCP-time reverse lookup succeeds on the first tool call.
+    // Idempotent: `addTeamworkSession` is INSERT ... ON CONFLICT DO NOTHING.
+    if (opts.taskId && sessionId) {
+      const tid = opts.taskId
+      addTeamworkSession(tid, sessionId, 'coordinator', null).catch((e) => {
+        console.warn(
+          `[chat] teamwork coordinator registration (resume) failed task=${tid} session=${sessionId}:`,
+          e,
+        )
+      })
+    }
+    const taskIdForHook = opts.taskId
+    const onNewSession = taskIdForHook
+      ? async (newSid: string) => {
+          await addTeamworkSession(taskIdForHook, newSid, 'coordinator', null)
+        }
+      : undefined
+
+    const intercepted = createInterceptedSSEResponse(response, {
+      workspaceId,
+      userMessageText,
+      existingSessionId: sessionId,
+      userImages: images,
+      callerUserId,
+      source,
+      reconnectFactory: async (sid) => {
+        try {
+          const resp = await fetch(`${address}/sessions/${encodeURIComponent(sid)}/reconnect`, {
+            method: 'POST',
+          })
+          if (!resp.ok) return null
+          return resp
+        } catch (e) {
+          console.error(`[chat] reconnect fetch failed workspace=${workspaceId} session=${sid}:`, e)
+          return null
+        }
       },
+      sessionToken,
+      onNewSession,
+      replicaId,
+      // Hand the admission slot to the interceptor: it releases exactly once when
+      // the turn terminates (clean end, error, interrupt, or pod death), which is
+      // the single point that also frees the accounting for the autoscaler.
+      onTurnEnd: () => slot.release(),
     })
+    handedOff = true
+    return intercepted
+  } finally {
+    // Released here for every non-handoff exit (early return or thrown error);
+    // the streaming path sets handedOff and lets the interceptor own it.
+    if (!handedOff) slot.release()
   }
-
-  if (sessionId) {
-    await transitionSessionStatus(sessionId, 'agent')
-    // Eagerly persist the user message while the agent turn is running,
-    // so a page refresh can't lose it. For new sessions we defer to
-    // `createInterceptedSSEResponse`, which stores the message once
-    // `session.started` assigns an id.
-    if (userMessageText) {
-      const blocks = buildUserMessageBlocks(userMessageText, images)
-      const msg = await addMessage(workspaceId, sessionId, 'user', userMessageText)
-      await insertUserMessageBlocks(msg.id, sessionId, blocks)
-      userMessageText = null // prevent the interceptor from persisting a duplicate
-    }
-  }
-
-  // Teamwork: when resuming an existing session that wasn't yet registered
-  // (e.g. an older session pre-dating this code path), ensure the row is
-  // present so MCP-time reverse lookup succeeds on the first tool call.
-  // Idempotent: `addTeamworkSession` is INSERT ... ON CONFLICT DO NOTHING.
-  if (opts.taskId && sessionId) {
-    const tid = opts.taskId
-    addTeamworkSession(tid, sessionId, 'coordinator', null).catch((e) => {
-      console.warn(
-        `[chat] teamwork coordinator registration (resume) failed task=${tid} session=${sessionId}:`,
-        e,
-      )
-    })
-  }
-  const taskIdForHook = opts.taskId
-  const onNewSession = taskIdForHook
-    ? async (newSid: string) => {
-        await addTeamworkSession(taskIdForHook, newSid, 'coordinator', null)
-      }
-    : undefined
-
-  return createInterceptedSSEResponse(response, {
-    workspaceId,
-    userMessageText,
-    existingSessionId: sessionId,
-    userImages: images,
-    callerUserId,
-    source,
-    reconnectFactory: async (sid) => {
-      try {
-        const resp = await fetch(`${address}/sessions/${encodeURIComponent(sid)}/reconnect`, {
-          method: 'POST',
-        })
-        if (!resp.ok) return null
-        return resp
-      } catch (e) {
-        console.error(`[chat] reconnect fetch failed workspace=${workspaceId} session=${sid}:`, e)
-        return null
-      }
-    },
-    sessionToken,
-    onNewSession,
-    replicaId,
-    // Hand the admission slot to the interceptor: it releases exactly once when
-    // the turn terminates (clean end, error, interrupt, or pod death), which is
-    // the single point that also frees the accounting for the autoscaler.
-    onTurnEnd: () => slot.release(),
-  })
 }
 
 /**
