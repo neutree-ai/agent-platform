@@ -5,9 +5,9 @@ import {
   listAllUserCredentials,
   listUsersWithDeletingCredentials,
 } from '../services/db/credentials'
-import { getRemoteWorkspaceIds } from '../services/db/environments'
+import { getAutoScalingWorkspaceIds, getRemoteWorkspaceIds } from '../services/db/environments'
 import { getWorkspace, listAllWorkspaces, updateWorkspace } from '../services/db/workspaces'
-import { runEnvProjection } from '../services/env-projection'
+import { projectBuiltinAutoScalingStatus, runEnvProjection } from '../services/env-projection'
 import { runIdleWorkspaceGC } from '../services/idle-workspace-gc'
 import * as k8s from '../services/k8s'
 import { refreshReplicaRouter } from '../services/replica-router'
@@ -44,11 +44,16 @@ async function fullReconcile(): Promise<string> {
     // Workspaces on remote environments have no Deployment in cp's cluster —
     // their status is driven by the env projection (observed + heartbeat), not
     // this watch-k8s path. Skip them so resolveDeploymentStatus(undefined) never
-    // clobbers a remote workspace to 'stopped'.
+    // clobbers a remote workspace to 'stopped'. Auto-scaling workspaces are the
+    // same case for a different reason: they are StatefulSets, so they have no
+    // Deployment here either — their status is projected from the runner's
+    // observed_phase (projectBuiltinAutoScalingStatus). Both sets are empty for a
+    // plain static workspace, so its watch-k8s status path is unchanged.
     const remoteIds = await getRemoteWorkspaceIds()
+    const autoScalingIds = await getAutoScalingWorkspaceIds()
 
     for (const ws of allWorkspaces) {
-      if (remoteIds.has(ws.id)) continue
+      if (remoteIds.has(ws.id) || autoScalingIds.has(ws.id)) continue
       // A workspace mid-delete (inverted remote delete) is being reaped by the
       // projection once its placement clears — don't let watch-k8s clobber its
       // 'deleting' status to 'stopped' (which would strand it unreaped).
@@ -188,6 +193,19 @@ export function startReconcileLoop() {
   new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
     runEnvProjection(ENV_HEARTBEAT_TIMEOUT_SEC).catch((e) =>
       console.error('[Reconcile] env projection error:', e instanceof Error ? e.message : e),
+    ),
+  )
+
+  // Built-in auto-scaling status projection: drive workspace.status from the
+  // runner's observed_phase for built-in auto-scaling (StatefulSet) workspaces,
+  // which the watch-k8s Deployment reconcile skips. Same 15s cadence; a cheap
+  // no-op while none is auto-scaling, and never touches static workspaces.
+  new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
+    projectBuiltinAutoScalingStatus().catch((e) =>
+      console.error(
+        '[Reconcile] auto-scaling status projection error:',
+        e instanceof Error ? e.message : e,
+      ),
     ),
   )
 

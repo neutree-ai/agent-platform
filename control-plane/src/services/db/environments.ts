@@ -125,6 +125,43 @@ export async function getRemoteWorkspaceIds(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.workspace_id as string))
 }
 
+/**
+ * Ids of auto-scaling workspaces (auto_scaling config present). Like remote
+ * ones, these have no Deployment for the watch-k8s reconcile to read — they are
+ * StatefulSets — so that reconcile skips them and their status comes from the
+ * runner-reported observed_phase (see {@link listBuiltinAutoScalingObservations}).
+ * Only auto-scaling workspaces are returned, so a static workspace is never
+ * affected: it stays on the watch-k8s status path, unchanged.
+ */
+export async function getAutoScalingWorkspaceIds(): Promise<Set<string>> {
+  const { rows } = await pool.query(
+    'SELECT workspace_id FROM workspace_config WHERE auto_scaling IS NOT NULL',
+  )
+  return new Set(rows.map((r) => r.workspace_id as string))
+}
+
+/**
+ * Observed state of every built-in auto-scaling workspace, for projecting
+ * workspace.status from the runner's observed_phase — the built-in counterpart
+ * of {@link listRemoteWorkspaceObservations}, minus the heartbeat/offline logic
+ * (the built-in runner shares cp's cluster). Scoped to auto_scaling IS NOT NULL,
+ * so static workspaces are never returned.
+ */
+export async function listBuiltinAutoScalingObservations(): Promise<
+  { workspace_id: string; observed_phase: string | null }[]
+> {
+  const { rows } = await pool.query(
+    `SELECT p.workspace_id, p.observed_phase
+       FROM workspace_placements p
+       JOIN environments e ON e.id = p.environment_id
+       JOIN workspace_config wc ON wc.workspace_id = p.workspace_id
+      WHERE e.is_builtin = true
+        AND wc.auto_scaling IS NOT NULL
+        AND p.desired_phase <> 'deleted'`,
+  )
+  return rows
+}
+
 interface RemoteObservation {
   workspace_id: string
   environment_id: string

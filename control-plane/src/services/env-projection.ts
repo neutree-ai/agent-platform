@@ -1,6 +1,7 @@
 import { dropRemoteProxy, ensureRemoteProxy, syncReplicaProxies } from '../lib/remote-proxy'
 import { type WorkspaceStatus, applyStatusChange } from '../lib/workspace-status'
 import {
+  listBuiltinAutoScalingObservations,
   listReapableWorkspaces,
   listRemoteWorkspaceObservations,
   markStaleEnvironmentsOffline,
@@ -75,6 +76,26 @@ export async function runEnvProjection(thresholdSec: number): Promise<void> {
       }
     } else {
       dropRemoteProxy(o.workspace_id)
+    }
+  }
+}
+
+/**
+ * Project workspace.status for BUILT-IN auto-scaling workspaces from the runner's
+ * observed_phase. They are StatefulSets, so the watch-k8s Deployment reconcile
+ * has no Deployment for them and skips them (see reconcile.ts); without this they
+ * would be stuck / wrongly 'stopped'. This is the built-in analogue of the remote
+ * projection above, minus proxies/heartbeat (the built-in runner shares cp's
+ * cluster and reaches pods via cluster DNS). Cheap no-op while no built-in
+ * workspace is auto-scaling (the query returns nothing) — static workspaces are
+ * never selected, so their status path is untouched.
+ */
+export async function projectBuiltinAutoScalingStatus(): Promise<void> {
+  for (const o of await listBuiltinAutoScalingObservations()) {
+    const status = mapObservedToStatus(o.observed_phase)
+    const ws = await getWorkspace(o.workspace_id)
+    if (ws && ws.status !== status) {
+      await applyStatusChange(o.workspace_id, status, ws.status)
     }
   }
 }
