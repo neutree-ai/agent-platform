@@ -3497,6 +3497,26 @@
       "unstar": "取消收藏",
       "starred": "已收藏",
       "filterStarred": "只看收藏",
+      "filter": {
+        "title": "筛选",
+        "activeLabel": "筛选（已启用 {{count}} 项）",
+        "source": "来源",
+        "status": "状态",
+        "time": "时间",
+        "all": "全部",
+        "clear": "清除全部筛选",
+        "statusValue": {
+          "human": "待你回复",
+          "agent": "运行中",
+          "idle": "空闲"
+        },
+        "timeValue": {
+          "any": "不限",
+          "today": "今天",
+          "7d": "近 7 天",
+          "30d": "近 30 天"
+        }
+      },
       "unreadCount_one": "{{count}} 个待回复",
       "unreadCount_other": "{{count}} 个待回复",
       "locateUnread": "跳转到下一个待回复会话",
@@ -3510,9 +3530,9 @@
         "title": "没有匹配的会话",
         "description": "请尝试其他搜索词。"
       },
-      "starredEmpty": {
-        "title": "还没有收藏的会话",
-        "description": "收藏会话后，可在这里快速找到。"
+      "filteredEmpty": {
+        "title": "没有符合筛选条件的会话",
+        "description": "调整或清除筛选条件即可看到其他会话。"
       },
       "toasts": {
         "renamed": "会话已重命名",

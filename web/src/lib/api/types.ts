@@ -24,6 +24,8 @@ export type { ApiTag as Tag } from '@neutree-ai/types'
 
 export type { ApiSession as Session, ApiK8sStatus as K8sResourceStatus } from '@neutree-ai/types'
 
+export type { ApiSessionFacets as SessionFacets } from '@neutree-ai/types'
+
 export type { ApiMessage } from '@neutree-ai/types'
 
 export interface ChatImageAttachment {

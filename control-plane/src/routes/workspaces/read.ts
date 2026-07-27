@@ -2,6 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import {
   ApiK8sStatusSchema,
   ApiMessageSchema,
+  ApiSessionFacetsSchema,
   ApiSessionListSchema,
   ApiWorkspaceConfigSchema,
   ApiWorkspaceSchema,
@@ -10,7 +11,7 @@ import type { AppEnv } from '../../lib/types'
 import { getWorkspaceReplicaStatus } from '../../services/db/env-placements'
 import { listAttachmentsForWorkspace } from '../../services/db/memory'
 import { getMessagesWithBlocks } from '../../services/db/messages'
-import { listSessions } from '../../services/db/sessions'
+import { getSessionFacets, listSessions } from '../../services/db/sessions'
 import { getTagAssignmentsForUser } from '../../services/db/tags'
 import type { SessionWithPreview } from '../../services/db/types'
 import { getWorkspace, getWorkspaceConfig, listWorkspaces } from '../../services/db/workspaces'
@@ -134,6 +135,14 @@ const listSessionsRoute = createRoute({
       offset: z.coerce.number().int().min(0).default(0).optional(),
       // When 'true', restrict the list to starred sessions.
       starred: z.enum(['true', 'false']).optional(),
+      // Comma-separated sources to leave out, e.g. 'schedule,webhook'.
+      // Exclusion, not inclusion, so a saved filter can't hide a source type
+      // that didn't exist when it was saved.
+      exclude_sources: z.string().optional(),
+      // Comma-separated coarse statuses to keep: human | agent | idle.
+      status: z.string().optional(),
+      // ISO instant; keeps sessions active at or after it.
+      active_after: z.string().datetime().optional(),
     }),
   },
   responses: {
@@ -194,10 +203,27 @@ read.openapi(listMessagesRoute, async (c) => {
   )
 })
 
+/** Splits a comma-separated query param, dropping blanks. */
+function csv(value: string | undefined): string[] | undefined {
+  if (!value) return undefined
+  const parts = value
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  return parts.length ? parts : undefined
+}
+
 read.openapi(listSessionsRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
-  const { limit = 20, offset = 0, starred } = c.req.valid('query')
+  const {
+    limit = 20,
+    offset = 0,
+    starred,
+    exclude_sources,
+    status,
+    active_after,
+  } = c.req.valid('query')
   const workspace = await getWorkspace(id)
   if (!workspace || !canManage(workspace, currentUser)) {
     return c.json({ error: 'Workspace not found' }, 404)
@@ -206,8 +232,40 @@ read.openapi(listSessionsRoute, async (c) => {
     limit,
     offset,
     starredOnly: starred === 'true',
+    excludeSources: csv(exclude_sources),
+    statuses: csv(status),
+    activeAfter: active_after,
   })
   return c.json({ items: items.map(toApiSession), total }, 200)
+})
+
+const sessionFacetsRoute = createRoute({
+  method: 'get',
+  path: '/{id}/sessions/facets',
+  tags: ['workspaces'],
+  summary: 'Session counts per filter facet',
+  security: [{ bearerAuth: [] }],
+  request: { params: WorkspaceIdParam },
+  responses: {
+    200: {
+      description: 'Counts per source and status, plus starred and total',
+      content: { 'application/json': { schema: ApiSessionFacetsSchema } },
+    },
+    404: {
+      description: 'Workspace not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+read.openapi(sessionFacetsRoute, async (c) => {
+  const currentUser = c.get('user')
+  const { id } = c.req.valid('param')
+  const workspace = await getWorkspace(id)
+  if (!workspace || !canManage(workspace, currentUser)) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+  return c.json(await getSessionFacets(id), 200)
 })
 
 read.openapi(getConfigRoute, async (c) => {

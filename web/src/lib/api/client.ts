@@ -80,6 +80,7 @@ import type {
   SandboxListResponse,
   Schedule,
   Session,
+  SessionFacets,
   SkillDependents,
   SkillGrant,
   SkillSourceKind,
@@ -330,14 +331,28 @@ class ApiClient {
   // Sessions
   async getSessions(
     workspaceId: string,
-    opts?: { limit?: number; offset?: number; starred?: boolean },
+    opts?: {
+      limit?: number
+      offset?: number
+      starred?: boolean
+      excludeSources?: string[]
+      statuses?: string[]
+      activeAfter?: string
+    },
   ): Promise<{ items: Session[]; total: number }> {
     const params = new URLSearchParams()
     if (opts?.limit != null) params.set('limit', String(opts.limit))
     if (opts?.offset != null) params.set('offset', String(opts.offset))
     if (opts?.starred) params.set('starred', 'true')
+    if (opts?.excludeSources?.length) params.set('exclude_sources', opts.excludeSources.join(','))
+    if (opts?.statuses?.length) params.set('status', opts.statuses.join(','))
+    if (opts?.activeAfter) params.set('active_after', opts.activeAfter)
     const qs = params.toString()
     return this.request(`/workspaces/${workspaceId}/sessions${qs ? `?${qs}` : ''}`)
+  }
+
+  async getSessionFacets(workspaceId: string): Promise<SessionFacets> {
+    return this.request(`/workspaces/${workspaceId}/sessions/facets`)
   }
 
   async getSession(
