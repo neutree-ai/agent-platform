@@ -110,6 +110,12 @@ const LOCK_FILE = '.editing'
  */
 export const RESERVED_SKILL_NAMES: ReadonlySet<string> = new Set(['__platform__'])
 
+/** Hidden prefix of a `__platform__` publish staging dir: `<prefix><pid>-<ms>`. */
+const PLATFORM_STAGING_PREFIX = '.__platform__.staging-'
+/** A staging dir older than this is orphaned (no install runs that long), so a
+ * sweep may remove it without racing a sibling replica's live install. */
+const STAGING_STALE_MS = 5 * 60_000
+
 function assertNotReserved(name: string): void {
   if (RESERVED_SKILL_NAMES.has(name)) {
     throw new Error(`Skill name "${name}" is reserved for platform use`)
@@ -839,6 +845,44 @@ export class SkillManager {
   }
 
   /**
+   * Remove a tree that may have been locked readonly. The publish path chmods
+   * staging to 0444/0555 before renaming, so a plain rm of a staging that DIDN'T
+   * get renamed (the loser of a race, or a crash mid-install) fails EPERM —
+   * removing a file needs write on its parent dir. Restore write first, then rm.
+   */
+  private async forceRm(path: string): Promise<void> {
+    if (!this.fs.exists(path)) return
+    await this.shell.exec('chmod', ['-R', 'u+w', path]).catch(() => {})
+    await this.fs.rm(path).catch(() => {})
+  }
+
+  /**
+   * Sweep orphaned `__platform__` staging dirs off the shared volume. The loser
+   * of a publish race (or a crash between chmod-readonly and rename) leaves a
+   * readonly staging that nothing else clears. Only stagings older than
+   * STAGING_STALE_MS are removed: a sibling replica mid-install in this same
+   * cold-start wave has a fresh timestamp, so its live staging is never touched.
+   * The timestamp is the Date.now() embedded in the name at creation.
+   */
+  private async sweepStaleStaging(): Promise<void> {
+    let entries: string[]
+    try {
+      entries = await this.fs.readdir(this.skillsDir)
+    } catch {
+      return // no skillsDir yet — nothing to sweep
+    }
+    const cutoff = Date.now() - STAGING_STALE_MS
+    await Promise.all(
+      entries.map(async (e) => {
+        if (!e.startsWith(PLATFORM_STAGING_PREFIX)) return
+        const ts = Number(e.slice(e.lastIndexOf('-') + 1))
+        if (Number.isFinite(ts) && ts > cutoff) return // fresh → a live sibling
+        await this.forceRm(`${this.skillsDir}/${e}`)
+      }),
+    )
+  }
+
+  /**
    * Stamp the platform-managed `__platform__` skill onto disk. Caller passes a
    * map of relative paths → content; SkillManager owns the lifecycle.
    *
@@ -865,6 +909,11 @@ export class SkillManager {
     const version = SkillManager.platformVersion(files)
     const verPath = this.platformVersionPath()
 
+    // 0. Clear orphaned staging dirs from earlier races/crashes (readonly, so
+    // nothing else can). Skips fresh ones, so a sibling installing right now is
+    // never disturbed. Runs before the skip below so even a warm boot tidies up.
+    await this.sweepStaleStaging()
+
     // 1. Idempotent skip: this exact version is already installed (by us on a
     // prior boot, or by a sibling replica in this cold-start wave).
     if (this.fs.exists(dest)) {
@@ -878,8 +927,8 @@ export class SkillManager {
     }
 
     // 2. Stage the full tree on the same filesystem as dest.
-    const staging = `${this.skillsDir}/.__platform__.staging-${process.pid}-${Date.now()}`
-    await this.fs.rm(staging) // clear a leaked staging from a crashed prior boot
+    const staging = `${this.skillsDir}/${PLATFORM_STAGING_PREFIX}${process.pid}-${Date.now()}`
+    await this.forceRm(staging) // clear a same-name leftover (readonly-safe)
     await this.fs.mkdir(staging)
     const sorted = Object.entries(files).sort(
       ([a], [b]) => a.split('/').length - b.split('/').length,
@@ -908,7 +957,9 @@ export class SkillManager {
       }
       await this.fs.rename(staging, dest)
     } catch {
-      await this.fs.rm(staging).catch(() => {})
+      // Lost the race (or dest reappeared): our staging was chmod'd readonly
+      // above, so a plain rm would EPERM and leak it — restore write first.
+      await this.forceRm(staging)
     }
 
     // 4. Record the version last (best-effort: a missing marker only costs a
