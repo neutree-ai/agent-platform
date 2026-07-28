@@ -4,6 +4,7 @@ import {
   buildHeadlessServiceSpec,
   buildStatefulSetSpec,
   buildWorkspacePodTemplate,
+  builtinHeadlessAddress,
   builtinReplicaAddress,
   readyReplicaIdsFromPods,
   resolveStatefulSetStatus,
@@ -272,6 +273,14 @@ describe('builtinReplicaAddress', () => {
     )
     expect(builtinReplicaAddress(baseCfg, 'ws1', 2)).toBe(
       'http://nap-ws1-2.nap-ws1-hl.nap.svc.cluster.local:3001',
+    )
+  })
+})
+
+describe('builtinHeadlessAddress', () => {
+  it('resolves to the headless Service (all ready pods), no ordinal', () => {
+    expect(builtinHeadlessAddress(baseCfg, 'ws1')).toBe(
+      'http://nap-ws1-hl.nap.svc.cluster.local:3001',
     )
   })
 })

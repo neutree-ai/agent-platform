@@ -5,10 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // resolveAgentAddress must stay identity-equal to getWorkspaceAddress for
 // every route context while workspaces are single-replica.
 
-const { getRemoteProxyPortMock, anyReadyReplicaMock, readyReplicaIdsMock } = vi.hoisted(() => ({
+const {
+  getRemoteProxyPortMock,
+  anyReadyReplicaMock,
+  readyReplicaIdsMock,
+  isAutoScalingWorkspaceMock,
+} = vi.hoisted(() => ({
   getRemoteProxyPortMock: vi.fn<(workspaceId: string, replicaId?: number) => number | undefined>(),
   anyReadyReplicaMock: vi.fn<(workspaceId: string) => number | undefined>(),
   readyReplicaIdsMock: vi.fn<(workspaceId: string) => readonly number[]>(),
+  isAutoScalingWorkspaceMock: vi.fn<(workspaceId: string) => boolean>(),
 }))
 
 vi.mock('./remote-proxy', () => ({
@@ -18,6 +24,7 @@ vi.mock('./remote-proxy', () => ({
 vi.mock('../services/replica-router', () => ({
   anyReadyReplica: anyReadyReplicaMock,
   readyReplicaIds: readyReplicaIdsMock,
+  isAutoScalingWorkspace: isAutoScalingWorkspaceMock,
 }))
 
 import {
@@ -31,6 +38,7 @@ beforeEach(() => {
   getRemoteProxyPortMock.mockReturnValue(undefined)
   anyReadyReplicaMock.mockReturnValue(undefined) // static: no ready replicas
   readyReplicaIdsMock.mockReturnValue([])
+  isAutoScalingWorkspaceMock.mockReturnValue(false) // static unless a test says otherwise
 })
 
 afterEach(() => {
@@ -56,10 +64,26 @@ describe('getWorkspaceAddress', () => {
 
   it('resolves a built-in auto-scaling workspace (no replica) to any ready replica', () => {
     // no ClusterIP Service exists → the bare name would not resolve; pick a ready one
+    isAutoScalingWorkspaceMock.mockReturnValue(true)
     anyReadyReplicaMock.mockReturnValue(1)
     expect(getWorkspaceAddress('ws1')).toBe(
       'http://tos-ws1-1.tos-ws1-hl.default.svc.cluster.local:3001',
     )
+  })
+
+  it('resolves a cold-starting auto-scaling workspace (no ready replica) to its headless Service, not the absent ClusterIP', () => {
+    // scaled to zero / cold-starting: no ready replica yet. The ClusterIP name an
+    // auto-scaling workspace never has would NXDOMAIN for the whole cold-start
+    // budget; the headless Service resolves to pods as they become ready.
+    isAutoScalingWorkspaceMock.mockReturnValue(true)
+    anyReadyReplicaMock.mockReturnValue(undefined)
+    expect(getWorkspaceAddress('ws1')).toBe('http://tos-ws1-hl.default.svc.cluster.local:3001')
+  })
+
+  it('a static workspace with no ready replica still falls back to its ClusterIP Service', () => {
+    // isAutoScalingWorkspace=false (default) → unchanged bare-name behaviour.
+    anyReadyReplicaMock.mockReturnValue(undefined)
+    expect(getWorkspaceAddress('ws1')).toBe('http://tos-ws1.default.svc.cluster.local:3001')
   })
 })
 

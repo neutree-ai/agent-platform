@@ -389,6 +389,21 @@ export function builtinReplicaAddress(
 }
 
 /**
+ * The base URL of an auto-scaling workspace's HEADLESS Service (not per-ordinal).
+ * A headless Service's DNS resolves to the IPs of its READY pods, so this reaches
+ * any one ready replica the moment k8s adds it to the endpoints — no dependency
+ * on cp's ready-set observation catching up. This is the address to use for a
+ * workspace-scoped call (health, reload) on an auto-scaling workspace that has no
+ * ready replica in cp's router yet — most importantly the cold-start /health poll
+ * when scaling up from zero, where {@link builtinReplicaAddress}'s ordinal-less
+ * form would name the ClusterIP Service that an auto-scaling workspace never has.
+ */
+export function builtinHeadlessAddress(cfg: K8sConfig, workspaceId: string): string {
+  const base = `${cfg.namePrefix}-${workspaceId}`
+  return `http://${base}-hl.${cfg.namespace}.svc.cluster.local:${AGENT_PORT}`
+}
+
+/**
  * Batch-check K8s deployment statuses for active workspaces.
  * Returns a map of workspaceId → resolved status.
  * Uses a single listNamespacedDeployment call (O(1) K8s API).

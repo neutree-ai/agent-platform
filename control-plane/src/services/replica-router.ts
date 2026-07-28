@@ -25,6 +25,7 @@
 // ordinal); the router assumes nothing about it being contiguous or ordered.
 
 import { listWorkspaceReplicaSets } from './db/env-placements'
+import { getAutoScalingWorkspaceIds } from './db/environments'
 
 /** Per-workspace snapshot of one observation: ready replicas + capacity input. */
 interface ReplicaSnapshot {
@@ -52,6 +53,15 @@ const rrCursor = new Map<string, number>()
  * so a replica that has actually left ready also leaves draining.
  */
 const drainingReplicas = new Map<string, Set<number>>()
+/**
+ * Workspaces whose config has an auto_scaling block — kept independently of the
+ * ready set so it survives a scale to zero, when {@link readyReplicas} is empty
+ * but the workspace is still auto-scaling. Lets the address seam pick the
+ * headless-Service fallback (which exists) over the ClusterIP one (which an
+ * auto-scaling workspace never has) during a cold start. Populated every refresh
+ * from workspace_config, so it includes stopped/starting auto-scaling workspaces.
+ */
+const autoScalingIds = new Set<string>()
 
 /**
  * Replace the whole ready-replica picture from one observation snapshot (every
@@ -95,7 +105,10 @@ export function syncReadyReplicas(snapshot: ReadonlyMap<string, ReplicaSnapshot>
  * workspace is auto-scaling (the query returns nothing).
  */
 export async function refreshReplicaRouter(): Promise<void> {
-  const rows = await listWorkspaceReplicaSets()
+  const [rows, asIds] = await Promise.all([
+    listWorkspaceReplicaSets(),
+    getAutoScalingWorkspaceIds(),
+  ])
   syncReadyReplicas(
     new Map(
       rows.map((r) => [
@@ -104,6 +117,22 @@ export async function refreshReplicaRouter(): Promise<void> {
       ]),
     ),
   )
+  syncAutoScalingIds(asIds)
+}
+
+/**
+ * Replace the set of auto-scaling workspace ids (a full replace). Kept separate
+ * from the ready-set sync because it must include auto-scaling workspaces that
+ * currently report no replicas (scaled to zero / cold-starting).
+ */
+export function syncAutoScalingIds(ids: Iterable<string>): void {
+  autoScalingIds.clear()
+  for (const id of ids) autoScalingIds.add(id)
+}
+
+/** Whether a workspace is auto-scaling — true even while it is scaled to zero. */
+export function isAutoScalingWorkspace(workspaceId: string): boolean {
+  return autoScalingIds.has(workspaceId)
 }
 
 /**
@@ -217,4 +246,5 @@ export function __resetReplicaRouter(): void {
   perReplicaCap.clear()
   rrCursor.clear()
   drainingReplicas.clear()
+  autoScalingIds.clear()
 }
