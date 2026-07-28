@@ -20,6 +20,7 @@ export {
   buildHeadlessServiceSpec,
   buildStatefulSetSpec,
   buildWorkspacePodTemplate,
+  builtinHeadlessAddress,
   builtinReplicaAddress,
   deploymentTemplateVersion,
   readyReplicaIdsFromPods,

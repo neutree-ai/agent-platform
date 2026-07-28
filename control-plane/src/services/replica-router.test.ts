@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __resetReplicaRouter,
+  isAutoScalingWorkspace,
   perReplicaCapacity,
   pickReplicaForTurn,
   readyReplicaIds,
   setDraining,
+  syncAutoScalingIds,
   syncReadyReplicas,
 } from './replica-router'
 
@@ -19,6 +21,23 @@ beforeEach(() => {
 
 const snapshot = (entries: Record<string, number[]>) =>
   new Map(Object.entries(entries).map(([ws, ids]) => [ws, { ids }]))
+
+describe('isAutoScalingWorkspace / syncAutoScalingIds', () => {
+  it('tracks auto-scaling ids independently of the ready set (survives scale to zero)', () => {
+    expect(isAutoScalingWorkspace('ws1')).toBe(false)
+    syncAutoScalingIds(['ws1', 'ws2'])
+    expect(isAutoScalingWorkspace('ws1')).toBe(true)
+    expect(isAutoScalingWorkspace('ws2')).toBe(true)
+    expect(isAutoScalingWorkspace('ws3')).toBe(false)
+    // still auto-scaling even with no reported replicas (scaled to zero)
+    syncReadyReplicas(snapshot({}))
+    expect(isAutoScalingWorkspace('ws1')).toBe(true)
+    // a full replace drops one no longer configured as auto-scaling
+    syncAutoScalingIds(['ws2'])
+    expect(isAutoScalingWorkspace('ws1')).toBe(false)
+    expect(isAutoScalingWorkspace('ws2')).toBe(true)
+  })
+})
 
 describe('pickReplicaForTurn', () => {
   it('returns undefined for a workspace with no reported replicas (static)', () => {

@@ -1,5 +1,13 @@
-import { builtinReplicaAddress, defaultCfg } from '../../../internal/k8s-provider'
-import { anyReadyReplica, readyReplicaIds } from '../services/replica-router'
+import {
+  builtinHeadlessAddress,
+  builtinReplicaAddress,
+  defaultCfg,
+} from '../../../internal/k8s-provider'
+import {
+  anyReadyReplica,
+  isAutoScalingWorkspace,
+  readyReplicaIds,
+} from '../services/replica-router'
 import { getRemoteProxyPort } from './remote-proxy'
 
 /**
@@ -26,14 +34,21 @@ import { getRemoteProxyPort } from './remote-proxy'
  * With no `replicaId`, a workspace-scoped call (health, reload, usage, export):
  * a static workspace resolves to its single Service (unchanged); a built-in
  * auto-scaling one has NO ClusterIP Service — only per-ordinal headless DNS — so
- * it resolves to any one ready replica (all share the volume). Falls back to the
- * bare name only when no replica is ready (scaled to zero / not yet observed),
- * where nothing is reachable anyway.
+ * it resolves to any one ready replica (all share the volume). When no replica is
+ * ready yet (scaled to zero / cold-starting / not yet observed) an auto-scaling
+ * workspace resolves to its HEADLESS Service, whose DNS names the ready pods as
+ * k8s adds them — so a cold-start /health poll and the first turn become
+ * reachable the moment a pod is ready, without waiting for cp's ready-set
+ * observation to catch up. A static workspace keeps falling back to its Service
+ * (which exists), byte-identical to before.
  */
 export function getWorkspaceAddress(workspaceId: string, replicaId?: number): string {
   const remotePort = getRemoteProxyPort(workspaceId, replicaId)
   if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
   const id = replicaId ?? anyReadyReplica(workspaceId)
+  if (id === undefined && isAutoScalingWorkspace(workspaceId)) {
+    return builtinHeadlessAddress(defaultCfg, workspaceId)
+  }
   return builtinReplicaAddress(defaultCfg, workspaceId, id)
 }
 
