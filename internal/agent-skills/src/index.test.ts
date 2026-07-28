@@ -952,9 +952,39 @@ describe('SkillManager draft persistence (draftBase)', () => {
         return realRename(from, to)
       }
       await expect(mgr().installPlatformSkill({ 'SKILL.md': 'body' })).resolves.toBeUndefined()
+      // The staged tree was chmod'd readonly before the failed publish, so the
+      // loser MUST restore write before removing it — otherwise the readonly
+      // dirs make rm fail and it leaks an undeletable staging on the shared
+      // volume every racy cold-start.
+      const restoredWrite = shell.calls.find(
+        (c) =>
+          c.cmd === 'chmod' &&
+          c.args.includes('u+w') &&
+          c.args.some((a) => a.includes('.__platform__.staging-')),
+      )
+      expect(restoredWrite).toBeTruthy()
       expect([...fs.dirs].some((d) => d.includes('.__platform__.staging-'))).toBe(false)
       expect([...fs.files.keys()].some((k) => k.includes('.__platform__.staging-'))).toBe(false)
       fs.rename = realRename
+    })
+
+    test('sweeps an orphaned stale staging dir but keeps a fresh sibling one', async () => {
+      // A prior race/crash left a readonly staging behind; a sibling replica is
+      // mid-install right now (fresh timestamp). Install should reap the orphan
+      // and leave the live one alone.
+      const stale = `${SKILLS_DIR}/.__platform__.staging-999-1` // ms=1 → ancient
+      const fresh = `${SKILLS_DIR}/.__platform__.staging-888-${Date.now()}` // now → live
+      for (const s of [stale, fresh]) {
+        fs.dirs.add(s)
+        fs.files.set(`${s}/SKILL.md`, 'x')
+      }
+      await mgr().installPlatformSkill({ 'SKILL.md': 'body' })
+      expect(fs.exists(stale)).toBe(false) // orphan reaped
+      expect(fs.exists(fresh)).toBe(true) // live sibling untouched
+      // The reap restored write on the readonly orphan first.
+      expect(
+        shell.calls.some((c) => c.cmd === 'chmod' && c.args.includes('u+w') && c.args.includes(stale)),
+      ).toBe(true)
     })
   })
 
