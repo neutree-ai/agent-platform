@@ -55,6 +55,10 @@ export async function destroyWorkspace(workspace: Workspace): Promise<void> {
     return
   }
 
-  await k8s.deleteInstance(workspace.id)
+  // Tear down by the shape that exists (Deployment or StatefulSet). deleteInstance
+  // knows only the Deployment shape, so an auto-scaling workspace's StatefulSet,
+  // pods, and headless Service would leak — and since the row (and its placement)
+  // is deleted next, the runner's reconcile never sees it to clean up.
+  await k8s.destroy(workspace.id)
   await deleteWorkspace(workspace.id)
 }
