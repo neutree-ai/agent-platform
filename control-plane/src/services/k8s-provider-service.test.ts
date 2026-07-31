@@ -139,6 +139,13 @@ function makeApis(opts: {
       services.push(svc)
       return { body: svc }
     },
+    deleteNamespacedService: async (name: string) => {
+      record('deleteNamespacedService', name)
+      const i = services.findIndex((s) => s.metadata?.name === name)
+      if (i < 0) throw apiError(404)
+      services.splice(i, 1)
+      return { body: {} }
+    },
     createNamespacedPersistentVolumeClaim: async (
       _ns: string,
       pvc: k8s.V1PersistentVolumeClaim,
@@ -210,6 +217,33 @@ describe('observation reflects Service presence', () => {
     const stopped = makeApis({ deployments: [deployment('ws1', 0, 0)], services: [] })
     await stopped.provider.observe('ws1')
     expect(stopped.methods()).not.toContain('readNamespacedService')
+  })
+})
+
+describe('stop releases the ClusterIP', () => {
+  it('stop: deletes the Service, and start puts it back', async () => {
+    const { provider, services } = makeApis({
+      deployments: [deployment('ws1', 1, 1)],
+      services: [service('ws1')],
+    })
+    await provider.stop('ws1')
+    expect(services).toHaveLength(0)
+
+    await provider.start('ws1')
+    expect(services.map((s) => s.metadata?.name)).toEqual(['nap-ws1'])
+  })
+
+  it('stop: tolerates a Service that is already gone', async () => {
+    const { provider } = makeApis({ deployments: [deployment('ws1', 1, 1)], services: [] })
+    await expect(provider.stop('ws1')).resolves.toBeUndefined()
+  })
+
+  it('stop: leaves the auto-scaling shape to its own teardown', async () => {
+    // No Deployment → stopInstance 404s → the StatefulSet path takes over; its
+    // headless Service holds no ClusterIP, so there is nothing to release.
+    const { provider, methods } = makeApis({ deployments: [], services: [] })
+    await provider.stop('ws1')
+    expect(methods()).not.toContain('deleteNamespacedService')
   })
 })
 
