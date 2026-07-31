@@ -14,6 +14,7 @@ import {
   expandWorkspacePvc,
   isPodReady,
   resourceName,
+  swallow404,
   workspaceLabels,
   workspacePvcName,
 } from './support'
@@ -729,7 +730,19 @@ export class KubernetesProvider implements EnvironmentProvider {
     // workspace scales its Deployment; stopInstance returns false (404) when
     // there is none, i.e. an auto-scaling workspace, whose StatefulSet we scale.
     const scaled = await this.stopInstance(workspaceId)
-    if (!scaled) await this.autoScaling.stop(workspaceId)
+    if (!scaled) {
+      await this.autoScaling.stop(workspaceId)
+      return
+    }
+    // Release the ClusterIP while scaled to 0. A stopped workspace routes
+    // nothing, but its Service holds an address out of a range that is finite
+    // and cluster-wide (a /22 is 1022 of them) — with stopped workspaces
+    // typically outnumbering running ones, holding those is what exhausts the
+    // range and starves *new* workspaces. start() recreates it on the way up,
+    // which is what makes releasing it safe.
+    await this.coreApi
+      .deleteNamespacedService(this.getResourceName(workspaceId), this.cfg.namespace)
+      .catch(swallow404)
   }
 
   async destroy(workspaceId: string): Promise<void> {
