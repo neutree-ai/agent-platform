@@ -163,7 +163,7 @@ describe('reconcileOnce decision table', () => {
     const result = await reconcileOnce(provider, transport)
 
     expect(provider.count('stop')).toBe(1)
-    expect(transport.writes()).toEqual([{ phase: 'stopped', endpoint: undefined }])
+    expect(transport.writes()).toEqual([{ phase: 'stopped', endpoint: undefined, message: null }])
     expect(result).toMatchObject({ acted: 1, failed: 0 })
   })
 
@@ -207,7 +207,9 @@ describe('reconcileOnce decision table', () => {
     const applies = provider.calls.filter((c) => c.method === 'apply')
     expect(applies).toHaveLength(1)
     expect(applies[0].args[1]).toBe(spec)
-    expect(transport.writes()).toEqual([{ phase: 'running', endpoint: undefined, version: 2 }])
+    expect(transport.writes()).toEqual([
+      { phase: 'running', endpoint: undefined, version: 2, message: null },
+    ])
     expect(result).toMatchObject({ acted: 1 })
   })
 
@@ -221,7 +223,9 @@ describe('reconcileOnce decision table', () => {
     const result = await reconcileOnce(provider, transport)
 
     expect(provider.count('apply')).toBe(1)
-    expect(transport.writes()).toEqual([{ phase: 'starting', endpoint: undefined, version: 1 }])
+    expect(transport.writes()).toEqual([
+      { phase: 'starting', endpoint: undefined, version: 1, message: null },
+    ])
     expect(result).toMatchObject({ acted: 1 })
   })
 
@@ -241,7 +245,7 @@ describe('reconcileOnce decision table', () => {
 
     expect(provider.count('start')).toBe(1)
     expect(provider.count('apply')).toBe(0)
-    expect(transport.writes()).toEqual([{ phase: 'running', endpoint: undefined }])
+    expect(transport.writes()).toEqual([{ phase: 'running', endpoint: undefined, message: null }])
     expect(result).toMatchObject({ acted: 1 })
   })
 
@@ -261,7 +265,7 @@ describe('reconcileOnce decision table', () => {
     expect(provider.count('apply')).toBe(0)
     expect(provider.count('start')).toBe(0)
     expect(provider.count('stop')).toBe(0)
-    expect(transport.writes()).toEqual([{ phase: 'starting', endpoint: undefined }])
+    expect(transport.writes()).toEqual([{ phase: 'starting', endpoint: undefined, message: null }])
     expect(result).toMatchObject({ noop: 1 })
   })
 
