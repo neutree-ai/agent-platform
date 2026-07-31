@@ -3,6 +3,7 @@ import type { ComputeResources } from '../types/api'
 import type {
   Capabilities,
   EnvironmentProvider,
+  ObservedPhase,
   ObservedState,
   WorkspaceSpec,
 } from '../types/environments'
@@ -80,6 +81,35 @@ export class KubernetesProvider implements EnvironmentProvider {
     return workspaceLabels(this.cfg, workspaceId)
   }
 
+  /**
+   * Create the workspace's ClusterIP Service if it isn't there (agents are
+   * reached via cluster DNS at `<prefix>-<wsId>.<ns>.svc:3001`; afs-fuse via
+   * :9101). Idempotent — a 409 means it already exists.
+   *
+   * Called from every converge path, not just create: the Service is the one
+   * workspace resource whose creation can fail for a *cluster-wide* reason
+   * (ClusterIP range exhausted) rather than a per-workspace one, so a
+   * workspace can outlive its Service. Without a repair on start()/apply(),
+   * such a workspace stays unreachable forever — its Deployment is healthy, so
+   * nothing in reconcile ever fires.
+   */
+  private async ensureService(workspaceId: string): Promise<void> {
+    const name = this.getResourceName(workspaceId)
+    const labels = this.getLabels(workspaceId)
+    await createOrAdopt(() =>
+      this.coreApi.createNamespacedService(this.cfg.namespace, {
+        apiVersion: 'v1',
+        kind: 'Service',
+        metadata: { name, labels },
+        spec: {
+          selector: labels,
+          ports: WORKSPACE_SERVICE_PORTS,
+          type: 'ClusterIP',
+        },
+      }),
+    )
+  }
+
   /** Create K8s resources for a workspace */
   async createInstance(
     workspaceId: string,
@@ -105,6 +135,13 @@ export class KubernetesProvider implements EnvironmentProvider {
       }),
     )
 
+    // Service before Deployment: it is the step that can fail on a cluster-wide
+    // resource (ClusterIP range full). Creating it first means such a failure
+    // leaves no Deployment behind — observe() reports 'unknown' and reconcile
+    // keeps retrying, instead of a running-but-unreachable workspace nothing
+    // ever re-converges.
+    await this.ensureService(workspaceId)
+
     // Create Deployment. A 409 here can only be a race with a concurrent
     // create building the same fresh spec (a pre-existing Deployment routes
     // apply() to rebuildInstance instead), so adopting is safe.
@@ -113,21 +150,6 @@ export class KubernetesProvider implements EnvironmentProvider {
         this.cfg.namespace,
         buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
       ),
-    )
-
-    // Create Service (ClusterIP — agents are reached via cluster DNS at
-    // <prefix>-<wsId>.<ns>.svc:3001; afs-fuse via :9101)
-    await createOrAdopt(() =>
-      this.coreApi.createNamespacedService(this.cfg.namespace, {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name, labels },
-        spec: {
-          selector: labels,
-          ports: WORKSPACE_SERVICE_PORTS,
-          type: 'ClusterIP',
-        },
-      }),
     )
 
     return {
@@ -527,6 +549,40 @@ export class KubernetesProvider implements EnvironmentProvider {
   }
 
   /**
+   * The workspace-ids that currently have a ClusterIP Service. Same label
+   * selector as {@link listWorkspaceDeployments}; only the ids are kept, since
+   * every caller asks "does this workspace have one" and nothing else.
+   */
+  async listWorkspaceServiceIds(timeoutMs = 30_000): Promise<Set<string>> {
+    const response = await Promise.race([
+      this.coreApi.listNamespacedService(
+        this.cfg.namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        `app=${this.cfg.namePrefix},component=workspace`,
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`listWorkspaceServiceIds timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        ),
+      ),
+    ])
+
+    const ids = new Set<string>()
+    for (const svc of response.body.items) {
+      // Skip the auto-scaling headless Service (`<name>-hl`), which carries the
+      // same labels but is not the ClusterIP one this check is about.
+      if (svc.spec?.clusterIP === 'None') continue
+      const wsId = svc.metadata?.labels?.['workspace-id']
+      if (wsId) ids.add(wsId)
+    }
+    return ids
+  }
+
+  /**
    * Full list of all workspace deployments. Returns deployments indexed by
    * workspace-id plus the response resourceVersion for starting a watch.
    */
@@ -640,6 +696,7 @@ export class KubernetesProvider implements EnvironmentProvider {
       // rebuild swaps the Deployment (new container resources/image) but
       // preserves the PVC, so grow storage separately when the spec asks for it
       // (expand only ever increases; same-size is a no-op).
+      await this.ensureService(workspaceId)
       await this.rebuildInstance(workspaceId, spec.agentType, spec.resources)
       if (spec.resources?.storage) {
         await this.expandInstanceStorage(workspaceId, spec.resources.storage)
@@ -655,7 +712,16 @@ export class KubernetesProvider implements EnvironmentProvider {
     // i.e. an auto-scaling workspace, whose StatefulSet we wake instead (also a
     // no-op if it has neither shape).
     const started = await this.startInstance(workspaceId)
-    if (!started) await this.autoScaling.start(workspaceId)
+    if (!started) {
+      await this.autoScaling.start(workspaceId)
+      return
+    }
+    // Static shape woke up — repair its Service on the way. A stopped workspace
+    // keeps its Service while scaled to 0, but that Service may have been
+    // reclaimed (or never created), and waking the pod alone would leave it
+    // unreachable. Only on this branch: the auto-scaling shape routes through
+    // its own headless Service and a ClusterIP one would just burn an IP.
+    await this.ensureService(workspaceId)
   }
 
   async stop(workspaceId: string): Promise<void> {
@@ -682,6 +748,23 @@ export class KubernetesProvider implements EnvironmentProvider {
   }
 
   /**
+   * A workspace whose pods are up but whose Service is gone is reachable by
+   * nothing: cp addresses agents by cluster DNS, which resolves through that
+   * Service. Reported as 'error' rather than 'running' so the placement row
+   * says what a caller would find, instead of a `running` that every HTTP hop
+   * turns into a 502.
+   *
+   * Only applied to 'running': a stopped workspace legitimately has no Service
+   * once one is reclaimed, and start() recreates it on the way up.
+   */
+  private withServiceCheck(phase: ObservedPhase, hasService: boolean): ObservedState['phase'] {
+    return phase === 'running' && !hasService ? 'error' : phase
+  }
+
+  private static readonly SERVICE_MISSING_MESSAGE =
+    'Service missing — workspace is running but unreachable via cluster DNS'
+
+  /**
    * Point-in-time observation via a single Deployment read. `version` is left
    * undefined: the spec-convergence version is a placement concept the runner
    * tracks itself (NOT the pod-template version stamped on the Deployment).
@@ -690,11 +773,26 @@ export class KubernetesProvider implements EnvironmentProvider {
     const name = this.getResourceName(workspaceId)
     try {
       const res = await this.appsApi.readNamespacedDeployment(name, this.cfg.namespace)
+      const deployPhase = resolveDeploymentStatus(res.body)
+      // Only pay for the Service read when its absence would change the answer.
+      const hasService =
+        deployPhase !== 'running' ||
+        (await this.coreApi
+          .readNamespacedService(name, this.cfg.namespace)
+          .then(() => true)
+          .catch((e: any) => {
+            if (e.response?.statusCode === 404) return false
+            throw e
+          }))
+      const phase = this.withServiceCheck(deployPhase, hasService)
       return {
-        phase: resolveDeploymentStatus(res.body),
+        phase,
         endpoint: {
           address: `${name}.${this.cfg.namespace}.svc.cluster.local:3001`,
         },
+        ...(phase === 'error' && deployPhase === 'running'
+          ? { message: KubernetesProvider.SERVICE_MISSING_MESSAGE }
+          : {}),
       }
     } catch (e: any) {
       if (e.response?.statusCode === 404) {
@@ -711,17 +809,29 @@ export class KubernetesProvider implements EnvironmentProvider {
    * (status + cluster-DNS endpoint); workspaces with no deployment are simply
    * absent from the map (the reconcile loop treats them as 'unknown', exactly
    * as observe()'s 404 path does).
+   *
+   * Two LISTs, not one: the Service set is fetched alongside the Deployments so
+   * the running-but-unreachable case {@link observe} catches per workspace is
+   * caught here too, still in O(1) round-trips per pass.
    */
   async observeAll(): Promise<Map<string, ObservedState>> {
-    const { deployments } = await this.listWorkspaceDeployments()
+    const [{ deployments }, services] = await Promise.all([
+      this.listWorkspaceDeployments(),
+      this.listWorkspaceServiceIds(),
+    ])
     const out = new Map<string, ObservedState>()
     for (const [wsId, dep] of deployments) {
       const name = this.getResourceName(wsId)
+      const deployPhase = resolveDeploymentStatus(dep)
+      const phase = this.withServiceCheck(deployPhase, services.has(wsId))
       out.set(wsId, {
-        phase: resolveDeploymentStatus(dep),
+        phase,
         endpoint: {
           address: `${name}.${this.cfg.namespace}.svc.cluster.local:3001`,
         },
+        ...(phase === 'error' && deployPhase === 'running'
+          ? { message: KubernetesProvider.SERVICE_MISSING_MESSAGE }
+          : {}),
       })
     }
     // Merge in auto-scaling (StatefulSet) workspaces. A workspace is only ever

@@ -39,6 +39,9 @@ async function recordIfChanged(
     await transport.writeObserved(p.workspace_id, {
       phase: current.phase,
       endpoint: current.endpoint,
+      // Explicit null, not omitted: a phase that recovered has to clear the
+      // message the failing phase left behind.
+      message: current.message ?? null,
     })
   }
 }
@@ -71,6 +74,7 @@ async function reconcilePlacement(
       await transport.writeObserved(p.workspace_id, {
         phase: after.phase,
         endpoint: after.endpoint,
+        message: after.message ?? null,
       })
       return 'stop'
     }
@@ -88,6 +92,7 @@ async function reconcilePlacement(
       phase: after.phase,
       endpoint: after.endpoint,
       version: p.spec_version,
+      message: after.message ?? null,
     })
     return 'apply'
   }
@@ -102,6 +107,7 @@ async function reconcilePlacement(
         phase: after.phase,
         endpoint: after.endpoint,
         version: p.spec_version,
+        message: after.message ?? null,
       })
       return 'apply'
     }
@@ -111,6 +117,7 @@ async function reconcilePlacement(
       await transport.writeObserved(p.workspace_id, {
         phase: after.phase,
         endpoint: after.endpoint,
+        message: after.message ?? null,
       })
       return 'start'
     }
