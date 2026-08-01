@@ -42,6 +42,11 @@ export async function createSandbox(opts: {
   image: string
   timeoutSeconds?: number
   resource?: Record<string, string>
+  // Kubernetes resource *requests*, set independently of `resource` (which maps
+  // to limits). Omitting this keeps the server's default of requests == limits.
+  // Lowering requests puts the pod in Burstable QoS so idle sandboxes stop
+  // reserving their full limit against node capacity. Requires server >= v0.2.1.
+  resourceRequests?: Record<string, string>
   entrypoint?: string[]
   env?: Record<string, string>
   metadata?: Record<string, string>
@@ -51,6 +56,7 @@ export async function createSandbox(opts: {
     image: opts.image,
     timeoutSeconds: opts.timeoutSeconds ?? 3600,
     resource: opts.resource ?? { cpu: '500m', memory: '512Mi' },
+    resourceRequests: opts.resourceRequests,
     entrypoint: opts.entrypoint,
     env: opts.env,
     metadata: opts.metadata,
@@ -102,6 +108,10 @@ interface CommandResult {
   stderr: string
   exitCode: number | null
   executionTimeMs?: number
+  // Present when the command was started with `background: true`. Feed it to
+  // getCommandStatus / getBackgroundCommandLogs to follow the run.
+  commandId?: string
+  background?: boolean
 }
 
 export async function runCommand(
@@ -111,6 +121,10 @@ export async function runCommand(
     cwd?: string
     timeoutSeconds?: number
     env?: Record<string, string>
+    // Detach instead of blocking until exit. stdout/stderr come back empty —
+    // the command is still starting — so callers poll with the returned
+    // commandId. Replaces the `nohup cmd &` workaround.
+    background?: boolean
   },
 ): Promise<CommandResult> {
   const sbx = await connectSandbox(sandboxId)
@@ -119,13 +133,65 @@ export async function runCommand(
       workingDirectory: opts?.cwd,
       timeoutSeconds: opts?.timeoutSeconds,
       envs: opts?.env,
+      background: opts?.background,
     })
     return {
       stdout: execution.logs.stdout.map((m) => m.text).join('\n'),
       stderr: execution.logs.stderr.map((m) => m.text).join('\n'),
       exitCode: execution.exitCode ?? null,
       executionTimeMs: execution.complete?.executionTimeMs,
+      commandId: execution.id,
+      background: opts?.background || undefined,
     }
+  } finally {
+    await sbx.close()
+  }
+}
+
+export async function getCommandStatus(
+  sandboxId: string,
+  commandId: string,
+): Promise<Record<string, unknown>> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    return (await sbx.commands.getCommandStatus(commandId)) as unknown as Record<string, unknown>
+  } finally {
+    await sbx.close()
+  }
+}
+
+/**
+ * Fetch a chunk of a background command's output. `cursor` is the byte offset
+ * returned by the previous call — pass it back to continue where you left off
+ * instead of re-reading the whole log.
+ */
+export async function getBackgroundCommandLogs(
+  sandboxId: string,
+  commandId: string,
+  cursor?: number,
+): Promise<Record<string, unknown>> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    return (await sbx.commands.getBackgroundCommandLogs(commandId, cursor)) as unknown as Record<
+      string,
+      unknown
+    >
+  } finally {
+    await sbx.close()
+  }
+}
+
+/**
+ * Terminate a running command.
+ *
+ * The SDK types name the argument `sessionId`, but execd accepts a background
+ * command id here too — verified against opensandbox-server v0.2.2, where the
+ * command lands on `running: false, exitCode: -1, error: "signal: terminate…"`.
+ */
+export async function interruptCommand(sandboxId: string, commandId: string): Promise<void> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    await sbx.commands.interrupt(commandId)
   } finally {
     await sbx.close()
   }
@@ -161,15 +227,60 @@ export async function getEndpointDirect(sandboxId: string, port: number): Promis
 
 // ---- File operations ----
 
-export async function readFile(sandboxId: string, path: string): Promise<string> {
+/** Take lines [offset, offset+limit) from `text`; offset is 1-based. */
+function sliceLines(text: string, offset?: number, limit?: number): string {
+  const lines = text.split('\n')
+  // A trailing newline yields a final empty element that is not a line.
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+  const start = Math.max(0, (offset ?? 1) - 1)
+  const end = limit != null ? start + limit : lines.length
+  return lines.slice(start, end).join('\n')
+}
+
+/**
+ * Read a text file. `offset`/`limit` select a line range (offset is 1-based) so
+ * callers can page through a large file instead of pulling all of it — a full
+ * read is easy to truncate downstream once it crosses a tool-output limit.
+ *
+ * Line ranges are an execd-side feature. Older execd (v1.0.16, what production
+ * currently runs) ignores the parameters and returns the whole file with no
+ * error, which would hand the caller far more than it asked for while looking
+ * like a successful paged read.
+ *
+ * So the range is always applied here, and the request to execd asks for the
+ * leading `offset + limit - 1` lines rather than the range itself. That prefix
+ * is the same shape whether execd honours it or returns everything, so slicing
+ * it locally lands on the right lines either way and needs no version check.
+ * The cost is pulling the lines before `offset` on a capable execd; bounded,
+ * and only noticeable when paging deep into a file.
+ */
+export async function readFile(
+  sandboxId: string,
+  path: string,
+  opts?: { offset?: number; limit?: number },
+): Promise<string> {
+  const ranged = opts?.offset !== undefined || opts?.limit !== undefined
   const sbx = await connectSandbox(sandboxId)
   try {
-    return await sbx.files.readFile(path)
+    if (!ranged) return await sbx.files.readFile(path)
+    const offset = opts?.offset ?? 1
+    const prefixLimit = opts?.limit != null ? offset + opts.limit - 1 : undefined
+    const content = await sbx.files.readFile(
+      path,
+      prefixLimit != null ? { offset: 1, limit: prefixLimit } : undefined,
+    )
+    return sliceLines(content, offset, opts?.limit)
   } finally {
     await sbx.close()
   }
 }
 
+/**
+ * Search for files by glob pattern. Returns a flat list.
+ *
+ * Kept separate from listDirectory: browser-service uses this to find a
+ * downloaded file by name under /downloads, which is a search, not a listing.
+ */
 export async function listFiles(
   sandboxId: string,
   path: string,
@@ -178,6 +289,102 @@ export async function listFiles(
   const sbx = await connectSandbox(sandboxId)
   try {
     return await sbx.files.search({ path, pattern })
+  } finally {
+    await sbx.close()
+  }
+}
+
+/**
+ * List a directory's entries, each carrying a `type` (file/directory/symlink).
+ * `depth` defaults to 1 (immediate children); symlinks are reported as
+ * symlinks and are not followed.
+ *
+ * Note: `type` is populated by the server, not the SDK — against an older
+ * opensandbox-server the field comes back empty.
+ */
+export async function listDirectory(
+  sandboxId: string,
+  path: string,
+  depth?: number,
+): Promise<FileInfo[]> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    return await sbx.files.listDirectory({ path, depth })
+  } catch (e: any) {
+    // execd v1.0.16 has no directory endpoint and fails with a bare
+    // "List directory failed". Say why, so this doesn't read as a bad path.
+    throw new Error(
+      `${e?.message ?? e} (directory listing needs execd >= v1.0.20; use the glob search endpoint on older sandboxes)`,
+    )
+  } finally {
+    await sbx.close()
+  }
+}
+
+export async function deleteFiles(sandboxId: string, paths: string[]): Promise<void> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    await sbx.files.deleteFiles(paths)
+  } finally {
+    await sbx.close()
+  }
+}
+
+export async function moveFiles(
+  sandboxId: string,
+  entries: Array<{ src: string; dest: string }>,
+): Promise<void> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    await sbx.files.moveFiles(entries)
+  } finally {
+    await sbx.close()
+  }
+}
+
+export async function createDirectories(
+  sandboxId: string,
+  entries: Array<{ path: string; mode?: number }>,
+): Promise<void> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    await sbx.files.createDirectories(entries)
+  } finally {
+    await sbx.close()
+  }
+}
+
+export async function deleteDirectories(sandboxId: string, paths: string[]): Promise<void> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    await sbx.files.deleteDirectories(paths)
+  } finally {
+    await sbx.close()
+  }
+}
+
+/**
+ * Replace text in files. Returns a per-file `replacedCount` so callers can tell
+ * "no match" (0) from "changed" — a plain replace call can't.
+ *
+ * The counts come from execd and older builds (v1.0.16) return an empty list
+ * while still performing the replacement. `detailAvailable: false` marks that
+ * case, so an empty `results` is not mistaken for "nothing was replaced".
+ */
+export async function replaceContents(
+  sandboxId: string,
+  entries: Array<{ path: string; oldContent: string; newContent: string }>,
+): Promise<{
+  results: Array<{ path: string; replacedCount: number }>
+  detailAvailable: boolean
+}> {
+  const sbx = await connectSandbox(sandboxId)
+  try {
+    const results = await sbx.files.replaceContentsDetailed(entries)
+    return {
+      results,
+      detailAvailable: !(entries.length > 0 && results.length === 0),
+    }
   } finally {
     await sbx.close()
   }
