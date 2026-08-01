@@ -26,6 +26,13 @@ export const CreateSandboxBodySchema = z
   .object({
     image: z.string().openapi({ example: 'ubuntu:22.04' }),
     resource: z.object({ cpu: z.string().optional(), memory: z.string().optional() }).optional(),
+    resourceRequests: z
+      .object({ cpu: z.string().optional(), memory: z.string().optional() })
+      .optional()
+      .openapi({
+        description:
+          'Kubernetes resource requests, set independently of `resource` (limits). Omit to keep requests == limits. Lowering requests puts the sandbox in Burstable QoS so it stops reserving its full limit against node capacity.',
+      }),
     timeoutSeconds: z.number().int().positive().optional(),
     entrypoint: z.array(z.string()).optional(),
     env: z.record(z.string(), z.string()).optional(),
@@ -55,6 +62,10 @@ export const ExecBodySchema = z
     cwd: z.string().optional(),
     timeoutSeconds: z.number().int().positive().optional(),
     env: z.record(z.string(), z.string()).optional(),
+    background: z.boolean().optional().openapi({
+      description:
+        'Detach instead of blocking until the command exits. stdout/stderr come back empty; poll the returned commandId via /commands/{commandId} and /commands/{commandId}/logs.',
+    }),
   })
   .openapi('ExecBody')
 
@@ -64,8 +75,20 @@ export const ExecResponseSchema = z
     stderr: z.string(),
     exitCode: z.number().int().nullable(),
     executionTimeMs: z.number().optional(),
+    commandId: z.string().optional(),
+    background: z.boolean().optional(),
   })
   .openapi('ExecResponse')
+
+export const CommandStatusResponseSchema = z
+  .object({})
+  .loose()
+  .openapi('CommandStatusResponse', { description: 'Command status (execd-defined shape)' })
+
+export const CommandLogsResponseSchema = z.object({}).loose().openapi('CommandLogsResponse', {
+  description:
+    'Background command log chunk (execd-defined shape). Carries a tail cursor to resume from.',
+})
 
 export const ReadFileResponseSchema = z
   .object({
@@ -109,6 +132,67 @@ export const WriteFilesResponseSchema = z
     count: z.number().int(),
   })
   .openapi('WriteFilesResponse')
+
+export const DeletePathsBodySchema = z
+  .object({
+    paths: z
+      .array(z.string())
+      .min(1)
+      .openapi({ example: ['/tmp/foo.txt'] }),
+  })
+  .openapi('DeletePathsBody')
+
+export const MoveFilesBodySchema = z
+  .object({
+    entries: z
+      .array(z.object({ src: z.string(), dest: z.string() }))
+      .min(1)
+      .openapi({ example: [{ src: '/tmp/a.txt', dest: '/tmp/b.txt' }] }),
+  })
+  .openapi('MoveFilesBody')
+
+export const CreateDirectoriesBodySchema = z
+  .object({
+    entries: z
+      .array(
+        z.object({
+          path: z.string(),
+          mode: z
+            .number()
+            .int()
+            .optional()
+            .openapi({ description: 'Unix permissions, e.g. 493 (0o755)' }),
+        }),
+      )
+      .min(1)
+      .openapi({ example: [{ path: '/tmp/newdir' }] }),
+  })
+  .openapi('CreateDirectoriesBody')
+
+export const ReplaceContentsBodySchema = z
+  .object({
+    entries: z
+      .array(z.object({ path: z.string(), oldContent: z.string(), newContent: z.string() }))
+      .min(1),
+  })
+  .openapi('ReplaceContentsBody')
+
+export const ReplaceContentsResponseSchema = z
+  .object({
+    results: z.array(z.object({ path: z.string(), replacedCount: z.number().int() })),
+    detailAvailable: z.boolean().openapi({
+      description:
+        'False when the sandbox runtime is too old to report per-file counts. The replacement still happened — an empty `results` in that case does not mean nothing matched.',
+    }),
+  })
+  .openapi('ReplaceContentsResponse')
+
+export const MutationSuccessResponseSchema = z
+  .object({
+    success: z.literal(true),
+    count: z.number().int(),
+  })
+  .openapi('MutationSuccessResponse')
 
 export const DeleteSandboxResponseSchema = z
   .object({

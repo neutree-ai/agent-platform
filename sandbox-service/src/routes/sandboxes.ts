@@ -3,7 +3,11 @@ import type { AuthUser } from '../lib/auth'
 import * as launches from '../lib/launches'
 import * as sandbox from '../lib/sandbox'
 import {
+  CommandLogsResponseSchema,
+  CommandStatusResponseSchema,
+  CreateDirectoriesBodySchema,
   CreateSandboxBodySchema,
+  DeletePathsBodySchema,
   DeleteSandboxResponseSchema,
   EndpointResponseSchema,
   ErrorSchema,
@@ -12,9 +16,13 @@ import {
   ListFilesResponseSchema,
   ListLaunchesResponseSchema,
   ListSandboxesResponseSchema,
+  MoveFilesBodySchema,
+  MutationSuccessResponseSchema,
   ReadFileResponseSchema,
   RenewSandboxBodySchema,
   RenewSandboxResponseSchema,
+  ReplaceContentsBodySchema,
+  ReplaceContentsResponseSchema,
   SandboxInfoSchema,
   WriteFilesBodySchema,
   WriteFilesResponseSchema,
@@ -157,6 +165,7 @@ sandboxes.openapi(
       const info = await sandbox.createSandbox({
         image: body.image,
         resource,
+        resourceRequests: body.resourceRequests as Record<string, string> | undefined,
         timeoutSeconds: body.timeoutSeconds,
         entrypoint: body.entrypoint,
         env: body.env,
@@ -418,8 +427,122 @@ sandboxes.openapi(
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
         env: body.env,
+        background: body.background,
       })
       return c.json(result, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+const IdCommandParam = z.object({
+  id: z.string().openapi({ param: { name: 'id', in: 'path' } }),
+  commandId: z.string().openapi({ param: { name: 'commandId', in: 'path' } }),
+})
+
+// Background command status
+sandboxes.openapi(
+  createRoute({
+    method: 'get',
+    path: '/{id}/commands/{commandId}',
+    tags: tag,
+    security,
+    summary: 'Get the status of a command started with background: true',
+    request: { params: IdCommandParam },
+    responses: {
+      200: {
+        description: 'Command status',
+        content: { 'application/json': { schema: CommandStatusResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const status = await sandbox.getCommandStatus(c.req.param('id'), c.req.param('commandId'))
+      return c.json(status, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Interrupt a running command
+sandboxes.openapi(
+  createRoute({
+    method: 'post',
+    path: '/{id}/commands/{commandId}/interrupt',
+    tags: tag,
+    security,
+    summary: 'Terminate a running command',
+    responses: {
+      200: {
+        description: 'Interrupted',
+        content: { 'application/json': { schema: DeleteSandboxResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+    request: { params: IdCommandParam },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      await sandbox.interruptCommand(c.req.param('id'), c.req.param('commandId'))
+      return c.json({ success: true as const }, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Background command logs
+sandboxes.openapi(
+  createRoute({
+    method: 'get',
+    path: '/{id}/commands/{commandId}/logs',
+    tags: tag,
+    security,
+    summary: 'Fetch a chunk of a background command output',
+    request: {
+      params: IdCommandParam,
+      query: z.object({
+        cursor: z.coerce
+          .number()
+          .int()
+          .nonnegative()
+          .optional()
+          .openapi({
+            param: { name: 'cursor', in: 'query' },
+            description: 'Offset returned by the previous call; resumes from there.',
+          }),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'Log chunk',
+        content: { 'application/json': { schema: CommandLogsResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const { cursor } = c.req.valid('query')
+      const logs = await sandbox.getBackgroundCommandLogs(
+        c.req.param('id'),
+        c.req.param('commandId'),
+        cursor,
+      )
+      return c.json(logs, 200)
     } catch (e: any) {
       return c.json({ error: e.message }, 500)
     }
@@ -564,10 +687,30 @@ sandboxes.openapi(
     tags: tag,
     security,
     summary: 'Read a file from the sandbox',
+    description:
+      'Returns the whole file by default. Pass offset/limit to read a line range instead — useful for large files that would otherwise be truncated by a downstream output limit.',
     request: {
       params: IdParam,
       query: z.object({
         path: z.string().openapi({ param: { name: 'path', in: 'query' }, example: '/tmp/foo.txt' }),
+        offset: z.coerce
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .openapi({
+            param: { name: 'offset', in: 'query' },
+            description: 'Starting line number, 1-based.',
+          }),
+        limit: z.coerce
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .openapi({
+            param: { name: 'limit', in: 'query' },
+            description: 'Number of lines to read.',
+          }),
       }),
     },
     responses: {
@@ -584,8 +727,8 @@ sandboxes.openapi(
     try {
       const info = await withOwnership(c, c.req.param('id'))
       if (!info) return c.json({ error: 'Sandbox not found' }, 404)
-      const { path } = c.req.valid('query')
-      const content = await sandbox.readFile(c.req.param('id'), path)
+      const { path, offset, limit } = c.req.valid('query')
+      const content = await sandbox.readFile(c.req.param('id'), path, { offset, limit })
       return c.json({ content }, 200)
     } catch (e: any) {
       return c.json({ error: e.message }, 500)
@@ -624,6 +767,231 @@ sandboxes.openapi(
         body.files.map((f) => ({ path: f.path, data: f.content })),
       )
       return c.json({ success: true as const, count: body.files.length }, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Directory listing.
+// Distinct from /files/list, which is a glob *search* returning a flat list —
+// this walks the directory and reports an entry type for each item.
+sandboxes.openapi(
+  createRoute({
+    method: 'get',
+    path: '/{id}/files/dir',
+    tags: tag,
+    security,
+    summary: 'List a directory, with entry types',
+    description:
+      'Each entry carries a `type` (file / directory / symlink). Symlinks are reported as symlinks and are not followed. Note: `type` is filled in by opensandbox-server — against an older server the field comes back empty.',
+    request: {
+      params: IdParam,
+      query: z.object({
+        path: z.string().openapi({ param: { name: 'path', in: 'query' }, example: '/workspace' }),
+        depth: z.coerce
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .openapi({
+            param: { name: 'depth', in: 'query' },
+            description: 'Traversal depth; defaults to 1 (immediate children).',
+          }),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'OK',
+        content: { 'application/json': { schema: ListFilesResponseSchema } },
+      },
+      400: errorResponses[400],
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const { path, depth } = c.req.valid('query')
+      const files = await sandbox.listDirectory(c.req.param('id'), path, depth)
+      return c.json({ files: files as any[] }, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Delete files
+sandboxes.openapi(
+  createRoute({
+    method: 'delete',
+    path: '/{id}/files',
+    tags: tag,
+    security,
+    summary: 'Delete one or more files from the sandbox',
+    request: {
+      params: IdParam,
+      body: { content: { 'application/json': { schema: DeletePathsBodySchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Deleted',
+        content: { 'application/json': { schema: MutationSuccessResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const body = c.req.valid('json')
+      await sandbox.deleteFiles(c.req.param('id'), body.paths)
+      return c.json({ success: true as const, count: body.paths.length }, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Move / rename files
+sandboxes.openapi(
+  createRoute({
+    method: 'post',
+    path: '/{id}/files/move',
+    tags: tag,
+    security,
+    summary: 'Move or rename files inside the sandbox',
+    request: {
+      params: IdParam,
+      body: { content: { 'application/json': { schema: MoveFilesBodySchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Moved',
+        content: { 'application/json': { schema: MutationSuccessResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const body = c.req.valid('json')
+      await sandbox.moveFiles(c.req.param('id'), body.entries)
+      return c.json({ success: true as const, count: body.entries.length }, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Create directories
+sandboxes.openapi(
+  createRoute({
+    method: 'post',
+    path: '/{id}/directories',
+    tags: tag,
+    security,
+    summary: 'Create directories inside the sandbox',
+    request: {
+      params: IdParam,
+      body: { content: { 'application/json': { schema: CreateDirectoriesBodySchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Created',
+        content: { 'application/json': { schema: MutationSuccessResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const body = c.req.valid('json')
+      await sandbox.createDirectories(c.req.param('id'), body.entries)
+      return c.json({ success: true as const, count: body.entries.length }, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Delete directories
+sandboxes.openapi(
+  createRoute({
+    method: 'delete',
+    path: '/{id}/directories',
+    tags: tag,
+    security,
+    summary: 'Delete directories from the sandbox',
+    request: {
+      params: IdParam,
+      body: { content: { 'application/json': { schema: DeletePathsBodySchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Deleted',
+        content: { 'application/json': { schema: MutationSuccessResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const body = c.req.valid('json')
+      await sandbox.deleteDirectories(c.req.param('id'), body.paths)
+      return c.json({ success: true as const, count: body.paths.length }, 200)
+    } catch (e: any) {
+      return c.json({ error: e.message }, 500)
+    }
+  },
+)
+
+// Replace file contents
+sandboxes.openapi(
+  createRoute({
+    method: 'post',
+    path: '/{id}/files/replace',
+    tags: tag,
+    security,
+    summary: 'Replace text inside files',
+    description:
+      'Returns a per-file replacedCount so callers can tell "no match" (0) from "changed".',
+    request: {
+      params: IdParam,
+      body: { content: { 'application/json': { schema: ReplaceContentsBodySchema } } },
+    },
+    responses: {
+      200: {
+        description: 'Replacement results',
+        content: { 'application/json': { schema: ReplaceContentsResponseSchema } },
+      },
+      404: errorResponses[404],
+      500: errorResponses[500],
+    },
+  }),
+  async (c) => {
+    try {
+      const info = await withOwnership(c, c.req.param('id'))
+      if (!info) return c.json({ error: 'Sandbox not found' }, 404)
+      const body = c.req.valid('json')
+      const { results, detailAvailable } = await sandbox.replaceContents(
+        c.req.param('id'),
+        body.entries,
+      )
+      return c.json({ results, detailAvailable }, 200)
     } catch (e: any) {
       return c.json({ error: e.message }, 500)
     }
