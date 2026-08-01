@@ -12,7 +12,7 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
-    "@alibaba-group/opensandbox": "^0.1.5",
+    "@alibaba-group/opensandbox": "^0.1.11",
     "@hono/node-server": "^1.19.14",
     "@hono/zod-openapi": "^1.2.4",
     "@scalar/hono-api-reference": "^0.10.7",
