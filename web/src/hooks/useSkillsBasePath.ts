@@ -1,3 +1,4 @@
+import { agentProxyFetch } from '@/lib/api/client'
 import { DEFAULT_SKILLS_BASE_PATH } from '@/lib/workspace-file-link'
 import { useQuery } from '@tanstack/react-query'
 
@@ -19,8 +20,8 @@ export function useSkillsBasePath(workspaceId: string | undefined, enabled: bool
     queryKey: skillsBasePathQueryKey(workspaceId ?? ''),
     queryFn: async () => {
       // Canonical agent skills endpoint (same as the skill browser uses).
-      const resp = await fetch(`/_proxy/agent/${workspaceId}/skills`, { credentials: 'include' })
-      if (!resp.ok) throw new Error(`fetch skills failed: ${resp.status}`)
+      const resp = await agentProxyFetch(`/_proxy/agent/${workspaceId}/skills`)
+      if (!resp?.ok) throw new Error(`fetch skills failed: ${resp?.status ?? 'unreachable'}`)
       const json = (await resp.json()) as { filesBrowsePath?: string }
       return json.filesBrowsePath ?? DEFAULT_SKILLS_BASE_PATH
     },
