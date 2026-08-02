@@ -98,15 +98,20 @@ import type {
 } from './types'
 
 /**
- * Deadline for short reads proxied to a workspace's agent pod. Deliberately
- * generous versus the sub-second these endpoints normally take — it exists to
- * bound a wedged container, not to police latency. Kept above the control
- * plane's own proxy deadline so cp's 504 is what surfaces when it fires.
+ * Deadlines for calls proxied to a workspace's agent pod. Both sit just above
+ * the control plane's matching budget so its 504 is what surfaces when a pod
+ * is wedged, rather than a bare client-side abort.
+ *
+ * Split for the same reason cp splits: `/sessions/*` handlers are trivial
+ * reads, while the rest can legitimately grind (packing a skill directory
+ * over NFS inside a throttled pod). These bound a hang; they do not police
+ * latency, so the slow lane is deliberately loose.
  */
-const AGENT_PROXY_TIMEOUT_MS = 15_000
+const AGENT_SESSION_TIMEOUT_MS = 15_000
+const AGENT_PROXY_TIMEOUT_MS = 65_000
 
 /**
- * Short read/write against a workspace's agent pod, via the control plane's
+ * Read/write against a workspace's agent pod, via the control plane's
  * `/_proxy/agent` passthrough. These bypass `request()` because each caller
  * wants its own take on failure (null vs throw), but they share the part
  * that matters: a bounded wait.
@@ -119,12 +124,16 @@ const AGENT_PROXY_TIMEOUT_MS = 15_000
  * Transport failure and a tripped deadline both resolve to `null`, which
  * every caller already handles as part of its non-ok branch.
  */
-export async function agentProxyFetch(url: string, init?: RequestInit): Promise<Response | null> {
+export async function agentProxyFetch(
+  url: string,
+  init?: RequestInit & { timeoutMs?: number },
+): Promise<Response | null> {
+  const { timeoutMs = AGENT_PROXY_TIMEOUT_MS, ...rest } = init ?? {}
   try {
     return await fetch(url, {
       credentials: 'include',
-      ...init,
-      signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
+      ...rest,
+      signal: AbortSignal.timeout(timeoutMs),
     })
   } catch {
     return null
@@ -474,6 +483,7 @@ class ApiClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId, answers }),
+      timeoutMs: AGENT_SESSION_TIMEOUT_MS,
     })
     if (!response?.ok) {
       throw new Error(i18n.t('session.errors.respondQuestionFailed'))
@@ -487,7 +497,7 @@ class ApiClient {
     // the panel usable — `switchSession` awaits this alongside the history
     // load, so a hang here is what froze the whole session switch. The
     // question re-appears on the next poll once the pod recovers.
-    const response = await agentProxyFetch(url)
+    const response = await agentProxyFetch(url, { timeoutMs: AGENT_SESSION_TIMEOUT_MS })
     if (!response?.ok) return null
     return (await response.json()) ?? null
   }
