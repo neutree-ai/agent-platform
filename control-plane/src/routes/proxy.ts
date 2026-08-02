@@ -32,11 +32,16 @@ function canAccessProxy(workspace: Workspace, user: { sub: string; role: string 
  *     lock is held. A tight bound is what gets the UI unstuck quickly.
  *   - Everything else can legitimately take a while — `skills/:name/pack`
  *     tars a directory, and skill trees are many small files on NFS inside a
- *     CPU-throttled pod. Bounding infinity is the goal here, not policing
- *     latency, so this one is deliberately loose.
+ *     CPU-throttled pod. Beating the 300s default is the goal here, not
+ *     policing latency, so this one is deliberately loose.
+ *
+ * Both tiers are set well above the slowest healthy call we know of. They can
+ * be tightened once production tells us what the real distribution looks
+ * like; starting loose means the first rollout cannot turn a slow-but-working
+ * request into a 504.
  */
-const AGENT_SESSION_TIMEOUT_MS = 10_000
-const AGENT_DEFAULT_TIMEOUT_MS = 60_000
+const AGENT_SESSION_TIMEOUT_MS = 30_000
+const AGENT_DEFAULT_TIMEOUT_MS = 180_000
 
 export function createProxyRoutes() {
   const proxy = new Hono<AppEnv>()
