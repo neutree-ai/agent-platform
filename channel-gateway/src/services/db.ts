@@ -528,6 +528,24 @@ export async function getThreadSessionCursor(
   return rows[0]?.cursor_ts ?? null
 }
 
+/** Resolve the agent session a chat thread is currently bound to, if any.
+ *
+ *  Interrupting needs the session, not just the workspace: a workspace can be
+ *  the target of several routes and chats at once, and `workspaces.interrupt`
+ *  would stop whichever turns happen to be running — including other people's.
+ */
+export async function getThreadSessionId(
+  routeId: string,
+  threadId: string,
+): Promise<string | null> {
+  const { rows } = await pool.query(
+    `SELECT session_id FROM channel.thread_sessions
+     WHERE route_id = $1 AND external_thread_id = $2`,
+    [routeId, threadId],
+  )
+  return rows[0]?.session_id ?? null
+}
+
 /** Delete the thread_sessions row so the next message starts a fresh session.
  *  Returns true if a row was deleted. */
 export async function deleteThreadSession(routeId: string, threadId: string): Promise<boolean> {
