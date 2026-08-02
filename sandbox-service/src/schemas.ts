@@ -31,7 +31,7 @@ export const CreateSandboxBodySchema = z
       .optional()
       .openapi({
         description:
-          'Kubernetes resource requests, set independently of `resource` (limits). Omit to keep requests == limits. Lowering requests puts the sandbox in Burstable QoS so it stops reserving its full limit against node capacity.',
+          'Kubernetes resource requests, set independently of `resource` (limits). Omit and a memory request is derived from the memory limit, so an idle sandbox stops reserving its full limit against node capacity; the CPU request stays at the CPU limit. Pass the limits here to opt back into requests == limits.',
       }),
     timeoutSeconds: z.number().int().positive().optional(),
     entrypoint: z.array(z.string()).optional(),
