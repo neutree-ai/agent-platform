@@ -30,6 +30,15 @@
     "browser": true
   },
 
+  "$sandboxComment": [
+    "The control plane proxies only create/list/endpoint/delete, so the sandbox",
+    "file and command specs call the sandbox service directly. Leave the URL out",
+    "to skip those, the same as turning the capability off. The image needs a",
+    "shell and to be pullable from the target's nodes."
+  ],
+  "sandboxServiceUrl": "http://127.0.0.1:30306",
+  "sandboxImage": "python:3.12-slim",
+
   "confirmMutatesTarget": false,
   "allowNonPristineTarget": false,
 

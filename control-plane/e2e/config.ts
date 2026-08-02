@@ -56,6 +56,23 @@ export interface E2eProfile {
   llm: E2eLlmConfig
   capabilities: E2eCapabilities
   /**
+   * Base URL of the deployed sandbox service, e.g. http://10.0.0.5:30306.
+   *
+   * The control plane only proxies create/list/endpoint/delete, so the file and
+   * command surface has no route through it — those specs talk to the component
+   * directly. The run's own service token authenticates there too: the sandbox
+   * service resolves bearer tokens through the control plane, and ownership
+   * scoping means a run still only sees the sandboxes it created.
+   *
+   * Unset skips the specs that need it, the same as turning the capability off.
+   */
+  sandboxServiceUrl?: string
+  /**
+   * Image the sandbox specs run in. Needs a shell and to be pullable from the
+   * target's nodes — override it when the deployment mirrors its registry.
+   */
+  sandboxImage: string
+  /**
    * Explicit acknowledgement that the suite creates and deletes real data on
    * the target. Must be true — there is no default that lets an unconfigured
    * run mutate a cluster.
@@ -126,6 +143,8 @@ function envOverride(profile: Record<string, unknown>) {
   set('llm.apiKey', process.env.E2E_LLM_API_KEY)
   set('llm.model', process.env.E2E_LLM_MODEL)
   setList('llm.agentTypes', process.env.E2E_LLM_AGENT_TYPES)
+  set('sandboxServiceUrl', process.env.E2E_SANDBOX_SERVICE_URL)
+  set('sandboxImage', process.env.E2E_SANDBOX_IMAGE)
 }
 
 let cached: E2eProfile | undefined
@@ -182,6 +201,10 @@ export function loadProfile(): E2eProfile {
       sandbox: capabilities.sandbox ?? true,
       browser: capabilities.browser ?? true,
     },
+    sandboxServiceUrl: raw.sandboxServiceUrl
+      ? String(raw.sandboxServiceUrl).replace(/\/$/, '')
+      : undefined,
+    sandboxImage: String(raw.sandboxImage ?? 'python:3.12-slim'),
     confirmMutatesTarget: raw.confirmMutatesTarget === true,
     allowNonPristineTarget: raw.allowNonPristineTarget === true,
     artifactsDir: String(raw.artifactsDir ?? './e2e-artifacts'),
