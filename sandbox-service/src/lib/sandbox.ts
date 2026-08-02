@@ -36,6 +36,61 @@ async function connectSandbox(sandboxId: string): Promise<Sandbox> {
   })
 }
 
+// ---- Resource requests ----
+
+// Requests default to the limits, so an idle sandbox holds its full limit
+// against node capacity for as long as it lives. Measured over 7 days across
+// the running sandboxes, memory peaks at 7% of the limit at the median and 30%
+// at p95, while the sandbox nodes were sitting at 45-92% reserved.
+//
+// Memory only, for now. CPU requests also set the CFS weight, so cutting them
+// makes a busy sandbox lose ground under contention, and the CPU tail is real
+// (p95 peaks at 99% of its limit) — that one wants its own rollout.
+const MEMORY_REQUEST_RATIO = 0.4
+const MEMORY_REQUEST_FLOOR_MIB = 256
+
+const MEMORY_UNITS: Record<string, number> = {
+  Ki: 1 / 1024,
+  Mi: 1,
+  Gi: 1024,
+  Ti: 1024 * 1024,
+  K: 1000 / 1024 / 1024,
+  M: (1000 * 1000) / 1024 / 1024,
+  G: (1000 * 1000 * 1000) / 1024 / 1024,
+}
+
+/** Parse a Kubernetes memory quantity into MiB; null if it isn't one. */
+function parseMemoryMiB(value: string): number | null {
+  const m = /^(\d+(?:\.\d+)?)([KMGT]i?)?$/.exec(value.trim())
+  if (!m) return null
+  const amount = Number.parseFloat(m[1])
+  if (!Number.isFinite(amount)) return null
+  const unit = m[2]
+  if (!unit) return amount / 1024 / 1024 // plain bytes
+  const factor = MEMORY_UNITS[unit]
+  return factor === undefined ? null : amount * factor
+}
+
+/**
+ * Derive the resource requests for a sandbox whose caller did not specify any.
+ * Returns undefined when there is nothing to derive, which leaves the runtime
+ * on its own default of requests == limits.
+ */
+function deriveResourceRequests(
+  resource: Record<string, string>,
+): Record<string, string> | undefined {
+  const limit = resource.memory
+  if (!limit) return undefined
+  const limitMiB = parseMemoryMiB(limit)
+  if (limitMiB === null) return undefined
+  const requestMiB = Math.min(
+    limitMiB,
+    Math.max(MEMORY_REQUEST_FLOOR_MIB, Math.round(limitMiB * MEMORY_REQUEST_RATIO)),
+  )
+  // Omitting cpu leaves the CPU request defaulting to the CPU limit.
+  return { memory: `${Math.round(requestMiB)}Mi` }
+}
+
 // ---- Lifecycle ----
 
 export async function createSandbox(opts: {
@@ -43,20 +98,23 @@ export async function createSandbox(opts: {
   timeoutSeconds?: number
   resource?: Record<string, string>
   // Kubernetes resource *requests*, set independently of `resource` (which maps
-  // to limits). Omitting this keeps the server's default of requests == limits.
-  // Lowering requests puts the pod in Burstable QoS so idle sandboxes stop
-  // reserving their full limit against node capacity. Requires server >= v0.2.1.
+  // to limits). Left unset, a memory request is derived from the memory limit —
+  // see deriveResourceRequests. Pass a value to override that, including the
+  // limits themselves to opt back into Guaranteed QoS.
+  // Honoured by opensandbox-server >= v0.2.1; older servers ignore it and leave
+  // requests equal to limits.
   resourceRequests?: Record<string, string>
   entrypoint?: string[]
   env?: Record<string, string>
   metadata?: Record<string, string>
 }): Promise<SandboxInfo> {
+  const resource = opts.resource ?? { cpu: '500m', memory: '512Mi' }
   const sbx = await Sandbox.create({
     connectionConfig: getConnectionConfig(),
     image: opts.image,
     timeoutSeconds: opts.timeoutSeconds ?? 3600,
-    resource: opts.resource ?? { cpu: '500m', memory: '512Mi' },
-    resourceRequests: opts.resourceRequests,
+    resource,
+    resourceRequests: opts.resourceRequests ?? deriveResourceRequests(resource),
     entrypoint: opts.entrypoint,
     env: opts.env,
     metadata: opts.metadata,
