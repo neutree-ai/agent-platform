@@ -2,6 +2,7 @@ import { SocketModeClient } from '@slack/socket-mode'
 import { WebClient } from '@slack/web-api'
 import pMap from 'p-map'
 import { NapClient } from '../../../internal/client/src/index'
+import { resolveRouteClient } from '../lib/route-client'
 import * as db from '../services/db'
 
 const NAP_API_URL = process.env.NAP_API_URL || 'http://localhost:3000'
@@ -367,6 +368,55 @@ Indexes are 1-based and match the attached images order.
 
     let cleanText = botUserId ? text.replace(new RegExp(`<@${botUserId}>`, 'g'), '').trim() : text
 
+    // Intercept /cancel before any of the work below. Interrupting has to
+    // bypass the job queue to be worth anything: inbound messages are
+    // serialized behind the running turn, so a queued interrupt would only
+    // arrive after the thing it meant to stop had finished. Going straight to
+    // cp reaches the turn that is actually in flight.
+    //
+    // Unlike /new — which WeCom needs because its group chat is one flat
+    // conversation — this has no natural equivalent here: starting a new
+    // thread sidesteps a running turn but cannot stop it, and abandons the
+    // context the user wants to keep.
+    //
+    // The follow-up message then resumes the same session with its history,
+    // which is the point: cancel exists so a wrong host or a missing detail
+    // can be corrected without starting over. Whatever the interrupted turn
+    // had produced so far is discarded, which is the desired outcome.
+    if (cleanText === '/cancel') {
+      const sessionId = await db.getThreadSessionId(route.id, threadTs)
+      let ack = 'No active session in this thread.'
+      if (sessionId) {
+        const client = await resolveRouteClient(
+          `[Slack] ${connector.name}`,
+          route,
+          connector,
+          napClient,
+        )
+        if (!client) return
+        try {
+          // Interrupt the session, not the workspace: a workspace can back
+          // several routes and threads at once, and workspaces.interrupt
+          // would stop other people's turns along with this one.
+          await client.sessions.interrupt(route.workspace_id, sessionId)
+          ack = 'Cancelled. Send your correction and I will continue from here.'
+        } catch (e) {
+          // A turn that already finished is the common case, not a failure —
+          // the user pressed cancel a moment too late. Say so plainly instead
+          // of surfacing an API error.
+          console.warn(`[Slack] ${connector.name}: /cancel failed session=${sessionId}:`, e)
+          ack = 'Nothing to cancel — the current turn already finished.'
+        }
+      }
+      console.log(
+        `[Slack] ${connector.name}: /cancel user=${user} thread=${threadTs} session=${sessionId ?? 'none'}`,
+      )
+      await web.chat
+        .postMessage({ channel, thread_ts: threadTs, text: ack })
+        .catch((e) => console.warn(`[Slack] ${connector.name}: failed to ack /cancel:`, e))
+      return
+    }
+
     const images = await fetchImageAttachments(event)
 
     // Voice clips: prefer Slack's built-in transcript, otherwise fall back to
@@ -431,22 +481,13 @@ Indexes are 1-based and match the attached images order.
     // Chat API requires non-empty message; substitute a placeholder when the user sent only images.
     if (!cleanText && allImages.length) cleanText = '[image]'
 
-    // Create the job as the route owner (route.user_id), not the connector
-    // owner. The job targets route.workspace_id; with a shared connector whose
-    // route points at another user's workspace, calling cp as the connector
-    // owner gets scoped out → 404 "Workspace not found". Reuse the connector
-    // client when owners match to avoid an extra token lookup per message.
-    let jobClient = napClient
-    if (route.user_id !== connector.user_id) {
-      const routeToken = await db.getPlatformToken(route.user_id)
-      if (!routeToken) {
-        console.error(
-          `[Slack] ${connector.name}: no platform token for route owner=${route.user_id}`,
-        )
-        return
-      }
-      jobClient = new NapClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
-    }
+    const jobClient = await resolveRouteClient(
+      `[Slack] ${connector.name}`,
+      route,
+      connector,
+      napClient,
+    )
+    if (!jobClient) return
 
     try {
       const result = await jobClient.jobs.create(route.workspace_id, {
