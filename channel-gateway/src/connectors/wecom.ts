@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import WebSocket from 'ws'
 import { NapClient } from '../../../internal/client/src/index'
+import { cancelThreadTurn } from '../lib/cancel-command'
 import { resolveRouteClient } from '../lib/route-client'
 import * as db from '../services/db'
 import { handleRespondAck, wecomSend, wecomSendStream } from './wecom-sender'
@@ -505,41 +506,17 @@ async function handleMessage(
     return
   }
 
-  // Intercept /cancel the same way. Interrupting has to bypass the job queue
-  // to be worth anything: inbound messages are serialized behind the running
-  // turn, so a queued interrupt would only arrive after the thing it meant to
-  // stop had finished. Going straight to cp reaches the turn that is actually
-  // in flight.
-  //
-  // The user's follow-up then resumes the same session normally, keeping the
-  // history — which is the point: cancel exists so a wrong IP or a missing
-  // detail can be corrected without starting over. Whatever the interrupted
-  // turn had produced so far is discarded, which is the desired outcome here.
+  // Intercept /cancel the same way, before the job queue — see
+  // cancelThreadTurn for why that placement is what makes it work.
   if (cleanText === '/cancel') {
-    const sessionId = await db.getThreadSessionId(route.id, chatId)
-    let ack = 'No active session.'
-    if (sessionId) {
-      const client = await resolveRouteClient(
-        `[WeCom] ${connector.name}`,
-        activeRoute,
-        connector,
-        napClient,
-      )
-      if (!client) return
-      try {
-        await client.sessions.interrupt(route.workspace_id, sessionId)
-        ack = 'Cancelled. Send your correction and I will continue from here.'
-      } catch (e) {
-        // A turn that already finished is the common case, not a failure —
-        // the user pressed cancel a moment too late. Say so plainly instead
-        // of surfacing an API error.
-        console.warn(`[WeCom] ${connector.name}: /cancel failed session=${sessionId}:`, e)
-        ack = 'Nothing to cancel — the current turn already finished.'
-      }
-    }
-    console.log(
-      `[WeCom] ${connector.name}: /cancel from=${from} chat=${chatId} session=${sessionId ?? 'none'}`,
+    const ack = await cancelThreadTurn(
+      `[WeCom] ${connector.name}`,
+      activeRoute,
+      connector,
+      napClient,
+      chatId,
     )
+    if (ack === null) return
     try {
       await wecomSend(connector, route, ack, { chat_id: chatId, req_id: reqId })
     } catch (e) {
@@ -549,13 +526,7 @@ async function handleMessage(
       route_id: route.id,
       connector_id: connector.id,
       event_type: 'mention',
-      payload: {
-        user: from,
-        chat_id: chatId,
-        text: content,
-        command: '/cancel',
-        session_id: sessionId,
-      },
+      payload: { user: from, chat_id: chatId, text: content, command: '/cancel' },
       status: 'success',
     })
     return
