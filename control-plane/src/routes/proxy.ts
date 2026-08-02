@@ -13,8 +13,11 @@ function canAccessProxy(workspace: Workspace, user: { sub: string; role: string 
 /**
  * How long the agent pod gets to start responding. A container that has
  * exhausted its memory keeps accepting connections while its event loop is
- * wedged, so without a deadline the fetch below — and the browser request
- * waiting on it — stays pending indefinitely.
+ * wedged, and the only thing that ended such a request before was undici's
+ * default `headersTimeout` — 300s. Nothing upstream shortens it either: the
+ * ingress route for this service disables its response timeout, and a browser
+ * `fetch` has no deadline of its own. Five minutes of a frozen panel is
+ * indistinguishable from broken, hence an explicit budget.
  *
  * The deadline is disarmed as soon as `fetch` resolves, so it never touches a
  * response body: SSE streams flow through this same fetch, and a timer left
