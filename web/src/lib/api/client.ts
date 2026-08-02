@@ -98,6 +98,40 @@ import type {
 } from './types'
 
 /**
+ * Deadline for short reads proxied to a workspace's agent pod. Deliberately
+ * generous versus the sub-second these endpoints normally take — it exists to
+ * bound a wedged container, not to police latency. Kept above the control
+ * plane's own proxy deadline so cp's 504 is what surfaces when it fires.
+ */
+const AGENT_PROXY_TIMEOUT_MS = 15_000
+
+/**
+ * Short read/write against a workspace's agent pod, via the control plane's
+ * `/_proxy/agent` passthrough. These bypass `request()` because each caller
+ * wants its own take on failure (null vs throw), but they share the part
+ * that matters: a bounded wait.
+ *
+ * A container that has exhausted its memory still completes the TCP
+ * handshake while its event loop is wedged, so an unbounded fetch here never
+ * settles — and an unsettled promise is what left the chat panel stuck in
+ * its switching lock, silently disabling the new-session button.
+ *
+ * Transport failure and a tripped deadline both resolve to `null`, which
+ * every caller already handles as part of its non-ok branch.
+ */
+export async function agentProxyFetch(url: string, init?: RequestInit): Promise<Response | null> {
+  try {
+    return await fetch(url, {
+      credentials: 'include',
+      ...init,
+      signal: AbortSignal.timeout(AGENT_PROXY_TIMEOUT_MS),
+    })
+  } catch {
+    return null
+  }
+}
+
+/**
  * Error subclass that preserves the parsed JSON body of a 4xx/5xx response,
  * so callers can read structured fields (e.g. template link-acl `missing[]`)
  * instead of having to string-parse the English message.
@@ -436,13 +470,12 @@ class ApiClient {
     answers: Record<string, string>,
   ): Promise<{ success: boolean }> {
     const url = `/_proxy/agent/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/respond`
-    const response = await fetch(url, {
+    const response = await agentProxyFetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId, answers }),
-      credentials: 'include',
     })
-    if (!response.ok) {
+    if (!response?.ok) {
       throw new Error(i18n.t('session.errors.respondQuestionFailed'))
     }
     return response.json()
@@ -450,8 +483,12 @@ class ApiClient {
 
   async getPendingQuestion(workspaceId: string, sessionId: string): Promise<AskUserRequest | null> {
     const url = `/_proxy/agent/${workspaceId}/sessions/${encodeURIComponent(sessionId)}/pending-question`
-    const response = await fetch(url, { credentials: 'include' })
-    if (!response.ok) return null
+    // Degrading to "no pending question" when the pod is unreachable keeps
+    // the panel usable — `switchSession` awaits this alongside the history
+    // load, so a hang here is what froze the whole session switch. The
+    // question re-appears on the next poll once the pod recovers.
+    const response = await agentProxyFetch(url)
+    if (!response?.ok) return null
     return (await response.json()) ?? null
   }
 
@@ -1857,8 +1894,8 @@ class ApiClient {
   // Agent info
   async getAgentInfo(workspaceId: string): Promise<AgentInfo | null> {
     const url = `/_proxy/agent/${workspaceId}/info`
-    const response = await fetch(url, { credentials: 'include' })
-    if (!response.ok) return null
+    const response = await agentProxyFetch(url)
+    if (!response?.ok) return null
     return response.json()
   }
 
