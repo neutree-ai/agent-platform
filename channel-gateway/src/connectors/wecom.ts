@@ -452,6 +452,25 @@ async function handleMessage(
     console.log(`[WeCom] ${connector.name}: no route for chat=${chatId}, ignoring`)
     return
   }
+  const activeRoute = route
+
+  // Act as the route owner (route.user_id), not the connector owner. Every
+  // call below targets route.workspace_id; with a shared connector whose route
+  // points at another user's workspace, calling cp as the connector owner gets
+  // scoped out → 404 "Workspace not found". Reuse the connector client when
+  // owners match to avoid an extra token lookup per message. Null means the
+  // route owner has no platform token — already logged, caller should bail.
+  const resolveRouteClient = async (): Promise<NapClient | null> => {
+    if (activeRoute.user_id === connector.user_id) return napClient
+    const routeToken = await db.getPlatformToken(activeRoute.user_id)
+    if (!routeToken) {
+      console.error(
+        `[WeCom] ${connector.name}: no platform token for route owner=${activeRoute.user_id}`,
+      )
+      return null
+    }
+    return new NapClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
+  }
 
   // Voice transcription failure → reply error and abort. Do this only when a
   // voice segment was actually present; otherwise voiceError stays null.
@@ -503,6 +522,57 @@ async function handleMessage(
     return
   }
 
+  // Intercept /cancel the same way. Interrupting has to bypass the job queue
+  // to be worth anything: inbound messages are serialized behind the running
+  // turn, so a queued interrupt would only arrive after the thing it meant to
+  // stop had finished. Going straight to cp reaches the turn that is actually
+  // in flight.
+  //
+  // The user's follow-up then resumes the same session normally, keeping the
+  // history — which is the point: cancel exists so a wrong IP or a missing
+  // detail can be corrected without starting over. Whatever the interrupted
+  // turn had produced so far is discarded, which is the desired outcome here.
+  if (cleanText === '/cancel') {
+    const sessionId = await db.getThreadSessionId(route.id, chatId)
+    let ack = 'No active session.'
+    if (sessionId) {
+      const client = await resolveRouteClient()
+      if (!client) return
+      try {
+        await client.sessions.interrupt(route.workspace_id, sessionId)
+        ack = 'Cancelled. Send your correction and I will continue from here.'
+      } catch (e) {
+        // A turn that already finished is the common case, not a failure —
+        // the user pressed cancel a moment too late. Say so plainly instead
+        // of surfacing an API error.
+        console.warn(`[WeCom] ${connector.name}: /cancel failed session=${sessionId}:`, e)
+        ack = 'Nothing to cancel — the current turn already finished.'
+      }
+    }
+    console.log(
+      `[WeCom] ${connector.name}: /cancel from=${from} chat=${chatId} session=${sessionId ?? 'none'}`,
+    )
+    try {
+      await wecomSend(connector, route, ack, { chat_id: chatId, req_id: reqId })
+    } catch (e) {
+      console.warn(`[WeCom] ${connector.name}: failed to ack /cancel:`, e)
+    }
+    await db.logEvent({
+      route_id: route.id,
+      connector_id: connector.id,
+      event_type: 'mention',
+      payload: {
+        user: from,
+        chat_id: chatId,
+        text: content,
+        command: '/cancel',
+        session_id: sessionId,
+      },
+      status: 'success',
+    })
+    return
+  }
+
   const promptTemplate = (route.config as Record<string, unknown>)?.prompt as string | undefined
   // Expose sender / chat metadata to the agent. The aibot WS callback only
   // ships `from.userid` (no name/email), so {user} is the most specific
@@ -537,20 +607,8 @@ async function handleMessage(
     )
   }
 
-  // Create the job as the route owner (route.user_id), not the connector owner.
-  // The job targets route.workspace_id; with a shared connector whose route
-  // points at another user's workspace, calling cp as the connector owner gets
-  // scoped out → 404 "Workspace not found". Reuse the connector client when
-  // owners match to avoid an extra token lookup per message.
-  let jobClient = napClient
-  if (route.user_id !== connector.user_id) {
-    const routeToken = await db.getPlatformToken(route.user_id)
-    if (!routeToken) {
-      console.error(`[WeCom] ${connector.name}: no platform token for route owner=${route.user_id}`)
-      return
-    }
-    jobClient = new NapClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
-  }
+  const jobClient = await resolveRouteClient()
+  if (!jobClient) return
 
   try {
     const result = await jobClient.jobs.create(route.workspace_id, {
