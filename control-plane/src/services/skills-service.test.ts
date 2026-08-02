@@ -819,6 +819,7 @@ describe('SkillsService.syncSource', () => {
       ok({
         source,
         commit_sha: 'newsha',
+        skipped: [],
         results: [
           { skill_id: s1.id, version_id: 'v-new', content_hash: 'h1', changed: true },
           { skill_id: s2.id, version_id: 'v-old', content_hash: 'h2', changed: false },

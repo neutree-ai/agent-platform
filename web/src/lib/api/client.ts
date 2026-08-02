@@ -975,6 +975,12 @@ class ApiClient {
       content_hash: string
       changed: boolean
     }>
+    skipped: Array<{
+      skill_id: string
+      name: string
+      subpath: string
+      reason: 'subpath_not_found' | 'too_large'
+    }>
     commit_sha: string | null
   }> {
     return this.request(`/skills/sources/${encodeURIComponent(sourceId)}/sync`, {

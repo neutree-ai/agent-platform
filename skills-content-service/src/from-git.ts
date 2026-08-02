@@ -479,9 +479,17 @@ interface SyncRow {
   changed: boolean
 }
 
+interface SyncSkip {
+  skill_id: string
+  name: string
+  subpath: string
+  reason: 'subpath_not_found' | 'too_large'
+}
+
 interface SyncSourceResult {
   source: SkillSource
   results: SyncRow[]
+  skipped: SyncSkip[]
   commit_sha: string | null
 }
 
@@ -491,6 +499,11 @@ interface SyncSourceResult {
  * current active version, append a new version and flip active. Same hash
  * means no-op (we still report it with changed=false so callers can show
  * "unchanged" rows in their sync summary).
+ *
+ * A skill we could not import at all (its subpath no longer resolves after an
+ * upstream restructure, or it outgrew the size limit) is reported in
+ * `skipped` rather than dropped, and suppresses the `last_commit_sha`
+ * advance — see the mark-synced call at the end for why that matters.
  *
  * Source-kind guarding (must be 'git') lives in the route handler; this
  * helper assumes the caller already checked.
@@ -542,7 +555,7 @@ export async function syncSource(
     )
     return {
       ok: true,
-      data: { source: updatedSource ?? source, results: [], commit_sha: commitSha },
+      data: { source: updatedSource ?? source, results: [], skipped: [], commit_sha: commitSha },
     }
   }
 
@@ -565,18 +578,23 @@ export async function syncSource(
   // has — typically <10 for monorepos.
   const tImport = Date.now()
   const rows = await Promise.all(
-    skills.map(async (skill): Promise<SyncRow | null> => {
+    skills.map(async (skill): Promise<SyncRow | SyncSkip | null> => {
       const scoped = filterSubpath(entries, skill.subpath || null)
       if (scoped.length === 0) {
         console.warn(
           `[skills-content] sync: subpath "${skill.subpath}" empty for skill ${skill.id}`,
         )
-        return null
+        return {
+          skill_id: skill.id,
+          name: skill.name,
+          subpath: skill.subpath,
+          reason: 'subpath_not_found',
+        }
       }
       const repacked = await repack(scoped)
       if (repacked.byteLength > maxSkillPackageBytes()) {
         console.warn(`[skills-content] sync: skill ${skill.id} exceeds size limit; skipping`)
-        return null
+        return { skill_id: skill.id, name: skill.name, subpath: skill.subpath, reason: 'too_large' }
       }
       const currentHash = (await getActiveVersionHash(skill.id))?.content_hash ?? null
       return withTx(async (client) => {
@@ -599,19 +617,34 @@ export async function syncSource(
       })
     }),
   )
-  const results = rows.filter((r): r is SyncRow => r !== null)
+  const results = rows.filter((r): r is SyncRow => r !== null && 'version_id' in r)
+  const skipped = rows.filter((r): r is SyncSkip => r !== null && 'reason' in r)
   mark('per_skill_import', tImport)
 
+  // Only record the SHA when every skill actually imported. Recording it
+  // after a partial run poisons the source permanently: the pre-check above
+  // would match on the next sync and short-circuit, so the skipped skill
+  // stays stale and every later sync reports "already up to date" without
+  // ever retrying it. Clearing the SHA instead forces the next sync to do
+  // the full walk, which both re-reports the skip and lets a corrected
+  // subpath take effect. `markSourceSynced` COALESCEs a null argument onto
+  // the stored value, so the clear needs its own statement.
   const tMark = Date.now()
-  const updatedSource = await withTx((client) => markSourceSynced(client, args.sourceId, commitSha))
+  const updatedSource = await withTx(async (client) => {
+    if (skipped.length === 0) return markSourceSynced(client, args.sourceId, commitSha)
+    await client.query('UPDATE skill_sources SET last_commit_sha = NULL WHERE id = $1', [
+      args.sourceId,
+    ])
+    return markSourceSynced(client, args.sourceId, null)
+  })
   mark('mark_synced', tMark)
 
   console.log(
-    `[skills-content] sync: source=${args.sourceId} skills=${skills.length} changed=${results.filter((r) => r.changed).length} sha=${commitSha?.slice(0, 7) ?? 'none'} total=${Date.now() - t0}ms ${phases.join(' ')}`,
+    `[skills-content] sync: source=${args.sourceId} skills=${skills.length} changed=${results.filter((r) => r.changed).length} skipped=${skipped.length} sha=${commitSha?.slice(0, 7) ?? 'none'} total=${Date.now() - t0}ms ${phases.join(' ')}`,
   )
 
   return {
     ok: true,
-    data: { source: updatedSource ?? source, results, commit_sha: commitSha },
+    data: { source: updatedSource ?? source, results, skipped, commit_sha: commitSha },
   }
 }

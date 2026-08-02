@@ -464,6 +464,13 @@ const SyncResultRow = z.object({
   changed: z.boolean(),
 })
 
+const SyncSkipRow = z.object({
+  skill_id: z.string(),
+  name: z.string(),
+  subpath: z.string(),
+  reason: z.enum(['subpath_not_found', 'too_large']),
+})
+
 const syncRoute = createRoute({
   method: 'post',
   path: '/sources/{id}/sync',
@@ -478,6 +485,7 @@ const syncRoute = createRoute({
           schema: z.object({
             source: SourceSchema,
             results: z.array(SyncResultRow),
+            skipped: z.array(SyncSkipRow),
             commit_sha: z.string().nullable(),
           }),
         },

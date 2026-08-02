@@ -460,10 +460,26 @@ export function SkillsSection({ instanceId }: { instanceId: string }) {
   function handleSyncSource(sourceId: string) {
     syncSource.mutate(sourceId, {
       onSuccess: (result) => {
+        // Skips are the headline when present: those skills did NOT sync, and
+        // the fix is manual (re-point the subpath / shrink the skill). One
+        // toast per reason keeps the remedy specific. Reported alongside the
+        // success toast rather than instead of it — the other skills in the
+        // source did sync.
+        for (const reason of ['subpath_not_found', 'too_large'] as const) {
+          const hit = result.skipped.filter((s) => s.reason === reason)
+          if (hit.length === 0) continue
+          const key =
+            reason === 'subpath_not_found'
+              ? 'components.library.skills.toasts.syncSkippedSubpath'
+              : 'components.library.skills.toasts.syncSkippedTooLarge'
+          toast.warning(t(key, { count: hit.length, names: hit.map((s) => s.name).join(', ') }), {
+            duration: 10000,
+          })
+        }
         const changed = result.results.some((r) => r.changed)
         if (changed) {
           toast.success(t('components.library.skills.toasts.synced'))
-        } else {
+        } else if (result.skipped.length === 0) {
           toast.info(t('components.library.skills.toasts.alreadyUpToDate'))
         }
       },
