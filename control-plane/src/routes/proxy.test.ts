@@ -2,9 +2,9 @@
  * Agent passthrough deadline.
  *
  * A workspace pod that has exhausted its memory still completes the TCP
- * handshake while its event loop is wedged, so the proxy's fetch never
- * settles and the browser request behind it hangs forever. That hang is what
- * froze the chat panel's session switch — and with it the new-session button.
+ * handshake while its event loop is wedged. Nothing but undici's 300s default
+ * ended such a request, and five minutes of a frozen session switch — and
+ * with it a dead new-session button — reads as broken.
  *
  * The deadline that fixes it must cover the response headers ONLY: SSE turns
  * flow through this same fetch, and a timer that stayed armed would sever

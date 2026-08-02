@@ -117,9 +117,11 @@ const AGENT_PROXY_TIMEOUT_MS = 65_000
  * that matters: a bounded wait.
  *
  * A container that has exhausted its memory still completes the TCP
- * handshake while its event loop is wedged, so an unbounded fetch here never
- * settles — and an unsettled promise is what left the chat panel stuck in
- * its switching lock, silently disabling the new-session button.
+ * handshake while its event loop is wedged. A browser `fetch` has no deadline
+ * of its own, so these calls used to hang until the control plane gave up on
+ * its side — five minutes, on undici's default. That is long enough to leave
+ * the chat panel stuck in its switching lock, silently disabling the
+ * new-session button, for as long as anyone would keep looking at it.
  *
  * Transport failure and a tripped deadline both resolve to `null`, which
  * every caller already handles as part of its non-ok branch.
