@@ -64,8 +64,27 @@ Turning one off skips the specs that need it rather than failing them:
 | Capability   | Gates                                              |
 | ------------ | -------------------------------------------------- |
 | `kubernetes` | workspace lifecycle, and everything needing a live agent (sessions, shares, jobs) |
-| `sandbox`    | reserved for sandbox coverage                      |
+| `sandbox`    | sandbox specs (also needs `kubernetes`, since the pods have to schedule) |
 | `browser`    | reserved for browser coverage                      |
+
+## Sandboxes talk to two services
+
+The control plane proxies four sandbox operations — create, list, endpoint,
+delete — so the file and command surface has no route through it. The sandbox
+specs are split to match: one group drives the proxied routes and proves a
+workspace can own a sandbox, the other calls the sandbox service directly for
+everything else. Each group creates and deletes its own sandbox rather than
+sharing one, so neither depends on the other's principal resolving the same way.
+
+Point `sandboxServiceUrl` at the deployed service (or `E2E_SANDBOX_SERVICE_URL`)
+to enable the second group; leaving it out skips it, the same as turning the
+capability off. `sandboxImage` picks what those sandboxes run — it needs a shell
+and has to be pullable from the target's nodes, so override it when the
+deployment mirrors its registry.
+
+The run's own service token authenticates to both. The sandbox service resolves
+bearer tokens through the control plane, and ownership scoping means a run only
+ever sees the sandboxes it created — no service key, no shared principal.
 
 ## Agent core matrix
 

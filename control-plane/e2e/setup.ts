@@ -20,6 +20,12 @@ if (!baseUrl || !serviceToken) {
 /** Authenticated as the throwaway user this run provisioned. */
 export const client = new NapClient({ baseUrl, serviceToken })
 
+/**
+ * The same token as a bare string, for the few surfaces NapClient does not
+ * cover — the sandbox specs call the sandbox service directly.
+ */
+export const runToken = serviceToken
+
 export const profile = loadProfile()
 
 /** Identifier shared by every resource this run creates. */
@@ -41,6 +47,20 @@ export function scoped(name: string): string {
 
 /** Workspaces can reach `running` — needs a real Kubernetes-backed target. */
 export const describeIfK8s = profile.capabilities.kubernetes ? describe : describe.skip
+
+/**
+ * Sandboxes can actually be created. Needs the component installed and a
+ * cluster to schedule the pods on; specs that reach past the control plane's
+ * four proxied routes also need the service's own URL.
+ */
+export const describeIfSandbox =
+  profile.capabilities.sandbox && profile.capabilities.kubernetes ? describe : describe.skip
+
+/** As above, plus a reachable sandbox service for the file and command surface. */
+export const describeIfSandboxService =
+  profile.capabilities.sandbox && profile.capabilities.kubernetes && profile.sandboxServiceUrl
+    ? describe
+    : describe.skip
 
 /** Agent cores this run exercises, from the profile. */
 export const agentCores = profile.llm.agentTypes
