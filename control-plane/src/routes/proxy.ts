@@ -11,16 +11,29 @@ function canAccessProxy(workspace: Workspace, user: { sub: string; role: string 
 }
 
 /**
- * How long the agent pod gets to produce response *headers*. A container that
- * has exhausted its memory keeps accepting connections while its event loop
- * is wedged, so without a deadline the fetch below — and the browser request
+ * How long the agent pod gets to start responding. A container that has
+ * exhausted its memory keeps accepting connections while its event loop is
+ * wedged, so without a deadline the fetch below — and the browser request
  * waiting on it — stays pending indefinitely.
  *
- * The deadline covers the headers only, never the body: SSE streams flow
- * through this same fetch, and aborting on a timer would sever every live
- * turn after 10s. See the clearTimeout in the handler.
+ * The deadline is disarmed as soon as `fetch` resolves, so it never touches a
+ * response body: SSE streams flow through this same fetch, and a timer left
+ * armed would sever every live turn when it expired.
+ *
+ * It does, however, cover the handler's whole runtime, not just connection
+ * setup — a JSON handler flushes headers only once it has a body to write. So
+ * the budget is per-path rather than global:
+ *
+ *   - `/sessions/*` (pending-question, respond, reconnect) are trivial reads,
+ *     and they are the ones the chat panel awaits while its session-switch
+ *     lock is held. A tight bound is what gets the UI unstuck quickly.
+ *   - Everything else can legitimately take a while — `skills/:name/pack`
+ *     tars a directory, and skill trees are many small files on NFS inside a
+ *     CPU-throttled pod. Bounding infinity is the goal here, not policing
+ *     latency, so this one is deliberately loose.
  */
-const AGENT_HEADERS_TIMEOUT_MS = 10_000
+const AGENT_SESSION_TIMEOUT_MS = 10_000
+const AGENT_DEFAULT_TIMEOUT_MS = 60_000
 
 export function createProxyRoutes() {
   const proxy = new Hono<AppEnv>()
@@ -83,15 +96,15 @@ export function createProxyRoutes() {
     if (destination) headers.set('Destination', destination)
 
     const clientSignal = c.req.raw.signal
-    // Arm the headers deadline against our own controller (chained to the
-    // client's signal so a disconnect still cancels), then disarm it the
-    // moment `fetch` resolves. Once disarmed the controller can no longer
-    // fire, so a streaming body — SSE included — is free to run as long as
-    // it likes.
+    // Arm the deadline against our own controller (chained to the client's
+    // signal so a disconnect still cancels), then disarm it the moment
+    // `fetch` resolves. Once disarmed the controller can no longer fire, so a
+    // streaming body — SSE included — is free to run as long as it likes.
+    const timeoutMs = sessionMatch ? AGENT_SESSION_TIMEOUT_MS : AGENT_DEFAULT_TIMEOUT_MS
     const ac = new AbortController()
     const onClientAbort = () => ac.abort()
     clientSignal.addEventListener('abort', onClientAbort, { once: true })
-    const headersDeadline = setTimeout(() => ac.abort(), AGENT_HEADERS_TIMEOUT_MS)
+    const responseDeadline = setTimeout(() => ac.abort(), timeoutMs)
     let response: Response
     try {
       response = await fetch(targetUrl, {
@@ -104,7 +117,7 @@ export function createProxyRoutes() {
       if (clientSignal.aborted) return new Response(null, { status: 499 })
       if (ac.signal.aborted) {
         console.error(
-          `[proxy] Agent did not respond within ${AGENT_HEADERS_TIMEOUT_MS}ms workspace=${workspaceId} path=${agentPath}`,
+          `[proxy] Agent did not respond within ${timeoutMs}ms workspace=${workspaceId} path=${agentPath}`,
         )
         return c.json({ error: 'Agent did not respond in time' }, 504)
       }
@@ -115,7 +128,7 @@ export function createProxyRoutes() {
       // wired for the whole request: a browser that disconnects mid-stream
       // must still cancel the upstream fetch, or the agent keeps producing
       // into a body nobody reads.
-      clearTimeout(headersDeadline)
+      clearTimeout(responseDeadline)
     }
 
     // SSE response: intercept for ASQ-answer reconnect, passthrough otherwise.

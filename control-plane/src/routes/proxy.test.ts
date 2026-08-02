@@ -72,6 +72,36 @@ describe('agent proxy headers deadline', () => {
     expect((await res.json()).error).toMatch(/did not respond/i)
   })
 
+  it('gives non-session paths a budget the session deadline would have cut short', async () => {
+    vi.useFakeTimers()
+    // `skills/:name/pack` tars a directory over NFS in a throttled pod, and
+    // a JSON/tarball handler flushes headers only once it has bytes to send —
+    // so the deadline covers the whole job. Holding every path to the session
+    // budget would turn a slow pack into a 504.
+    let respond!: () => void
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise((resolve, reject) => {
+            respond = () => resolve(new Response('{}'))
+            init.signal?.addEventListener('abort', () =>
+              reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+            )
+          }),
+      ),
+    )
+
+    const pending = buildApp().request('/_proxy/agent/ws1/skills/big-skill/pack', {
+      method: 'POST',
+    })
+    await vi.advanceTimersByTimeAsync(30_000)
+    respond()
+    const res = await pending
+
+    expect(res.status).toBe(200)
+  })
+
   it('lets an SSE body outlive the deadline once headers have landed', async () => {
     vi.useFakeTimers()
     // Headers arrive immediately; the body stays open far longer than the
