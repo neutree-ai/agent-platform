@@ -1,6 +1,7 @@
 import crypto from 'node:crypto'
 import WebSocket from 'ws'
 import { NapClient } from '../../../internal/client/src/index'
+import { resolveRouteClient } from '../lib/route-client'
 import * as db from '../services/db'
 import { handleRespondAck, wecomSend, wecomSendStream } from './wecom-sender'
 
@@ -454,24 +455,6 @@ async function handleMessage(
   }
   const activeRoute = route
 
-  // Act as the route owner (route.user_id), not the connector owner. Every
-  // call below targets route.workspace_id; with a shared connector whose route
-  // points at another user's workspace, calling cp as the connector owner gets
-  // scoped out → 404 "Workspace not found". Reuse the connector client when
-  // owners match to avoid an extra token lookup per message. Null means the
-  // route owner has no platform token — already logged, caller should bail.
-  const resolveRouteClient = async (): Promise<NapClient | null> => {
-    if (activeRoute.user_id === connector.user_id) return napClient
-    const routeToken = await db.getPlatformToken(activeRoute.user_id)
-    if (!routeToken) {
-      console.error(
-        `[WeCom] ${connector.name}: no platform token for route owner=${activeRoute.user_id}`,
-      )
-      return null
-    }
-    return new NapClient({ baseUrl: NAP_API_URL, serviceToken: routeToken })
-  }
-
   // Voice transcription failure → reply error and abort. Do this only when a
   // voice segment was actually present; otherwise voiceError stays null.
   if (hadVoiceSeg && voiceError) {
@@ -536,7 +519,12 @@ async function handleMessage(
     const sessionId = await db.getThreadSessionId(route.id, chatId)
     let ack = 'No active session.'
     if (sessionId) {
-      const client = await resolveRouteClient()
+      const client = await resolveRouteClient(
+        `[WeCom] ${connector.name}`,
+        activeRoute,
+        connector,
+        napClient,
+      )
       if (!client) return
       try {
         await client.sessions.interrupt(route.workspace_id, sessionId)
@@ -607,7 +595,12 @@ async function handleMessage(
     )
   }
 
-  const jobClient = await resolveRouteClient()
+  const jobClient = await resolveRouteClient(
+    `[WeCom] ${connector.name}`,
+    activeRoute,
+    connector,
+    napClient,
+  )
   if (!jobClient) return
 
   try {
