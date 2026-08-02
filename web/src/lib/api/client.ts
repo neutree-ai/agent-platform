@@ -107,8 +107,8 @@ import type {
  * over NFS inside a throttled pod). These bound a hang; they do not police
  * latency, so the slow lane is deliberately loose.
  */
-const AGENT_SESSION_TIMEOUT_MS = 15_000
-const AGENT_PROXY_TIMEOUT_MS = 65_000
+const AGENT_SESSION_TIMEOUT_MS = 45_000
+const AGENT_PROXY_TIMEOUT_MS = 195_000
 
 /**
  * Read/write against a workspace's agent pod, via the control plane's

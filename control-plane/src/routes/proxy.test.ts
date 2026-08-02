@@ -65,7 +65,7 @@ describe('agent proxy headers deadline', () => {
     )
 
     const pending = buildApp().request('/_proxy/agent/ws1/sessions/s1/pending-question')
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(30_000)
     const res = await pending
 
     expect(res.status).toBe(504)
@@ -95,7 +95,7 @@ describe('agent proxy headers deadline', () => {
     const pending = buildApp().request('/_proxy/agent/ws1/skills/big-skill/pack', {
       method: 'POST',
     })
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(60_000)
     respond()
     const res = await pending
 
