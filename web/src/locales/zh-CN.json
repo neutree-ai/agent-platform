@@ -970,6 +970,8 @@
           "uploaded": "Skill 已上传",
           "synced": "Skill 已同步",
           "alreadyUpToDate": "当前已是最新",
+          "syncSkippedSubpath": "未同步：{{names}} —— 记录的目录在仓库中已不存在。请编辑该 skill 重新选择目录。",
+          "syncSkippedTooLarge": "未同步：{{names}} —— 打包后超出体积上限。",
           "switchedToGit": "Skill 已切换到 Git 来源",
           "deleted": "Skill 已删除"
         },

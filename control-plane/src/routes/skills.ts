@@ -853,6 +853,7 @@ skills.openapi(syncSourceRoute, async (c) => {
     {
       source: sourceToApi(value.source),
       results: value.results,
+      skipped: value.skipped,
       commit_sha: value.commit_sha,
     },
     200,

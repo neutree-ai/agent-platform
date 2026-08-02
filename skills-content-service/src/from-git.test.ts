@@ -23,7 +23,8 @@ const mocks = vi.hoisted(() => {
   const listSkillsBySource = vi.fn()
   const markSourceSynced = vi.fn()
   const setActiveVersion = vi.fn()
-  const withTx = vi.fn(async (fn: (client: unknown) => unknown) => fn({}))
+  const query = vi.fn(async () => ({ rowCount: 1, rows: [] }))
+  const withTx = vi.fn(async (fn: (client: unknown) => unknown) => fn({ query }))
   return {
     fetchTarball,
     fetchCommitSha,
@@ -38,6 +39,7 @@ const mocks = vi.hoisted(() => {
     insertVersion,
     listSkillsBySource,
     markSourceSynced,
+    query,
     setActiveVersion,
     withTx,
   }
@@ -78,7 +80,8 @@ beforeEach(() => {
       ;(k as { mockReset: () => void }).mockReset()
     }
   }
-  mocks.withTx.mockImplementation(async (fn) => fn({}))
+  mocks.query.mockImplementation(async () => ({ rowCount: 1, rows: [] }))
+  mocks.withTx.mockImplementation(async (fn) => fn({ query: mocks.query }))
 })
 
 // Tarball with a single root-level skill, wrapped under the github-style
@@ -398,5 +401,71 @@ describe('syncSource', () => {
     if (!r.ok) return
     expect(r.data.results[0].changed).toBe(false)
     expect(mocks.setActiveVersion).not.toHaveBeenCalled()
+    // Clean run — the SHA is recorded, so the next sync can short-circuit.
+    expect(mocks.markSourceSynced).toHaveBeenCalledWith(expect.anything(), 'src1', 'deadbeef')
+  })
+
+  it('reports a skill whose subpath no longer resolves, and withholds the SHA', async () => {
+    mocks.getSourceById.mockResolvedValueOnce({
+      id: 'src1',
+      kind: 'git',
+      git_url: 'https://github.com/owner/repo',
+      git_type: 'github',
+      git_ref: null,
+      last_commit_sha: 'cafe1234',
+    })
+    mocks.fetchTarball.mockResolvedValueOnce(await singleSkillTarball())
+    mocks.fetchCommitSha.mockResolvedValueOnce('deadbeef')
+    // The repo moved SKILL.md to the root; the skill still tracks old/dir.
+    mocks.listSkillsBySource.mockResolvedValueOnce([
+      { id: 'sk1', source_id: 'src1', subpath: 'old/dir', name: 'myskill' },
+    ])
+    mocks.markSourceSynced.mockResolvedValueOnce({ id: 'src1', kind: 'git' })
+
+    const r = await syncSource({ sourceId: 'src1', publishedBy: 'u1' })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.data.results).toHaveLength(0)
+    expect(r.data.skipped).toEqual([
+      { skill_id: 'sk1', name: 'myskill', subpath: 'old/dir', reason: 'subpath_not_found' },
+    ])
+    expect(mocks.insertVersion).not.toHaveBeenCalled()
+    // The SHA must be cleared, not advanced: recording 'deadbeef' here would
+    // make every later sync short-circuit on the pre-check and never retry
+    // this skill.
+    expect(mocks.query).toHaveBeenCalledWith(
+      'UPDATE skill_sources SET last_commit_sha = NULL WHERE id = $1',
+      ['src1'],
+    )
+    expect(mocks.markSourceSynced).toHaveBeenCalledWith(expect.anything(), 'src1', null)
+  })
+
+  it('still syncs the healthy skills alongside a skipped one', async () => {
+    mocks.getSourceById.mockResolvedValueOnce({
+      id: 'src1',
+      kind: 'git',
+      git_url: 'https://github.com/owner/repo',
+      git_type: 'github',
+      git_ref: null,
+    })
+    mocks.fetchTarball.mockResolvedValueOnce(await singleSkillTarball())
+    mocks.fetchCommitSha.mockResolvedValueOnce('deadbeef')
+    mocks.listSkillsBySource.mockResolvedValueOnce([
+      { id: 'sk1', source_id: 'src1', subpath: '', name: 'myskill' },
+      { id: 'sk2', source_id: 'src1', subpath: 'gone', name: 'stale' },
+    ])
+    mocks.getActiveVersionHash.mockResolvedValueOnce({ content_hash: 'OLDHASH' })
+    mocks.insertVersion.mockResolvedValueOnce({
+      version: { id: 'v2', skill_id: 'sk1', source_id: 'src1', content_hash: 'NEWHASH' },
+      created: true,
+    })
+    mocks.setActiveVersion.mockResolvedValueOnce({})
+    mocks.markSourceSynced.mockResolvedValueOnce({ id: 'src1', kind: 'git' })
+
+    const r = await syncSource({ sourceId: 'src1', publishedBy: 'u1' })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.data.results.map((x) => x.skill_id)).toEqual(['sk1'])
+    expect(r.data.skipped.map((x) => x.skill_id)).toEqual(['sk2'])
   })
 })

@@ -940,6 +940,8 @@
           "uploaded": "Skill uploaded",
           "synced": "Skill synced",
           "alreadyUpToDate": "Already up to date",
+          "syncSkippedSubpath": "Not synced: {{names}} — the tracked directory no longer exists in the repo. Edit the skill and pick its new directory.",
+          "syncSkippedTooLarge": "Not synced: {{names}} — the packed skill exceeds the size limit.",
           "switchedToGit": "Skill switched to Git source",
           "deleted": "Skill deleted"
         },

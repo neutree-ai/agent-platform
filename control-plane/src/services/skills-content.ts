@@ -199,9 +199,18 @@ interface SyncResultRow {
   changed: boolean
 }
 
+/** A skill the sync could not import — reported instead of silently dropped. */
+interface SyncSkipRow {
+  skill_id: string
+  name: string
+  subpath: string
+  reason: 'subpath_not_found' | 'too_large'
+}
+
 export interface SyncResult {
   source: SkillSource
   results: SyncResultRow[]
+  skipped: SyncSkipRow[]
   commit_sha: string | null
 }
 

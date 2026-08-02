@@ -692,6 +692,18 @@ export const SkillSyncResponseSchema = z.object({
       changed: z.boolean(),
     }),
   ),
+  // Skills the sync could not import (subpath no longer resolves after an
+  // upstream restructure, or the packed skill outgrew the size limit). Non-
+  // empty means the source's stored commit SHA was cleared, so the next sync
+  // re-walks the repo instead of short-circuiting on an unchanged HEAD.
+  skipped: z.array(
+    z.object({
+      skill_id: z.string(),
+      name: z.string(),
+      subpath: z.string(),
+      reason: z.enum(['subpath_not_found', 'too_large']),
+    }),
+  ),
   commit_sha: z.string().nullable(),
 })
 
