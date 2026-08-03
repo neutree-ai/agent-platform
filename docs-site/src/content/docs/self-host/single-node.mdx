@@ -16,7 +16,7 @@ Recommended spec: **8 vCPU / 32 GB / 200 GB disk** — comfortable for roughly *
 On a bare Linux machine with internet access, k3s is **not** required — the script installs it. Run as root:
 
 ```bash
-curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
+curl -sfL https://nap.neutree.ai/get.sh | sudo sh -
 ```
 
 It installs k3s if missing, generates every secret, autodetects the node IP, creates a random admin password, and prints the login URL + credentials when it finishes. Configuration lands in `/opt/nap/values.env`; re-running the same line upgrades in place.
@@ -25,11 +25,11 @@ Common overrides:
 
 ```bash
 # choose the host IP / admin password yourself
-curl -sfL https://nap.docs.neutree.ai/get.sh \
+curl -sfL https://nap.neutree.ai/get.sh \
   | sudo NAP_HOST=192.168.1.10 NAP_ADMIN_PASSWORD=your-password sh -
 
 # generate values.env only — review/edit it, then re-run without the flag to install
-curl -sfL https://nap.docs.neutree.ai/get.sh \
+curl -sfL https://nap.neutree.ai/get.sh \
   | sudo sh -s -- --prepare-only
 ```
 

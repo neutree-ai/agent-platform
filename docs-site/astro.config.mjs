@@ -14,7 +14,7 @@ const hasUseCases =
   existsSync(useCasesDir) && readdirSync(useCasesDir).some((f) => /\.mdx?$/.test(f))
 
 export default defineConfig({
-  site: 'https://nap.docs.neutree.ai',
+  site: 'https://nap.neutree.ai',
   integrations: [
     preact(),
     starlight({
