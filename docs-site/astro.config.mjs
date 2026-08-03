@@ -14,7 +14,11 @@ const hasUseCases =
   existsSync(useCasesDir) && readdirSync(useCasesDir).some((f) => /\.mdx?$/.test(f))
 
 export default defineConfig({
-  site: 'https://nap.neutree.ai',
+  site: 'https://docs.neutree.ai',
+  // The docs are one product's section of the docs domain, beside the MaaS
+  // docs at its root. Astro rewrites its own links and assets from this;
+  // links written by hand in the content carry the prefix themselves.
+  base: '/nap',
   integrations: [
     preact(),
     starlight({
@@ -159,7 +163,7 @@ export default defineConfig({
         {
           label: 'API Docs',
           translations: { 'zh-CN': 'API 文档' },
-          link: 'https://nap.neutree.ai/api/docs',
+          link: 'https://docs.neutree.ai/nap/api/docs',
           attrs: { target: '_blank', rel: 'noopener' },
         },
       ],

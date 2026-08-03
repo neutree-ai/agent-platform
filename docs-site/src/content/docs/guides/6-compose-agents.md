@@ -43,7 +43,7 @@ The calling Agent automatically handles the cross-Workspace communication: it pa
 
 You can also use **background mode**—send it off without waiting, letting the callee work at its own pace in its own Workspace, and report back via a notification or by writing a file when done. This suits longer-running tasks.
 
-When you need to pass **large amounts of material** or **generated artifacts** between Agents, don't stuff them into the prompt—use [AFS (cross-Agent file sharing)](/concepts/afs/): write the file to a shared directory, grant access to the collaborator, and they can read it directly at the same path inside their own container.
+When you need to pass **large amounts of material** or **generated artifacts** between Agents, don't stuff them into the prompt—use [AFS (cross-Agent file sharing)](/nap/concepts/afs/): write the file to a shared directory, grant access to the collaborator, and they can read it directly at the same path inside their own container.
 
 ## A few typical collaboration patterns
 
@@ -102,7 +102,7 @@ The task detail page has a **collaboration timeline**: one line per member's ses
 - Long-lived, fixed collaboration → configure Slug + Visibility, the approach in the first half of this chapter
 - **One-off tasks, needing to temporarily pull in a private Agent, needing shared files**—use Teamwork
 
-For the full design motivation and how it works, see the [Teamwork concepts page](/concepts/teamwork/).
+For the full design motivation and how it works, see the [Teamwork concepts page](/nap/concepts/teamwork/).
 
 ## Some practical experience
 
@@ -116,4 +116,4 @@ For the full design motivation and how it works, see the [Teamwork concepts page
 
 ## Next
 
-By now you've covered both the Agent's "capability surface" and its "collaboration surface." The final chapter covers how to **reuse, share, and scale** these capabilities → [Operating at Scale](/guides/7-operate-at-scale/).
+By now you've covered both the Agent's "capability surface" and its "collaboration surface." The final chapter covers how to **reuse, share, and scale** these capabilities → [Operating at Scale](/nap/guides/7-operate-at-scale/).

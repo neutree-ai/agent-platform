@@ -1,6 +1,6 @@
 name: Deploy docs
 
-# Publishes the static docs-site to its public home at nap.neutree.ai.
+# Publishes the static docs-site to its public home at docs.neutree.ai/nap.
 #
 # The site is a plain Astro/Starlight static build (no use-cases in this repo —
 # that section is a downstream extension point), so the public deploy is just:
@@ -31,6 +31,10 @@ env:
   AWS_REGION: us-east-1
   DEPLOY_ROLE: arn:aws:iam::784310920186:role/neutree-nap-docs-deploy
   S3_BUCKET: neutree-nap-docs-prod
+  # NOTE: still the nap.neutree.ai distribution. The docs now live under
+  # docs.neutree.ai/nap, so this has to become that distribution's id, and the
+  # deploy role needs cloudfront:CreateInvalidation on it. Until then the sync
+  # lands in S3 but the edge keeps serving stale HTML.
   CF_DISTRIBUTION_ID: E2FR8AO2K9XIBJ
 
 jobs:
@@ -61,20 +65,20 @@ jobs:
       - name: Sync to S3
         working-directory: docs-site
         run: |
-          aws s3 sync dist/ "s3://${S3_BUCKET}/" --delete \
+          aws s3 sync dist/ "s3://${S3_BUCKET}/nap/" --delete \
             --exclude "*.html" --exclude "get.sh" \
             --cache-control "public, max-age=31536000, immutable"
-          aws s3 sync dist/ "s3://${S3_BUCKET}/" --delete \
+          aws s3 sync dist/ "s3://${S3_BUCKET}/nap/" --delete \
             --exclude "*" --include "*.html" \
             --cache-control "no-cache"
 
       # The one-line installer is served off the docs domain
-      # (https://nap.neutree.ai/get.sh). It is not part of the Astro
+      # (https://docs.neutree.ai/nap/get.sh). It is not part of the Astro
       # build, so the dist sync above excludes it from --delete and this step
       # keeps it current. no-cache so upgrades propagate immediately.
       - name: Publish get.sh
         run: |
-          aws s3 cp self-host/get.sh "s3://${S3_BUCKET}/get.sh" \
+          aws s3 cp self-host/get.sh "s3://${S3_BUCKET}/nap/get.sh" \
             --cache-control "no-cache" \
             --content-type "text/plain; charset=utf-8"
 
@@ -82,4 +86,4 @@ jobs:
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "${CF_DISTRIBUTION_ID}" \
-            --paths "/*"
+            --paths "/nap/*"

@@ -3,7 +3,7 @@ title: 3. Defining Agent Behavior
 description: Tune your Agent with Prompt, Skills, and Memory
 ---
 
-By now you should already have a working Agent (if not, start with [your first Agent](/guides/2-first-agent/)). This chapter covers how to actually "tune" it — give it a specific role, have it work the way you want, know which tools to use, and remember what should be remembered.
+By now you should already have a working Agent (if not, start with [your first Agent](/nap/guides/2-first-agent/)). This chapter covers how to actually "tune" it — give it a specific role, have it work the way you want, know which tools to use, and remember what should be remembered.
 
 ## Configuration entry points
 
@@ -97,19 +97,19 @@ Open the **Skills** area in Settings to see the list of all available skills. Se
 - The task **is only needed in some Agents** — for example a translation Agent needs a terminology-lookup skill, but a code-review Agent doesn't, so there's no point loading it by default
 - **Someone has already packaged it** — just select and use it, no need to re-teach the Agent
 
-If a skill you need doesn't exist yet, you can create one and upload it to the library. This belongs to the "extension" and "scaling" topics — see [Operating at Scale](/guides/7-operate-at-scale/).
+If a skill you need doesn't exist yet, you can create one and upload it to the library. This belongs to the "extension" and "scaling" topics — see [Operating at Scale](/nap/guides/7-operate-at-scale/).
 
 ## MCP: Connecting external tools
 
 MCP is another way to let an Agent call external tools — connecting to an independently running service via a protocol, so the tools that service exposes become capabilities the Agent can call.
 
-The **MCP** area in Settings is where you fill in the connection details (command or URL) of an MCP service. For how to deploy and connect an MCP service, see [Extending the Workspace](/guides/4-extend-workspace/).
+The **MCP** area in Settings is where you fill in the connection details (command or URL) of an MCP service. For how to deploy and connect an MCP service, see [Extending the Workspace](/nap/guides/4-extend-workspace/).
 
 ## Memory: Recall across Sessions
 
 By default, each Session is independent — what was learned in the last conversation isn't automatically remembered next time. Memory solves this problem.
 
-Neutree Agent Platform uses a **Memory Store** to manage memory across Sessions. It's a standalone resource that can be attached to one or more Workspaces. For the complete design, see the [Memory Store concept page](/concepts/memory-store/); here we only cover how to use it.
+Neutree Agent Platform uses a **Memory Store** to manage memory across Sessions. It's a standalone resource that can be attached to one or more Workspaces. For the complete design, see the [Memory Store concept page](/nap/concepts/memory-store/); here we only cover how to use it.
 
 ### Where to find it
 
@@ -143,7 +143,7 @@ Every record carries a **version**, so it's traceable and reversible.
 ### Content not suitable for a Memory Store
 
 - **Changing state** — today's to-dos, the current environment variables. These should be written to files or queried dynamically
-- **Secrets** — API keys, passwords. Use [credentials](/guides/4-extend-workspace/#credentials-keys-to-external-resources) instead
+- **Secrets** — API keys, passwords. Use [credentials](/nap/guides/4-extend-workspace/#credentials-keys-to-external-resources) instead
 - **Very long content** — a complete codebase description, a spec document of dozens of pages. The index goes into the context of every conversation, and being too long wastes tokens; long body content should go into sub-files for the Agent to read on demand
 
 ### How the Agent reads and writes
@@ -183,7 +183,7 @@ Avoid piling on Skills and MCP from the start. Getting the Prompt right matters 
 
 ## Enabling Builder Mode
 
-[Builder Mode](/concepts/builder-mode/) lets you say things in conversation like "make the prompt clearer" or "add a schedule at 9 AM daily," and the Agent makes the changes itself while you click approve — no going back to UI forms to fill in fields. Turn it on when you need it.
+[Builder Mode](/nap/concepts/builder-mode/) lets you say things in conversation like "make the prompt clearer" or "add a schedule at 9 AM daily," and the Agent makes the changes itself while you click approve — no going back to UI forms to fill in fields. Turn it on when you need it.
 
 **Entry point**: Settings → **MCP** → the **Platform** card → **Builder Mode** multi-select.
 
@@ -207,9 +207,9 @@ Choose and save — the next time you send a message, the Agent can see the corr
 
 > "Look at the last 5 chats, analyze where my system prompt is tripping you up, and propose improvements."
 
-The Agent sends the changes to the conversation as cards, and you click *Approve* or *Reject* after reviewing. For what exactly it can do and how to use it, go back to the [Builder Mode concept page](/concepts/builder-mode/) for the full explanation.
+The Agent sends the changes to the conversation as cards, and you click *Approve* or *Reject* after reviewing. For what exactly it can do and how to use it, go back to the [Builder Mode concept page](/nap/concepts/builder-mode/) for the full explanation.
 
 ## Next
 
-- Want to connect your Agent to more external capabilities (MCP services, custom tabs, custom commands)? → [Extending the Workspace](/guides/4-extend-workspace/)
-- Want the Agent to be triggered by more than just manual conversation? → [Triggering Agents](/guides/5-trigger-agents/)
+- Want to connect your Agent to more external capabilities (MCP services, custom tabs, custom commands)? → [Extending the Workspace](/nap/guides/4-extend-workspace/)
+- Want the Agent to be triggered by more than just manual conversation? → [Triggering Agents](/nap/guides/5-trigger-agents/)

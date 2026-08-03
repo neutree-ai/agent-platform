@@ -330,7 +330,7 @@ const PANEL_STR = {
     inStep1Note: <>For a connected install, all first-party images are pulled from the public registry (<code>${'{'}REGISTRY{'}'}</code>, default <code>ghcr.io/neutree-ai/agent-platform</code>). Override <code>REGISTRY</code> only if you mirror the images elsewhere.</>,
     agInstallSummary: 'build the image bundle and push it into your registry',
     agInstall1: <>On a connected host, <code>./offline/save-images.sh</code> pulls every first-party and prerequisite image and writes <code>offline/nap-images.tar.gz</code> plus the prereq charts under <code>prereqs/</code>. Move it to the air-gapped side, then <code>./offline/load-images.sh --registry &lt;your-registry&gt;</code> (add <code>--insecure-registry</code> for a plain-HTTP registry) loads, retags, and pushes every image into your registry and prints the exact <code>REGISTRY=</code> / <code>*_IMAGE=</code> lines to paste into <code>values.env</code>. If a vendor delivered a prebuilt bundle, skip <code>save-images</code> and start at <code>load-images</code>.</>,
-    agInstall2: <>With those set, the remaining steps run exactly as they do online — <code>./install.sh</code> auto-detects the offline prereq bundles and builds the pull secret from <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code>. For a single machine with no external registry, use the <a href="/self-host/single-node/">single-node profile</a> instead.</>,
+    agInstall2: <>With those set, the remaining steps run exactly as they do online — <code>./install.sh</code> auto-detects the offline prereq bundles and builds the pull secret from <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code>. For a single machine with no external registry, use the <a href="/nap/self-host/single-node/">single-node profile</a> instead.</>,
     agPrefix: <><strong>Naming.</strong> Every first-party image carries the <code>values.env</code> <code>APP_PREFIX</code> (default <code>nap</code>, as in <code>nap-cp</code>). It is for <strong>redistributors only</strong> — a non-default prefix requires every first-party image to be rebuilt under that prefix in your own registry; the public registry only hosts <code>nap-*</code>, and the installer refuses the combination. A redistribution that kept a different prefix builds the bundle with its own <code>values.env</code> and runs <code>load-images.sh --app-prefix &lt;prefix&gt;</code> so the loader finds the prefixed images. The installer also refuses to change the prefix of an existing install.</>,
     inRegAuthNote: <>If your registry needs a login, set <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> in <code>values.env</code> — the installer builds a <code>regcred</code> imagePullSecret from them automatically and attaches it to the platform, CNPG, and the workspace pods.</>,
     inStep2H3: 'Prepare values.env',
@@ -346,7 +346,7 @@ const PANEL_STR = {
     inSubH2: 'install.sh subcommands',
     inSubIntro: <>For running stages separately; a single <code>./install.sh</code> is enough for the normal case.</>,
     inSingleH2: 'Single-node profile',
-    inSingleP: <>A single k3s node — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). <strong>Connected</strong>, it pulls every image from the public registry. <strong>Air-gapped</strong>, it brings up an in-cluster registry and seeds it from the image bundle, so no external registry is needed at all. The <a href="/self-host/single-node/">single-node page</a> covers both paths end to end.</>,
+    inSingleP: <>A single k3s node — same as the full profile, just with <code>PG_INSTANCES=1</code> and an in-cluster NFS server for RWX storage (a single node has no external NFS). <strong>Connected</strong>, it pulls every image from the public registry. <strong>Air-gapped</strong>, it brings up an in-cluster registry and seeds it from the image bundle, so no external registry is needed at all. The <a href="/nap/self-host/single-node/">single-node page</a> covers both paths end to end.</>,
     // Upgrade
     upPathH2: 'Upgrade',
     upPathP1: <>Upgrading is the same command as a first install. First refresh the installer itself to the new release (<code>git pull</code> in the cloned repo — the new manifests ship with it), pin <code>IMAGE_TAG</code> to the new release tag (or keep <code>latest</code>) in your existing <code>values.env</code>, then re-run:</>,
@@ -382,7 +382,7 @@ const PANEL_STR = {
           In that case <code>kubectl get deploy -n $NAMESPACE nfs-subdir-external-provisioner</code> returns NotFound.
           Fix either way: add <code>mountPermissions: "0777"</code> to that SC (as above), or delete the pre-existing SC / use a different <code>NFS_STORAGE_CLASS</code> name and re-run the installer so nfs-subdir actually installs.</>,
     tsVideoH2: 'Agent Browser live view doesn\'t render',
-    tsVideoP: <>Usually TURN is unreachable. Set <code>TURN_HOST</code> to an IP the user's browser can actually reach and re-run{' '}<code>install.sh</code>; the full checklist is in <a href="/self-host/sandbox-browser/">Code Sandbox / Agent Browser</a> → Debugging.</>,
+    tsVideoP: <>Usually TURN is unreachable. Set <code>TURN_HOST</code> to an IP the user's browser can actually reach and re-run{' '}<code>install.sh</code>; the full checklist is in <a href="/nap/self-host/sandbox-browser/">Code Sandbox / Agent Browser</a> → Debugging.</>,
   },
   'zh-CN': {
     // Overview
@@ -476,7 +476,7 @@ const PANEL_STR = {
     inStep1Note: <>联网安装时，所有第一方镜像都从公共仓库拉取（<code>${'{'}REGISTRY{'}'}</code>，默认 <code>ghcr.io/neutree-ai/agent-platform</code>）。仅当你把镜像放到别处镜像源时才覆盖 <code>REGISTRY</code>。</>,
     agInstallSummary: '构建镜像包并推入你的仓库',
     agInstall1: <>在一台联网机器上，<code>./offline/save-images.sh</code> 会拉取全部第一方与前置镜像，产出 <code>offline/nap-images.tar.gz</code> 以及 <code>prereqs/</code> 下的前置 chart。把它拷到隔离侧，再用 <code>./offline/load-images.sh --registry &lt;你的仓库&gt;</code>（纯 HTTP 仓库加 <code>--insecure-registry</code>）加载、重打 tag 并把所有镜像推入你的仓库，同时打印出需要粘贴进 <code>values.env</code> 的 <code>REGISTRY=</code> / <code>*_IMAGE=</code> 各行。若厂商已交付预构建镜像包，跳过 <code>save-images</code>，直接从 <code>load-images</code> 开始。</>,
-    agInstall2: <>设好之后，后续步骤与联网时完全一致 —— <code>./install.sh</code> 会自动识别离线前置包，并据 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> 生成 pull secret。若是单台机器、没有外部仓库，改用 <a href="/zh-cn/self-host/single-node/">单节点 profile</a>。</>,
+    agInstall2: <>设好之后，后续步骤与联网时完全一致 —— <code>./install.sh</code> 会自动识别离线前置包，并据 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> 生成 pull secret。若是单台机器、没有外部仓库，改用 <a href="/nap/zh-cn/self-host/single-node/">单节点 profile</a>。</>,
     agPrefix: <><strong>命名</strong>：每个第一方镜像都带 <code>values.env</code> 里的 <code>APP_PREFIX</code>（默认 <code>nap</code>，即 <code>nap-cp</code>）。它<strong>仅供再分发者使用</strong> —— 非默认前缀要求所有第一方镜像都以该前缀重建在你自己的仓库里；公共仓库只发布 <code>nap-*</code>，安装器会直接拒绝这种组合。沿用其他前缀的再分发版本，用自己的 <code>values.env</code> 构建镜像包，并以 <code>load-images.sh --app-prefix &lt;前缀&gt;</code> 加载，脚本才能找到带前缀的镜像。安装器同样拒绝修改现有安装的前缀。</>,
     inRegAuthNote: <>若你的仓库需要登录，在 <code>values.env</code> 里设置 <code>REGISTRY_USERNAME</code> / <code>REGISTRY_PASSWORD</code> —— 安装器会据此自动创建 <code>regcred</code> imagePullSecret，并挂到平台、CNPG 与 workspace pod 上。</>,
     inStep2H3: '准备 values.env',
@@ -492,7 +492,7 @@ const PANEL_STR = {
     inSubH2: 'install.sh 子命令',
     inSubIntro: <>用于单独运行各阶段；通常情况下一条 <code>./install.sh</code> 就够了。</>,
     inSingleH2: 'Single-node profile',
-    inSingleP: <>单个 k3s 节点 —— 与完整 profile 相同，只是改成 <code>PG_INSTANCES=1</code> 并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。<strong>联网</strong> 时所有镜像直接从公共仓库拉取。<strong>隔离网络</strong> 时它会启动集群内仓库并用镜像包填充，完全不需要外部仓库。<a href="/zh-cn/self-host/single-node/">单节点页面</a> 完整覆盖两条路径。</>,
+    inSingleP: <>单个 k3s 节点 —— 与完整 profile 相同，只是改成 <code>PG_INSTANCES=1</code> 并用集群内 NFS server 提供 RWX 存储（单节点没有外部 NFS）。<strong>联网</strong> 时所有镜像直接从公共仓库拉取。<strong>隔离网络</strong> 时它会启动集群内仓库并用镜像包填充，完全不需要外部仓库。<a href="/nap/zh-cn/self-host/single-node/">单节点页面</a> 完整覆盖两条路径。</>,
     // Upgrade
     upPathH2: '升级',
     upPathP1: <>升级与首次安装用的是同一条命令。先把安装器本身更新到新版本（在 clone 的 repo 里 <code>git pull</code> —— 新的 manifest 随之而来），在现有 <code>values.env</code> 里把 <code>IMAGE_TAG</code> 固定到新的发布 tag（或保持 <code>latest</code>），然后重新运行：</>,
@@ -528,7 +528,7 @@ const PANEL_STR = {
           此时 <code>kubectl get deploy -n $NAMESPACE nfs-subdir-external-provisioner</code> 返回 NotFound。
           两种修法皆可：给该 SC 加上 <code>mountPermissions: "0777"</code>（如上），或删除已存在的 SC / 改用一个不同的 <code>NFS_STORAGE_CLASS</code> 名称并重新运行安装器，让 nfs-subdir 真正装上。</>,
     tsVideoH2: 'Agent Browser 实时画面不显示',
-    tsVideoP: <>通常是 TURN 不可达。把 <code>TURN_HOST</code> 设为用户浏览器真正能访问到的 IP 并重新运行{' '}<code>install.sh</code>；完整排查清单见 <a href="/zh-cn/self-host/sandbox-browser/">Code Sandbox / Agent Browser</a> 的调试一节。</>,
+    tsVideoP: <>通常是 TURN 不可达。把 <code>TURN_HOST</code> 设为用户浏览器真正能访问到的 IP 并重新运行{' '}<code>install.sh</code>；完整排查清单见 <a href="/nap/zh-cn/self-host/sandbox-browser/">Code Sandbox / Agent Browser</a> 的调试一节。</>,
   },
 } as const
 

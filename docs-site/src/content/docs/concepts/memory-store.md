@@ -141,9 +141,9 @@ Why not expose memory via MCP tools? Two reasons:
 
 **Layer your mounts**—put account-level preferences (language, style) in a standalone "user memory store" mounted to all Workspaces; put project knowledge in a Workspace-specific store. Don't cram everything into one store.
 
-**Don't put sensitive information in the Memory Store**—use [Credentials](/guides/1-setup/#credentials-your-agents-keys-to-resources) for API keys and passwords. The Memory Store is essentially Agent context and enters the conversation, so it's not suitable for secrets.
+**Don't put sensitive information in the Memory Store**—use [Credentials](/nap/guides/1-setup/#credentials-your-agents-keys-to-resources) for API keys and passwords. The Memory Store is essentially Agent context and enters the conversation, so it's not suitable for secrets.
 
 ## Next
 
-- Hands-on: mount a memory store and write your first memory → [Defining Agent Behavior](/guides/3-agent-behavior/#memory-recall-across-sessions)
-- How this mechanism relates to the Agent's five core parts → [The Anatomy of an Agent](/concepts/agent-anatomy/#memory-long-term-memory-across-sessions)
+- Hands-on: mount a memory store and write your first memory → [Defining Agent Behavior](/nap/guides/3-agent-behavior/#memory-recall-across-sessions)
+- How this mechanism relates to the Agent's five core parts → [The Anatomy of an Agent](/nap/concepts/agent-anatomy/#memory-long-term-memory-across-sessions)

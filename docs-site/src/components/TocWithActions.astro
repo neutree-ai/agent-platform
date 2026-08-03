@@ -3,7 +3,10 @@ import Default from '@astrojs/starlight/components/TableOfContents.astro'
 
 const { entry } = Astro.locals.starlightRoute
 const slug = entry?.slug ?? entry?.id ?? ''
-const sourceUrl = slug ? `/source/${slug}.md` : null
+// derived from the configured base rather than written in, so the link keeps
+// working wherever the site is mounted
+const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+const sourceUrl = slug ? `${base}/source/${slug}.md` : null
 const fileName = slug ? `${slug.split('/').pop()}.md` : 'page.md'
 const isMdx = entry?.id?.endsWith('.mdx')
 

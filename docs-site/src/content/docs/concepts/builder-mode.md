@@ -29,7 +29,7 @@ A Workspace's configuration—system prompt, enabled skills, schedules, model ch
 
 ## When Not To Use
 
-- **Cross-Workspace editing**—for safety, the default **This workspace** capability only changes the current Workspace's own configuration; account-wide resources require enabling the separate **Account-wide** capability (see [Enabling Builder Mode](/guides/3-agent-behavior/#enabling-builder-mode))
+- **Cross-Workspace editing**—for safety, the default **This workspace** capability only changes the current Workspace's own configuration; account-wide resources require enabling the separate **Account-wide** capability (see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode))
 - **Fine-grained field tweaks**—for example, changing a single word in the prompt; the UI editor may be handier
 
 ## The Safety Guarantees of the Approval Model
@@ -64,8 +64,8 @@ This is why Builder Mode is more efficient than the early standalone "prompt opt
 
 > Note for existing users: the original **prompt optimizer** experimental feature has been retired. Builder Mode is its better version—no need to leave the familiar conversation entry; session selection, topic declaration, and landing the change all happen in the same conversation.
 
-Having the Agent review historical sessions and improve its own configuration is itself part of [Optimization](/concepts/optimize/)—Builder Mode is the entry point for landing and approving it; the full picture of optimization (autonomous tuning, and later model replacement) is laid out in that chapter.
+Having the Agent review historical sessions and improve its own configuration is itself part of [Optimization](/nap/concepts/optimize/)—Builder Mode is the entry point for landing and approving it; the full picture of optimization (autonomous tuning, and later model replacement) is laid out in that chapter.
 
 ---
 
-For specific setup steps and the capability list, see [Enabling Builder Mode](/guides/3-agent-behavior/#enabling-builder-mode).
+For specific setup steps and the capability list, see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode).

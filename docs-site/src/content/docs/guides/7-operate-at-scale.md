@@ -33,7 +33,7 @@ If only one Workspace uses it, there's no need to extract it. Wait until there's
 
 ### Skills
 
-Skills are also stored in the Library, with a similar mechanism. [Defining Agent Behavior](/guides/3-agent-behavior/#skills-reusable-capability-packages) covered how to **enable** a skill in a Workspace. Here we cover how to **create** one:
+Skills are also stored in the Library, with a similar mechanism. [Defining Agent Behavior](/nap/guides/3-agent-behavior/#skills-reusable-capability-packages) covered how to **enable** a skill in a Workspace. Here we cover how to **create** one:
 
 In the **Library** app, switch to **Skills** and create one. You can choose two methods:
 
@@ -102,7 +102,7 @@ Note that what you share is **public**—don't share sessions containing sensiti
 
 ## Workspace visibility and team collaboration
 
-[Composing Agents](/guides/6-compose-agents/#visibility) covered how a Workspace's Visibility affects **who can call it**. The same field also affects **who can see it in their own list**:
+[Composing Agents](/nap/guides/6-compose-agents/#visibility) covered how a Workspace's Visibility affects **who can call it**. The same field also affects **who can see it in their own list**:
 
 - **Private** —only you can see it
 - **User** —you can see it (it doesn't appear in others' lists)
@@ -123,4 +123,4 @@ This flow connects "personal exploration" and "team benefit"—what one person s
 
 By now you've walked the full path from "creating your first Agent" to "turning it into a team-level capability."
 
-If you want to dive deep into a specific topic, return to the [Concepts](/concepts/overview/) chapter for a panoramic explanation of NAP's core concept groups.
+If you want to dive deep into a specific topic, return to the [Concepts](/nap/concepts/overview/) chapter for a panoramic explanation of NAP's core concept groups.

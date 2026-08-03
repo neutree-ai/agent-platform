@@ -5,7 +5,7 @@ description: Let Agents start working on their own at the right moment—on a sc
 
 By now your Agent can already work through manual conversations in the Web UI. This chapter covers how to let it **start working without human intervention**—by time, by external event, by API call.
 
-The concepts, boundaries, and the "why it's split this way" behind these three trigger methods are covered in [Where an Agent Gets Its Tasks](/concepts/triggers-and-routes/). This chapter is the hands-on version, ordered from easiest to hardest:
+The concepts, boundaries, and the "why it's split this way" behind these three trigger methods are covered in [Where an Agent Gets Its Tasks](/nap/concepts/triggers-and-routes/). This chapter is the hands-on version, ordered from easiest to hardest:
 
 1. **Schedules** —zero external dependencies, the simplest
 2. **External events** —integrate external systems via Slack, Webhook, WeCom
@@ -32,7 +32,7 @@ The time zone follows the browser by default and can be set separately.
 
 ### Things to note
 
-- **Each trigger is an independent Session** —context is not shared. If you need to "continue from last time's state," have the Agent write its state to a file or put it in [Memory](/guides/3-agent-behavior/#memory-recall-across-sessions)
+- **Each trigger is an independent Session** —context is not shared. If you need to "continue from last time's state," have the Agent write its state to a file or put it in [Memory](/nap/guides/3-agent-behavior/#memory-recall-across-sessions)
 - **A minimum interval of at least 5 minutes is recommended** —the platform's scheduler has buffering, so very short intervals are not meaningful
 - **Disabling keeps the configuration** —no need to delete it to pause for a while
 
@@ -45,7 +45,7 @@ When external systems (GitLab, GitHub, Jira, Slack, WeCom, etc.) want to proacti
 - **Connector** —the "door" that receives events. One Connector corresponds to one external system's ingress endpoint
 - **Route** —a rule attached under a Connector. It decides which events go to which Workspace and how they become a Prompt
 
-> The design rationale for these two objects is covered on the [concepts page](/concepts/triggers-and-routes/#connector--route-external-systems-push-events)—here we go straight to how to configure them.
+> The design rationale for these two objects is covered on the [concepts page](/nap/concepts/triggers-and-routes/#connector--route-external-systems-push-events)—here we go straight to how to configure them.
 
 ### Webhook: the most universal integration
 
@@ -154,4 +154,4 @@ For the full list of endpoints and their URLs, open **API Docs** on your instanc
 
 ## Next
 
-Let Agents collaborate with each other → [Composing Agents](/guides/6-compose-agents/).
+Let Agents collaborate with each other → [Composing Agents](/nap/guides/6-compose-agents/).

@@ -4,14 +4,14 @@ description: Connect a large-model API provider — the one thing to set up befo
 ---
 
 :::note[Don't have a running platform yet?]
-These guides assume a Neutree Agent Platform instance you can sign in to. Don't have one? [Install it in one line](/self-host/single-node/).
+These guides assume a Neutree Agent Platform instance you can sign in to. Don't have one? [Install it in one line](/nap/self-host/single-node/).
 :::
 
 Before you create your first Agent, you need exactly one thing: a working **API provider** — the large-model API your Agent's calls go through. Each Workspace picks one provider plus a specific model, and all model calls in every Session go through that channel.
 
 ## Create an API provider
 
-Press `⌘K` (`Ctrl+K` on Windows / Linux), search for **API Providers** and open it, then click **New API Provider**. (On a team instance an administrator may already have shared **Public** providers — if one fits, pick it and go straight to [creating your first Agent](/guides/2-first-agent/).)
+Press `⌘K` (`Ctrl+K` on Windows / Linux), search for **API Providers** and open it, then click **New API Provider**. (On a team instance an administrator may already have shared **Public** providers — if one fits, pick it and go straight to [creating your first Agent](/nap/guides/2-first-agent/).)
 
 The Provider Type must match the agent you plan to run and the API you have:
 
@@ -32,4 +32,4 @@ Like every shareable resource on the platform, a provider has one of three scope
 
 ## Ready to go
 
-As long as the **API Providers** list shows one usable provider, you're set — go [create your first Agent](/guides/2-first-agent/).
+As long as the **API Providers** list shows one usable provider, you're set — go [create your first Agent](/nap/guides/2-first-agent/).

@@ -3,7 +3,7 @@ title: 2. Your First Agent
 description: Create a Workspace from scratch and complete your first conversation
 ---
 
-Once you have a working [API provider](/guides/1-setup/), you can create your first Agent. The whole process takes less than 5 minutes.
+Once you have a working [API provider](/nap/guides/1-setup/), you can create your first Agent. The whole process takes less than 5 minutes.
 
 ## Create a Workspace
 
@@ -14,7 +14,7 @@ Click the workspace switcher in the top menu bar and choose **Create Workspace**
    - **From Template** — start from a template shared on your instance. A template carries a complete Agent configuration (provider, model, prompt, possibly skills); if a suitable one exists, pick it and you're done with this step
    - **Blank** — configure from scratch. On a fresh install with no templates yet, this is your path — it's only a few fields:
      - **Agent Type** — Claude Code or Codex
-     - **API Provider** — the list only shows providers compatible with the chosen agent type (the mapping from [Getting Ready](/guides/1-setup/))
+     - **API Provider** — the list only shows providers compatible with the chosen agent type (the mapping from [Getting Ready](/nap/guides/1-setup/))
      - **Model** — pick one the chosen provider actually serves
      - **Prompt** — fine to leave empty; write it after you enter the Workspace
 
@@ -62,4 +62,4 @@ Files are **shared across Sessions**: when you start a new Session, everything i
 
 ## Next
 
-At this point you have an Agent that runs and can converse. The next step is making it do what you actually want — write a prompt to give it a "personality" and a way of working, add skills to give it specialties, configure MCP to connect it to external systems, and use memory so it understands you better the more you use it. All of this is in [Defining Agent Behavior](/guides/3-agent-behavior/).
+At this point you have an Agent that runs and can converse. The next step is making it do what you actually want — write a prompt to give it a "personality" and a way of working, add skills to give it specialties, configure MCP to connect it to external systems, and use memory so it understands you better the more you use it. All of this is in [Defining Agent Behavior](/nap/guides/3-agent-behavior/).
