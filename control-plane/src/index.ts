@@ -536,7 +536,17 @@ if (process.env.DISABLE_SESSION_RECOVERY === '1') {
 const port = Number.parseInt(process.env.PORT || '3000')
 console.log(`Control plane starting on port ${port}`)
 
-const server = serve({ fetch: app.fetch, port })
+// Node's http server defaults `requestTimeout` to 5 minutes, counted from the
+// first byte until the request body is fully received. File uploads stream
+// through here (PUT /workspaces/:id/agent/files), so on a slow uplink a large
+// file trips the default and the client gets a 408 mid-body — the bytes never
+// reach the agent. 30 minutes covers a ~100MB upload at dial-up-grade speed
+// while still bounding a stalled request, which is what the timeout is for.
+const server = serve({
+  fetch: app.fetch,
+  port,
+  serverOptions: { requestTimeout: 30 * 60 * 1000 },
+})
 injectWebSocket(server)
 
 // Debug/profiling server on a separate port — only exposed via ClusterIP Service,
