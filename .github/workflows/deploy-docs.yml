@@ -31,11 +31,9 @@ env:
   AWS_REGION: us-east-1
   DEPLOY_ROLE: arn:aws:iam::784310920186:role/neutree-nap-docs-deploy
   S3_BUCKET: neutree-nap-docs-prod
-  # NOTE: still the nap.neutree.ai distribution. The docs now live under
-  # docs.neutree.ai/nap, so this has to become that distribution's id, and the
-  # deploy role needs cloudfront:CreateInvalidation on it. Until then the sync
-  # lands in S3 but the edge keeps serving stale HTML.
-  CF_DISTRIBUTION_ID: E2FR8AO2K9XIBJ
+  # docs.neutree.ai, which serves /nap/* from this bucket. (The retired
+  # nap.neutree.ai distribution was E2FR8AO2K9XIBJ.)
+  CF_DISTRIBUTION_ID: E29XRXNU59R62H
 
 jobs:
   deploy:
