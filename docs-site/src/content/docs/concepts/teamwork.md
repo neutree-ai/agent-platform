@@ -5,7 +5,7 @@ description: Task-scoped multi-Agent collaboration, with automatic management of
 
 > Teamwork is currently in preview. The core mechanics are stable, but the final shape may change. We welcome your feedback as you use it.
 
-Neutree Agent Platform (NAP) has always supported multi-Agent collaboration: in any Workspace you can call another Agent with `@agent/slug`, and to pass files you can create a shared directory with [AFS](/concepts/afs/). But both of these are **Workspace-level** configurations—an Agent is either visible to others or not, and a shared directory is either mounted or not.
+Neutree Agent Platform (NAP) has always supported multi-Agent collaboration: in any Workspace you can call another Agent with `@agent/slug`, and to pass files you can create a shared directory with [AFS](/nap/concepts/afs/). But both of these are **Workspace-level** configurations—an Agent is either visible to others or not, and a shared directory is either mounted or not.
 
 Yet much collaboration is actually **task-scoped**:
 
@@ -55,7 +55,7 @@ The main Agent calls another Agent through these two built-in tools:
 
 Conversations can pass text, but not things like slide-deck binaries, PDFs, or hundreds of lines of CSV. By default, two Agents' file systems are isolated—files a sub-agent writes in its own container can't be read by the main Agent.
 
-[AFS](/concepts/afs/) solves this: you can create a shared directory and mount it for multiple Agents; you control whether access is read-only or read-write, and you can revoke it anytime. Agents can also initiate sharing themselves through MCP tools.
+[AFS](/nap/concepts/afs/) solves this: you can create a shared directory and mount it for multiple Agents; you control whether access is read-only or read-write, and you can revoke it anytime. Agents can also initiate sharing themselves through MCP tools.
 
 Teamwork uses this same underlying layer—it just automates "create directory, mount, reclaim."
 
@@ -65,7 +65,7 @@ Teamwork doesn't replace the two capabilities above; it adds a layer of "**task*
 
 ### 1. Task-scoped Agent visibility
 
-Normally, a Workspace's [Visibility](/guides/6-compose-agents/#visibility) has three tiers: Private / User / Public. This is a Workspace-level standing configuration—an Agent is either visible to collaborators or not.
+Normally, a Workspace's [Visibility](/nap/guides/6-compose-agents/#visibility) has three tiers: Private / User / Public. This is a Workspace-level standing configuration—an Agent is either visible to collaborators or not.
 
 But if what you want is "just this once, have a private Agent do something for me, then keep it invisible afterward," the standing configuration is too heavyweight—you'd have to keep toggling back and forth.
 
@@ -127,5 +127,5 @@ For example, have a code-review Agent open three sessions to inspect the same pi
 
 ## Next
 
-- Want to know exactly how Agents call each other and how to configure Visibility → [Composing Agents](/guides/6-compose-agents/)
-- Want to understand the underpinnings of cross-Agent file sharing → [AFS: Cross-Agent File Sharing](/concepts/afs/)
+- Want to know exactly how Agents call each other and how to configure Visibility → [Composing Agents](/nap/guides/6-compose-agents/)
+- Want to understand the underpinnings of cross-Agent file sharing → [AFS: Cross-Agent File Sharing](/nap/concepts/afs/)

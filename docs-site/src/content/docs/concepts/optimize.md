@@ -11,7 +11,7 @@ Optimization always centers on two metrics: **cost per task (cost/task)** and **
 
 The Agent discovers inefficiencies from session history and continuously refines its own prompts and skills—clarifying ambiguous system prompts, extracting capabilities that don't need to be active at the same time into on-demand skills, and scripting high-frequency or unstable steps. The more it runs, the more accurate and token-efficient it gets.
 
-For the landing mechanism and approval model, see [Builder Mode](/concepts/builder-mode/): the Agent lists relevant sessions itself, downloads and analyzes them on demand, and proposes changes—each of which takes effect only after your approval.
+For the landing mechanism and approval model, see [Builder Mode](/nap/concepts/builder-mode/): the Agent lists relevant sessions itself, downloads and analyzes them on demand, and proposes changes—each of which takes effect only after your approval.
 
 ## Model Replacement (Planned)
 

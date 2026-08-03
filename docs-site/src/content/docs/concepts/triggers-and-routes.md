@@ -71,7 +71,7 @@ You could also let the Agent decide for itself whether "this event should be han
 
 A Provider is not a triggering mechanism — it's the foundation the Agent uses to call a large-model API when it's running. You can think of it this way: the triggering mechanism decides "when to call the Agent to work," and the Provider decides "what the Agent thinks with when it works." These are two independent things.
 
-Each Workspace picks one Provider. Providers are managed centrally in the **API Providers** app (`⌘K` → **API Providers**); see [Getting Ready](/guides/1-setup/) for details.
+Each Workspace picks one Provider. Providers are managed centrally in the **API Providers** app (`⌘K` → **API Providers**); see [Getting Ready](/nap/guides/1-setup/) for details.
 
 ## The full picture of how they relate
 
@@ -89,4 +89,4 @@ flowchart TD
   S --> A
 </pre>
 
-Next, head to [Triggering Agents](/guides/5-trigger-agents/) for the specific configuration steps of each triggering mechanism.
+Next, head to [Triggering Agents](/nap/guides/5-trigger-agents/) for the specific configuration steps of each triggering mechanism.

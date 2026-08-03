@@ -24,7 +24,7 @@ if missing), autodetects the node IP, generates the admin password and prints
 the login URL + credentials at the end:
 
 ```bash
-curl -sfL https://nap.neutree.ai/get.sh | sudo sh -
+curl -sfL https://docs.neutree.ai/nap/get.sh | sudo sh -
 ```
 
 **Existing Kubernetes cluster** — uses your current kubeconfig; you must name
@@ -32,7 +32,7 @@ the host users reach the platform at and an RWX storage backend (external NFS,
 or a pre-existing RWX StorageClass):
 
 ```bash
-curl -sfL https://nap.neutree.ai/get.sh \
+curl -sfL https://docs.neutree.ai/nap/get.sh \
   | sh -s -- --k8s --host=<ip-or-hostname> --nfs-server=<ip> --nfs-path=</export/path>
 # or with an existing RWX StorageClass:
 #   ... | sh -s -- --k8s --host=<ip-or-hostname> --storage-class=<rwx-storageclass>

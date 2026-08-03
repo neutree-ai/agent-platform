@@ -23,9 +23,9 @@ NAP consolidates all of this into one platform. You focus on "what this Agent sh
 
 Running an Agent on NAP means going through these three stages repeatedly — and the docs are organized around this main thread:
 
-- **Build** — define who it is and what it can do: model, prompt, skills, external tools, human-in-the-loop interface. Start with [your first Agent](/guides/2-first-agent/).
-- **Distribute** — make it usable anytime, anywhere: scheduled, external events, API triggers, multi-Agent collaboration, team reuse. See [Triggering Agents](/guides/5-trigger-agents/).
-- **Optimize** — make it better the more it's used: review real session history, continuously drive down per-task cost and raise task success rate. See [Optimize](/concepts/optimize/).
+- **Build** — define who it is and what it can do: model, prompt, skills, external tools, human-in-the-loop interface. Start with [your first Agent](/nap/guides/2-first-agent/).
+- **Distribute** — make it usable anytime, anywhere: scheduled, external events, API triggers, multi-Agent collaboration, team reuse. See [Triggering Agents](/nap/guides/5-trigger-agents/).
+- **Optimize** — make it better the more it's used: review real session history, continuously drive down per-task cost and raise task success rate. See [Optimize](/nap/concepts/optimize/).
 
 ## Three sets of terms that run through the whole site
 
@@ -41,5 +41,5 @@ These sets of concepts are deliberately kept separate. The Agent engine (Claude 
 
 ## What to read next
 
-- Want to build a complete mental model first → read through the [Concepts](/concepts/agent-and-workspace/) chapter in order, about 10 minutes
-- Want to get hands-on immediately → jump to [Getting Ready](/guides/1-setup/) and get your first Agent running
+- Want to build a complete mental model first → read through the [Concepts](/nap/concepts/agent-and-workspace/) chapter in order, about 10 minutes
+- Want to get hands-on immediately → jump to [Getting Ready](/nap/guides/1-setup/) and get your first Agent running

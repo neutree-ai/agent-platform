@@ -3,7 +3,7 @@ title: 4. Extending the Workspace
 description: Custom commands, Sandbox, MCP services, and custom UI tabs
 ---
 
-[The previous chapter](/guides/3-agent-behavior/) covered tuning a single Agent with off-the-shelf means. This chapter takes a step further out — **expanding the Agent's range of activity** by connecting it to tools and capabilities it didn't originally have.
+[The previous chapter](/nap/guides/3-agent-behavior/) covered tuning a single Agent with off-the-shelf means. This chapter takes a step further out — **expanding the Agent's range of activity** by connecting it to tools and capabilities it didn't originally have.
 
 Five things, from shallow to deep:
 
@@ -93,7 +93,7 @@ You can also fill in **any Docker image address** — the first startup needs to
 
 ## MCP services
 
-MCP (Model Context Protocol) is a standardized protocol that lets an Agent call tools provided by an **independently running service**. The difference from Skills is covered in [Agent Anatomy](/concepts/agent-anatomy/): Skills are files mounted into the container, read and used by the Agent itself; MCP is a protocol-layer call to an external service, suitable for "connecting external systems, crossing networks, having its own state."
+MCP (Model Context Protocol) is a standardized protocol that lets an Agent call tools provided by an **independently running service**. The difference from Skills is covered in [Agent Anatomy](/nap/concepts/agent-anatomy/): Skills are files mounted into the container, read and used by the Agent itself; MCP is a protocol-layer call to an external service, suitable for "connecting external systems, crossing networks, having its own state."
 
 ### Connecting an existing MCP service
 
@@ -148,4 +148,4 @@ If your business scenario needs this kind of deep integration, it's best to cont
 
 ## Next
 
-At this point the Agent's "capability surface" has a complete set of extension means. The next chapter covers how to make the Agent **triggered by more than just manual conversation** — [Triggering Agents](/guides/5-trigger-agents/).
+At this point the Agent's "capability surface" has a complete set of extension means. The next chapter covers how to make the Agent **triggered by more than just manual conversation** — [Triggering Agents](/nap/guides/5-trigger-agents/).

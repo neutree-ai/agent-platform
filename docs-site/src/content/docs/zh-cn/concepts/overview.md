@@ -23,9 +23,9 @@ NAP 把这些事情都收敛到一个平台里。你专注于"这个 Agent 该�
 
 在 NAP 上经营一个 Agent，会反复走这三段——文档也按这条主线组织：
 
-- **构建** — 定义它是谁、能做什么：模型、prompt、skills、外部工具、human-in-loop 界面。从[第一个 Agent](/zh-cn/guides/2-first-agent/) 开始。
-- **分发** — 让它随时随地为人所用：定时、外部事件、API 触发，多 Agent 协作，团队复用。见[触发 Agent](/zh-cn/guides/5-trigger-agents/)。
-- **优化** — 让它越用越好：复盘真实会话历史，持续压低单任务成本、提升任务成功率。见[优化](/zh-cn/concepts/optimize/)。
+- **构建** — 定义它是谁、能做什么：模型、prompt、skills、外部工具、human-in-loop 界面。从[第一个 Agent](/nap/zh-cn/guides/2-first-agent/) 开始。
+- **分发** — 让它随时随地为人所用：定时、外部事件、API 触发，多 Agent 协作，团队复用。见[触发 Agent](/nap/zh-cn/guides/5-trigger-agents/)。
+- **优化** — 让它越用越好：复盘真实会话历史，持续压低单任务成本、提升任务成功率。见[优化](/nap/zh-cn/concepts/optimize/)。
 
 ## 贯穿全站的三组词
 
@@ -41,5 +41,5 @@ NAP 把这些事情都收敛到一个平台里。你专注于"这个 Agent 该�
 
 ## 接下来读什么
 
-- 想先建立完整心智模型 → 顺序读完[概念](/zh-cn/concepts/agent-and-workspace/)章节，约 10 分钟
-- 想立刻动手 → 跳到[准备工作](/zh-cn/guides/1-setup/)，跑通第一个 Agent
+- 想先建立完整心智模型 → 顺序读完[概念](/nap/zh-cn/concepts/agent-and-workspace/)章节，约 10 分钟
+- 想立刻动手 → 跳到[准备工作](/nap/zh-cn/guides/1-setup/)，跑通第一个 Agent

@@ -49,7 +49,7 @@ A common collaboration scenario: a parent agent prepares a set of materials and 
 1. parent calls `share_folder("task-2026-05")` — gets the mount point `/mnt/afs/task-2026-05/`
 2. parent writes the files to hand off into this directory (using its usual file tools; the path is just an ordinary file)
 3. parent calls `grant_access("task-2026-05", "child-agent", readonly=true)` — the child's Workspace immediately sees these files at the same-named path
-4. parent calls the child agent (see [Multi-Agent collaboration](/guides/6-compose-agents/)), and the prompt only needs to reference the path: `"Please process the files under /mnt/afs/task-2026-05/"`
+4. parent calls the child agent (see [Multi-Agent collaboration](/nap/guides/6-compose-agents/)), and the prompt only needs to reference the path: `"Please process the files under /mnt/afs/task-2026-05/"`
 5. child reads the path directly in its own container, completes the task, and can write the artifact back (if access is read_write) or write it to its own Workspace's local
 
 ## How it works (a primer)
