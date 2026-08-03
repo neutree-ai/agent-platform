@@ -8,10 +8,12 @@
 <p align="center">
   <a href="https://docs.neutree.ai/nap/">Docs</a> ·
   <a href="https://neutree.ai/nap">Website</a> ·
-  <a href="https://docs.neutree.ai/nap/self-host/">Self-host guide</a>
+  <a href="https://docs.neutree.ai/nap/self-host/">Self-host guide</a> ·
+  <a href="https://discord.gg/MnsQ73d8dq">Discord</a>
 </p>
 
 <p align="center">
+  <a href="https://discord.gg/MnsQ73d8dq"><img alt="Discord" src="https://img.shields.io/badge/Discord-Neutree-5865F2?logo=discord&logoColor=white"></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
   <a href="CONTRIBUTING.md"><img alt="Contributions welcome" src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg"></a>
 </p>
@@ -100,6 +102,19 @@ NAP is a set of services that share a PostgreSQL control plane. One control plan
 ## Container images
 
 First-party images are published to GitHub Container Registry under `ghcr.io/neutree-ai/agent-platform/` (e.g. `nap-cp`, `nap-cg`, `nap-scheduler`, `nap-browser`, `nap-sandbox`). Builds are driven by [`.github/workflows/build-images.yml`](.github/workflows/build-images.yml): images are built on demand (`workflow_dispatch`) or when a per-service release tag `<image>-v<x.y.z>` is pushed — services version independently.
+
+## Community
+
+[**Discord**](https://discord.gg/MnsQ73d8dq) is where the projects live day to day — questions,
+support, and the people who work on them. It covers everything Neutree builds, not just this
+repository, so tag your `#help` post with the product it's about.
+
+Bugs and feature requests belong in [Issues](https://github.com/neutree-ai/agent-platform/issues),
+where they don't scroll away. Design proposals that need to outlive a conversation go in
+[Discussions](https://github.com/orgs/neutree-ai/discussions).
+
+Most install problems are answered in one round when the question says **which install path**
+(connected or air-gapped), quotes **the error verbatim**, and says **what you already tried**.
 
 ## Contributing
 
