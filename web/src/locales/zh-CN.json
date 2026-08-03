@@ -1640,7 +1640,8 @@
       },
       "upload": {
         "progressSingle": "正在上传 {{name}}… {{percent}}%",
-        "progressMultiple": "正在上传 {{count}} 个文件… {{percent}}%"
+        "progressMultiple": "正在上传 {{count}} 个文件… {{percent}}%",
+        "dismissError": "知道了"
       },
       "selection": {
         "count": "已选 {{count}} 项",
@@ -1656,7 +1657,9 @@
         "listFailed": "列出目录失败：{{status}}",
         "createFileFailed": "创建文件失败：{{status}}",
         "moveFailed": "移动失败：{{name}}",
-        "deleteFailed": "删除失败：{{name}}"
+        "deleteFailed": "删除失败：{{name}}",
+        "uploadFailed": "上传失败：{{name}}（{{status}}）",
+        "uploadFailedNetwork": "上传失败：{{name}}（连接中断）"
       }
     },
     "memoryStores": {

@@ -348,6 +348,7 @@ export function WorkspaceFilesPanel({
 
   // Upload state
   const [uploads, setUploads] = useState<Map<string, UploadProgress>>(new Map())
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const uploading = uploads.size > 0
   const overallProgress = useMemo(() => {
     if (uploads.size === 0) return 0
@@ -478,13 +479,27 @@ export function WorkspaceFilesPanel({
             })
           }
         }
+        // `onload` fires for every completed response, including 4xx/5xx — the
+        // status has to be checked or a rejected upload reads as a successful
+        // one (progress hits 100%, no file on disk).
         xhr.onload = () => {
           setUploads((prev) => {
             const next = new Map(prev)
             next.delete(key)
             return next
           })
-          resolve()
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve()
+            return
+          }
+          reject(
+            new Error(
+              t('components.workspaceFiles.errors.uploadFailed', {
+                name: displayName,
+                status: xhr.status,
+              }),
+            ),
+          )
         }
         xhr.onerror = () => {
           setUploads((prev) => {
@@ -492,7 +507,11 @@ export function WorkspaceFilesPanel({
             next.delete(key)
             return next
           })
-          reject(new Error(`Upload failed: ${displayName}`))
+          reject(
+            new Error(
+              t('components.workspaceFiles.errors.uploadFailedNetwork', { name: displayName }),
+            ),
+          )
         }
         // Initialize progress entry
         setUploads((prev) => {
@@ -504,7 +523,7 @@ export function WorkspaceFilesPanel({
         xhr.send(file)
       })
     },
-    [workspaceId, drive],
+    [workspaceId, drive, t],
   )
 
   // Drained reader: directoryReader.readEntries returns at most ~100 entries
@@ -570,20 +589,27 @@ export function WorkspaceFilesPanel({
 
   const uploadDataTransfer = useCallback(
     async (dataTransfer: DataTransfer, destDir: string) => {
+      setUploadError(null)
       const items = dataTransfer.items
-      if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === 'function') {
-        const collected = await traverseDataTransferItems(items)
-        if (collected.length === 0) {
-          // Fallback: items existed but yielded no entries (rare).
-          await Promise.all(Array.from(dataTransfer.files).map((f) => uploadFile(f, destDir)))
+      try {
+        if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === 'function') {
+          const collected = await traverseDataTransferItems(items)
+          if (collected.length === 0) {
+            // Fallback: items existed but yielded no entries (rare).
+            await Promise.all(Array.from(dataTransfer.files).map((f) => uploadFile(f, destDir)))
+          } else {
+            await Promise.all(
+              collected.map(({ file, relativePath }) => uploadFile(file, destDir, relativePath)),
+            )
+          }
         } else {
-          await Promise.all(
-            collected.map(({ file, relativePath }) => uploadFile(file, destDir, relativePath)),
-          )
+          await Promise.all(Array.from(dataTransfer.files).map((f) => uploadFile(f, destDir)))
         }
-      } else {
-        await Promise.all(Array.from(dataTransfer.files).map((f) => uploadFile(f, destDir)))
+      } catch (e) {
+        setUploadError(e instanceof Error ? e.message : String(e))
       }
+      // Invalidate either way: a partially failed batch may still have written
+      // some of its files.
       invalidateListing()
     },
     [uploadFile, invalidateListing],
@@ -592,7 +618,12 @@ export function WorkspaceFilesPanel({
   const handleUpload = async (files: FileList, destDir: string = currentPath) => {
     // XHR upload keeps streaming progress out of useMutation; just invalidate
     // once everything settles.
-    await Promise.all(Array.from(files).map((f) => uploadFile(f, destDir)))
+    setUploadError(null)
+    try {
+      await Promise.all(Array.from(files).map((f) => uploadFile(f, destDir)))
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : String(e))
+    }
     invalidateListing()
   }
 
@@ -1322,6 +1353,25 @@ export function WorkspaceFilesPanel({
               </span>
             </div>
             <Progress value={overallProgress} className="mt-1.5 h-1.5" />
+          </div>
+        )}
+
+        {/* Upload failure — kept out of the listing area so the file list stays
+            usable; dismissed on the next upload or by the close button. */}
+        {uploadError && (
+          <div className="shrink-0 px-3 py-2">
+            <Alert variant="destructive">
+              <AlertDescription className="flex items-start gap-2">
+                <span className="min-w-0 flex-1">{uploadError}</span>
+                <button
+                  type="button"
+                  onClick={() => setUploadError(null)}
+                  className="shrink-0 text-xs underline underline-offset-2"
+                >
+                  {t('components.workspaceFiles.upload.dismissError')}
+                </button>
+              </AlertDescription>
+            </Alert>
           </div>
         )}
 

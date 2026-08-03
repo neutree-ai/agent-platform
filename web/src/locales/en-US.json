@@ -1615,7 +1615,8 @@
       },
       "upload": {
         "progressSingle": "Uploading {{name}}… {{percent}}%",
-        "progressMultiple": "Uploading {{count}} files… {{percent}}%"
+        "progressMultiple": "Uploading {{count}} files… {{percent}}%",
+        "dismissError": "Dismiss"
       },
       "selection": {
         "count": "{{count}} selected",
@@ -1631,7 +1632,9 @@
         "listFailed": "Failed to list directory: {{status}}",
         "createFileFailed": "Failed to create file: {{status}}",
         "moveFailed": "Move failed: {{name}}",
-        "deleteFailed": "Delete failed: {{name}}"
+        "deleteFailed": "Delete failed: {{name}}",
+        "uploadFailed": "Upload failed: {{name}} ({{status}})",
+        "uploadFailedNetwork": "Upload failed: {{name}} (connection lost)"
       }
     },
     "memoryStores": {
