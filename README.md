@@ -6,6 +6,12 @@
 </p>
 
 <p align="center">
+  <a href="https://docs.neutree.ai/nap/">Docs</a> ·
+  <a href="https://neutree.ai/nap">Website</a> ·
+  <a href="https://docs.neutree.ai/nap/self-host/">Self-host guide</a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
   <a href="CONTRIBUTING.md"><img alt="Contributions welcome" src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg"></a>
 </p>
@@ -14,44 +20,40 @@
 
 Neutree Agent Platform (NAP) turns AI agents into a hosted, multi-user service. Instead of every developer running an agent on their own laptop, a team gets one platform to **build** agents, **distribute** them through whatever channel users already live in, and **optimize** them as they run.
 
-## Build — more with less, on the platform
+## What it does
 
-- **Agent core** — a neutral, swappable frontier agent at the center. Claude Code and Codex are supported today, and the runtime extends to others. Shape its expertise with prompts, skills, and MCP.
-- **Agent middleware, batteries included** — sandbox, remote browser, agent-native shared filesystem, memory store, multi-agent orchestration, and MCP gateway are provided by the platform. Agents use them out of the box instead of each rebuilding them.
-- **Build it your way** — configure agents directly through the UI, or describe the expertise you want in natural language and let an agent assemble it for you.
-- **Custom human-in-the-loop UIs** — build UI plugins that place the right human checkpoints into an agent's workflow, so people can approve and steer at exactly the right moments.
-- **Resource library** — agent templates, prompts, and skills become shared, reusable assets, so a team standardizes and forks instead of starting over.
+- **Build** — a neutral, swappable frontier core, shaped with prompts, skills and MCP, on top of middleware the platform runs so no agent has to ship its own. Configure it in the UI, or describe what you want and let builder mode assemble it. Change the core and the configuration comes along: it belongs to the workspace, not to the core running it.
+- **Distribute** — one workspace, reachable five ways, served in whichever shape the workload needs. Nothing on the user's side: no install, no configuration, no key of their own.
+- **Optimize** — the agent reads its own session history and proposes changes to its prompts and skills. Nothing lands until a human approves it.
 
-## Distribute — build once, use everywhere
+| | |
+| --- | --- |
+| **Cores** | Claude Code, Codex, Goose |
+| **Middleware** | Code sandbox · Remote browser · Agent-to-agent calls · Cross-agent filesystem · Memory store · MCP connections |
+| **Ways in** | Native UI · Chat channels · HTTP API · Webhook · Schedule |
+| **Serving** | **Static** — fixed replicas, held whether or not anyone is asking. **Auto-scaling** — replicas follow demand and go down to zero, waking on the next turn with files and sessions intact. |
+| **Human in the loop** | UI plugins place approval checkpoints inside an agent's workflow |
+| **Sharing** | Prompts, skills and templates carry private / team / public scope, so a working agent is something colleagues pick up rather than retype |
 
-- **Access entry points** — drive an agent from the built-in web UI, from message channels like Slack/IM through the channel gateway, or embed it in your own web app with the HTTP API and UI SDK.
-- **Run modes** — run agents **resident** (always-on, zero cold start, for latency-sensitive workloads) or **serverless** (scale from zero, start on demand, pay for what you use).
+Two things are honest to say up front: auto-scaling is configured through the API at workspace creation, not yet in the web UI; and building an evaluation set out of session history — to check a change, or to see whether a cheaper model holds up — is still being built. The tuning loop above ships today.
 
-## Optimize — agents that improve with use
+The [website](https://neutree.ai/nap) walks through all three with diagrams; the [docs](https://docs.neutree.ai/nap/) are the reference.
 
-- **Autonomous tuning** — mine session history for where an agent underperforms and continuously refine its prompts and skills, so it gets cheaper and better the more it runs.
-- **Model swapping** *(planned)* — automatically evaluate against cheaper models and switch when quality holds, to keep pushing cost down.
+## Local and managed, one setup
 
-## Architecture
-
-NAP is a set of services that share a PostgreSQL control plane.
-
-| Component | Package | Role |
-| --- | --- | --- |
-| **control-plane** | `@neutree-ai/control-plane` | Core API + orchestrator: workspaces, sessions, agents, prompts, templates, skills, providers, credentials, teams. PostgreSQL-backed. |
-| **web** | `@neutree-ai/web` | React front-end (Vite + Tailwind + shadcn/ui). |
-| **channel-gateway** | `@neutree-ai/channel-gateway` | Bridges external channels into the platform. |
-| **scheduler** | `@neutree-ai/scheduler` | Runs scheduled / recurring agent tasks. |
-| **browser-service** | `@neutree-ai/browser-service` | Remote browser agents drive, streamed to users over WebRTC. |
-| **sandbox-service** | `@neutree-ai/sandbox-service` | Code sandbox control, backed by [OpenSandbox](https://github.com/alibaba/OpenSandbox). |
-| **skills-content-service** | `@neutree-ai/skills-content-service` | Serves agent skill content. |
-| **memory-fuse** | — | FUSE layer exposing agent memory as a filesystem. |
-| **agents/** | — | Agent runtime adapters (`claude-code`, `codex`). |
-| **internal/** | `@neutree-ai/*` | Shared libraries (client, types, oauth-client, theme, prompt, …). |
+A local agent and a managed agent are the same craft at two scales. NAP invents no new core, and no new way to shape one: the prompt, the skills and the MCP servers are the ones your local agent already uses. A setup carries over without a rewrite, your local agent can create and manage hosted ones through the API, and what you publish here can be installed back into a local agent.
 
 ## Quick start
 
-The fastest way to stand up the whole platform is the self-host installer, which deploys to a Kubernetes cluster (multi-node or a single k3s node):
+One Linux machine, one command:
+
+```bash
+curl -sfL https://docs.neutree.ai/nap/get.sh | sudo sh -
+```
+
+It installs a single-node k3s cluster and the whole platform on it, then prints the URL and the admin credentials. 8 vCPU / 32 GB / 200 GB is enough for around ten workspaces.
+
+To deploy into a cluster you already run, or to set anything by hand:
 
 ```bash
 cd self-host
@@ -61,7 +63,39 @@ vi values.env                    # set host, admin password, storage, …
 ./install.sh
 ```
 
-When it finishes, open the web UI and log in with the admin credentials from `values.env`. The Code Sandbox and Remote Browser capabilities are optional and can be enabled later without reinstalling — see [`self-host/README.md`](self-host/README.md) for the full guide, configuration reference, and optional-capability setup.
+Code Sandbox and Remote Browser are optional and can be turned on later without reinstalling. [`self-host/README.md`](self-host/README.md) is the full guide, configuration reference and optional-capability setup.
+
+## Architecture
+
+NAP is a set of services that share a PostgreSQL control plane. One control plane serves as many clusters as you need: workspaces run beside it, or in a remote cluster whose runner dials the control plane and keeps the line open — their network, your workspaces.
+
+<p align="center">
+  <img src="docs/architecture.svg" alt="Entry points reach the control plane, which places workspaces — each running one pluggable agent core — onto Kubernetes clusters, with platform middleware brokered to them as MCP tools and mounts" width="880">
+</p>
+
+| Component | Package | Role |
+| --- | --- | --- |
+| **control-plane** | `@neutree-ai/control-plane` | Core API + orchestrator: workspaces, sessions, agents, prompts, templates, skills, providers, credentials, teams. PostgreSQL-backed. |
+| **web** | `@neutree-ai/web` | React front-end (Vite + Tailwind + shadcn/ui). |
+| **channel-gateway** | `@neutree-ai/channel-gateway` | Bridges external channels into the platform. |
+| **scheduler** | `@neutree-ai/scheduler` | Runs scheduled / recurring agent tasks. |
+| **browser-service** | `@neutree-ai/browser-service` | Remote browsers agents drive, streamed to users over WebRTC. |
+| **sandbox-service** | `@neutree-ai/sandbox-service` | Code sandbox control, backed by [OpenSandbox](https://github.com/alibaba/OpenSandbox). |
+| **skills-content-service** | `@neutree-ai/skills-content-service` | Serves agent skill content. |
+| **env-runner-k8s** | `@neutree-ai/env-runner-k8s` | Places and supervises workspace containers on Kubernetes. |
+| **memory-fuse** | — | FUSE layer exposing agent memory as a filesystem. |
+| **agents/** | — | Agent runtime adapters (`claude-code`, `codex`, `goose`). |
+| **internal/** | `@neutree-ai/*` | Shared libraries — client, types, ACP adapter, agent skills, OAuth, theme, platform prompt, and the published [`ui-sdk`](internal/ui-sdk). |
+| **packages/sandbox** | `@neutree-ai/sandbox` | Published SDK for driving sandboxes from your own code. |
+| **docs-site** | `@neutree-ai/docs-site` | The documentation at [docs.neutree.ai/nap](https://docs.neutree.ai/nap/) (Astro + Starlight, en / zh-CN). |
+
+### Where to start reading
+
+- `control-plane/src/routes` — the API surface, and the quickest map of what the platform can do
+- `control-plane/src/services` — orchestration and the PostgreSQL layer under it
+- `agents/<core>/src` — how one frontier core is adapted; the three are worth diffing against each other
+- `web/src` — the shell users actually operate
+- `self-host/` — how the whole thing is deployed, including the air-gapped path
 
 ## Container images
 
