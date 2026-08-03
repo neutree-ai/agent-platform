@@ -1,13 +1,24 @@
-# Neutree Agent Platform — Self-Hosted (Connected)
+# Neutree Agent Platform — Self-Hosted
 
-This is the **connected / online** self-host installer. It assumes the target
-Kubernetes cluster can reach the public internet: container images are pulled
-directly from public registries (ghcr.io / docker.io / registry.k8s.io) and
-prerequisite charts/manifests are fetched from their public sources. There is
-no offline image bundle, no in-cluster registry, and no host image-loading step.
+One installer serves both kinds of site, and which path runs is decided by
+whether the image bundle is present — there is no second installer and no
+separate command.
 
-> For fully air-gapped / offline sites, use the separate offline installer
-> (which ships an image tarball, an in-cluster registry, and a host-prep step).
+**Connected.** Container images are pulled from public registries (ghcr.io /
+docker.io / registry.k8s.io) and prerequisite charts/manifests are fetched from
+their public sources. Nothing else to prepare.
+
+**Air-gapped.** Build the bundle on a connected host with
+[`offline/save-images.sh`](offline/save-images.sh), stage it on the target and
+load it with [`offline/load-images.sh`](offline/load-images.sh), then point
+`REGISTRY` at a registry your nodes can reach. The installer applies the
+offline CNPG/NFS bundles and wires an imagePullSecret from `REGISTRY_USERNAME` /
+`REGISTRY_PASSWORD` for you. The single-node path can also bring up the
+in-cluster registry in [`offline/registry.yaml`](offline/registry.yaml), so a
+lone machine needs no registry of its own.
+
+The [single-node guide](https://docs.neutree.ai/nap/self-host/single-node/)
+walks both paths step by step, with the air-gapped extras inline.
 
 The **minimal install** brings up the core platform only. The Code Sandbox and
 Remote Browser capabilities are **optional and off by default** — enable them
@@ -48,7 +59,9 @@ Everything below is the manual path — the same steps, under your control.
 ## Prerequisites
 
 - A Kubernetes cluster (multi-node) **or** a single k3s node (single-node profile).
-- The cluster nodes can pull from `ghcr.io`, `docker.io`, and `registry.k8s.io`.
+- Connected sites: the cluster nodes can pull from `ghcr.io`, `docker.io` and
+  `registry.k8s.io`. Air-gapped sites: a registry every node can reach, plus
+  the loaded image bundle.
 - On the machine running the installer: `kubectl`, `envsubst`, `helm`, `openssl`.
 - A kubeconfig for the target cluster.
 
@@ -187,6 +200,8 @@ charts, then point NAP at it.
 
 ## Documentation
 
-This README plus the inline comments in `values.env.example` are the reference
-for configuration and the optional capabilities. A hosted docs site (deployment,
-upgrade, and operations guides) is planned.
+The [self-host guide](https://docs.neutree.ai/nap/self-host/) covers deployment,
+upgrade and operations, and the [single-node page](https://docs.neutree.ai/nap/self-host/single-node/)
+is the quickest path for one machine. This README plus the inline comments in
+`values.env.example` are the reference for configuration and the optional
+capabilities.
