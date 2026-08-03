@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>Close your laptop. Your agents keep working.</strong><br/>
-  The open-source agent platform to <strong>build</strong>, <strong>distribute</strong>, and <strong>optimize</strong> AI agents — on infrastructure you own.
+  The open-source agent platform to <strong>build</strong>, <strong>distribute</strong>, and <strong>optimize</strong> AI agents, on infrastructure you own.
 </p>
 
 <p align="center">
