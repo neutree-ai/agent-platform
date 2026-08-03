@@ -1,6 +1,6 @@
 name: Deploy docs
 
-# Publishes the static docs-site to its public home at nap.docs.neutree.ai.
+# Publishes the static docs-site to its public home at nap.neutree.ai.
 #
 # The site is a plain Astro/Starlight static build (no use-cases in this repo —
 # that section is a downstream extension point), so the public deploy is just:
@@ -69,7 +69,7 @@ jobs:
             --cache-control "no-cache"
 
       # The one-line installer is served off the docs domain
-      # (https://nap.docs.neutree.ai/get.sh). It is not part of the Astro
+      # (https://nap.neutree.ai/get.sh). It is not part of the Astro
       # build, so the dist sync above excludes it from --delete and this step
       # keeps it current. no-cache so upgrades propagate immediately.
       - name: Publish get.sh

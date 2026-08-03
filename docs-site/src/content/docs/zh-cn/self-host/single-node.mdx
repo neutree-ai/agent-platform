@@ -16,7 +16,7 @@ import AirgapBlock from '../../../../components/self-host/AirgapBlock.tsx'
 在一台可访问互联网的裸 Linux 主机上，**不需要**预装 k3s，脚本会自动安装。以 root 执行：
 
 ```bash
-curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
+curl -sfL https://nap.neutree.ai/get.sh | sudo sh -
 ```
 
 脚本会在缺失时安装 k3s，生成全部 secret，自动探测节点 IP，随机生成 admin 密码，完成后打印登录 URL 和凭据。配置落在 `/opt/nap/values.env`；重复执行同一行命令即为原地升级。
@@ -25,11 +25,11 @@ curl -sfL https://nap.docs.neutree.ai/get.sh | sudo sh -
 
 ```bash
 # 自行指定节点 IP / admin 密码
-curl -sfL https://nap.docs.neutree.ai/get.sh \
+curl -sfL https://nap.neutree.ai/get.sh \
   | sudo NAP_HOST=192.168.1.10 NAP_ADMIN_PASSWORD=your-password sh -
 
 # 只生成 values.env —— 人工确认或修改后，去掉该 flag 重新执行即开始安装
-curl -sfL https://nap.docs.neutree.ai/get.sh \
+curl -sfL https://nap.neutree.ai/get.sh \
   | sudo sh -s -- --prepare-only
 ```
 
