@@ -99,23 +99,23 @@ The most common task, end to end. Send a prompt, poll until the turn ends, read 
 
 ```bash
 BASE="${NAP_BASE_URL:-https://nap.example.com}"
-WS="<workspace-id>"
+NAP_WS="<workspace-id>"
 
 # 1. Start the turn. mode=async returns 202 immediately with a session id.
-SID=$(curl -s -X POST "$BASE/api/workspaces/$WS/chat" \
+SID=$(curl -s -X POST "$BASE/api/workspaces/$NAP_WS/chat" \
   -H "Authorization: Bearer $NAP_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"List the files in the repo and summarize the README","mode":"async","source":"api"}' \
   | jq -r .session_id)
 
 # 2. Poll the session until the agent stops running.
 #    chat_status: "agent" = still working · "idle" = finished · "human" = waiting on you (see pending_message)
-while [ "$(curl -s "$BASE/api/workspaces/$WS/sessions/$SID" \
+while [ "$(curl -s "$BASE/api/workspaces/$NAP_WS/sessions/$SID" \
     -H "Authorization: Bearer $NAP_TOKEN" | jq -r .chat_status)" = "agent" ]; do
   sleep 3
 done
 
 # 3. Read the full transcript for this turn.
-curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" \
+curl -s "$BASE/api/workspaces/$NAP_WS/messages?session_id=$SID" \
   -H "Authorization: Bearer $NAP_TOKEN" | jq .
 ```
 
