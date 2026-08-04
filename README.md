@@ -28,7 +28,7 @@ Neutree Agent Platform (NAP) turns AI agents into a hosted, multi-user service. 
 - **Distribute** — one workspace, reachable five ways, served in whichever shape the workload needs. Nothing on the user's side: no install, no configuration, no key of their own.
 - **Optimize** — the agent reads its own session history and proposes changes to its prompts and skills. Nothing lands until a human approves it.
 
-| | |
+| Area | Detail |
 | --- | --- |
 | **Cores** | Claude Code, Codex, Goose |
 | **Middleware** | Code sandbox · Remote browser · Agent-to-agent calls · Cross-agent filesystem · Memory store · MCP connections |
