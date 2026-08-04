@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Workspace } from './db/types'
 
 // destroyWorkspace must tear a built-in workspace down by the shape that exists
-// (Deployment OR StatefulSet) via k8s.destroy — NOT the Deployment-only
-// deleteInstance, which leaks an auto-scaling workspace's StatefulSet, pods, and
-// headless Service. Remote environments invert control (mark desired=deleted and
-// let the runner reap), so cp must not try to delete their k8s directly.
+// (Deployment OR StatefulSet) via k8s.destroy — never the provider's
+// Deployment-only deleteInstance, which leaks an auto-scaling workspace's
+// StatefulSet, pods, and headless Service. cp no longer re-exports that method,
+// so the shape is enforced at the type level. Remote environments invert control
+// (mark desired=deleted and let the runner reap), so cp must not try to delete
+// their k8s directly.
 
 vi.mock('../routes/workspaces/_shared', () => ({ interruptAllSessions: vi.fn() }))
 vi.mock('./db/schedules', () => ({ listSchedulesByWorkspace: vi.fn().mockResolvedValue([]) }))
@@ -15,7 +17,7 @@ vi.mock('./db/environments', () => ({ getWorkspacePlacementEnv: vi.fn() }))
 vi.mock('./db/sessions', () => ({ resetAllSessionsIdle: vi.fn() }))
 vi.mock('./db/workspaces', () => ({ deleteWorkspace: vi.fn(), updateWorkspace: vi.fn() }))
 vi.mock('./placement', () => ({ setDesiredPhase: vi.fn() }))
-vi.mock('./k8s', () => ({ destroy: vi.fn(), deleteInstance: vi.fn() }))
+vi.mock('./k8s', () => ({ destroy: vi.fn() }))
 
 import { getWorkspacePlacementEnv } from './db/environments'
 import { deleteWorkspace, updateWorkspace } from './db/workspaces'
