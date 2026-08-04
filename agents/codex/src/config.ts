@@ -35,17 +35,13 @@ export function cpAuthHeaders(): Record<string, string> {
 /**
  * URL for one of this workspace's own cp endpoints.
  *
- * Two prefixes for the duration of the migration, chosen by whether a token was
- * delivered rather than by a flag. The agent image tag is fixed, so a pod built
- * from the older template can restart onto this build and find itself with no
- * token — pointing it at the authenticated prefix would only earn it a 401. It
- * keeps using the unauthenticated one until its workspace is rebuilt, which is
- * also what removes that prefix from this function.
+ * A pod built from a template that predates token delivery has none, and its
+ * calls here are refused until the workspace is rebuilt — accepted, because the
+ * rebuild is what the deploy triggers anyway and the alternative is keeping an
+ * unauthenticated path open for it to fall back to.
  */
 export function cpWorkspaceUrl(suffix: string): string {
-  return WORKSPACE_TOKEN
-    ? `${CP_URL}/ws/v1/workspaces/${WORKSPACE_ID}/${suffix}`
-    : `${CP_URL}/_cp/workspaces/${WORKSPACE_ID}/${suffix}`
+  return `${CP_URL}/ws/v1/workspaces/${WORKSPACE_ID}/${suffix}`
 }
 
 /** Shell-quote a value for use in `export K=V` (single quotes, escape embedded quotes) */

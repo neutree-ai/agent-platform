@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import type { ApiWorkspaceConfig } from '../../../internal/types/api'
 import { notifyAgentReload } from '../lib/workspace-address'
-import { credentialsForWorkspace } from '../services/agent-credentials'
 import { listAfsMountsForWorkspace } from '../services/db/afs-shares'
 import {
   PathConflictError,
@@ -412,18 +411,6 @@ internal.get('/workspaces/:id/skills', async (c) => {
   // gitSource }` shape. Once the agent-side client is updated to read `id`,
   // drop the duplicated `name` field at the top level.
   return c.json({ skills })
-})
-
-// Get user credentials for a workspace (agent-facing, contains values).
-//
-// Superseded by GET /ws/v1/workspaces/:id/credentials, which requires the
-// workspace's own token. Kept until every workspace has been rebuilt with one:
-// a pod on the older template has no token to present, and this is how its
-// agent still gets its credentials. Delete once none are left.
-internal.get('/workspaces/:id/credentials', async (c) => {
-  const creds = await credentialsForWorkspace(c.req.param('id'))
-  if (!creds) return c.json({ error: 'Workspace not found' }, 404)
-  return c.json(creds)
 })
 
 export default internal

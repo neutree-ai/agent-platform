@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../services/db/workspace-tokens', () => ({ verifyWorkspaceToken: vi.fn() }))
-vi.mock('../../services/agent-credentials', () => ({ credentialsForWorkspace: vi.fn() }))
+vi.mock('../../services/db/credentials', () => ({ listWorkspaceCredentials: vi.fn() }))
+vi.mock('../../services/db/workspaces', () => ({ getWorkspace: vi.fn() }))
 
-import { credentialsForWorkspace } from '../../services/agent-credentials'
+import { listWorkspaceCredentials } from '../../services/db/credentials'
 import { verifyWorkspaceToken } from '../../services/db/workspace-tokens'
+import { getWorkspace } from '../../services/db/workspaces'
 import ws from './index'
 
 const verify = vi.mocked(verifyWorkspaceToken)
-const credentials = vi.mocked(credentialsForWorkspace)
+const listCreds = vi.mocked(listWorkspaceCredentials)
+const workspace = vi.mocked(getWorkspace)
 
 const CRED = {
   name: 'GITLAB_TOKEN',
@@ -26,8 +29,10 @@ function get(path: string, token?: string) {
 
 beforeEach(() => {
   verify.mockReset()
-  credentials.mockReset()
-  credentials.mockResolvedValue([CRED] as never)
+  listCreds.mockReset()
+  workspace.mockReset()
+  workspace.mockResolvedValue({ id: 'ws1', user_id: 'alice' } as never)
+  listCreds.mockResolvedValue([CRED] as never)
 })
 
 describe('GET /ws/v1/workspaces/:id/credentials', () => {
@@ -38,7 +43,8 @@ describe('GET /ws/v1/workspaces/:id/credentials', () => {
 
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual([CRED])
-    expect(credentials).toHaveBeenCalledWith('ws1')
+    // Scoped to the workspace and its owner, not to whoever asked.
+    expect(listCreds).toHaveBeenCalledWith('ws1', 'alice')
   })
 
   // The reason this route exists. On /_cp any caller could name any workspace.
@@ -49,14 +55,15 @@ describe('GET /ws/v1/workspaces/:id/credentials', () => {
 
     expect(res.status).toBe(404)
     // Rejected before any lookup — nothing about ws2 is read, let alone returned.
-    expect(credentials).not.toHaveBeenCalled()
+    expect(workspace).not.toHaveBeenCalled()
+    expect(listCreds).not.toHaveBeenCalled()
   })
 
   it('rejects a request with no token', async () => {
     const res = await get('/v1/workspaces/ws1/credentials')
 
     expect(res.status).toBe(401)
-    expect(credentials).not.toHaveBeenCalled()
+    expect(listCreds).not.toHaveBeenCalled()
   })
 
   it('rejects a token that does not verify', async () => {
@@ -65,12 +72,12 @@ describe('GET /ws/v1/workspaces/:id/credentials', () => {
     const res = await get('/v1/workspaces/ws1/credentials', 'ws_revoked')
 
     expect(res.status).toBe(401)
-    expect(credentials).not.toHaveBeenCalled()
+    expect(listCreds).not.toHaveBeenCalled()
   })
 
   it('404s when the workspace is gone', async () => {
     verify.mockResolvedValue({ workspaceId: 'ws1' })
-    credentials.mockResolvedValue(null as never)
+    workspace.mockResolvedValue(null as never)
 
     const res = await get('/v1/workspaces/ws1/credentials', 'ws_good')
 
