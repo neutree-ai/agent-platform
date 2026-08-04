@@ -51,6 +51,7 @@ import serviceTokenRoutes from './routes/service-tokens'
 import sharesRoutes from './routes/shares'
 import { skillRegistryApp, wellKnownRootApp } from './routes/skill-registry'
 import skillsRoutes from './routes/skills'
+import svcProtocolRoutes from './routes/svc'
 import systemWorkspacesRoutes from './routes/system-workspaces'
 import tagsRoutes from './routes/tags'
 import teamsRoutes from './routes/teams'
@@ -169,9 +170,10 @@ app.use('/*', async (c, next) => {
     path.startsWith('/_cp/') ||
     path.startsWith('/_cg/') ||
     path.startsWith('/env/v1/') ||
-    // Guarded by its own middleware (middleware/workspace-auth), not by user auth —
-    // same arrangement as /env/v1 above.
+    // Guarded by their own middleware (middleware/workspace-auth,
+    // middleware/service-auth), not by user auth — same arrangement as /env/v1.
     path.startsWith('/workspace/v1/') ||
+    path.startsWith('/svc/v1/') ||
     path === '/env-gateway' ||
     path.startsWith('/static/') ||
     path.startsWith('/assets/') ||
@@ -330,6 +332,7 @@ app.route('/api/credentials', credentialsRoutes)
 app.route('/api/environments', environmentsRoutes)
 app.route('/env', envProtocolRoutes)
 app.route('/workspace', workspaceProtocolRoutes)
+app.route('/svc', svcProtocolRoutes)
 app.route('/env-gateway', createEnvGatewayRoutes({ upgradeWebSocket }))
 app.route('/api/workspace-layouts', workspaceLayoutsRoutes)
 app.route('/api/prompts', promptsReadRoutes)
@@ -472,6 +475,7 @@ app.get('*', async (c) => {
     path.startsWith('/api/') ||
     path.startsWith('/_cp/') ||
     path.startsWith('/workspace/') ||
+    path.startsWith('/svc/') ||
     path.startsWith('/_proxy/') ||
     path.startsWith('/_saas/') ||
     path.startsWith('/_cg/')
