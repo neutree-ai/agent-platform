@@ -350,6 +350,7 @@ internal.get('/workspaces/:id/config', async (c) => {
     agent_settings: config.agent_settings,
     compute_resources: config.compute_resources ?? {},
     auto_start: config.auto_start ?? true,
+    muted: config.muted ?? false,
     user_display_name: user?.display_name || user?.username || null,
     memory_attachments: attachments.map((a) => ({
       store_id: a.store_id,

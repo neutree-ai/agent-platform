@@ -132,6 +132,12 @@ export interface WorkspaceConfig {
   /** When false, a stopped workspace is not auto-started on incoming chat. */
   auto_start: boolean
   /**
+   * When true, a session that ends normally goes straight to 'idle' instead of
+   * 'human', and the agent.task_done notification is skipped — the workspace
+   * works without asking for attention.
+   */
+  muted: boolean
+  /**
    * Auto-scaling parameters, or null for a static (single fixed replica)
    * workspace. Its PRESENCE is the runtime-shape discriminant — there is no
    * separate mode flag, and a static workspace has no replica parameters to

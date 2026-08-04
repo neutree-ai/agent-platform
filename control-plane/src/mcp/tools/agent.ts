@@ -32,7 +32,11 @@ import {
   updateSessionStats,
 } from '../../services/db/sessions'
 import { addTeamworkSession, resolveRosterMemberBySlug } from '../../services/db/teamwork'
-import { getWorkspace, resolveWorkspaceBySlug } from '../../services/db/workspaces'
+import {
+  getWorkspace,
+  getWorkspaceConfig,
+  resolveWorkspaceBySlug,
+} from '../../services/db/workspaces'
 import { textResult } from './shared'
 
 // Reset-on-every-event idle timeout. Sub-agent turns can legitimately run
@@ -369,8 +373,12 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
       await queue.flush()
 
       if (state.sessionId) {
-        // Successful session.ended → 'human'; any other path → 'idle'.
-        const terminalStatus = result.reason === 'completed' ? 'human' : 'idle'
+        // Successful session.ended → 'human'; any other path → 'idle'. A muted
+        // target workspace stays 'idle' either way — it never asks for attention.
+        const muted = await getWorkspaceConfig(targetWorkspaceId)
+          .then((cfg) => cfg?.muted === true)
+          .catch(() => false)
+        const terminalStatus = result.reason === 'completed' && !muted ? 'human' : 'idle'
         try {
           await transitionSessionStatus(state.sessionId, terminalStatus)
         } catch (e) {
