@@ -13,8 +13,10 @@ metadata:
   name: ${APP_PREFIX}-env-runner-k8s
   namespace: ${NAMESPACE}
 rules:
+  # secrets: the runner writes each workspace's own cp token into a per-workspace
+  # Secret before bringing the pod up, and removes it on destroy.
   - apiGroups: [""]
-    resources: ["pods", "services", "events", "persistentvolumeclaims"]
+    resources: ["pods", "services", "events", "persistentvolumeclaims", "secrets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["apps"]
     resources: ["deployments", "deployments/scale"]

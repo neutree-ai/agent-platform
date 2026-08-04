@@ -87,6 +87,9 @@ class FakeProvider implements EnvironmentProvider {
   expandStorage = async (workspaceId: string, sizeGi: number): Promise<void> => {
     this.calls.push({ method: 'expandStorage', args: [workspaceId, sizeGi] })
   }
+  deliverWorkspaceToken = async (workspaceId: string, token: string): Promise<void> => {
+    this.calls.push({ method: 'deliverWorkspaceToken', args: [workspaceId, token] })
+  }
   capabilities = (): Capabilities => {
     this.calls.push({ method: 'capabilities', args: [] })
     return this.caps
@@ -116,6 +119,10 @@ class FakeTransport implements PlacementTransport {
   heartbeat = async (capabilities: Record<string, unknown>): Promise<void> => {
     this.calls.push({ method: 'heartbeat', args: [capabilities] })
     if (this.heartbeatThrows) throw new Error('heartbeat boom')
+  }
+  mintWorkspaceToken = async (workspaceId: string): Promise<string> => {
+    this.calls.push({ method: 'mintWorkspaceToken', args: [workspaceId] })
+    return `ws_token_for_${workspaceId}`
   }
 
   count(method: string): number {
@@ -247,6 +254,77 @@ describe('reconcileOnce decision table', () => {
     expect(provider.count('apply')).toBe(0)
     expect(transport.writes()).toEqual([{ phase: 'running', endpoint: undefined, message: null }])
     expect(result).toMatchObject({ acted: 1 })
+  })
+
+  describe('workspace token provisioning', () => {
+    // The pod reads the token from its environment, which is fixed at creation —
+    // so it has to be in place before anything brings a workload up, on all
+    // three paths that do.
+    const bringsUpAWorkload = [
+      {
+        what: 'spec drift',
+        observeAll: new Map([['ws1', { phase: 'running' as const }]]),
+        row: { desired_phase: 'running', spec_version: 2, observed_version: 1 },
+        via: 'apply',
+      },
+      {
+        what: 'create',
+        observeAll: new Map(),
+        row: { desired_phase: 'running', spec_version: 1, observed_version: 1 },
+        via: 'apply',
+      },
+      {
+        what: 'start',
+        observeAll: new Map([['ws1', { phase: 'stopped' as const }]]),
+        row: {
+          desired_phase: 'running',
+          observed_phase: 'stopped',
+          spec_version: 1,
+          observed_version: 1,
+        },
+        via: 'start',
+      },
+    ]
+
+    it.each(bringsUpAWorkload)('mints and delivers before $via ($what)', async (c) => {
+      const provider = new FakeProvider({ observeAll: c.observeAll })
+      const transport = new FakeTransport([placement(c.row)])
+
+      await reconcileOnce(provider, transport)
+
+      expect(transport.count('mintWorkspaceToken')).toBe(1)
+      const delivered = provider.calls.find((x) => x.method === 'deliverWorkspaceToken')
+      expect(delivered?.args).toEqual(['ws1', 'ws_token_for_ws1'])
+      // Ordering is the whole point: a pod created before the secret exists
+      // comes up without one.
+      const deliverAt = provider.calls.findIndex((x) => x.method === 'deliverWorkspaceToken')
+      const bringUpAt = provider.calls.findIndex((x) => x.method === c.via)
+      expect(deliverAt).toBeGreaterThanOrEqual(0)
+      expect(deliverAt).toBeLessThan(bringUpAt)
+    })
+
+    it('mints nothing on a converged placement', async () => {
+      const provider = new FakeProvider({ observeAll: new Map([['ws1', { phase: 'running' }]]) })
+      const transport = new FakeTransport([
+        placement({ desired_phase: 'running', observed_phase: 'running' }),
+      ])
+
+      await reconcileOnce(provider, transport)
+
+      expect(transport.count('mintWorkspaceToken')).toBe(0)
+    })
+
+    it('mints nothing when the backend cannot deliver secrets', async () => {
+      const provider = new FakeProvider({ observeAll: new Map() })
+      // A backend with no secret delivery: minting would only leave rows to sweep.
+      ;(provider as { deliverWorkspaceToken?: unknown }).deliverWorkspaceToken = undefined
+      const transport = new FakeTransport([placement({ desired_phase: 'running' })])
+
+      await reconcileOnce(provider, transport)
+
+      expect(transport.count('mintWorkspaceToken')).toBe(0)
+      expect(provider.count('apply')).toBe(1)
+    })
   })
 
   it('desired=running, phase starting → no mutation, writeObserved only because phase differs from observed_phase', async () => {

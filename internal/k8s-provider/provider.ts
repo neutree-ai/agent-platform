@@ -10,6 +10,7 @@ import type {
 import { AutoScalingWorkload } from './auto-scaling-workload'
 import { type K8sConfig, defaultCfg } from './config'
 import {
+  WORKSPACE_TOKEN_ENV,
   createOrAdopt,
   expandWorkspacePvc,
   isPodReady,
@@ -17,6 +18,7 @@ import {
   swallow404,
   workspaceLabels,
   workspacePvcName,
+  workspaceTokenSecretName,
 } from './support'
 import {
   MEMORY_FUSE_CONTAINER_NAME,
@@ -750,6 +752,51 @@ export class KubernetesProvider implements EnvironmentProvider {
     // delete; route teardown by the shape that actually exists.
     if (await this.autoScaling.exists(workspaceId)) await this.autoScaling.destroy(workspaceId)
     else await this.deleteInstance(workspaceId)
+    // Out here rather than inside deleteInstance: both shapes have a token
+    // Secret, only one of them goes through that path.
+    await this.deleteWorkspaceTokenSecret(workspaceId)
+  }
+
+  /**
+   * Put the workspace's token in a Secret the pod reads through secretKeyRef.
+   *
+   * Replaces rather than adopts on conflict: this is called with a fresh token
+   * every time the workspace is materialised, so an existing Secret holds the
+   * previous one and keeping it would hand the new pod a credential cp is about
+   * to retire.
+   *
+   * The value reaches the container as an env var, so it stays out of the
+   * Deployment spec — which is dumped by `kubectl get`, compared by reconcile,
+   * and generally treated as inspectable — and the agent server scrubs it from
+   * its environment before spawning anything.
+   */
+  async deliverWorkspaceToken(workspaceId: string, token: string): Promise<void> {
+    const name = workspaceTokenSecretName(this.cfg, workspaceId)
+    const body = {
+      apiVersion: 'v1',
+      kind: 'Secret',
+      metadata: { name, labels: this.getLabels(workspaceId) },
+      type: 'Opaque',
+      stringData: { [WORKSPACE_TOKEN_ENV]: token },
+    }
+    try {
+      await this.coreApi.createNamespacedSecret(this.cfg.namespace, body)
+    } catch (e: any) {
+      if (e.response?.statusCode !== 409) throw e
+      await this.coreApi.replaceNamespacedSecret(name, this.cfg.namespace, body)
+    }
+  }
+
+  private async deleteWorkspaceTokenSecret(workspaceId: string): Promise<void> {
+    try {
+      await this.coreApi.deleteNamespacedSecret(
+        workspaceTokenSecretName(this.cfg, workspaceId),
+        this.cfg.namespace,
+      )
+    } catch (e: any) {
+      // 404 is the normal case for a workspace that predates token delivery.
+      if (e.response?.statusCode !== 404) throw e
+    }
   }
 
   async resize(workspaceId: string, resources: ComputeResources): Promise<void> {

@@ -156,6 +156,22 @@ export interface EnvironmentProvider {
   /** Create if absent; converge if drifted. */
   apply(workspaceId: string, spec: WorkspaceSpec): Promise<void>
   start(workspaceId: string): Promise<void>
+
+  /**
+   * Optional: put a freshly minted workspace token where the workload will find
+   * it, before the workload starts.
+   *
+   * Deliberately not part of {@link WorkspaceSpec} — the spec is desired state
+   * that cp stores and diffs, and a credential must not live there. The runner
+   * mints one per materialisation and hands it over here; how it reaches the
+   * process is the backend's business (a Kubernetes Secret, a bind-mounted file,
+   * a systemd credential), and the workload's side of the contract is only that
+   * it arrives in the environment as WORKSPACE_TOKEN.
+   *
+   * A backend with no way to deliver a secret omits this; its workloads then run
+   * without a token and can only reach the endpoints that do not require one.
+   */
+  deliverWorkspaceToken?(workspaceId: string, token: string): Promise<void>
   stop(workspaceId: string): Promise<void>
   destroy(workspaceId: string): Promise<void>
   resize(workspaceId: string, resources: ComputeResources): Promise<void>

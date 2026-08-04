@@ -1,8 +1,10 @@
+import { randomBytes } from 'node:crypto'
 import type {
   ObservedUpdate,
   PlacementRow,
   PlacementTransport,
 } from '../../internal/env-runner-core'
+import { generateWorkspaceToken, hashWorkspaceToken } from '../../internal/types/workspace-token'
 import { pool } from './db'
 
 // Direct-DB transport for the built-in runner: it reads and writes
@@ -45,6 +47,19 @@ export class DbTransport implements PlacementTransport {
 
   async deletePlacement(workspaceId: string): Promise<void> {
     await pool.query('DELETE FROM workspace_placements WHERE workspace_id = $1', [workspaceId])
+  }
+
+  // The remote runner asks cp over /env/v1; the built-in one has the table, so
+  // it writes the row itself. Both sides use the shared codec so the hash cp
+  // verifies against is the hash that was stored.
+  async mintWorkspaceToken(workspaceId: string): Promise<string> {
+    const token = generateWorkspaceToken()
+    await pool.query(
+      `INSERT INTO workspace_tokens (id, workspace_id, token_hash)
+       VALUES ($1, $2, $3)`,
+      [randomBytes(5).toString('hex'), workspaceId, hashWorkspaceToken(token)],
+    )
+    return token
   }
 
   // Built-in liveness is cp's own concern (it watches its own cluster), so the

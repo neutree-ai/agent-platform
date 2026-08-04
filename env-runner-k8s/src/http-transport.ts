@@ -52,6 +52,16 @@ export class HttpTransport implements PlacementTransport {
     await this.expectOk(res, 'POST delete')
   }
 
+  async mintWorkspaceToken(workspaceId: string): Promise<string> {
+    const res = await fetch(
+      `${this.base}/env/v1/workspaces/${encodeURIComponent(workspaceId)}/token`,
+      { method: 'POST', headers: this.headers() },
+    )
+    await this.expectOk(res, 'POST workspace token')
+    const body = (await res.json()) as { token: string }
+    return body.token
+  }
+
   async heartbeat(capabilities: Record<string, unknown>): Promise<void> {
     const res = await fetch(`${this.base}/env/v1/heartbeat`, {
       method: 'POST',

@@ -1,7 +1,7 @@
 import type * as k8s from '@kubernetes/client-node'
 import type { ComputeResources } from '../types/api'
 import { type K8sConfig, agentImageFor, defaultCfg } from './config'
-import { isPodReady } from './support'
+import { WORKSPACE_TOKEN_ENV, isPodReady, workspaceTokenSecretName } from './support'
 
 // Workspace pod/deployment spec construction, plus the pure status/annotation
 // readers the reconcile paths share. Split from the provider so the pod
@@ -42,7 +42,14 @@ import { isPodReady } from './support'
 //     /bin/true` 2.9s vs 0.008s with a clean env; builtins and non-bash shells
 //     were unaffected, which is why it read as "workspace IO is slow"). Nothing
 //     consumes these vars — service discovery goes through DNS.
-export const CURRENT_TEMPLATE_VERSION = 7
+// v8: every container gains WORKSPACE_TOKEN via secretKeyRef, the credential
+//     the workload uses for its own calls back into cp (/ws/v1). The ref is
+//     optional, so a pod whose Secret is missing still starts — but it starts
+//     without a token, and the routes being moved off the unauthenticated /_cp
+//     prefix will refuse it. Bumping forces reconcile to rebuild existing
+//     workspaces so they pick the ref up; the env var cannot be added to a
+//     running pod.
+export const CURRENT_TEMPLATE_VERSION = 8
 export const TEMPLATE_VERSION_ANNOTATION = 'agent-platform/workspace-version'
 export const MEMORY_FUSE_CONTAINER_NAME = 'memory-fuse'
 
@@ -67,6 +74,23 @@ export function buildWorkspacePodTemplate(
   // (count is always >= 1).
   const memoryFuseActive = cfg.memoryFuseImage !== ''
 
+  // The workspace's own credential for calling cp back. A secretKeyRef rather
+  // than a literal, so the value never lands in the Deployment spec — which is
+  // dumped, diffed and pasted around far more freely than a Secret is. Marked
+  // optional: a workspace whose Secret has not been written yet (an older one,
+  // or one mid-rebuild) still starts, and simply cannot reach the endpoints
+  // that require a token.
+  const workspaceTokenEnv: k8s.V1EnvVar = {
+    name: WORKSPACE_TOKEN_ENV,
+    valueFrom: {
+      secretKeyRef: {
+        name: workspaceTokenSecretName(cfg, workspaceId),
+        key: WORKSPACE_TOKEN_ENV,
+        optional: true,
+      },
+    },
+  }
+
   const agentContainer: k8s.V1Container = {
     name: 'agent',
     image: agentImageFor(cfg, agentType),
@@ -75,6 +99,7 @@ export function buildWorkspacePodTemplate(
       { name: 'WORKSPACE_DIR', value: '/workspace' },
       { name: 'CP_URL', value: cfg.cpServiceUrl },
       { name: 'WORKSPACE_ID', value: workspaceId },
+      workspaceTokenEnv,
       ...(cfg.afs.enabled
         ? [
             { name: 'AFS_CONTROLLER', value: cfg.afs.controllerAddr },
@@ -153,6 +178,7 @@ export function buildWorkspacePodTemplate(
             name: 'AFS_BOOTSTRAP_URL',
             value: `${cfg.cpServiceUrl}/_cp/workspaces/${workspaceId}/afs-mounts`,
           },
+          workspaceTokenEnv,
         ],
         securityContext: { privileged: true },
         volumeMounts: [
@@ -171,6 +197,7 @@ export function buildWorkspacePodTemplate(
         env: [
           { name: 'CP_URL', value: cfg.cpServiceUrl },
           { name: 'WORKSPACE_ID', value: workspaceId },
+          workspaceTokenEnv,
           // gRPC mount/unmount RPC: bind 0.0.0.0:9102 so cp can dial via the ws
           // Service (same pattern as afs-fuse on :9101). Trust cluster network.
           { name: 'GRPC_LISTEN_ADDR', value: '0.0.0.0:9102' },

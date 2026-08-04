@@ -6,7 +6,7 @@ exports[`buildDeploymentSpec golden master > afs enabled 1`] = `
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "7",
+      "agent-platform/workspace-version": "8",
     },
     "labels": {
       "app": "nap",
@@ -50,6 +50,16 @@ exports[`buildDeploymentSpec golden master > afs enabled 1`] = `
               {
                 "name": "WORKSPACE_ID",
                 "value": "ws1",
+              },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
               },
               {
                 "name": "AFS_CONTROLLER",
@@ -132,6 +142,16 @@ exports[`buildDeploymentSpec golden master > afs enabled 1`] = `
                 "name": "AFS_BOOTSTRAP_URL",
                 "value": "http://nap-cp:3000/_cp/workspaces/ws1/afs-mounts",
               },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
+              },
             ],
             "image": "nap-afs-fuse:latest",
             "name": "afs-fuse",
@@ -207,7 +227,7 @@ exports[`buildDeploymentSpec golden master > full: afs + memory + resources + no
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "7",
+      "agent-platform/workspace-version": "8",
     },
     "labels": {
       "app": "nap",
@@ -251,6 +271,16 @@ exports[`buildDeploymentSpec golden master > full: afs + memory + resources + no
               {
                 "name": "WORKSPACE_ID",
                 "value": "ws1",
+              },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
               },
               {
                 "name": "AFS_CONTROLLER",
@@ -338,6 +368,16 @@ exports[`buildDeploymentSpec golden master > full: afs + memory + resources + no
                 "name": "AFS_BOOTSTRAP_URL",
                 "value": "http://nap-cp:3000/_cp/workspaces/ws1/afs-mounts",
               },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
+              },
             ],
             "image": "nap-afs-fuse:latest",
             "name": "afs-fuse",
@@ -373,6 +413,16 @@ exports[`buildDeploymentSpec golden master > full: afs + memory + resources + no
               {
                 "name": "WORKSPACE_ID",
                 "value": "ws1",
+              },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
               },
               {
                 "name": "GRPC_LISTEN_ADDR",
@@ -470,7 +520,7 @@ exports[`buildDeploymentSpec golden master > memory-fuse enabled 1`] = `
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "7",
+      "agent-platform/workspace-version": "8",
     },
     "labels": {
       "app": "nap",
@@ -514,6 +564,16 @@ exports[`buildDeploymentSpec golden master > memory-fuse enabled 1`] = `
               {
                 "name": "WORKSPACE_ID",
                 "value": "ws1",
+              },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
               },
             ],
             "image": "nap-agent-claude-code:latest",
@@ -585,6 +645,16 @@ exports[`buildDeploymentSpec golden master > memory-fuse enabled 1`] = `
               {
                 "name": "WORKSPACE_ID",
                 "value": "ws1",
+              },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
               },
               {
                 "name": "GRPC_LISTEN_ADDR",
@@ -659,7 +729,7 @@ exports[`buildDeploymentSpec golden master > minimal: afs off, memory off, no no
   "kind": "Deployment",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "7",
+      "agent-platform/workspace-version": "8",
     },
     "labels": {
       "app": "nap",
@@ -703,6 +773,16 @@ exports[`buildDeploymentSpec golden master > minimal: afs off, memory off, no no
               {
                 "name": "WORKSPACE_ID",
                 "value": "ws1",
+              },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
               },
             ],
             "image": "nap-agent-claude-code:latest",
@@ -787,7 +867,7 @@ exports[`buildStatefulSetSpec > golden master: shared RWX PVC, headless serviceN
   "kind": "StatefulSet",
   "metadata": {
     "annotations": {
-      "agent-platform/workspace-version": "7",
+      "agent-platform/workspace-version": "8",
     },
     "labels": {
       "app": "nap",
@@ -830,6 +910,16 @@ exports[`buildStatefulSetSpec > golden master: shared RWX PVC, headless serviceN
               {
                 "name": "WORKSPACE_ID",
                 "value": "ws1",
+              },
+              {
+                "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
               },
             ],
             "image": "nap-agent-claude-code:latest",
