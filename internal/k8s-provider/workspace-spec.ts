@@ -1,7 +1,8 @@
 import type * as k8s from '@kubernetes/client-node'
 import type { ComputeResources } from '../types/api'
+import { WORKSPACE_TOKEN_ENV } from '../types/workspace-token'
 import { type K8sConfig, agentImageFor, defaultCfg } from './config'
-import { WORKSPACE_TOKEN_ENV, isPodReady, workspaceTokenSecretName } from './support'
+import { isPodReady, workspaceTokenSecretName } from './support'
 
 // Workspace pod/deployment spec construction, plus the pure status/annotation
 // readers the reconcile paths share. Split from the provider so the pod

@@ -15,10 +15,24 @@ import { SkillManager } from '../../../internal/agent-skills/src/index.js'
 import { nodeFetch, nodeFs, nodeShell } from '../../../internal/agent-skills/src/node.js'
 import { renderPlatformSkillFiles } from '../../../internal/agent-skills/src/platform.js'
 import { writePlatformPrompt } from '../../../internal/platform-prompt/src/index.js'
+import { captureWorkspaceToken } from '../../../internal/types/workspace-token.js'
 
 export const CP_URL = process.env.CP_URL
 export const WORKSPACE_ID = process.env.WORKSPACE_ID
 export const WORKSPACE_DIR = process.env.WORKSPACE_DIR || '/workspace'
+
+/**
+ * This module is imported before anything is spawned, so evaluating it here is
+ * what keeps the token out of every child's environment. Unlike the user's
+ * credentials — which are written to a file the shell sources on purpose — this
+ * one is the server's own and the model never needs it.
+ */
+const WORKSPACE_TOKEN = captureWorkspaceToken()
+
+/** Authorization header for cp calls, or nothing when no token was delivered. */
+export function cpAuthHeaders(): Record<string, string> {
+  return WORKSPACE_TOKEN ? { Authorization: `Bearer ${WORKSPACE_TOKEN}` } : {}
+}
 
 /** Shell-quote a value for use in `export K=V` (single quotes, escape embedded quotes) */
 function shellQuote(s: string): string {
@@ -80,7 +94,7 @@ export async function loadConfig(): Promise<boolean> {
     return false
   }
   const url = `${CP_URL}/_cp/workspaces/${WORKSPACE_ID}/config`
-  const resp = await fetch(url)
+  const resp = await fetch(url, { headers: cpAuthHeaders() })
   if (!resp.ok) {
     console.error(`[agent] Config fetch failed: ${resp.status} ${resp.statusText} url=${url}`)
     return false
@@ -293,7 +307,7 @@ export async function loadCredentials(): Promise<boolean> {
     return false
   }
   const url = `${CP_URL}/_cp/workspaces/${WORKSPACE_ID}/credentials`
-  const resp = await fetch(url)
+  const resp = await fetch(url, { headers: cpAuthHeaders() })
   if (!resp.ok) {
     console.error(`[agent] Credentials fetch failed: ${resp.status} ${resp.statusText} url=${url}`)
     return false
