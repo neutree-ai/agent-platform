@@ -18,12 +18,14 @@
 import { Hono } from 'hono'
 import type { WsAppEnv } from '../../lib/types'
 import { wsAuth } from '../../middleware/ws-auth'
+import config from './config'
 import credentials from './credentials'
 
 const ws = new Hono<WsAppEnv>()
 
 ws.use('*', wsAuth)
 
+ws.route('/', config)
 ws.route('/', credentials)
 
 export default ws
