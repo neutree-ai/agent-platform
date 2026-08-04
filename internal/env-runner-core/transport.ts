@@ -40,4 +40,10 @@ export interface PlacementTransport {
   deletePlacement(workspaceId: string): Promise<void>
   /** Liveness + capability refresh, once per reconcile pass. */
   heartbeat(capabilities: Record<string, unknown>): Promise<void>
+  /**
+   * Mint a workspace token for a workspace this runner is materialising, and
+   * return the plaintext. cp keeps only its hash, so this response is the only
+   * copy — a runner that drops it asks for another rather than recovering it.
+   */
+  mintWorkspaceToken(workspaceId: string): Promise<string>
 }

@@ -11,18 +11,11 @@
 // and lives only in the workload's process environment; a token that is lost is
 // re-minted, not recovered.
 
-import { createHash, randomBytes } from 'node:crypto'
+import {
+  generateWorkspaceToken,
+  hashWorkspaceToken,
+} from '../../../../internal/types/workspace-token'
 import { generateId, pool } from './pool'
-
-/** Generate a random workspace token. Returned to the caller exactly once. */
-function generateWorkspaceToken(): string {
-  return `ws_${randomBytes(32).toString('hex')}`
-}
-
-/** Hash a token for storage / lookup (SHA-256). */
-function hashWorkspaceToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex')
-}
 
 interface CreatedWorkspaceToken {
   id: string

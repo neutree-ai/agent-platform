@@ -46,6 +46,29 @@ async function recordIfChanged(
   }
 }
 
+/**
+ * Mint a workspace token and hand it to the provider, ahead of anything that
+ * brings a workload up.
+ *
+ * Every materialisation gets a fresh one, which is what makes rotation free: a
+ * rebuilt or restarted workspace is already carrying a new credential, and cp
+ * retires the predecessor once the pod holding it is gone. It also means a
+ * workspace that stops and starts does not come back with the token cp revoked
+ * on the way down.
+ *
+ * Skipped when the backend cannot deliver secrets — minting one nothing will
+ * receive would just leave rows to sweep.
+ */
+async function provisionToken(
+  provider: EnvironmentProvider,
+  transport: PlacementTransport,
+  workspaceId: string,
+): Promise<void> {
+  if (!provider.deliverWorkspaceToken) return
+  const token = await transport.mintWorkspaceToken(workspaceId)
+  await provider.deliverWorkspaceToken(workspaceId, token)
+}
+
 async function reconcilePlacement(
   provider: EnvironmentProvider,
   transport: PlacementTransport,
@@ -86,6 +109,7 @@ async function reconcilePlacement(
 
   // spec drift: cp bumped the spec — (re)apply, then record convergence.
   if (p.spec_version > (p.observed_version ?? 0)) {
+    await provisionToken(provider, transport, p.workspace_id)
     await provider.apply(p.workspace_id, p.spec as WorkspaceSpec)
     const after = await provider.observe(p.workspace_id)
     await transport.writeObserved(p.workspace_id, {
@@ -101,6 +125,7 @@ async function reconcilePlacement(
   if (current.phase !== 'running') {
     if (!exists) {
       // No object yet → create from spec (records convergence).
+      await provisionToken(provider, transport, p.workspace_id)
       await provider.apply(p.workspace_id, p.spec as WorkspaceSpec)
       const after = await provider.observe(p.workspace_id)
       await transport.writeObserved(p.workspace_id, {
@@ -112,6 +137,9 @@ async function reconcilePlacement(
       return 'apply'
     }
     if (current.phase === 'stopped') {
+      // Not just symmetry with apply: stopping revoked the workspace's tokens,
+      // so a start that reused the old one would come back unauthenticated.
+      await provisionToken(provider, transport, p.workspace_id)
       await provider.start(p.workspace_id)
       const after = await provider.observe(p.workspace_id)
       await transport.writeObserved(p.workspace_id, {
