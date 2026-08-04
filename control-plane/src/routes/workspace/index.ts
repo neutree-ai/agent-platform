@@ -18,6 +18,7 @@
 import { Hono } from 'hono'
 import type { WorkspaceAppEnv } from '../../lib/types'
 import { workspaceAuth } from '../../middleware/workspace-auth'
+import afs from './afs'
 import config from './config'
 import credentials from './credentials'
 import memory from './memory'
@@ -27,6 +28,7 @@ const ws = new Hono<WorkspaceAppEnv>()
 
 ws.use('*', workspaceAuth)
 
+ws.route('/', afs)
 ws.route('/', config)
 ws.route('/', credentials)
 ws.route('/', memory)

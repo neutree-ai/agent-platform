@@ -140,10 +140,20 @@ exports[`buildDeploymentSpec golden master > afs enabled 1`] = `
             "env": [
               {
                 "name": "AFS_BOOTSTRAP_URL",
-                "value": "http://nap-cp:3000/_cp/workspaces/ws1/afs-mounts",
+                "value": "http://nap-cp:3000/workspace/v1/workspaces/ws1/afs-mounts",
               },
               {
                 "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
+              },
+              {
+                "name": "AFS_BOOTSTRAP_TOKEN",
                 "valueFrom": {
                   "secretKeyRef": {
                     "key": "WORKSPACE_TOKEN",
@@ -366,10 +376,20 @@ exports[`buildDeploymentSpec golden master > full: afs + memory + resources + no
             "env": [
               {
                 "name": "AFS_BOOTSTRAP_URL",
-                "value": "http://nap-cp:3000/_cp/workspaces/ws1/afs-mounts",
+                "value": "http://nap-cp:3000/workspace/v1/workspaces/ws1/afs-mounts",
               },
               {
                 "name": "WORKSPACE_TOKEN",
+                "valueFrom": {
+                  "secretKeyRef": {
+                    "key": "WORKSPACE_TOKEN",
+                    "name": "nap-ws1-token",
+                    "optional": true,
+                  },
+                },
+              },
+              {
+                "name": "AFS_BOOTSTRAP_TOKEN",
                 "valueFrom": {
                   "secretKeyRef": {
                     "key": "WORKSPACE_TOKEN",
