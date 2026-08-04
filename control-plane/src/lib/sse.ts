@@ -15,7 +15,7 @@ import {
   updateSessionActivity,
   updateSessionStats,
 } from '../services/db/sessions'
-import { getWorkspace } from '../services/db/workspaces'
+import { getWorkspace, getWorkspaceConfig } from '../services/db/workspaces'
 import { notify } from '../services/notifications'
 import { pullWorkspaceUsage } from '../services/usage/pull'
 import { setSseStreamCountProvider, sseStreamDuration } from './metrics'
@@ -984,9 +984,17 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
           const reason = (evt as UniversalEvent).reason
           state.endReason = reason ?? null
           queue.run(async () => {
-            if (!state.sessionId) return
-            await transitionSessionStatus(state.sessionId, 'human')
-            console.log(`[SSE] Stored assistant message ${tag} session=${state.sessionId}`)
+            const sessionId = state.sessionId
+            if (!sessionId) return
+            // A muted workspace works without asking for attention: the session
+            // settles into 'idle' (no drain queue, no unread badge) and the
+            // task-done notification is skipped.
+            const muted = await getWorkspaceConfig(workspaceId)
+              .then((cfg) => cfg?.muted === true)
+              .catch(() => false)
+            await transitionSessionStatus(sessionId, muted ? 'idle' : 'human')
+            console.log(`[SSE] Stored assistant message ${tag} session=${sessionId}`)
+            if (muted) return
             // Summarize the agent's final answer, not the head of the whole
             // turn. 500 chars keeps the WeChat Work markdown message (2048
             // bytes) under budget for CJK text plus the trailing link.
@@ -1018,7 +1026,7 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
                 })
               })
               .catch((e) => console.warn('[SSE] Failed to send task notification:', e))
-          }, logError('final transition to human'))
+          }, logError('final session transition'))
           break
         }
 

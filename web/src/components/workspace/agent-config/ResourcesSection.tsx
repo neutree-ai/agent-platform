@@ -12,6 +12,8 @@ interface ResourcesSectionProps {
   templateConfig?: { compute_resources: ComputeResources } | null
   autoStart: boolean
   onAutoStartChange: (value: boolean) => void
+  muted: boolean
+  onMutedChange: (value: boolean) => void
 }
 
 export function ResourcesSection({
@@ -22,6 +24,8 @@ export function ResourcesSection({
   templateConfig,
   autoStart,
   onAutoStartChange,
+  muted,
+  onMutedChange,
 }: ResourcesSectionProps) {
   const { t } = useTranslation()
   return (
@@ -47,6 +51,17 @@ export function ResourcesSection({
           onCheckedChange={onAutoStartChange}
           className="mt-0.5 shrink-0"
         />
+      </div>
+      <div className="flex items-start justify-between gap-3 border-t border-border/60 pt-4">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-foreground">
+            {t('components.settings.mute.label')}
+          </div>
+          <p className="mt-1 text-mini text-muted-foreground">
+            {t('components.settings.mute.description')}
+          </p>
+        </div>
+        <Switch checked={muted} onCheckedChange={onMutedChange} className="mt-0.5 shrink-0" />
       </div>
     </div>
   )

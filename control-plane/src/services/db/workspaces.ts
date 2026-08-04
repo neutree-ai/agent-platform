@@ -319,6 +319,7 @@ export async function getWorkspaceConfig(workspaceId: string): Promise<Workspace
        CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(wc.compute_resources, tv.compute_resources)
             ELSE wc.compute_resources END AS compute_resources,
        wc.auto_start,
+       wc.muted,
        wc.auto_scaling,
        wc.updated_at,
        CASE WHEN wc.template_id IS NOT NULL
@@ -380,6 +381,7 @@ export async function updateWorkspaceConfig(
     'agent_settings',
     'compute_resources',
     'auto_start',
+    'muted',
     'auto_scaling',
     'template_id',
     'template_version',

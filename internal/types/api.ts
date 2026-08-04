@@ -363,6 +363,11 @@ export const ApiWorkspaceConfigSchema = z.object({
   compute_resources: ComputeResourcesSchema,
   /** When false, a stopped workspace is not auto-started on incoming chat. */
   auto_start: z.boolean(),
+  /**
+   * When true, a normally-ended session lands in `idle` instead of `human` and
+   * no task-done notification is sent — the workspace never asks for attention.
+   */
+  muted: z.boolean(),
   user_display_name: z.string().nullable(),
   memory_attachments: z.array(ApiConfigMemoryAttachmentSchema).default([]),
 })

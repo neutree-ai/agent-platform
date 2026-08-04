@@ -3616,6 +3616,10 @@
         "label": "Auto-start",
         "description": "When the workspace is stopped, automatically start it on an incoming chat or trigger. Turn off to require a manual start."
       },
+      "mute": {
+        "label": "Mute",
+        "description": "When a session ends it goes straight to idle instead of waiting for you, and no task-done notification is sent. For unattended workspaces you check on your own schedule."
+      },
       "startupAlert": {
         "title": "Workspace is having trouble starting"
       },

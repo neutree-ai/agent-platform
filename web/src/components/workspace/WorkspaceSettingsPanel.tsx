@@ -105,6 +105,7 @@ interface ConfigDraft {
   agentSettings: string
   computeResources: Required<ComputeResources>
   autoStart: boolean
+  muted: boolean
   enabledSkills: Set<string>
 }
 
@@ -457,6 +458,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       agentSettings: config.agent_settings,
       computeResources: withDefaults(config.compute_resources),
       autoStart: config.auto_start ?? true,
+      muted: config.muted ?? false,
     }))
     if (config.template_id && config.template_version) {
       api
@@ -546,6 +548,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
     agentSettings: '{}',
     computeResources: { ...DEFAULTS },
     autoStart: true,
+    muted: false,
     enabledSkills: new Set(),
   }))
   // Revert intent is transient — it only matters between "user clicked
@@ -590,6 +593,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       agentSettings: config.agent_settings,
       computeResources: withDefaults(config.compute_resources),
       autoStart: config.auto_start ?? true,
+      muted: config.muted ?? false,
       enabledSkills: new Set(),
     })
     api
@@ -723,6 +727,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
     )
       return true
     if (draft.autoStart !== (config.auto_start ?? true)) return true
+    if (draft.muted !== (config.muted ?? false)) return true
     const orig = originalSkills
     if (
       draft.enabledSkills.size !== orig.size ||
@@ -782,6 +787,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
           patch.compute_resources = draft.computeResources
 
         if (draft.autoStart !== (config.auto_start ?? true)) patch.auto_start = draft.autoStart
+        if (draft.muted !== (config.muted ?? false)) patch.muted = draft.muted
 
         if (Object.keys(patch).length > 0) {
           await updateFields(patch)
@@ -1005,6 +1011,8 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
             }}
             autoStart={draft.autoStart}
             onAutoStartChange={(v) => patchDraft({ autoStart: v })}
+            muted={draft.muted}
+            onMutedChange={(v) => patchDraft({ muted: v })}
             templateConfig={tplResources}
           />
         )
