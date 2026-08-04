@@ -6,19 +6,24 @@
 // key says "one of us", and routes behind it must be ones where that is
 // sufficient authority.
 //
-// Fails closed. Without SERVICE_KEY set, every call is refused rather than
-// waved through: a deployment that forgets the variable should break loudly
-// where it is missing, not quietly serve an open endpoint.
+// Fails closed. Without PLATFORM_SERVICE_KEY set, every call is refused rather
+// than waved through: a deployment that forgets the variable should break
+// loudly where it is missing, not quietly serve an open endpoint.
+//
+// Named for the fleet it belongs to. sandbox-service has its own shared secret
+// under the bare name SERVICE_KEY with a different value and the opposite
+// failure mode (it fails open), so a bare name here would be one env var and
+// one header shared by two mechanisms that disagree about both.
 
 import type { MiddlewareHandler } from 'hono'
 
 export const serviceAuth: MiddlewareHandler = async (c, next) => {
-  const expected = process.env.SERVICE_KEY
+  const expected = process.env.PLATFORM_SERVICE_KEY
   if (!expected) {
-    console.error('[svc] SERVICE_KEY is not set — refusing service-protocol request')
+    console.error('[svc] PLATFORM_SERVICE_KEY is not set — refusing service-protocol request')
     return c.json({ error: 'Unauthorized' }, 401)
   }
-  if (c.req.header('x-service-key') !== expected) {
+  if (c.req.header('x-platform-service-key') !== expected) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
   return next()

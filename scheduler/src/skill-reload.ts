@@ -17,8 +17,9 @@ import { DEAD_LETTER_QUEUE } from './dead-letter'
 const QUEUE_NAME = 'skill-reload'
 const NAP_API_URL = process.env.NAP_API_URL || 'http://nap-cp:3000'
 // Shared with cp. The fan-out endpoint refuses the call without it, so a
-// missing value surfaces as a failing job rather than a silent no-op.
-const SERVICE_KEY = process.env.SERVICE_KEY || ''
+// missing value surfaces as a failing job rather than a silent no-op. Distinct
+// from sandbox-service's SERVICE_KEY, which is a different secret entirely.
+const PLATFORM_SERVICE_KEY = process.env.PLATFORM_SERVICE_KEY || ''
 
 interface SkillReloadJob {
   kind: 'skill-reload'
@@ -48,7 +49,7 @@ export async function registerSkillReloadWorker(boss: PgBoss): Promise<void> {
         const { skillId } = job.data
         const res = await fetch(`${NAP_API_URL}/svc/v1/skills/${skillId}/reload-fanout`, {
           method: 'POST',
-          headers: { 'X-Service-Key': SERVICE_KEY },
+          headers: { 'X-Platform-Service-Key': PLATFORM_SERVICE_KEY },
         })
         if (!res.ok) {
           throw new Error(`reload-fanout skill=${skillId} returned ${res.status}`)

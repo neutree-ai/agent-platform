@@ -11,17 +11,17 @@ import svc from './index'
 
 const usingSkill = vi.mocked(skillRepo.listWorkspacesUsingSkill)
 const reload = vi.mocked(notifyAgentReload)
-const originalKey = process.env.SERVICE_KEY
+const originalKey = process.env.PLATFORM_SERVICE_KEY
 
 function post(path: string, key?: string) {
   return svc.request(path, {
     method: 'POST',
-    headers: key ? { 'X-Service-Key': key } : undefined,
+    headers: key ? { 'X-Platform-Service-Key': key } : undefined,
   })
 }
 
 beforeEach(() => {
-  process.env.SERVICE_KEY = 'svc-secret'
+  process.env.PLATFORM_SERVICE_KEY = 'svc-secret'
   usingSkill.mockReset()
   reload.mockReset()
   usingSkill.mockResolvedValue([{ id: 'ws1' }, { id: 'ws2' }] as never)
@@ -32,8 +32,8 @@ afterEach(() => {
   // delete, not `= undefined`: Node stores that assignment as the string
   // "undefined", which would look like a configured key to the middleware.
   // biome-ignore lint/performance/noDelete: the variable must actually be gone
-  if (originalKey === undefined) delete process.env.SERVICE_KEY
-  else process.env.SERVICE_KEY = originalKey
+  if (originalKey === undefined) delete process.env.PLATFORM_SERVICE_KEY
+  else process.env.PLATFORM_SERVICE_KEY = originalKey
 })
 
 describe('POST /svc/v1/skills/:id/reload-fanout', () => {
@@ -70,7 +70,7 @@ describe('POST /svc/v1/skills/:id/reload-fanout', () => {
   // rather than quietly serving an open endpoint.
   it('rejects everything when the key is not configured', async () => {
     // biome-ignore lint/performance/noDelete: the variable must actually be gone
-    delete process.env.SERVICE_KEY
+    delete process.env.PLATFORM_SERVICE_KEY
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const res = await post('/v1/skills/sk-1/reload-fanout', 'svc-secret')
