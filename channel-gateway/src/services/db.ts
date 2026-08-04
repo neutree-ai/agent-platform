@@ -533,15 +533,21 @@ export async function getThreadSessionCursor(
  *  Interrupting needs the session, not just the workspace: a workspace can be
  *  the target of several routes and chats at once, and `workspaces.interrupt`
  *  would stop whichever turns happen to be running — including other people's.
+ *
+ *  The TTL must match the one the scheduler resumes by: past it, the next
+ *  message starts a fresh session, so a row older than the TTL names a session
+ *  that is already over and interrupting it would report a phantom result.
  */
 export async function getThreadSessionId(
   routeId: string,
   threadId: string,
+  sessionTtlHours = 24,
 ): Promise<string | null> {
   const { rows } = await pool.query(
     `SELECT session_id FROM channel.thread_sessions
-     WHERE route_id = $1 AND external_thread_id = $2`,
-    [routeId, threadId],
+     WHERE route_id = $1 AND external_thread_id = $2
+       AND last_active_at > NOW() - make_interval(hours => $3)`,
+    [routeId, threadId, sessionTtlHours],
   )
   return rows[0]?.session_id ?? null
 }

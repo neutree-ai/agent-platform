@@ -24,7 +24,9 @@ export async function cancelThreadTurn(
   connectorClient: NapClient,
   threadId: string,
 ): Promise<string | null> {
-  const sessionId = await db.getThreadSessionId(route.id, threadId)
+  const sessionTtlHours =
+    ((route.config as Record<string, unknown>)?.session_ttl_hours as number) ?? 24
+  const sessionId = await db.getThreadSessionId(route.id, threadId, sessionTtlHours)
   if (!sessionId) {
     console.log(`${label}: /cancel thread=${threadId} session=none`)
     return 'No active session.'
