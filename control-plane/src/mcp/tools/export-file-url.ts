@@ -44,7 +44,9 @@ Returns { url, expires_at }. \`expires_at\` is \`null\` for permanent URLs. The 
           .min(1)
           .max(MAX_TTL)
           .default(DEFAULT_TTL)
-          .describe(`URL lifetime in seconds. Default ${DEFAULT_TTL}, max ${MAX_TTL}. Ignored when permanent is true.`),
+          .describe(
+            `URL lifetime in seconds. Default ${DEFAULT_TTL}, max ${MAX_TTL}. Ignored when permanent is true.`,
+          ),
         permanent: z
           .boolean()
           .default(false)

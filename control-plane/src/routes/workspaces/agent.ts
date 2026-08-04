@@ -781,7 +781,10 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
 
   // ── DELETE /{id}/agent/export-tokens/{token} — revoke a public link ───────
   const RevokeTokenParam = WorkspaceIdParam.extend({
-    token: z.string().min(1).openapi({ param: { name: 'token', in: 'path' } }),
+    token: z
+      .string()
+      .min(1)
+      .openapi({ param: { name: 'token', in: 'path' } }),
   })
   const revokeExportTokenRoute = createRoute({
     method: 'delete',
