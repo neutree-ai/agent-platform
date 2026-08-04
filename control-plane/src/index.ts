@@ -116,11 +116,11 @@ app.use('*', async (c, next) => {
 
 // Middleware — skip logging for health checks and HMR
 //
-// memory-fuse sidecars poll GET /_cp/workspaces/<id>/memory-stores/<id>/memories
+// memory-fuse sidecars poll GET /workspace/v1/workspaces/<id>/memory-stores/<id>/memories
 // once per mounted store on a refresh ticker; a healthy fleet would otherwise
 // flood the log with identical 200s. Suppress only the successful polls — a
 // non-2xx (e.g. 404 "store not attached") still logs so failures stay visible.
-const memorySnapshotPoll = /^\/_cp\/workspaces\/[^/]+\/memory-stores\/[^/]+\/memories$/
+const memorySnapshotPoll = /^\/workspace\/v1\/workspaces\/[^/]+\/memory-stores\/[^/]+\/memories$/
 app.use('*', async (c, next) => {
   const path = c.req.path
   if (path.endsWith('/health') || path === '/metrics' || path === '/__webpack_hmr') return next()

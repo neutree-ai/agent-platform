@@ -1,8 +1,11 @@
 // Package cpclient is a thin HTTP client for the NAP control-plane memory
-// store API. It speaks the cluster-internal /_cp/* surface (no auth, trusted
-// network) — list memories, fetch a memory by path, write a memory at a
-// path, and delete one. Identity comes from the workspace_id baked into
-// each URL; cp resolves the attachment row to authorise.
+// store API. It speaks the /workspace/v1/* surface — list memories, fetch a
+// memory by path, write a memory at a path, and delete one.
+//
+// Every call carries the workspace token the runner delivered to this pod. cp
+// resolves it to a workspace and refuses a URL naming any other, so the
+// workspace_id in the path is checked rather than trusted; the attachment row
+// still decides which stores are reachable.
 package cpclient
 
 import (
@@ -22,6 +25,7 @@ type Client struct {
 	baseURL     string
 	workspaceID string
 	storeID     string
+	token       string
 	http        *http.Client
 }
 
@@ -29,7 +33,10 @@ type Options struct {
 	BaseURL     string
 	WorkspaceID string
 	StoreID     string
-	Timeout     time.Duration
+	// Token is this workspace's own cp credential (WORKSPACE_TOKEN). Empty
+	// means the pod predates token delivery, and cp will refuse the calls.
+	Token   string
+	Timeout time.Duration
 }
 
 func New(opt Options) *Client {
@@ -41,7 +48,16 @@ func New(opt Options) *Client {
 		baseURL:     strings.TrimRight(opt.BaseURL, "/"),
 		workspaceID: opt.WorkspaceID,
 		storeID:     opt.StoreID,
+		token:       opt.Token,
 		http:        &http.Client{Timeout: timeout},
+	}
+}
+
+// authorize stamps the workspace token on a request. Kept in one place so a
+// new call cannot quietly go out unauthenticated.
+func authorize(req *http.Request, token string) {
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 }
 
@@ -54,18 +70,17 @@ type Attachment struct {
 	Instructions string `json:"instructions"`
 }
 
-// ListWorkspaceAttachments fetches the initial mount set for a workspace from
-// cp's unauthenticated internal endpoint. The internal sub-app is mounted at
-// /_cp inside cp (not /internal — that prefix bounces through auth middleware
-// and returns HTML). Trust comes from cluster network isolation, mirroring
-// the afs-fuse pattern.
-func ListWorkspaceAttachments(ctx context.Context, baseURL, workspaceID string) ([]Attachment, error) {
-	u := fmt.Sprintf("%s/_cp/workspaces/%s/memory-attachments",
+// ListWorkspaceAttachments fetches the initial mount set for a workspace on
+// boot. A package-level function rather than a method because it runs before
+// any store is known, so it takes the token directly.
+func ListWorkspaceAttachments(ctx context.Context, baseURL, workspaceID, token string) ([]Attachment, error) {
+	u := fmt.Sprintf("%s/workspace/v1/workspaces/%s/memory-attachments",
 		strings.TrimRight(baseURL, "/"), workspaceID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
+	authorize(req, token)
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -118,12 +133,13 @@ type ErrPrecondition struct {
 func (e *ErrPrecondition) Error() string { return "sha256 precondition failed" }
 
 func (c *Client) ListMemories(ctx context.Context) ([]MemoryLite, error) {
-	u := fmt.Sprintf("%s/_cp/workspaces/%s/memory-stores/%s/memories",
+	u := fmt.Sprintf("%s/workspace/v1/workspaces/%s/memory-stores/%s/memories",
 		c.baseURL, c.workspaceID, c.storeID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}
+	authorize(req, c.token)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
@@ -151,6 +167,7 @@ func (c *Client) GetMemory(ctx context.Context, path string) (*Memory, error) {
 	if err != nil {
 		return nil, err
 	}
+	authorize(req, c.token)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, err
@@ -181,6 +198,7 @@ func (c *Client) PutMemory(ctx context.Context, path, content, ifMatchSHA256 str
 	if err != nil {
 		return nil, err
 	}
+	authorize(req, c.token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -209,6 +227,7 @@ func (c *Client) DeleteMemory(ctx context.Context, path, ifMatchSHA256 string) e
 	if err != nil {
 		return err
 	}
+	authorize(req, c.token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -233,12 +252,13 @@ func (c *Client) MoveMemory(ctx context.Context, fromPath, toPath string, overwr
 		"overwrite":       overwrite,
 		"if_match_sha256": ifMatchSHA256,
 	})
-	u := fmt.Sprintf("%s/_cp/workspaces/%s/memory-stores/%s/memory-move",
+	u := fmt.Sprintf("%s/workspace/v1/workspaces/%s/memory-stores/%s/memory-move",
 		c.baseURL, c.workspaceID, c.storeID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
+	authorize(req, c.token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -259,12 +279,12 @@ func (c *Client) memoryURL(path string) (string, error) {
 	if !strings.HasPrefix(path, "/") {
 		return "", fmt.Errorf("path must start with /: %q", path)
 	}
-	// /_cp/workspaces/<wsId>/memory-stores/<storeId>/memory/<path-without-leading-slash>
+	// /workspace/v1/workspaces/<wsId>/memory-stores/<storeId>/memory/<path-without-leading-slash>
 	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
 	for i, p := range parts {
 		parts[i] = url.PathEscape(p)
 	}
-	return fmt.Sprintf("%s/_cp/workspaces/%s/memory-stores/%s/memory/%s",
+	return fmt.Sprintf("%s/workspace/v1/workspaces/%s/memory-stores/%s/memory/%s",
 		c.baseURL, c.workspaceID, c.storeID, strings.Join(parts, "/")), nil
 }
 
