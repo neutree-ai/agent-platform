@@ -34,10 +34,9 @@ CREATE TABLE IF NOT EXISTS workspace_tokens (
     revoked_at   timestamp with time zone
 );
 
--- Auth hot path: Bearer token → hash lookup (only non-revoked rows matter).
-CREATE INDEX IF NOT EXISTS idx_workspace_tokens_hash
-    ON workspace_tokens (token_hash)
-    WHERE revoked_at IS NULL;
+-- The auth hot path (Bearer token → hash lookup) is served by the UNIQUE
+-- constraint's own index; a second one on the same column would only add a
+-- write per mint.
 
 -- Per-workspace sweeps: revoke-on-stop, and the reconcile pass that retires
 -- superseded tokens once the placement that minted them is gone.

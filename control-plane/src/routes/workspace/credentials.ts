@@ -1,9 +1,8 @@
 import { Hono } from 'hono'
 import type { ApiCredential } from '../../../../internal/types/api'
 import type { WorkspaceAppEnv } from '../../lib/types'
-import { requireWorkspaceParam } from '../../middleware/workspace-auth'
+import { caller, requireWorkspaceParam } from '../../middleware/workspace-auth'
 import { listWorkspaceCredentials } from '../../services/db/credentials'
-import { getWorkspace } from '../../services/db/workspaces'
 
 const credentials = new Hono<WorkspaceAppEnv>()
 
@@ -15,11 +14,9 @@ const credentials = new Hono<WorkspaceAppEnv>()
 // enough to walk the fleet, which is what the unauthenticated predecessor
 // allowed with no token at all.
 credentials.get('/v1/workspaces/:id/credentials', requireWorkspaceParam(), async (c) => {
-  const id = c.req.param('id')
-  const workspace = await getWorkspace(id)
-  if (!workspace) return c.json({ error: 'Workspace not found' }, 404)
+  const { workspaceId, userId } = caller(c)
 
-  const creds = await listWorkspaceCredentials(id, workspace.user_id)
+  const creds = await listWorkspaceCredentials(workspaceId, userId)
   const response: ApiCredential[] = creds.map((cr) => ({
     name: cr.name,
     value: cr.value,

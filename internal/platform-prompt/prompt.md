@@ -7,7 +7,7 @@ The `__platform__` skill documents every workspace capability the platform provi
 
 ## MCP Reauth
 
-MCP URLs matching `…/_cp/mcp/<userId>/<encodedOrigin>/…` go through the NAP OAuth proxy. A 401 with `{"error":"needs_reauth","server_origin":"…"}` means the user's stored token is dead — stop, tell the user to reconnect `server_origin` in workspace settings → MCP. Don't retry, don't fall back to `agent-browser` login.
+MCP URLs matching `http://127.0.0.1:3001/mcp/<encodedOrigin>/…` go through the NAP OAuth proxy. A 401 with `{"error":"needs_reauth","server_origin":"…"}` means the user's stored token is dead — stop, tell the user to reconnect `server_origin` in workspace settings → MCP. Don't retry, don't fall back to `agent-browser` login.
 
 ## Filesystem
 

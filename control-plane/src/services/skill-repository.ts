@@ -152,6 +152,24 @@ export interface WorkspaceSkillRow {
   source_kind: string | null
 }
 
+/**
+ * Project skill rows for a workspace whose owner is `ownerId`.
+ *
+ * Shared by the agent's view of the list and the browser's, which are separate
+ * routes behind separate auth — but the same list, and `editable` is a rule the
+ * two must not come to disagree about.
+ */
+export function toWorkspaceSkillDtos(rows: WorkspaceSkillRow[], ownerId: string) {
+  return rows.map((s) => ({
+    id: s.id,
+    name: s.name ?? '(unknown)',
+    // Editable when the workspace owner owns it, or when it has no owner at
+    // all (built-in).
+    editable: s.user_id === ownerId || !s.user_id,
+    gitSource: s.source_kind === 'git',
+  }))
+}
+
 // ── adapter ────────────────────────────────────────────────────────────────
 
 // Column list for the SkillMeta projection. Always JOINs `users` for owner_name

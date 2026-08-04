@@ -2,8 +2,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { resolveTokenForUser } from '../lib/session-token'
 import type { WorkspaceAppEnv } from '../lib/types'
-import { callerWorkspaceId } from '../middleware/workspace-auth'
-import { getWorkspace } from '../services/db/workspaces'
+import { caller } from '../middleware/workspace-auth'
 import { McpOAuthReauthRequired, getValidAccessToken } from '../services/mcp-oauth'
 
 /**
@@ -54,10 +53,7 @@ function reauthRequired(c: Context, e: McpOAuthReauthRequired) {
 }
 
 mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
-  const workspaceId = callerWorkspaceId(c)
-  const workspace = await getWorkspace(workspaceId)
-  if (!workspace) return c.json({ error: 'Workspace not found' }, 404)
-  const userId = workspace.user_id
+  const { userId } = caller(c)
   const encodedOrigin = c.req.param('encodedOrigin')
   const rest = c.req.path.replace(new RegExp(`^.*?/v1/mcp/${encodedOrigin}`), '')
 

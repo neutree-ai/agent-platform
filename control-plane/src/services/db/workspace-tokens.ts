@@ -14,8 +14,9 @@
 import {
   generateWorkspaceToken,
   hashWorkspaceToken,
+  newWorkspaceTokenId,
 } from '../../../../internal/types/workspace-token'
-import { generateId, pool } from './pool'
+import { pool } from './pool'
 
 interface CreatedWorkspaceToken {
   id: string
@@ -31,7 +32,7 @@ interface CreatedWorkspaceToken {
  * retires the extras.
  */
 export async function createWorkspaceToken(workspaceId: string): Promise<CreatedWorkspaceToken> {
-  const id = generateId()
+  const id = newWorkspaceTokenId()
   const token = generateWorkspaceToken()
   const { rows } = await pool.query(
     `INSERT INTO workspace_tokens (id, workspace_id, token_hash)
@@ -43,31 +44,24 @@ export async function createWorkspaceToken(workspaceId: string): Promise<Created
 
 // last_used_at is an operational breadcrumb ("when did this workspace last talk
 // to cp"), not an audit record, and the agent polls often enough that writing on
-// every request would be a steady stream of pointless UPDATEs. Throttle to one
-// write per token per window; the map is bounded by the number of live tokens,
-// and entries for revoked ones fall out on restart.
-const LAST_USED_WRITE_INTERVAL_MS = 60_000
-const lastUsedWrittenAt = new Map<string, number>()
-
-function shouldWriteLastUsed(tokenId: string): boolean {
-  const now = Date.now()
-  const previous = lastUsedWrittenAt.get(tokenId)
-  if (previous !== undefined && now - previous < LAST_USED_WRITE_INTERVAL_MS) {
-    return false
-  }
-  lastUsedWrittenAt.set(tokenId, now)
-  return true
-}
+// every request would be a steady stream of pointless UPDATEs. The throttle is a
+// predicate on the row rather than a map in memory: cp runs several replicas, so
+// a per-process memo would let each of them write once per window anyway, and it
+// would grow an entry for every token the process ever saw.
+const LAST_USED_THROTTLE = '1 minute'
 
 /**
- * Verify a raw Bearer token. Returns the bound workspace id (the workload's
- * entire authority) or null. Only non-revoked tokens whose workspace still
- * exists resolve — the JOIN drops tokens orphaned by a deleted workspace.
+ * Verify a raw Bearer token. Returns the workspace it was minted for and that
+ * workspace's owner — the JOIN needs the row anyway, and every caller that
+ * resolves a user would otherwise re-read it. Null when the token is unknown,
+ * revoked, or orphaned by a deleted workspace.
  */
-export async function verifyWorkspaceToken(raw: string): Promise<{ workspaceId: string } | null> {
+export async function verifyWorkspaceToken(
+  raw: string,
+): Promise<{ workspaceId: string; userId: string } | null> {
   if (!raw) return null
   const { rows } = await pool.query(
-    `SELECT t.id, t.workspace_id
+    `SELECT t.id, t.workspace_id, w.user_id
        FROM workspace_tokens t
        JOIN workspaces w ON w.id = t.workspace_id
       WHERE t.token_hash = $1 AND t.revoked_at IS NULL`,
@@ -75,15 +69,17 @@ export async function verifyWorkspaceToken(raw: string): Promise<{ workspaceId: 
   )
   if (!rows[0]) return null
 
-  if (shouldWriteLastUsed(rows[0].id)) {
-    // Fire-and-forget: a failed breadcrumb must never fail the request it
-    // describes.
-    pool
-      .query('UPDATE workspace_tokens SET last_used_at = NOW() WHERE id = $1', [rows[0].id])
-      .catch((e) => console.error('[workspace-tokens] last_used_at update failed:', e))
-  }
+  // Fire-and-forget: a failed breadcrumb must never fail the request it describes.
+  pool
+    .query(
+      `UPDATE workspace_tokens SET last_used_at = NOW()
+        WHERE id = $1
+          AND (last_used_at IS NULL OR last_used_at < NOW() - interval '${LAST_USED_THROTTLE}')`,
+      [rows[0].id],
+    )
+    .catch((e) => console.error('[workspace-tokens] last_used_at update failed:', e))
 
-  return { workspaceId: rows[0].workspace_id }
+  return { workspaceId: rows[0].workspace_id, userId: rows[0].user_id }
 }
 
 /**

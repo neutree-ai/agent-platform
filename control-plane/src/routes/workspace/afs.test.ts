@@ -24,7 +24,7 @@ beforeEach(() => {
 
 describe('GET /workspace/v1/workspaces/:id/afs-mounts', () => {
   it('serves the sidecar its own mount set', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await get('/v1/workspaces/ws1/afs-mounts', 'ws_good')
 
@@ -38,7 +38,7 @@ describe('GET /workspace/v1/workspaces/:id/afs-mounts', () => {
 
   // The entries carry share access keys, which is why this one moved.
   it('refuses to serve another workspace, valid token or not', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await get('/v1/workspaces/ws2/afs-mounts', 'ws_good')
 
@@ -54,7 +54,7 @@ describe('GET /workspace/v1/workspaces/:id/afs-mounts', () => {
   })
 
   it('marks a read-only share readonly', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
     mounts.mockResolvedValue([
       { afs_dir_id: 'dir1', access_key: 'ak', share_name: 'ro', permission: 'read_only' },
     ] as never)

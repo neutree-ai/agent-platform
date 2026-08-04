@@ -43,7 +43,7 @@ beforeEach(() => {
 
 describe('GET /workspace/v1/workspaces/:id/config', () => {
   it('serves the workspace its own config', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await get('/v1/workspaces/ws1/config', 'ws_good')
 
@@ -54,7 +54,7 @@ describe('GET /workspace/v1/workspaces/:id/config', () => {
   // The config carries the provider api_key, so the binding matters as much
   // here as it does for credentials.
   it('refuses to serve another workspace, valid token or not', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await get('/v1/workspaces/ws2/config', 'ws_good')
 
@@ -70,7 +70,7 @@ describe('GET /workspace/v1/workspaces/:id/config', () => {
   })
 
   it('404s when the workspace has no config', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
     config.mockResolvedValue(null as never)
 
     const res = await get('/v1/workspaces/ws1/config', 'ws_good')
