@@ -1,4 +1,5 @@
 import { pool } from './db/pool'
+import { revokeAllWorkspaceTokens } from './db/workspace-tokens'
 import { getWorkspaceConfig } from './db/workspaces'
 
 // Desired-state writes for the BYOI placement queue. After the P1 control
@@ -99,7 +100,15 @@ export async function setDesiredReplicas(workspaceId: string, replicas: number):
   )
 }
 
-/** Set the desired phase (running | stopped | deleted). */
+/**
+ * Set the desired phase (running | stopped | deleted).
+ *
+ * Leaving 'running' also revokes the workspace's tokens. A workspace that is
+ * not meant to be up has no workload that should still be able to reach cp, and
+ * the next start mints a fresh one anyway. This sits here rather than at the
+ * three call sites that stop a workspace (manual stop, idle GC, scale-to-zero)
+ * because a fourth one will be added eventually and would forget.
+ */
 export async function setDesiredPhase(
   workspaceId: string,
   phase: 'running' | 'stopped' | 'deleted',
@@ -108,6 +117,9 @@ export async function setDesiredPhase(
     workspaceId,
     phase,
   ])
+  if (phase !== 'running') {
+    await revokeAllWorkspaceTokens(workspaceId)
+  }
 }
 
 /**

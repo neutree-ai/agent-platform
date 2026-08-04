@@ -13,8 +13,10 @@ import {
   deletePlacementForEnvironment,
   listPlacementsForEnvironment,
   recordHeartbeat,
+  workspaceIsOnEnvironment,
   writeObservedForEnvironment,
 } from '../../services/db/env-placements'
+import { createWorkspaceToken } from '../../services/db/workspace-tokens'
 
 const env = new Hono<EnvAppEnv>()
 
@@ -57,6 +59,26 @@ env.post('/v1/placements/:wsId/delete', async (c) => {
   const ok = await deletePlacementForEnvironment(environmentId, wsId)
   if (!ok) return c.json({ error: 'placement not found in this environment' }, 404)
   return c.json({ ok: true })
+})
+
+// Mint a workspace token for a workspace this environment is placing.
+//
+// The runner asks for one as it materialises the pod and hands it to the
+// workload, which uses it for its own calls back into cp (/ws/v1). cp keeps only
+// the hash, so the plaintext in this response is the only copy — a runner that
+// loses it asks again rather than recovering it.
+//
+// Scoped like every other route here: a runner can only mint for a workspace
+// actually placed on its environment, so an env token cannot be turned into
+// access to somebody else's workspace.
+env.post('/v1/workspaces/:wsId/token', async (c) => {
+  const { environmentId } = c.get('envPrincipal')
+  const wsId = c.req.param('wsId')
+  if (!(await workspaceIsOnEnvironment(environmentId, wsId))) {
+    return c.json({ error: 'placement not found in this environment' }, 404)
+  }
+  const { token } = await createWorkspaceToken(wsId)
+  return c.json({ token })
 })
 
 // Liveness + capability refresh.

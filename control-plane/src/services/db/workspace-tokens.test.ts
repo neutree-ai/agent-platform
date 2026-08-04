@@ -10,7 +10,7 @@ import { pool } from './pool'
 import {
   createWorkspaceToken,
   revokeAllWorkspaceTokens,
-  revokeSupersededWorkspaceTokens,
+  sweepSupersededWorkspaceTokens,
   verifyWorkspaceToken,
 } from './workspace-tokens'
 
@@ -101,20 +101,22 @@ describe('revocation', () => {
     expect(q.mock.calls[0][1]).toEqual(['ws1'])
   })
 
-  it('keeps the newest tokens and only retires past the grace window', async () => {
+  it('keeps the newest tokens per workspace and only retires past the grace window', async () => {
     q.mockResolvedValueOnce({ rows: [], rowCount: 1 } as never)
 
-    await revokeSupersededWorkspaceTokens('ws1')
+    await sweepSupersededWorkspaceTokens()
 
     // Default: keep 2 (so a rolling update can overlap), 1h grace in seconds.
-    expect(q.mock.calls[0][1]).toEqual(['ws1', 2, 3600])
+    expect(q.mock.calls[0][1]).toEqual([2, 3600])
+    // One set-based statement for the whole fleet, not a query per workspace.
+    expect(String(q.mock.calls[0][0])).toContain('PARTITION BY workspace_id')
   })
 
   it('honours an explicit keep count and grace', async () => {
     q.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
 
-    await revokeSupersededWorkspaceTokens('ws1', 1, 5_000)
+    await sweepSupersededWorkspaceTokens(1, 5_000)
 
-    expect(q.mock.calls[0][1]).toEqual(['ws1', 1, 5])
+    expect(q.mock.calls[0][1]).toEqual([1, 5])
   })
 })

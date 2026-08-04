@@ -110,28 +110,36 @@ export async function revokeAllWorkspaceTokens(workspaceId: string): Promise<num
 const SUPERSEDED_GRACE_MS = 60 * 60 * 1000
 
 /**
- * Retire tokens a workspace has outgrown: keep the newest `keep`, revoke any
- * older one that is past the grace window. The grace exists because minting
- * happens at placement while the pod holding the previous token may still be
- * draining — revoking on sight would kill the outgoing pod's cp access mid-flight.
+ * Retire tokens their workspace has outgrown, fleet-wide: per workspace keep the
+ * newest `keep`, revoke any older one past the grace window.
  *
- * Returns the number revoked. Safe to call on every reconcile pass.
+ * The grace exists because minting happens at placement while the pod holding
+ * the previous token may still be draining — revoking on sight would cut off the
+ * outgoing pod mid-flight.
+ *
+ * One set-based statement rather than a per-workspace call in a loop: this runs
+ * on a timer against every workspace there is, and a query per workspace would
+ * be a thousand round-trips to revoke a handful of rows.
+ *
+ * Returns the number revoked. Safe to call on every pass.
  */
-export async function revokeSupersededWorkspaceTokens(
-  workspaceId: string,
+export async function sweepSupersededWorkspaceTokens(
   keep = 2,
   graceMs = SUPERSEDED_GRACE_MS,
 ): Promise<number> {
   const result = await pool.query(
     `UPDATE workspace_tokens SET revoked_at = NOW()
       WHERE id IN (
-        SELECT id FROM workspace_tokens
-         WHERE workspace_id = $1 AND revoked_at IS NULL
-         ORDER BY created_at DESC
-         OFFSET $2
-      )
-        AND created_at < NOW() - make_interval(secs => $3)`,
-    [workspaceId, keep, graceMs / 1000],
+        SELECT id FROM (
+          SELECT id, created_at,
+                 row_number() OVER (PARTITION BY workspace_id ORDER BY created_at DESC) AS rn
+            FROM workspace_tokens
+           WHERE revoked_at IS NULL
+        ) ranked
+        WHERE ranked.rn > $1
+          AND ranked.created_at < NOW() - make_interval(secs => $2)
+      )`,
+    [keep, graceMs / 1000],
   )
   return result.rowCount ?? 0
 }

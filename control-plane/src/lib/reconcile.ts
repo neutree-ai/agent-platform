@@ -6,6 +6,7 @@ import {
   listUsersWithDeletingCredentials,
 } from '../services/db/credentials'
 import { getAutoScalingWorkspaceIds, getRemoteWorkspaceIds } from '../services/db/environments'
+import { sweepSupersededWorkspaceTokens } from '../services/db/workspace-tokens'
 import { getWorkspace, listAllWorkspaces, updateWorkspace } from '../services/db/workspaces'
 import { projectBuiltinAutoScalingStatus, runEnvProjection } from '../services/env-projection'
 import { runIdleWorkspaceGC } from '../services/idle-workspace-gc'
@@ -173,6 +174,20 @@ export function startReconcileLoop() {
     sweepRunningWorkspaces().catch((e) =>
       console.error('[Reconcile] usage sweep error:', e instanceof Error ? e.message : e),
     ),
+  )
+
+  // Superseded workspace tokens: each placement mints a fresh one, so a rebuilt
+  // workspace leaves its predecessor behind. Retire the ones past the overlap
+  // grace. Hourly is ample — these are already inert (nothing holds them) and the
+  // grace is an hour anyway. protect:true so a slow pass never stacks.
+  new Cron('17 * * * *', { protect: true }, () =>
+    sweepSupersededWorkspaceTokens()
+      .then((n) => {
+        if (n > 0) console.log(`[Reconcile] revoked ${n} superseded workspace token(s)`)
+      })
+      .catch((e) =>
+        console.error('[Reconcile] token sweep error:', e instanceof Error ? e.message : e),
+      ),
   )
 
   // Idle-workspace GC: hourly sweep that stops long-idle workspaces to reclaim

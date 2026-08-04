@@ -1,11 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // buildWorkspaceSpec is pure, but importing the module pulls in the pg pool —
 // stub the DB modules so the test stays dependency-free.
 vi.mock('./db/pool', () => ({ pool: { query: vi.fn() } }))
 vi.mock('./db/workspaces', () => ({ getWorkspaceConfig: vi.fn() }))
+vi.mock('./db/workspace-tokens', () => ({ revokeAllWorkspaceTokens: vi.fn() }))
 
-import { buildWorkspaceSpec } from './placement'
+import { revokeAllWorkspaceTokens } from './db/workspace-tokens'
+import { buildWorkspaceSpec, setDesiredPhase } from './placement'
 
 describe('buildWorkspaceSpec', () => {
   it('projects agent_type and compute_resources from the config row', () => {
@@ -56,5 +58,27 @@ describe('buildWorkspaceSpec', () => {
 
   it('auto-scaling with min_replicas 0 (scale-to-zero) still starts runnable at 1', () => {
     expect(buildWorkspaceSpec({ auto_scaling: { min_replicas: 0 } }, 1).replicas).toBe(1)
+  })
+})
+
+describe('setDesiredPhase', () => {
+  const revoke = vi.mocked(revokeAllWorkspaceTokens)
+
+  beforeEach(() => {
+    revoke.mockReset()
+  })
+
+  // Whatever took the workspace down — manual stop, idle GC, scale-to-zero —
+  // its workloads are going away and should not keep a working credential.
+  it.each(['stopped', 'deleted'] as const)('revokes the tokens on %s', async (phase) => {
+    await setDesiredPhase('ws1', phase)
+
+    expect(revoke).toHaveBeenCalledWith('ws1')
+  })
+
+  it('leaves the tokens alone when the workspace is meant to be up', async () => {
+    await setDesiredPhase('ws1', 'running')
+
+    expect(revoke).not.toHaveBeenCalled()
   })
 })
