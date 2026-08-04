@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { Switch } from '@/components/ui/switch'
 import { DEFAULTS } from '@/components/workspace/ConfigResourcesButton'
 import { DeleteWorkspaceDialog } from '@/components/workspace/DeleteWorkspaceDialog'
 import { SaveAsTemplateDialog } from '@/components/workspace/SaveAsTemplateDialog'
@@ -126,11 +127,17 @@ function GeneralSection({
   draft,
   onChange,
   onConfigReload,
+  muted,
+  onMutedChange,
 }: {
   workspace: Workspace
   draft: GeneralDraft
   onChange: (patch: Partial<GeneralDraft>) => void
   onConfigReload: () => void
+  // Mute lives in workspace_config, not the general draft — it rides the
+  // config patch on save like the other agent-config fields.
+  muted: boolean
+  onMutedChange: (value: boolean) => void
 }) {
   const { t } = useTranslation()
   const { data: tags } = useTags()
@@ -233,6 +240,18 @@ function GeneralSection({
           </div>
         </div>
       )}
+
+      <div className="mt-4 flex items-start justify-between gap-3 border-t border-border/60 pt-4">
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-foreground">
+            {t('components.settings.mute.label')}
+          </div>
+          <p className="mt-1 text-mini text-muted-foreground">
+            {t('components.settings.mute.description')}
+          </p>
+        </div>
+        <Switch checked={muted} onCheckedChange={onMutedChange} className="mt-0.5 shrink-0" />
+      </div>
 
       {/* Save as template */}
       <div className="mt-4 flex items-start justify-between gap-3 border-t border-border/60 pt-4">
@@ -1011,8 +1030,6 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
             }}
             autoStart={draft.autoStart}
             onAutoStartChange={(v) => patchDraft({ autoStart: v })}
-            muted={draft.muted}
-            onMutedChange={(v) => patchDraft({ muted: v })}
             templateConfig={tplResources}
           />
         )
@@ -1023,6 +1040,8 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
             draft={general}
             onChange={(patch) => setGeneral((g) => ({ ...g, ...patch }))}
             onConfigReload={reload}
+            muted={draft.muted}
+            onMutedChange={(v) => patchDraft({ muted: v })}
           />
         ) : null
       default:
