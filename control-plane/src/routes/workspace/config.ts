@@ -1,14 +1,14 @@
 import { Hono } from 'hono'
 import type { ApiWorkspaceConfig } from '../../../../internal/types/api'
-import type { WsAppEnv } from '../../lib/types'
-import { requireWorkspaceParam } from '../../middleware/ws-auth'
+import type { WorkspaceAppEnv } from '../../lib/types'
+import { requireWorkspaceParam } from '../../middleware/workspace-auth'
 import { getMemoryByPath, listAttachmentsForWorkspace } from '../../services/db/memory'
 import { getUser } from '../../services/db/users'
 import { getWorkspace, getWorkspaceConfig } from '../../services/db/workspaces'
 import { getToken, serverOriginFromUrl } from '../../services/mcp-oauth'
 import { encodeOrigin } from '../mcp-proxy'
 
-const config = new Hono<WsAppEnv>()
+const config = new Hono<WorkspaceAppEnv>()
 
 // The agent's own workspace config: prompt, model/provider, MCP servers,
 // memory attachments. Carries the provider api_key, so it is workspace-scoped

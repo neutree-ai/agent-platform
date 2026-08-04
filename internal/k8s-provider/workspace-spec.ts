@@ -44,7 +44,7 @@ import { isPodReady, workspaceTokenSecretName } from './support'
 //     were unaffected, which is why it read as "workspace IO is slow"). Nothing
 //     consumes these vars — service discovery goes through DNS.
 // v8: every container gains WORKSPACE_TOKEN via secretKeyRef, the credential
-//     the workload uses for its own calls back into cp (/ws/v1). The ref is
+//     the workload uses for its own calls back into cp (/workspace/v1). The ref is
 //     optional, so a pod whose Secret is missing still starts — but it starts
 //     without a token, and the routes being moved off the unauthenticated /_cp
 //     prefix will refuse it. Bumping forces reconcile to rebuild existing

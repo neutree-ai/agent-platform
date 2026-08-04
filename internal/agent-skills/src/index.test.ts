@@ -171,9 +171,8 @@ describe('SkillManager', () => {
     test('downloads and extracts skills', async () => {
       const tarBuf = Buffer.from('fake-tar-gz')
       const fetchImpl = async (url: string) => {
-        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: ['my-skill'] })
-        if (url.includes('/_cp/skills/my-skill')) return binaryResponse(tarBuf)
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'my-skill' }])
+        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [{ id: 'my-skill', name: 'my-skill' }] })
+        if (url.includes('/skills/my-skill')) return binaryResponse(tarBuf)
         throw new Error(`Unexpected fetch: ${url}`)
       }
 
@@ -201,12 +200,11 @@ describe('SkillManager', () => {
       const fetchImpl = async (url: string, init?: { headers?: Record<string, string> }) => {
         if (url.includes('/workspaces/ws-1/skills'))
           return jsonResponse({ skills: [{ name: 'my-skill', id: 'sk-1' }] })
-        if (url.includes('/_cp/skills/sk-1/package')) {
+        if (url.includes('/skills/sk-1/package')) {
           const inm = init?.headers?.['If-None-Match'] ?? null
           requests.push(inm)
           return inm === ETAG ? notModifiedResponse(ETAG) : binaryResponse(tarBuf, ETAG)
         }
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'my-skill' }])
         throw new Error(`Unexpected fetch: ${url}`)
       }
 
@@ -234,8 +232,7 @@ describe('SkillManager', () => {
       fs.files.set('/tmp/skill-locked/.editing', '')
 
       const fetchImpl = async (url: string) => {
-        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: ['locked'] })
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'locked' }])
+        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [{ id: 'locked', name: 'locked' }] })
         throw new Error(`Should not download locked skill, but fetched: ${url}`)
       }
 
@@ -251,7 +248,6 @@ describe('SkillManager', () => {
     test('handles empty skill list', async () => {
       const fetchImpl = async (url: string) => {
         if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [] })
-        if (url.includes('/_cp/skills')) return jsonResponse([])
         throw new Error(`Unexpected: ${url}`)
       }
 
@@ -264,13 +260,12 @@ describe('SkillManager', () => {
       const tarBuf = Buffer.from('fake-tar-gz')
       let attempts = 0
       const fetchImpl = async (url: string) => {
-        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: ['flaky'] })
-        if (url.includes('/_cp/skills/flaky')) {
+        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [{ id: 'flaky', name: 'flaky' }] })
+        if (url.includes('/skills/flaky')) {
           attempts++
           if (attempts < 3) return errorResponse(503)
           return binaryResponse(tarBuf)
         }
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'flaky' }])
         throw new Error(`Unexpected: ${url}`)
       }
 
@@ -287,9 +282,8 @@ describe('SkillManager', () => {
       fs.files.set('/tmp/skill-pinned/SKILL.md', 'previous content')
 
       const fetchImpl = async (url: string) => {
-        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: ['pinned'] })
-        if (url.includes('/_cp/skills/pinned')) return errorResponse(500)
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'pinned' }])
+        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [{ id: 'pinned', name: 'pinned' }] })
+        if (url.includes('/skills/pinned')) return errorResponse(500)
         throw new Error(`Unexpected: ${url}`)
       }
 
@@ -312,12 +306,11 @@ describe('SkillManager', () => {
       const fetchImpl = async (url: string) => {
         if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({
           skills: [
-            { name: 'mine', editable: true },
-            { name: 'others', editable: false },
+            { id: 'mine', name: 'mine', editable: true },
+            { id: 'others', name: 'others', editable: false },
           ],
         })
-        if (url.includes('/_cp/skills/mine') || url.includes('/_cp/skills/others')) return binaryResponse(tarBuf)
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'mine' }, { name: 'others' }])
+        if (url.includes('/skills/mine') || url.includes('/skills/others')) return binaryResponse(tarBuf)
         throw new Error(`Unexpected: ${url}`)
       }
 
@@ -334,10 +327,9 @@ describe('SkillManager', () => {
       const tarBuf = Buffer.from('fake')
       const fetchImpl = async (url: string) => {
         if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({
-          skills: [{ name: skillName, editable: true }],
+          skills: [{ id: skillName, name: skillName, editable: true }],
         })
-        if (url.includes(`/_cp/skills/${skillName}`)) return binaryResponse(tarBuf)
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: skillName }])
+        if (url.includes(`/skills/${skillName}`)) return binaryResponse(tarBuf)
         throw new Error(`Unexpected: ${url}`)
       }
       const mgr = createManager(fetchImpl)
@@ -366,10 +358,9 @@ describe('SkillManager', () => {
     test('startEditing throws if skill not editable', async () => {
       const fetchImpl = async (url: string) => {
         if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({
-          skills: [{ name: 'readonly', editable: false }],
+          skills: [{ id: 'readonly', name: 'readonly', editable: false }],
         })
-        if (url.includes('/_cp/skills/readonly')) return binaryResponse(Buffer.from('x'))
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'readonly' }])
+        if (url.includes('/skills/readonly')) return binaryResponse(Buffer.from('x'))
         throw new Error(`Unexpected: ${url}`)
       }
       const mgr = createManager(fetchImpl)
@@ -379,9 +370,8 @@ describe('SkillManager', () => {
 
     test('startEditing throws if skill not found locally', async () => {
       const fetchImpl = async (url: string) => {
-        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [{ name: 'ghost', editable: true }] })
-        if (url.includes('/_cp/skills/ghost')) return errorResponse(404)
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'ghost' }])
+        if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [{ id: 'ghost', name: 'ghost', editable: true }] })
+        if (url.includes('/skills/ghost')) return errorResponse(404)
         throw new Error(`Unexpected: ${url}`)
       }
       const mgr = createManager(fetchImpl)
@@ -410,7 +400,7 @@ describe('SkillManager', () => {
       const fetchImpl = async (url: string, init?: { headers?: Record<string, string> }) => {
         if (url.includes('/workspaces/ws-1/skills'))
           return jsonResponse({ skills: [{ name, id: 'sk-1', editable: true }] })
-        if (url.includes('/_cp/skills/sk-1/package')) {
+        if (url.includes('/skills/sk-1/package')) {
           const inm = init?.headers?.['If-None-Match'] ?? null
           requests.push(inm)
           return inm === ETAG ? notModifiedResponse(ETAG) : binaryResponse(tarBuf, ETAG)
@@ -465,7 +455,7 @@ describe('SkillManager', () => {
       const fetchImpl = async (url: string) => {
         if (url.includes('/workspaces/ws-1/skills'))
           return jsonResponse({ skills: [{ name: 'flaky', id: 'sk-1', editable: true }] })
-        if (url.includes('/_cp/skills/sk-1/package'))
+        if (url.includes('/skills/sk-1/package'))
           return failDownloads ? errorResponse(503) : binaryResponse(tarBuf)
         throw new Error(`Unexpected fetch: ${url}`)
       }
@@ -701,8 +691,8 @@ describe('SkillManager', () => {
       const tarBuf = Buffer.from('fake')
       const fetchImpl = async (url: string) => {
         if (url.includes('/workspaces/ws-1/skills'))
-          return jsonResponse({ skills: [{ name: 'kept', editable: true }] })
-        if (url.includes('/_cp/skills/kept')) return binaryResponse(tarBuf)
+          return jsonResponse({ skills: [{ id: 'kept', name: 'kept', editable: true }] })
+        if (url.includes('/skills/kept')) return binaryResponse(tarBuf)
         throw new Error(`Unexpected: ${url}`)
       }
 
@@ -723,7 +713,7 @@ describe('SkillManager', () => {
       const fetchImpl = async (url: string, init?: { headers?: Record<string, string> }) => {
         if (url.includes('/workspaces/ws-1/skills'))
           return jsonResponse({ skills: [{ name: 'cached', id: 'sk-c' }] })
-        if (url.includes('/_cp/skills/sk-c/package')) {
+        if (url.includes('/skills/sk-c/package')) {
           return init?.headers?.['If-None-Match'] === ETAG
             ? notModifiedResponse(ETAG)
             : binaryResponse(Buffer.from('x'), ETAG)
@@ -809,7 +799,6 @@ describe('SkillManager draft persistence (draftBase)', () => {
     const fetchImpl = async (url: string) => {
       if (url.includes('/workspaces/ws-1/skills'))
         return jsonResponse({ skills: [{ name: 'wip', id: 'sk-wip' }] })
-      if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'wip' }])
       throw new Error(`Should not download a skill being edited: ${url}`)
     }
     const result = await createManager(fetchImpl).load()
@@ -852,8 +841,7 @@ describe('SkillManager draft persistence (draftBase)', () => {
     const fetchImpl = async (url: string) => {
       if (url.includes('/workspaces/ws-1/skills'))
         return jsonResponse({ skills: [{ name: 'done', id: 'sk-done' }] })
-      if (url.includes('/_cp/skills/sk-done/package')) return binaryResponse(tarBuf)
-      if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'done' }])
+      if (url.includes('/skills/sk-done/package')) return binaryResponse(tarBuf)
       throw new Error(`Unexpected fetch: ${url}`)
     }
     const result = await createManager(fetchImpl).load()
@@ -872,7 +860,7 @@ describe('SkillManager draft persistence (draftBase)', () => {
         return jsonResponse({
           skills: [{ name: 'imported', id: 'sk-g', editable: true, gitSource: true }],
         })
-      if (url.includes('/_cp/skills/sk-g/package')) return binaryResponse(tarBuf)
+      if (url.includes('/skills/sk-g/package')) return binaryResponse(tarBuf)
       throw new Error(`Unexpected fetch: ${url}`)
     }
     const mgr = createManager(fetchImpl)
@@ -1001,8 +989,7 @@ describe('SkillManager draft persistence (draftBase)', () => {
       const fetchImpl = async (url: string) => {
         if (url.includes('/workspaces/ws-1/skills'))
           return jsonResponse({ skills: [{ name: 'foo', id: 'sk-foo' }] })
-        if (url.includes('/_cp/skills/sk-foo/package')) return errorResponse(500)
-        if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'foo' }])
+        if (url.includes('/skills/sk-foo/package')) return errorResponse(500)
         throw new Error(`Unexpected fetch: ${url}`)
       }
       const result = await createManager(fetchImpl).load()
@@ -1043,9 +1030,8 @@ describe('SkillManager staging cleanup', () => {
 
     const tarBuf = Buffer.from('fake-tar-gz')
     const fetchImpl = async (url: string) => {
-      if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: ['foo'] })
-      if (url.includes('/_cp/skills/foo')) return binaryResponse(tarBuf)
-      if (url.includes('/_cp/skills')) return jsonResponse([{ name: 'foo' }])
+      if (url.includes('/workspaces/ws-1/skills')) return jsonResponse({ skills: [{ id: 'foo', name: 'foo' }] })
+      if (url.includes('/skills/foo')) return binaryResponse(tarBuf)
       throw new Error(`Unexpected fetch: ${url}`)
     }
     await createManager(fetchImpl).load()

@@ -32,7 +32,7 @@ export function cpAuthHeaders(): Record<string, string> {
  * unauthenticated path open for it to fall back to.
  */
 export function cpWorkspaceUrl(suffix: string): string {
-  return `${CP_URL}/ws/v1/workspaces/${WORKSPACE_ID}/${suffix}`
+  return `${CP_URL}/workspace/v1/workspaces/${WORKSPACE_ID}/${suffix}`
 }
 
 export interface UserMcpServerConfig {
@@ -45,7 +45,7 @@ export interface UserMcpServerConfig {
 }
 
 /**
- * Parsed user MCP servers from cp's `/ws/v1/workspaces/:id/config`. Cached
+ * Parsed user MCP servers from cp's `/workspace/v1/workspaces/:id/config`. Cached
  * in memory so `agent.ts` can merge them into the per-turn `mcpServers`
  * arg and inject `X-Session-Token` without re-parsing `.mcp.json` from
  * disk on every turn.
@@ -152,6 +152,7 @@ export async function loadSkills(): Promise<{ ok: boolean; failed: string[] }> {
   _skillManager = new SkillManager({
     cpUrl: CP_URL,
     workspaceId: WORKSPACE_ID,
+    cpHeaders: cpAuthHeaders(),
     skillsDir: join(WORKSPACE_DIR, '.claude', 'skills'),
     localBase: '/tmp',
     // Drafts (unpublished edits) live here on the persistent workspace volume so

@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
 import type { ApiCredential } from '../../../../internal/types/api'
-import type { WsAppEnv } from '../../lib/types'
-import { requireWorkspaceParam } from '../../middleware/ws-auth'
+import type { WorkspaceAppEnv } from '../../lib/types'
+import { requireWorkspaceParam } from '../../middleware/workspace-auth'
 import { listWorkspaceCredentials } from '../../services/db/credentials'
 import { getWorkspace } from '../../services/db/workspaces'
 
-const credentials = new Hono<WsAppEnv>()
+const credentials = new Hono<WorkspaceAppEnv>()
 
 // The agent's own credentials, values included — this is the one route where
 // they leave cp in plaintext, because the agent is what injects them.

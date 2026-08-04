@@ -64,7 +64,7 @@ env.post('/v1/placements/:wsId/delete', async (c) => {
 // Mint a workspace token for a workspace this environment is placing.
 //
 // The runner asks for one as it materialises the pod and hands it to the
-// workload, which uses it for its own calls back into cp (/ws/v1). cp keeps only
+// workload, which uses it for its own calls back into cp (/workspace/v1). cp keeps only
 // the hash, so the plaintext in this response is the only copy — a runner that
 // loses it asks again rather than recovering it.
 //

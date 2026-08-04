@@ -12,10 +12,8 @@ import {
   moveMemory,
   putMemory,
 } from '../services/db/memory'
-import { getWorkspace } from '../services/db/workspaces'
 import { broadcastStoreInvalidate } from '../services/memory-fuse'
 import { skillRepo } from '../services/skills-composition'
-import { skillsContentFetch, skillsContentUrl } from '../services/skills-content'
 
 const internal = new Hono()
 
@@ -207,51 +205,6 @@ internal.post('/workspaces/:wsId/memory-stores/:storeId/memory-move', async (c) 
   }
 })
 
-// List all skills (metadata only)
-internal.get('/skills', async (c) => {
-  const skills = await skillRepo.listSkills()
-  return c.json(skills)
-})
-
-// Download skill package (tar.gz binary). p3 hot path: the workspace agent hits
-// it on startup to stamp skills onto its filesystem. We proxy to
-// skills-content-service so cp never materializes the tarball.
-//
-// Route keys on skill UUID now — names are no longer globally unique, so the
-// previous `/skills/:name` form can't disambiguate cross-owner. agent-skills
-// resolves `id` at list time (via `/_cp/workspaces/:id/skills`) and uses it
-// here.
-const PACKAGE_PASSTHROUGH = ['Content-Type', 'Content-Length', 'ETag', 'Last-Modified']
-internal.get('/skills/:id/package', async (c) => {
-  const id = c.req.param('id')
-  const url = skillsContentUrl(id, '/package')
-  // Forward the agent's conditional-download header so scs can answer 304 when
-  // the active version is unchanged (see skills-content-service package route).
-  const inm = c.req.header('If-None-Match')
-  const result = await skillsContentFetch(
-    url,
-    c.req.raw.signal,
-    inm ? { 'If-None-Match': inm } : undefined,
-  )
-  if (!result.ok) return c.json({ error: result.error }, 502)
-  const { response } = result
-  if (response.status === 404) return c.json({ error: 'Skill not found' }, 404)
-  if (response.status === 304) {
-    const headers = new Headers()
-    const etag = response.headers.get('ETag')
-    if (etag) headers.set('ETag', etag)
-    return new Response(null, { status: 304, headers })
-  }
-  if (!response.ok) return c.json({ error: `Upstream returned ${response.status}` }, 502)
-  const headers = new Headers()
-  for (const h of PACKAGE_PASSTHROUGH) {
-    const v = response.headers.get(h)
-    if (v) headers.set(h, v)
-  }
-  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/gzip')
-  return new Response(response.body, { status: response.status, headers })
-})
-
 // Reload fanout for a skill. Called by the scheduler's skill-reload worker
 // (not the user request path) after a publish/sync/set-active enqueues a job.
 // Enumerates the workspaces mounting the skill and tells each agent to reload,
@@ -284,34 +237,6 @@ internal.post('/skills/:id/reload-fanout', async (c) => {
   await Promise.all(workers)
 
   return c.json({ total: workspaces.length, notified, failed })
-})
-
-// Get workspace skill list. p3: returns the canonical UUIDs plus display names
-// resolved via JOIN. Old shape exposed only names, but names aren't globally
-// unique now — agents and the web app should switch to id-keyed lookups.
-internal.get('/workspaces/:id/skills', async (c) => {
-  const id = c.req.param('id')
-  // One JOIN query for the skill rows + one for the workspace owner, in
-  // parallel. (Previously this fanned out into 1 + N×(getSkillMeta + getSource)
-  // round-trips per workspace skill.)
-  const [workspace, rows] = await Promise.all([
-    getWorkspace(id),
-    skillRepo.getWorkspaceSkillsForAgent(id),
-  ])
-  const wsOwner = workspace?.user_id ?? null
-
-  // p3 schema dropped `skills.git_source` — source kind comes from the joined
-  // `skill_sources` row.
-  const skills = rows.map((s) => ({
-    id: s.id,
-    name: s.name ?? '(unknown)',
-    editable: s.user_id === wsOwner || !s.user_id,
-    gitSource: s.source_kind === 'git',
-  }))
-  // TODO(agent-skills): legacy agent-skills clients consume `{ name, editable,
-  // gitSource }` shape. Once the agent-side client is updated to read `id`,
-  // drop the duplicated `name` field at the top level.
-  return c.json({ skills })
 })
 
 export default internal

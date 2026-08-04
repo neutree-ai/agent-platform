@@ -41,7 +41,7 @@ export function cpAuthHeaders(): Record<string, string> {
  * unauthenticated path open for it to fall back to.
  */
 export function cpWorkspaceUrl(suffix: string): string {
-  return `${CP_URL}/ws/v1/workspaces/${WORKSPACE_ID}/${suffix}`
+  return `${CP_URL}/workspace/v1/workspaces/${WORKSPACE_ID}/${suffix}`
 }
 
 /** Shell-quote a value for use in `export K=V` (single quotes, escape embedded quotes) */
@@ -259,6 +259,7 @@ export async function loadSkills(): Promise<{ ok: boolean; failed: string[] }> {
   _skillManager = new SkillManager({
     cpUrl: CP_URL,
     workspaceId: WORKSPACE_ID,
+    cpHeaders: cpAuthHeaders(),
     skillsDir: join(home, '.codex', 'skills'),
     localBase: '/tmp',
     // Drafts (unpublished edits) live here on the persistent workspace volume so

@@ -35,7 +35,7 @@ beforeEach(() => {
   listCreds.mockResolvedValue([CRED] as never)
 })
 
-describe('GET /ws/v1/workspaces/:id/credentials', () => {
+describe('GET /workspace/v1/workspaces/:id/credentials', () => {
   it('serves the workspace its own credentials', async () => {
     verify.mockResolvedValue({ workspaceId: 'ws1' })
 

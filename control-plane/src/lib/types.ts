@@ -12,12 +12,12 @@ type EnvPrincipal = { environmentId: string }
 export type EnvAppEnv = { Variables: { envPrincipal: EnvPrincipal } }
 
 /**
- * Restricted principal for the workspace protocol (/ws/v1/*). A workspace token
+ * Restricted principal for the workspace protocol (/workspace/v1/*). A workspace token
  * resolves to exactly one workspace id — never a user, and narrower than an env
  * principal, which covers a whole environment. Routes carrying a workspace id in
  * the path must match it against this one (see requireWorkspaceParam), so a
  * token that leaks out of its pod still cannot read another workspace.
  */
-type WsPrincipal = { workspaceId: string }
+type WorkspacePrincipal = { workspaceId: string }
 
-export type WsAppEnv = { Variables: { wsPrincipal: WsPrincipal } }
+export type WorkspaceAppEnv = { Variables: { workspacePrincipal: WorkspacePrincipal } }
