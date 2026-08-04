@@ -44,12 +44,13 @@ import { isPodReady, workspaceTokenSecretName } from './support'
 //     were unaffected, which is why it read as "workspace IO is slow"). Nothing
 //     consumes these vars — service discovery goes through DNS.
 // v8: every container gains WORKSPACE_TOKEN via secretKeyRef, the credential
-//     the workload uses for its own calls back into cp (/workspace/v1). The ref is
-//     optional, so a pod whose Secret is missing still starts — but it starts
-//     without a token, and the routes being moved off the unauthenticated /_cp
-//     prefix will refuse it. Bumping forces reconcile to rebuild existing
-//     workspaces so they pick the ref up; the env var cannot be added to a
-//     running pod.
+//     the workload uses for its own calls back into cp (/workspace/v1), and
+//     afs-fuse additionally gets it as AFS_BOOTSTRAP_TOKEN with its bootstrap
+//     URL repointed at the authenticated prefix. The refs are optional, so a
+//     pod whose Secret is missing still starts — but it starts without a token
+//     and every one of those routes refuses it. Bumping forces reconcile to
+//     rebuild existing workspaces so they pick the refs up; an env var cannot
+//     be added to a running pod.
 export const CURRENT_TEMPLATE_VERSION = 8
 export const TEMPLATE_VERSION_ANNOTATION = 'agent-platform/workspace-version'
 export const MEMORY_FUSE_CONTAINER_NAME = 'memory-fuse'
@@ -177,9 +178,13 @@ export function buildWorkspacePodTemplate(
           // is idempotent (ALREADY_EXISTS swallowed daemon-side).
           {
             name: 'AFS_BOOTSTRAP_URL',
-            value: `${cfg.cpServiceUrl}/_cp/workspaces/${workspaceId}/afs-mounts`,
+            value: `${cfg.cpServiceUrl}/workspace/v1/workspaces/${workspaceId}/afs-mounts`,
           },
           workspaceTokenEnv,
+          // Same secret, under the name afs-fuse looks for. It stays generic
+          // about who serves the bootstrap URL, so it takes its own token env
+          // rather than one named after this platform.
+          { ...workspaceTokenEnv, name: 'AFS_BOOTSTRAP_TOKEN' },
         ],
         securityContext: { privileged: true },
         volumeMounts: [
