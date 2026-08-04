@@ -104,7 +104,7 @@ export async function loadConfig(): Promise<boolean> {
     )
     return false
   }
-  const url = `${CP_URL}/_cp/workspaces/${WORKSPACE_ID}/config`
+  const url = cpWorkspaceUrl('config')
   const resp = await fetch(url, { headers: cpAuthHeaders() })
   if (!resp.ok) {
     console.error(`[agent] Config fetch failed: ${resp.status} ${resp.statusText} url=${url}`)

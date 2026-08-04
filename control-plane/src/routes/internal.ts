@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import type { ApiWorkspaceConfig } from '../../../internal/types/api'
 import { notifyAgentReload } from '../lib/workspace-address'
 import { listAfsMountsForWorkspace } from '../services/db/afs-shares'
 import {
@@ -13,13 +12,10 @@ import {
   moveMemory,
   putMemory,
 } from '../services/db/memory'
-import { getUser } from '../services/db/users'
-import { getWorkspace, getWorkspaceConfig } from '../services/db/workspaces'
-import { getToken, serverOriginFromUrl } from '../services/mcp-oauth'
+import { getWorkspace } from '../services/db/workspaces'
 import { broadcastStoreInvalidate } from '../services/memory-fuse'
 import { skillRepo } from '../services/skills-composition'
 import { skillsContentFetch, skillsContentUrl } from '../services/skills-content'
-import { encodeOrigin } from './mcp-proxy'
 
 const internal = new Hono()
 
@@ -209,101 +205,6 @@ internal.post('/workspaces/:wsId/memory-stores/:storeId/memory-move', async (c) 
       return c.json({ error: 'sha256 precondition failed', current_sha256: e.currentSha }, 412)
     throw e
   }
-})
-
-// Get workspace config
-internal.get('/workspaces/:id/config', async (c) => {
-  const id = c.req.param('id')
-  const config = await getWorkspaceConfig(id)
-  if (!config) {
-    return c.json({ error: 'Config not found' }, 404)
-  }
-  // Inject headers and rewrite URLs in MCP server configs at serve time:
-  // 1. X-Workspace-ID for all servers
-  // 2. Rewrite URL to CP proxy for OAuth-connected servers (token injected at proxy time)
-  const CP_INTERNAL_URL =
-    process.env.CONTROL_PLANE_URL || 'http://nap-cp.default.svc.cluster.local:3000'
-  const workspace = await getWorkspace(id)
-  const user = workspace?.user_id ? await getUser(workspace.user_id) : null
-  let mcpConfig = config.mcp_config
-  try {
-    const parsed = JSON.parse(mcpConfig)
-    if (!parsed.mcpServers) parsed.mcpServers = {}
-    // Note: `tos-platform` is no longer injected here. Sidecars are
-    // responsible for wiring the platform MCP server per-turn (claude-code)
-    // or per-session (codex) so the X-Task-Id header can vary with the
-    // teamwork task context. Keeping a static injection here would create
-    // a duplicate definition that conflicts with the sidecar's dynamic one.
-    if (parsed.mcpServers) {
-      for (const server of Object.values(parsed.mcpServers) as any[]) {
-        // Inject workspace context for all MCP servers
-        if (server.url) {
-          server.headers = { ...server.headers, 'X-Workspace-ID': id, 'X-Agent-ID': id }
-        }
-        // Rewrite URL to CP proxy for servers with OAuth tokens
-        if (workspace?.user_id && server.url) {
-          try {
-            const origin = serverOriginFromUrl(server.url)
-            const token = await getToken(workspace.user_id, origin)
-            if (token) {
-              const encodedOrig = encodeOrigin(origin)
-              const path = new URL(server.url).pathname
-              server.url = `${CP_INTERNAL_URL}/_cp/mcp/${workspace.user_id}/${encodedOrig}${path}`
-            }
-          } catch {
-            // skip if origin parsing fails
-          }
-        }
-      }
-      mcpConfig = JSON.stringify(parsed)
-    }
-  } catch {
-    // leave mcp_config as-is if not valid JSON
-  }
-
-  const attachments = await listAttachmentsForWorkspace(id)
-  // Snapshot each store's MEMORY.md index so the platform prompt can inline it
-  // — saves the agent a `cat` round-trip on session start. Stores without an
-  // index report null and the template just omits the block.
-  const indexByStore = new Map<string, string | null>()
-  await Promise.all(
-    attachments.map(async (a) => {
-      const m = await getMemoryByPath(a.store_id, '/MEMORY.md')
-      indexByStore.set(a.store_id, m?.content ?? null)
-    }),
-  )
-  const response: ApiWorkspaceConfig = {
-    agent_type: config.agent_type,
-    provider_id: config.provider_id,
-    prompt_id: config.prompt_id,
-    prompt_name: config.prompt_name,
-    prompt_content: config.prompt_content,
-    template_id: config.template_id,
-    template_version: config.template_version,
-    template_name: config.template_name,
-    template_latest_version: config.template_latest_version,
-    provider_type: config.provider_type,
-    model: config.model,
-    base_url: config.base_url,
-    api_key: config.api_key,
-    small_model: config.small_model,
-    system_prompt: config.system_prompt,
-    mcp_config: mcpConfig,
-    agent_settings: config.agent_settings,
-    compute_resources: config.compute_resources ?? {},
-    auto_start: config.auto_start ?? true,
-    muted: config.muted ?? false,
-    user_display_name: user?.display_name || user?.username || null,
-    memory_attachments: attachments.map((a) => ({
-      store_id: a.store_id,
-      store_name: a.store_name,
-      store_description: a.store_description,
-      access: a.access,
-      instructions: a.instructions,
-      index_content: indexByStore.get(a.store_id) ?? null,
-    })),
-  }
-  return c.json(response)
 })
 
 // List all skills (metadata only)

@@ -45,7 +45,7 @@ export interface UserMcpServerConfig {
 }
 
 /**
- * Parsed user MCP servers from cp's `/_cp/workspaces/:id/config`. Cached
+ * Parsed user MCP servers from cp's `/ws/v1/workspaces/:id/config`. Cached
  * in memory so `agent.ts` can merge them into the per-turn `mcpServers`
  * arg and inject `X-Session-Token` without re-parsing `.mcp.json` from
  * disk on every turn.
@@ -67,7 +67,7 @@ export async function loadConfig(): Promise<boolean> {
     )
     return false
   }
-  const url = `${CP_URL}/_cp/workspaces/${WORKSPACE_ID}/config`
+  const url = cpWorkspaceUrl('config')
   const resp = await fetch(url, { headers: cpAuthHeaders() })
   if (!resp.ok) {
     console.error(`[agent] Config fetch failed: ${resp.status} ${resp.statusText} url=${url}`)

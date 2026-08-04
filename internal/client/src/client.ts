@@ -13,7 +13,6 @@ import { SharesApi } from './shares'
 import { TagsApi } from './tags'
 import { ServiceTokensApi } from './service-tokens'
 import { SkillsApi } from './skills'
-import { InternalApi } from './internal'
 import { ChannelGatewayApi } from './channel-gateway'
 import { AsrApi } from './asr'
 
@@ -33,7 +32,6 @@ export class NapClient {
   readonly tags: TagsApi
   readonly serviceTokens: ServiceTokensApi
   readonly skills: SkillsApi
-  readonly internal: InternalApi
   readonly cg: ChannelGatewayApi
   readonly asr: AsrApi
 
@@ -52,7 +50,6 @@ export class NapClient {
     this.tags = new TagsApi(http)
     this.serviceTokens = new ServiceTokensApi(http)
     this.skills = new SkillsApi(http)
-    this.internal = new InternalApi(http)
     this.cg = new ChannelGatewayApi(http)
     this.asr = new AsrApi(http)
   }
