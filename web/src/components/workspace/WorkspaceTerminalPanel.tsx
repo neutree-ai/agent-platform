@@ -17,6 +17,7 @@ import { ChevronDown, ChevronUp, RefreshCw, Search, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useTerminalTheme } from './terminal-themes'
 
 type WsState = 'connecting' | 'open' | 'closed' | 'error'
@@ -205,6 +206,25 @@ export function WorkspaceTerminalPanel({ workspaceId, instanceId }: WorkspaceTer
       return true
     })
 
+    // OSC 52 → system clipboard. tmux runs with `mouse on`, so a drag is
+    // consumed by tmux's copy-mode and never becomes a browser selection —
+    // without this bridge the copied text only lands in tmux's paste buffer
+    // and ⌘/Ctrl+C has nothing to copy. tmux (set-clipboard on) emits the
+    // selection as OSC 52; hand it to the real clipboard.
+    const oscDisposable = term.parser.registerOscHandler(52, (payload) => {
+      const text = decodeOsc52(payload)
+      // Reads (`?`) and malformed payloads: swallow rather than let the
+      // sequence fall through and get printed as garbage.
+      if (text === null) return true
+      navigator.clipboard?.writeText(text).catch(() => {
+        // Clipboard writes need a focused document, and Safari wants the write
+        // inside a user gesture — the OSC arrives a tick after mouseup, so this
+        // can legitimately fail. Point at the workaround that always works.
+        toast.error(i18n.t('components.workspaceTerminal.messages.copyFailed'))
+      })
+      return true
+    })
+
     termRef.current = term
     fitRef.current = fitAddon
     searchRef.current = searchAddon
@@ -219,6 +239,7 @@ export function WorkspaceTerminalPanel({ workspaceId, instanceId }: WorkspaceTer
 
     return () => {
       resultsDisposable.dispose()
+      oscDisposable.dispose()
       observer.disconnect()
       term.dispose()
       termRef.current = null
@@ -456,6 +477,25 @@ export function WorkspaceTerminalPanel({ workspaceId, instanceId }: WorkspaceTer
       </div>
     </>
   )
+}
+
+// OSC 52 payload is `<targets>;<base64>` — targets is a clipboard-selection
+// string (tmux sends `c`), and a lone `?` in place of the data is a *read*
+// request, which we don't serve. Returns null for anything we shouldn't copy.
+function decodeOsc52(payload: string): string | null {
+  const sep = payload.indexOf(';')
+  if (sep === -1) return null
+  const b64 = payload.slice(sep + 1)
+  if (b64 === '?' || b64 === '') return null
+  try {
+    const binary = atob(b64)
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
+    // tmux sends UTF-8; decoding through bytes keeps CJK output intact, which
+    // a naive atob-to-string would mangle.
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
 }
 
 function sendResize(ws: WebSocket, cols: number, rows: number) {

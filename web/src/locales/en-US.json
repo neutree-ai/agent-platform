@@ -2792,7 +2792,8 @@
       "messages": {
         "reconnecting": "Reconnecting...",
         "connectionClosed": "Connection closed",
-        "connectionError": "Connection error"
+        "connectionError": "Connection error",
+        "copyFailed": "Couldn't copy to the clipboard. Hold Shift while dragging to select, then press ⌘/Ctrl+C."
       }
     },
     "combobox": {
