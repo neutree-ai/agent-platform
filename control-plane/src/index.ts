@@ -73,6 +73,7 @@ import workspacesSkillsRoutes from './routes/workspaces/skills'
 import workspacesTemplatesRoutes from './routes/workspaces/templates'
 import workspacesUsageRoutes from './routes/workspaces/usage'
 import workspacesWriteRoutes from './routes/workspaces/write'
+import wsProtocolRoutes from './routes/ws'
 import { renewToken, shouldRenewToken, verifyToken } from './services/auth'
 import { initDb } from './services/db/pool'
 import { getServiceTokenByHash } from './services/db/shares'
@@ -168,6 +169,9 @@ app.use('/*', async (c, next) => {
     path.startsWith('/_cp/') ||
     path.startsWith('/_cg/') ||
     path.startsWith('/env/v1/') ||
+    // Guarded by its own middleware (middleware/ws-auth), not by user auth —
+    // same arrangement as /env/v1 above.
+    path.startsWith('/ws/v1/') ||
     path === '/env-gateway' ||
     path.startsWith('/static/') ||
     path.startsWith('/assets/') ||
@@ -325,6 +329,7 @@ app.route('/api/workspaces', jobRoutes)
 app.route('/api/credentials', credentialsRoutes)
 app.route('/api/environments', environmentsRoutes)
 app.route('/env', envProtocolRoutes)
+app.route('/ws', wsProtocolRoutes)
 app.route('/env-gateway', createEnvGatewayRoutes({ upgradeWebSocket }))
 app.route('/api/workspace-layouts', workspaceLayoutsRoutes)
 app.route('/api/prompts', promptsReadRoutes)
@@ -466,6 +471,7 @@ app.get('*', async (c) => {
   if (
     path.startsWith('/api/') ||
     path.startsWith('/_cp/') ||
+    path.startsWith('/ws/') ||
     path.startsWith('/_proxy/') ||
     path.startsWith('/_saas/') ||
     path.startsWith('/_cg/')
