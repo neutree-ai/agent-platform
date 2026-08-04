@@ -23,6 +23,22 @@ export function cpAuthHeaders(): Record<string, string> {
   return WORKSPACE_TOKEN ? { Authorization: `Bearer ${WORKSPACE_TOKEN}` } : {}
 }
 
+/**
+ * URL for one of this workspace's own cp endpoints.
+ *
+ * Two prefixes for the duration of the migration, chosen by whether a token was
+ * delivered rather than by a flag. The agent image tag is fixed, so a pod built
+ * from the older template can restart onto this build and find itself with no
+ * token — pointing it at the authenticated prefix would only earn it a 401. It
+ * keeps using the unauthenticated one until its workspace is rebuilt, which is
+ * also what removes that prefix from this function.
+ */
+export function cpWorkspaceUrl(suffix: string): string {
+  return WORKSPACE_TOKEN
+    ? `${CP_URL}/ws/v1/workspaces/${WORKSPACE_ID}/${suffix}`
+    : `${CP_URL}/_cp/workspaces/${WORKSPACE_ID}/${suffix}`
+}
+
 export interface UserMcpServerConfig {
   type?: 'http' | 'sse' | 'stdio'
   url?: string
@@ -216,7 +232,7 @@ export async function loadCredentials(): Promise<boolean> {
     )
     return false
   }
-  const url = `${CP_URL}/_cp/workspaces/${WORKSPACE_ID}/credentials`
+  const url = cpWorkspaceUrl('credentials')
   const resp = await fetch(url, { headers: cpAuthHeaders() })
   if (!resp.ok) {
     console.error(`[agent] Credentials fetch failed: ${resp.status} ${resp.statusText} url=${url}`)

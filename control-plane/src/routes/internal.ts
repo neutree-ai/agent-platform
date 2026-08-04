@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
-import type { ApiCredential, ApiWorkspaceConfig } from '../../../internal/types/api'
+import type { ApiWorkspaceConfig } from '../../../internal/types/api'
 import { notifyAgentReload } from '../lib/workspace-address'
+import { credentialsForWorkspace } from '../services/agent-credentials'
 import { listAfsMountsForWorkspace } from '../services/db/afs-shares'
-import { listWorkspaceCredentials } from '../services/db/credentials'
 import {
   PathConflictError,
   PreconditionFailedError,
@@ -414,24 +414,16 @@ internal.get('/workspaces/:id/skills', async (c) => {
   return c.json({ skills })
 })
 
-// Get user credentials for a workspace (agent-facing, contains values)
+// Get user credentials for a workspace (agent-facing, contains values).
+//
+// Superseded by GET /ws/v1/workspaces/:id/credentials, which requires the
+// workspace's own token. Kept until every workspace has been rebuilt with one:
+// a pod on the older template has no token to present, and this is how its
+// agent still gets its credentials. Delete once none are left.
 internal.get('/workspaces/:id/credentials', async (c) => {
-  const id = c.req.param('id')
-  const workspace = await getWorkspace(id)
-  if (!workspace) {
-    return c.json({ error: 'Workspace not found' }, 404)
-  }
-  const creds = await listWorkspaceCredentials(id, workspace.user_id)
-  const response: ApiCredential[] = creds.map((cr) => ({
-    name: cr.name,
-    value: cr.value,
-    inject: cr.inject,
-    path: cr.path,
-    mode: cr.mode,
-    scope: cr.scope,
-    status: cr.status,
-  }))
-  return c.json(response)
+  const creds = await credentialsForWorkspace(c.req.param('id'))
+  if (!creds) return c.json({ error: 'Workspace not found' }, 404)
+  return c.json(creds)
 })
 
 export default internal
