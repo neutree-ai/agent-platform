@@ -3,7 +3,7 @@
  *
  * cp enqueues one job per skill whose active content changed (publish / sync /
  * set-active). This worker performs the deferred fanout by calling back into
- * cp's `/_cp/skills/:id/reload-fanout`, which enumerates the dependent
+ * cp's `/svc/v1/skills/:id/reload-fanout`, which enumerates the dependent
  * workspaces and tells each agent to reload. Keeping the fanout in cp avoids
  * duplicating agent addressing + the workspace-skill query here.
  *
@@ -16,6 +16,9 @@ import { DEAD_LETTER_QUEUE } from './dead-letter'
 
 const QUEUE_NAME = 'skill-reload'
 const NAP_API_URL = process.env.NAP_API_URL || 'http://nap-cp:3000'
+// Shared with cp. The fan-out endpoint refuses the call without it, so a
+// missing value surfaces as a failing job rather than a silent no-op.
+const SERVICE_KEY = process.env.SERVICE_KEY || ''
 
 interface SkillReloadJob {
   kind: 'skill-reload'
@@ -43,8 +46,9 @@ export async function registerSkillReloadWorker(boss: PgBoss): Promise<void> {
     async (jobs: JobWithMetadata<SkillReloadJob>[]) => {
       for (const job of jobs) {
         const { skillId } = job.data
-        const res = await fetch(`${NAP_API_URL}/_cp/skills/${skillId}/reload-fanout`, {
+        const res = await fetch(`${NAP_API_URL}/svc/v1/skills/${skillId}/reload-fanout`, {
           method: 'POST',
+          headers: { 'X-Service-Key': SERVICE_KEY },
         })
         if (!res.ok) {
           throw new Error(`reload-fanout skill=${skillId} returned ${res.status}`)

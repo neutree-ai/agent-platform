@@ -31,6 +31,12 @@ spec:
               value: "http://${APP_PREFIX}-cp:3000"
             - name: CG_API_URL
               value: "http://${APP_PREFIX}-cg:3002"
+            # Shared with cp, which refuses /svc/v1 without it.
+            - name: SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_PREFIX}-cp-secret
+                  key: SERVICE_KEY
           resources:
             requests:
               memory: "128Mi"

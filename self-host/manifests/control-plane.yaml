@@ -153,6 +153,13 @@ spec:
                 secretKeyRef:
                   name: ${APP_PREFIX}-cp-secret
                   key: CREDENTIAL_ENCRYPTION_KEY
+            # Shared secret for /svc/v1 — the platform's own background
+            # services (scheduler workers) authenticate with this.
+            - name: SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_PREFIX}-cp-secret
+                  key: SERVICE_KEY
             - name: LDAP_URL
               valueFrom:
                 secretKeyRef:
