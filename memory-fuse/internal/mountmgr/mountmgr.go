@@ -32,6 +32,7 @@ type ContentCache interface {
 
 type Options struct {
 	CPURL           string        // cp base URL, e.g. http://nap-cp.default.svc:3000
+	Token           string        // this workspace's own cp credential (WORKSPACE_TOKEN)
 	WorkspaceID     string        // baked into cp URLs for /_cp/workspaces/<id>/...
 	MountRoot       string        // typically /mnt/memory
 	Cache           ContentCache  // disk-backed content cache (optional)
@@ -106,6 +107,7 @@ func (m *Manager) Mount(ctx context.Context, storeID string, readOnly bool) (str
 
 	client := cpclient.New(cpclient.Options{
 		BaseURL:     m.opt.CPURL,
+		Token:       m.opt.Token,
 		WorkspaceID: m.opt.WorkspaceID,
 		StoreID:     storeID,
 	})

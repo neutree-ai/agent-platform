@@ -14,6 +14,7 @@ import (
 type capture struct {
 	method string
 	path   string
+	auth   string
 	body   map[string]any
 }
 
@@ -23,6 +24,7 @@ func newServer(t *testing.T, status int, respBody string, cap *capture) *httptes
 		if cap != nil {
 			cap.method = r.Method
 			cap.path = r.URL.EscapedPath()
+			cap.auth = r.Header.Get("Authorization")
 			if b, _ := io.ReadAll(r.Body); len(b) > 0 {
 				_ = json.Unmarshal(b, &cap.body)
 			}
@@ -35,7 +37,7 @@ func newServer(t *testing.T, status int, respBody string, cap *capture) *httptes
 }
 
 func testClient(base string) *Client {
-	return New(Options{BaseURL: base, WorkspaceID: "ws1", StoreID: "st1"})
+	return New(Options{BaseURL: base, WorkspaceID: "ws1", StoreID: "st1", Token: "ws_tok"})
 }
 
 func TestListMemories(t *testing.T) {
@@ -45,7 +47,7 @@ func TestListMemories(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cap.path != "/_cp/workspaces/ws1/memory-stores/st1/memories" {
+	if cap.path != "/workspace/v1/workspaces/ws1/memory-stores/st1/memories" {
 		t.Errorf("path = %q", cap.path)
 	}
 	if len(got) != 1 || got[0].Path != "/a.md" || got[0].ContentSHA256 != "sha" {
@@ -60,7 +62,7 @@ func TestGetMemoryEscapesPathAnd404(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cap.path != "/_cp/workspaces/ws1/memory-stores/st1/memory/notes/foo%20bar.md" {
+	if cap.path != "/workspace/v1/workspaces/ws1/memory-stores/st1/memory/notes/foo%20bar.md" {
 		t.Errorf("path not escaped: %q", cap.path)
 	}
 	if m.Content != "hi" {
@@ -126,7 +128,7 @@ func TestMoveMemory(t *testing.T) {
 	if cap.method != http.MethodPost {
 		t.Errorf("method = %q", cap.method)
 	}
-	if cap.path != "/_cp/workspaces/ws1/memory-stores/st1/memory-move" {
+	if cap.path != "/workspace/v1/workspaces/ws1/memory-stores/st1/memory-move" {
 		t.Errorf("path = %q", cap.path)
 	}
 	if cap.body["from"] != "/a.md" || cap.body["to"] != "/b.md" || cap.body["overwrite"] != true {
@@ -174,14 +176,60 @@ func TestMoveMemoryRejectsRelativePaths(t *testing.T) {
 func TestListWorkspaceAttachments(t *testing.T) {
 	var cap capture
 	srv := newServer(t, 200, `{"attachments":[{"store_id":"st1","access":"read_only","instructions":"x"}]}`, &cap)
-	got, err := ListWorkspaceAttachments(context.Background(), srv.URL, "ws1")
+	got, err := ListWorkspaceAttachments(context.Background(), srv.URL, "ws1", "ws_tok")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cap.path != "/_cp/workspaces/ws1/memory-attachments" {
+	if cap.path != "/workspace/v1/workspaces/ws1/memory-attachments" {
 		t.Errorf("path = %q", cap.path)
 	}
 	if len(got) != 1 || got[0].StoreID != "st1" || got[0].Access != "read_only" {
 		t.Errorf("got %+v", got)
 	}
+}
+
+// Every call cp serves under /workspace/v1 requires the workspace token, so a
+// method that forgets to stamp it is a method that stops working the moment it
+// ships. Exercise them all against one server and check what arrived.
+func TestEveryCallCarriesTheToken(t *testing.T) {
+	calls := []struct {
+		name string
+		do   func(c *Client) error
+	}{
+		{"ListMemories", func(c *Client) error { _, err := c.ListMemories(context.Background()); return err }},
+		{"GetMemory", func(c *Client) error { _, err := c.GetMemory(context.Background(), "/a.md"); return err }},
+		{"PutMemory", func(c *Client) error {
+			_, err := c.PutMemory(context.Background(), "/a.md", "x", "")
+			return err
+		}},
+		{"DeleteMemory", func(c *Client) error { return c.DeleteMemory(context.Background(), "/a.md", "") }},
+		{"MoveMemory", func(c *Client) error {
+			_, err := c.MoveMemory(context.Background(), "/a.md", "/b.md", true, "")
+			return err
+		}},
+	}
+
+	for _, tc := range calls {
+		t.Run(tc.name, func(t *testing.T) {
+			var cap capture
+			srv := newServer(t, 200, `{"memories":[],"path":"/a.md"}`, &cap)
+			if err := tc.do(testClient(srv.URL)); err != nil {
+				t.Fatal(err)
+			}
+			if cap.auth != "Bearer ws_tok" {
+				t.Errorf("Authorization = %q, want the workspace token", cap.auth)
+			}
+		})
+	}
+
+	t.Run("ListWorkspaceAttachments", func(t *testing.T) {
+		var cap capture
+		srv := newServer(t, 200, `{"attachments":[]}`, &cap)
+		if _, err := ListWorkspaceAttachments(context.Background(), srv.URL, "ws1", "ws_tok"); err != nil {
+			t.Fatal(err)
+		}
+		if cap.auth != "Bearer ws_tok" {
+			t.Errorf("Authorization = %q, want the workspace token", cap.auth)
+		}
+	})
 }

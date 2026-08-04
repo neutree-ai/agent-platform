@@ -29,6 +29,10 @@ import (
 func main() {
 	cpURL := os.Getenv("CP_URL")
 	workspaceID := os.Getenv("WORKSPACE_ID")
+	// Delivered by the runner as a Secret-backed env var. Absent on a pod
+	// built before token delivery existed; cp then refuses the calls, and the
+	// workspace recovers when it is rebuilt.
+	workspaceToken := os.Getenv("WORKSPACE_TOKEN")
 	grpcAddr := envOr("GRPC_LISTEN_ADDR", "0.0.0.0:9102")
 	mountRoot := envOr("MEMORY_MOUNT_ROOT", "/mnt/memory")
 	cacheRoot := envOr("MEMORY_CACHE_ROOT", "/var/cache/memory-fuse")
@@ -61,12 +65,13 @@ func main() {
 	mgr := mountmgr.New(mountmgr.Options{
 		CPURL:       cpURL,
 		WorkspaceID: workspaceID,
+		Token:       workspaceToken,
 		MountRoot:   mountRoot,
 		Cache:       contentCache,
 		Logger:      log,
 	})
 
-	if err := bootPull(ctx, log, cpURL, workspaceID, mgr, contentCache); err != nil {
+	if err := bootPull(ctx, log, cpURL, workspaceID, workspaceToken, mgr, contentCache); err != nil {
 		// Boot pull failures shouldn't kill the daemon — cp can still push
 		// mounts later via gRPC, and the daemon will recover. Log and proceed.
 		log.Warn("boot pull failed; continuing without initial mounts", "error", err)
@@ -89,13 +94,13 @@ func main() {
 func bootPull(
 	ctx context.Context,
 	log *slog.Logger,
-	cpURL, workspaceID string,
+	cpURL, workspaceID, token string,
 	mgr *mountmgr.Manager,
 	contentCache *cache.Cache,
 ) error {
 	pullCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	atts, err := cpclient.ListWorkspaceAttachments(pullCtx, cpURL, workspaceID)
+	atts, err := cpclient.ListWorkspaceAttachments(pullCtx, cpURL, workspaceID, token)
 	if err != nil {
 		return err
 	}
