@@ -137,6 +137,22 @@ export async function getWorkspaceReplicaStatus(
   return { ready: row.ready, desired: row.desired }
 }
 
+/**
+ * Whether a workspace is placed on this environment. The tenant-isolation check
+ * for calls that name a workspace but do not otherwise read its placement row —
+ * a runner may only act on workspaces it was actually given.
+ */
+export async function workspaceIsOnEnvironment(
+  environmentId: string,
+  workspaceId: string,
+): Promise<boolean> {
+  const { rows } = await pool.query(
+    'SELECT 1 FROM workspace_placements WHERE workspace_id = $1 AND environment_id = $2',
+    [workspaceId, environmentId],
+  )
+  return rows.length > 0
+}
+
 /** Remove a placement after destroy, scoped to the environment. */
 export async function deletePlacementForEnvironment(
   environmentId: string,
