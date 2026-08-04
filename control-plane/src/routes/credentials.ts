@@ -1,8 +1,5 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
-import {
-  ApiCredentialMetaSchema,
-  CredentialUpsertBodySchema,
-} from '../../../internal/types/api'
+import { ApiCredentialMetaSchema, CredentialUpsertBodySchema } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
 import { notifyAgentReload } from '../lib/workspace-address'
 import {
