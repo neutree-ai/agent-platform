@@ -59,9 +59,10 @@ export function watchDeployments(
 /**
  * Tear down a workspace's instance by whatever shape actually exists: a static
  * Deployment (+ ClusterIP Service) or an auto-scaling StatefulSet (+ headless
- * Service). Both share the PVC name. Prefer this over {@link deleteInstance},
+ * Service). Both share the PVC name. The provider also has a deleteInstance,
  * which only knows the Deployment shape and would leak an auto-scaling
- * workspace's StatefulSet, pods, and headless Service.
+ * workspace's StatefulSet, pods, and headless Service — it is deliberately not
+ * re-exported here.
  */
 export function destroy(workspaceId: string) {
   return defaultProvider.destroy(workspaceId)
