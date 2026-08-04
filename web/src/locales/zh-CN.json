@@ -2816,7 +2816,8 @@
       "messages": {
         "reconnecting": "重新连接中...",
         "connectionClosed": "连接已关闭",
-        "connectionError": "连接异常"
+        "connectionError": "连接异常",
+        "copyFailed": "无法写入剪贴板，可按住 Shift 拖拽选中后用 ⌘/Ctrl+C 复制"
       }
     },
     "combobox": {
