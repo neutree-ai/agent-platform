@@ -8,6 +8,10 @@ import { getWorkspace, getWorkspaceConfig } from '../../services/db/workspaces'
 import { getToken, serverOriginFromUrl } from '../../services/mcp-oauth'
 import { encodeOrigin } from '../mcp-proxy'
 
+// Where the agent server listens for the MCP hop, inside the workspace pod.
+// The port is the agent container's, fixed by the pod template.
+const AGENT_MCP_FORWARD_URL = 'http://127.0.0.1:3001/mcp'
+
 const config = new Hono<WorkspaceAppEnv>()
 
 // The agent's own workspace config: prompt, model/provider, MCP servers,
@@ -21,9 +25,13 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
   }
   // Inject headers and rewrite URLs in MCP server configs at serve time:
   // 1. X-Workspace-ID for all servers
-  // 2. Rewrite URL to CP proxy for OAuth-connected servers (token injected at proxy time)
-  const CP_INTERNAL_URL =
-    process.env.CONTROL_PLANE_URL || 'http://nap-cp.default.svc.cluster.local:3000'
+  // 2. Rewrite URL for OAuth-connected servers, so the traffic reaches cp's
+  //    proxy and the upstream token is attached there instead of being handed
+  //    down. The rewrite points at the agent server on loopback rather than at
+  //    cp directly: this config is passed to the coding CLI as a command-line
+  //    argument, which any process in the container can read, so it must not
+  //    name anything that would be worth stealing. The agent server holds the
+  //    workspace token and adds it on the way out.
   const workspace = await getWorkspace(id)
   const user = workspace?.user_id ? await getUser(workspace.user_id) : null
   let mcpConfig = config.mcp_config
@@ -49,7 +57,7 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
             if (token) {
               const encodedOrig = encodeOrigin(origin)
               const path = new URL(server.url).pathname
-              server.url = `${CP_INTERNAL_URL}/_cp/mcp/${workspace.user_id}/${encodedOrig}${path}`
+              server.url = `${AGENT_MCP_FORWARD_URL}/${encodedOrig}${path}`
             }
           } catch {
             // skip if origin parsing fails

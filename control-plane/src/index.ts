@@ -27,12 +27,10 @@ import credentialsRoutes from './routes/credentials'
 import envProtocolRoutes from './routes/env'
 import { createEnvGatewayRoutes } from './routes/env-gateway'
 import environmentsRoutes from './routes/environments'
-import internalRoutes from './routes/internal'
 import invitesRoutes from './routes/invites'
 import jobRoutes from './routes/jobs'
 import mcpCatalogRoutes from './routes/mcp-catalog'
 import mcpOAuthRoutes from './routes/mcp-oauth'
-import mcpProxyRoutes from './routes/mcp-proxy'
 import meActivityRoutes from './routes/me/activity'
 import meProfileRoutes from './routes/me/profile'
 import meRecentSessionsRoutes from './routes/me/recent-sessions'
@@ -167,7 +165,7 @@ app.use('/*', async (c, next) => {
     path.startsWith('/sk/') ||
     path.startsWith('/.well-known/agent-skills') ||
     path.startsWith('/api/docs') ||
-    path.startsWith('/_cp/') ||
+    path === '/healthz' ||
     path.startsWith('/_cg/') ||
     path.startsWith('/env/v1/') ||
     // Guarded by their own middleware (middleware/workspace-auth,
@@ -330,6 +328,11 @@ app.route('/api/me', meUsageRoutes)
 app.route('/api/workspaces', jobRoutes)
 app.route('/api/credentials', credentialsRoutes)
 app.route('/api/environments', environmentsRoutes)
+// Liveness/readiness. The only unauthenticated route left, and it says nothing
+// beyond "the process is up" — everything that used to keep it company under
+// /_cp now sits behind one of the three protocol prefixes.
+app.get('/healthz', (c) => c.json({ status: 'ok' }))
+
 app.route('/env', envProtocolRoutes)
 app.route('/workspace', workspaceProtocolRoutes)
 app.route('/svc', svcProtocolRoutes)
@@ -365,8 +368,6 @@ app.route('/.well-known/agent-skills', wellKnownRootApp)
 app.route('/api/plugins', pluginsRoutes)
 app.route('/api/mcp-catalog', mcpCatalogRoutes)
 app.route('/api/system-workspaces', systemWorkspacesRoutes)
-app.route('/_cp', internalRoutes)
-app.route('/_cp', mcpProxyRoutes)
 
 app.doc31('/api/docs/openapi.json', {
   openapi: '3.1.0',
@@ -473,7 +474,6 @@ app.get('*', async (c) => {
 
   if (
     path.startsWith('/api/') ||
-    path.startsWith('/_cp/') ||
     path.startsWith('/workspace/') ||
     path.startsWith('/svc/') ||
     path.startsWith('/_proxy/') ||

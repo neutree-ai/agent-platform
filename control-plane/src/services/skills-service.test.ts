@@ -735,7 +735,7 @@ describe('SkillsService.publishDraft', () => {
       note: 'release note',
     })
     // Fanout is deferred to the queue keyed by skillId; per-workspace delivery
-    // is covered by the /_cp/skills/:id/reload-fanout route, not here.
+    // is covered by the /svc/v1/skills/:id/reload-fanout route, not here.
     expect(h.reloadQueue.calls).toEqual([skill.id])
   })
 

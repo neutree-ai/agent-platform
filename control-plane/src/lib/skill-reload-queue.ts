@@ -5,7 +5,7 @@
  * workspace mounting it must reload. That fanout used to run inline on the
  * write request — the user waited for the slowest dependent agent's full
  * reload RTT. Here we instead enqueue a single job keyed by skillId; the
- * scheduler worker calls back into cp's `/_cp/skills/:id/reload-fanout` to do
+ * scheduler worker calls back into cp's `/svc/v1/skills/:id/reload-fanout` to do
  * the actual fanout, so the write returns as soon as the enqueue commits.
  *
  * Coalescing: `singletonKey: skillId` collapses a burst of publishes of the

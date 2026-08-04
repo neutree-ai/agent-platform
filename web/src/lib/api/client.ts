@@ -163,10 +163,7 @@ class ApiClient {
   private baseUrl = '/api'
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const url =
-      endpoint.startsWith('/_cp/') || endpoint.startsWith('/_saas/')
-        ? endpoint
-        : `${this.baseUrl}${endpoint}`
+    const url = endpoint.startsWith('/_saas/') ? endpoint : `${this.baseUrl}${endpoint}`
     const response = await fetch(url, {
       ...options,
       headers: {

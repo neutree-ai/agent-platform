@@ -1323,7 +1323,7 @@ function packageDisposition(skillName: string, suffix = ''): string {
 // ── GET /skills/:id/package ───────────────────────────────────────────────
 //
 // Shortcut: stream the skill's currently-active version. The legacy
-// download contract (`/_cp/skills/:name/package` → cp proxy → here) lives
+// download contract (`/workspace/v1/skills/:id/package` → cp proxy → here) lives
 // in this route; the agent-skills client at workspace boot is the dominant
 // caller. Returns 404 when the skill has no active version (transient state
 // right after create, or after every version was deleted).
