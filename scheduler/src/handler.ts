@@ -193,6 +193,24 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
     console.log(
       `[Scheduler] ${existingSessionId ? 'Continuing' : 'Starting new'} session job=${job.id}${streamSink ? ' (streaming)' : ''}`,
     )
+
+    // Bind the thread to its session as soon as `session.started` arrives, not
+    // when the turn ends. `/cancel` resolves the session through this row, so
+    // the first turn of a fresh thread would otherwise answer "No active
+    // session." for its entire duration — exactly when cancelling matters most.
+    // The post-reply upsert below still runs; it advances `last_active_at`.
+    const bindThreadSession =
+      routeId && threadId
+        ? (sessionId: string) => {
+            const channelId = replyContext?.channel_id as string | undefined
+            void db
+              .upsertThreadSession(routeId, threadId, sessionId, workspace_id, channelId)
+              .catch((e) =>
+                console.warn(`[Scheduler] Early thread-session bind failed job=${job.id}:`, e),
+              )
+          }
+        : undefined
+
     let sseResult = await startAndConsumeSession(
       chatEndpoint,
       workspace_id,
@@ -203,6 +221,7 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
       source,
       images,
       streamSink,
+      bindThreadSession,
     )
 
     // If resuming failed, fallback to a fresh session
@@ -218,6 +237,7 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
         source,
         images,
         streamSink,
+        bindThreadSession,
       )
     }
 
@@ -481,6 +501,7 @@ async function startAndConsumeSession(
   source?: string,
   images?: Array<{ data: string; media_type: string }>,
   streamSink?: StreamSink | null,
+  onSessionStarted?: (sessionId: string) => void,
 ): Promise<JobResult | null> {
   const body = JSON.stringify({
     message: prompt,
@@ -532,7 +553,12 @@ async function startAndConsumeSession(
   // primary stream ends before `session.ended`, runTurn re-attaches via cp's
   // `/cp-reconnect`; paired with the replacement cp's recoverOrphanedSessions
   // re-attaching cp→agent, a single cp restart stays transparent to the turn.
-  const { plugin, sink } = createSchedulerPlugin(workspaceId, onStatus, streamSink)
+  const { plugin, sink } = createSchedulerPlugin(
+    workspaceId,
+    onStatus,
+    streamSink,
+    onSessionStarted,
+  )
   const captured = response
   const result = await runTurn(
     {
@@ -681,6 +707,7 @@ function createSchedulerPlugin(
   workspaceId: string,
   onStatus?: StatusCallback,
   streamSink?: StreamSink | null,
+  onSessionStarted?: (sessionId: string) => void,
 ): { plugin: TurnPlugin; sink: SchedulerSink } {
   const sink: SchedulerSink = { sessionId: null, textContent: '' }
 
@@ -689,7 +716,10 @@ function createSchedulerPlugin(
     onEvent: (evt) => {
       switch (evt.type) {
         case 'session.started':
-          if (evt.session_id) sink.sessionId = evt.session_id
+          if (evt.session_id) {
+            sink.sessionId = evt.session_id
+            onSessionStarted?.(evt.session_id)
+          }
           onStatus?.('is thinking...')
           break
 
