@@ -28,7 +28,7 @@ It contains **pure schema only**. Bootstrap rows (the internal `system` user and
 
 Rules of thumb:
 
-- **Filename**: `NNN_snake_case_description.sql`, three-digit zero-padded, strictly increasing. Next free number is **131**.
+- **Filename**: `NNN_snake_case_description.sql`, three-digit zero-padded, strictly increasing. Next free number is **132**.
 - **Never rename or edit an applied migration.** To change something already shipped, add a new migration.
 - Each file runs once, in its own transaction. Write it to succeed against the schema as produced by every migration before it.
 - **No seed/bootstrap data here** — schema only. Data that every install needs goes into `scripts/seed-admin.ts` (idempotent, `ON CONFLICT DO NOTHING`).
