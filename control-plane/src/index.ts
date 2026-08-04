@@ -69,6 +69,7 @@ import workspacesProfileRoutes from './routes/workspaces/profile'
 import workspacesReadRoutes from './routes/workspaces/read'
 import workspacesSchedulesRoutes from './routes/workspaces/schedules'
 import workspacesSessionsRoutes from './routes/workspaces/sessions'
+import workspacesSkillsRoutes from './routes/workspaces/skills'
 import workspacesTemplatesRoutes from './routes/workspaces/templates'
 import workspacesUsageRoutes from './routes/workspaces/usage'
 import workspacesWriteRoutes from './routes/workspaces/write'
@@ -312,6 +313,7 @@ app.route('/api/workspaces', workspacesCommandsRoutes)
 app.route('/api/workspaces', workspacesChatRoutes)
 app.route('/api/workspaces', createAgentRoutes({ upgradeWebSocket }))
 app.route('/api/workspaces', workspacesAfsSharesRoutes)
+app.route('/api/workspaces', workspacesSkillsRoutes)
 app.route('/api/workspaces', workspacesSchedulesRoutes)
 app.route('/api/workspaces', workspacesAgentRequestsRoutes)
 app.route('/api/workspaces', workspacesProfileRoutes)

@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { ApiCredential, ApiWorkspaceConfig } from '../../../internal/types/api'
-import { getWorkspaceAddress, notifyAgentReload } from '../lib/workspace-address'
+import { notifyAgentReload } from '../lib/workspace-address'
 import { listAfsMountsForWorkspace } from '../services/db/afs-shares'
 import { listWorkspaceCredentials } from '../services/db/credentials'
 import {
@@ -15,13 +15,11 @@ import {
   putMemory,
 } from '../services/db/memory'
 import { getUser } from '../services/db/users'
-import { getWorkspace, getWorkspaceConfig, updateWorkspace } from '../services/db/workspaces'
+import { getWorkspace, getWorkspaceConfig } from '../services/db/workspaces'
 import { getToken, serverOriginFromUrl } from '../services/mcp-oauth'
 import { broadcastStoreInvalidate } from '../services/memory-fuse'
-import { bumpWorkspaceSpec } from '../services/placement'
-import { skillRepo, skillsService } from '../services/skills-composition'
+import { skillRepo } from '../services/skills-composition'
 import { skillsContentFetch, skillsContentUrl } from '../services/skills-content'
-import { applyWorkspaceConfigUpdate } from '../services/workspace-config'
 import { encodeOrigin } from './mcp-proxy'
 
 const internal = new Hono()
@@ -309,40 +307,6 @@ internal.get('/workspaces/:id/config', async (c) => {
   return c.json(response)
 })
 
-// Update workspace config
-internal.put('/workspaces/:id/config', async (c) => {
-  const id = c.req.param('id')
-  const body = await c.req.json<Partial<ApiWorkspaceConfig>>()
-  let reloaded = false
-  try {
-    const result = await applyWorkspaceConfigUpdate(id, body)
-    reloaded = result.reloaded
-  } catch (e: any) {
-    if ((e as Error).message === 'workspace not found') {
-      return c.json({ error: 'Workspace not found' }, 404)
-    }
-    throw e
-  }
-  const workspace = await getWorkspace(id)
-
-  // If compute_resources changed and workspace is running, apply to K8s
-  if (body.compute_resources && workspace?.status === 'running') {
-    const cr = body.compute_resources
-    try {
-      // Control inversion (P1): bump the spec; the env-runner re-applies with the
-      // new cpu/mem and resizes the PVC (one spec covers both).
-      if (cr.cpu_request || cr.cpu_limit || cr.memory_request || cr.memory_limit || cr.storage) {
-        await bumpWorkspaceSpec(id)
-        await updateWorkspace(id, { status: 'starting' })
-      }
-    } catch (e: any) {
-      console.error(`[config] Failed to apply compute resources for workspace=${id}:`, e.message)
-    }
-  }
-
-  return c.json({ success: true, reloaded })
-})
-
 // List all skills (metadata only)
 internal.get('/skills', async (c) => {
   const skills = await skillRepo.listSkills()
@@ -448,44 +412,6 @@ internal.get('/workspaces/:id/skills', async (c) => {
   // gitSource }` shape. Once the agent-side client is updated to read `id`,
   // drop the duplicated `name` field at the top level.
   return c.json({ skills })
-})
-
-// Set workspace skills (full replace) + trigger agent reload.
-// p3: body now carries UUIDs.
-internal.put('/workspaces/:id/skills', async (c) => {
-  const id = c.req.param('id')
-  const body = await c.req.json<{ skills: string[] }>()
-  try {
-    const { reloaded } = await skillsService.attachToWorkspace(id, body.skills)
-    return c.json({ success: true, reloaded })
-  } catch (e: any) {
-    const msg = e instanceof Error ? e.message : String(e)
-    if (msg === 'workspace not found') return c.json({ error: 'Workspace not found' }, 404)
-    if (msg.startsWith('skills not visible')) return c.json({ error: msg }, 403)
-    throw e
-  }
-})
-
-// Execute a command inside a workspace container (proxied to agent server)
-internal.post('/workspaces/:id/exec', async (c) => {
-  const id = c.req.param('id')
-  const workspace = await getWorkspace(id)
-  if (!workspace || workspace.status !== 'running') {
-    return c.json({ error: 'Workspace not running' }, 503)
-  }
-
-  const address = getWorkspaceAddress(workspace.id)
-
-  const body = await c.req.text()
-  const res = await fetch(`${address}/exec`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  })
-  return new Response(res.body, {
-    status: res.status,
-    headers: { 'Content-Type': 'application/json' },
-  })
 })
 
 // Get user credentials for a workspace (agent-facing, contains values)
