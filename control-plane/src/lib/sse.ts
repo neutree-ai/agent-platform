@@ -727,6 +727,10 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
   // by the agent's buffered sink append to the existing DB row instead
   // of creating a second assistant message for the same turn.
   let textContent = ctx.initialAssistant?.content ?? ''
+  // The most recent assistant text block on its own. `textContent` accumulates
+  // every block of the turn, so its head is the agent's opening narration —
+  // useless as a notification summary. The last block is the actual answer.
+  let lastAssistantText = ''
   let assistantMessageId: string | null = ctx.initialAssistant?.id ?? null
   let eventOrdinal = ctx.initialAssistant?.blocks.length ?? 0
   // Dedup tool_call by call_id across replays: on recovery we reuse the same
@@ -983,8 +987,11 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
             if (!state.sessionId) return
             await transitionSessionStatus(state.sessionId, 'human')
             console.log(`[SSE] Stored assistant message ${tag} session=${state.sessionId}`)
-            const summary =
-              textContent.length > 200 ? `${textContent.slice(0, 200)}...` : textContent
+            // Summarize the agent's final answer, not the head of the whole
+            // turn. 500 chars keeps the WeChat Work markdown message (2048
+            // bytes) under budget for CJK text plus the trailing link.
+            const final = lastAssistantText || textContent
+            const summary = final.length > 500 ? `${final.slice(0, 500)}...` : final
             getWorkspace(workspaceId)
               .then((ws) => {
                 if (!ws) return
@@ -1047,6 +1054,7 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
             }
             if (addedText) {
               textContent += addedText
+              lastAssistantText = addedText
               if (!firstResponseLogged && sessionStartedAt) {
                 const ttfrSec = ((Date.now() - sessionStartedAt) / 1000).toFixed(1)
                 console.log(
