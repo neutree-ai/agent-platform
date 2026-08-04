@@ -1146,12 +1146,12 @@ class ApiClient {
   async getWorkspaceSkillIds(id: string): Promise<string[]> {
     const data = await this.request<{
       skills: Array<{ id: string; name: string; editable: boolean; gitSource: boolean }>
-    }>(`/_cp/workspaces/${id}/skills`)
+    }>(`/workspaces/${id}/skills`)
     return data.skills.map((s) => s.id)
   }
 
   async updateWorkspaceSkills(id: string, skillIds: string[]): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(`/_cp/workspaces/${id}/skills`, {
+    return this.request<{ success: boolean }>(`/workspaces/${id}/skills`, {
       method: 'PUT',
       body: JSON.stringify({ skills: skillIds }),
     })

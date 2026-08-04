@@ -37,7 +37,7 @@ function skillsApiUrl(workspaceId: string) {
 }
 
 function workspaceSkillsUrl(workspaceId: string) {
-  return `/_cp/workspaces/${workspaceId}/skills`
+  return `/api/workspaces/${workspaceId}/skills`
 }
 
 export const enabledSkillsQueryKey = (workspaceId: string) =>

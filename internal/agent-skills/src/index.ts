@@ -833,7 +833,7 @@ export class SkillManager {
   private static platformVersion(files: Record<string, string>): string {
     let h = 5381
     for (const k of Object.keys(files).sort()) {
-      const s = `${k} ${files[k]} `
+      const s = `${k}\0${files[k]}\0`
       for (let i = 0; i < s.length; i++) h = (Math.imul(h, 33) + s.charCodeAt(i)) | 0
     }
     return (h >>> 0).toString(16)
