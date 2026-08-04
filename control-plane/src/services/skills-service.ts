@@ -172,11 +172,6 @@ export class SkillsService {
     return skill
   }
 
-  /** Unfiltered list used by the internal `/_cp/skills` route. */
-  listAll(): Promise<SkillMeta[]> {
-    return this.repo.listSkills()
-  }
-
   /** Owner-only — list of sources the user owns. */
   async listSources(userId: string, kind?: 'git' | 'native'): Promise<SkillSource[]> {
     return this.repo.listSourcesForUser(userId, kind)

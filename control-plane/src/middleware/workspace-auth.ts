@@ -1,4 +1,4 @@
-// Workspace-token auth middleware for the workspace protocol (/ws/v1/*).
+// Workspace-token auth middleware for the workspace protocol (/workspace/v1/*).
 //
 // Guards calls a workspace's own workloads make back into cp — the agent server
 // and the memory-fuse / afs sidecars. Resolves a Bearer workspace token to a
@@ -11,10 +11,10 @@
 // minted for have to agree.
 
 import type { Context, MiddlewareHandler } from 'hono'
-import type { WsAppEnv } from '../lib/types'
+import type { WorkspaceAppEnv } from '../lib/types'
 import { verifyWorkspaceToken } from '../services/db/workspace-tokens'
 
-export const wsAuth: MiddlewareHandler<WsAppEnv> = async (c, next) => {
+export const workspaceAuth: MiddlewareHandler<WorkspaceAppEnv> = async (c, next) => {
   const authHeader = c.req.header('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
     return c.json({ error: 'Unauthorized' }, 401)
@@ -23,7 +23,7 @@ export const wsAuth: MiddlewareHandler<WsAppEnv> = async (c, next) => {
   if (!principal) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
-  c.set('wsPrincipal', principal)
+  c.set('workspacePrincipal', principal)
   return next()
 }
 
@@ -41,17 +41,17 @@ export const wsAuth: MiddlewareHandler<WsAppEnv> = async (c, next) => {
  * @param param name of the path parameter holding the workspace id — routes use
  *              both `:id` and `:wsId`.
  */
-export function requireWorkspaceParam(param = 'id'): MiddlewareHandler<WsAppEnv> {
+export function requireWorkspaceParam(param = 'id'): MiddlewareHandler<WorkspaceAppEnv> {
   return async (c, next) => {
     const requested = c.req.param(param)
-    if (!requested || c.get('wsPrincipal').workspaceId !== requested) {
+    if (!requested || c.get('workspacePrincipal').workspaceId !== requested) {
       return c.json({ error: 'Workspace not found' }, 404)
     }
     return next()
   }
 }
 
-/** The calling workspace's id. Only valid downstream of {@link wsAuth}. */
-export function callerWorkspaceId(c: Context<WsAppEnv>): string {
-  return c.get('wsPrincipal').workspaceId
+/** The calling workspace's id. Only valid downstream of {@link workspaceAuth}. */
+export function callerWorkspaceId(c: Context<WorkspaceAppEnv>): string {
+  return c.get('workspacePrincipal').workspaceId
 }

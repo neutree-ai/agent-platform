@@ -41,7 +41,7 @@ beforeEach(() => {
   verify.mockReset()
 })
 
-describe('GET /ws/v1/workspaces/:id/config', () => {
+describe('GET /workspace/v1/workspaces/:id/config', () => {
   it('serves the workspace its own config', async () => {
     verify.mockResolvedValue({ workspaceId: 'ws1' })
 

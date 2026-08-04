@@ -3,17 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../services/db/workspace-tokens', () => ({ verifyWorkspaceToken: vi.fn() }))
 
-import type { WsAppEnv } from '../lib/types'
-import wsProtocolRoutes from '../routes/ws'
+import type { WorkspaceAppEnv } from '../lib/types'
+import workspaceProtocolRoutes from '../routes/workspace'
 import { verifyWorkspaceToken } from '../services/db/workspace-tokens'
-import { callerWorkspaceId, requireWorkspaceParam, wsAuth } from './ws-auth'
+import { callerWorkspaceId, requireWorkspaceParam, workspaceAuth } from './workspace-auth'
 
 const verify = vi.mocked(verifyWorkspaceToken)
 
 /** A router shaped like the real one: token auth, then per-route path binding. */
 function makeApp() {
-  const app = new Hono<WsAppEnv>()
-  app.use('*', wsAuth)
+  const app = new Hono<WorkspaceAppEnv>()
+  app.use('*', workspaceAuth)
   app.get('/whoami', (c) => c.json({ workspaceId: callerWorkspaceId(c) }))
   app.get('/workspaces/:id/thing', requireWorkspaceParam(), (c) => c.json({ ok: true }))
   app.get('/stores/:wsId/thing', requireWorkspaceParam('wsId'), (c) => c.json({ ok: true }))
@@ -24,7 +24,7 @@ beforeEach(() => {
   verify.mockReset()
 })
 
-describe('wsAuth', () => {
+describe('workspaceAuth', () => {
   it('rejects a request with no Authorization header', async () => {
     const res = await makeApp().request('/whoami')
 
@@ -65,7 +65,7 @@ describe('the /ws router', () => {
   // Default-deny: the guard sits on the router, not on individual routes, so a
   // path nobody has mounted yet is rejected rather than reaching anything.
   it('rejects an unauthenticated request even where no route is mounted', async () => {
-    const res = await wsProtocolRoutes.request('/v1/nothing-here')
+    const res = await workspaceProtocolRoutes.request('/v1/nothing-here')
 
     expect(res.status).toBe(401)
   })

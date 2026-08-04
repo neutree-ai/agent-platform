@@ -81,6 +81,13 @@ export interface SkillManagerOptions {
    */
   filesBrowsePath?: string
 
+  /**
+   * Headers for cp calls — the workspace token the agent server holds. The
+   * manager is handed them rather than reading the environment itself, because
+   * the server deletes the variable before spawning anything.
+   */
+  cpHeaders?: Record<string, string>
+
   // DI
   fetch: Fetcher
   fs: Fs
@@ -142,6 +149,7 @@ export class SkillManager {
   private draftBase: string | null
   private useSymlink: boolean
   private fetch: Fetcher
+  private cpHeaders: Record<string, string>
   private fs: Fs
   private shell: Shell
   private _filesBrowsePath: string
@@ -209,6 +217,7 @@ export class SkillManager {
     this.useSymlink = opts.useSymlink ?? true
     this._filesBrowsePath = opts.filesBrowsePath ?? '/.claude/skills'
     this.fetch = opts.fetch
+    this.cpHeaders = opts.cpHeaders ?? {}
     this.fs = opts.fs
     this.shell = opts.shell
   }
@@ -331,7 +340,8 @@ export class SkillManager {
   async load(): Promise<LoadResult> {
     // 1. Fetch enabled skill names for this workspace
     const listResp = await this.fetch(
-      `${this.cpUrl}/_cp/workspaces/${this.workspaceId}/skills`,
+      `${this.cpUrl}/workspace/v1/workspaces/${this.workspaceId}/skills`,
+      { headers: this.cpHeaders },
     )
     if (!listResp.ok) {
       throw new Error(`Skills list fetch failed: ${listResp.status}`)
@@ -546,19 +556,17 @@ export class SkillManager {
   > {
     const maxAttempts = 3
     const backoffMs = [500, 1500] // gap between attempt 1→2, 2→3
-    // p3: cp's download path is `/_cp/skills/:id/package`; the name itself
-    // is no longer unique. We resolved id at list time. If a caller invokes
-    // download for a name we never listed (e.g. a CLI-driven probe), fall
-    // back to the legacy by-name path so existing tooling doesn't break;
-    // cp will 404 and we'll surface that as failed download.
+    // p3: cp's download path keys on the skill UUID; names are no longer
+    // unique. The id was resolved at list time. A name that was never listed
+    // has none, and there is no by-name route to fall back to, so report the
+    // failure here rather than spend a request on a path that cannot resolve.
     const id = this.skillIds.get(name)
-    const url = id
-      ? `${this.cpUrl}/_cp/skills/${id}/package`
-      : `${this.cpUrl}/_cp/skills/${name}`
+    if (!id) return { kind: 'failed' }
+    const url = `${this.cpUrl}/workspace/v1/skills/${id}/package`
     const knownEtag = await this.readKnownEtag(name)
-    const init: FetchInit | undefined = knownEtag
-      ? { headers: { 'If-None-Match': knownEtag } }
-      : undefined
+    const init: FetchInit = {
+      headers: { ...this.cpHeaders, ...(knownEtag ? { 'If-None-Match': knownEtag } : {}) },
+    }
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const resp = await this.fetch(url, init)

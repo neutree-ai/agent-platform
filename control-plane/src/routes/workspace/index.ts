@@ -1,4 +1,4 @@
-// Workspace protocol endpoints (/ws/v1/*).
+// Workspace protocol endpoints (/workspace/v1/*).
 //
 // Calls a workspace's own workloads make back into cp: the agent server reads
 // its config, credentials and skills; the memory-fuse and afs sidecars read and
@@ -8,7 +8,7 @@
 //
 // Plain Hono (not OpenAPIHono) — a machine protocol, not part of the
 // user-facing API docs, same as /env/v1 next door. The global user-auth
-// middleware skips /ws/v1/* (see index.ts); this router's own middleware is
+// middleware skips /workspace/v1/* (see index.ts); this router's own middleware is
 // what guards it.
 //
 // This is the destination for the routes still sitting under the unauthenticated
@@ -16,16 +16,18 @@
 // authenticated, and /_cp shrinks until it can be deleted outright.
 
 import { Hono } from 'hono'
-import type { WsAppEnv } from '../../lib/types'
-import { wsAuth } from '../../middleware/ws-auth'
+import type { WorkspaceAppEnv } from '../../lib/types'
+import { workspaceAuth } from '../../middleware/workspace-auth'
 import config from './config'
 import credentials from './credentials'
+import skills from './skills'
 
-const ws = new Hono<WsAppEnv>()
+const ws = new Hono<WorkspaceAppEnv>()
 
-ws.use('*', wsAuth)
+ws.use('*', workspaceAuth)
 
 ws.route('/', config)
 ws.route('/', credentials)
+ws.route('/', skills)
 
 export default ws
