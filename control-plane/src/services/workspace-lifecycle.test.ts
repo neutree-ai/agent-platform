@@ -28,14 +28,12 @@ const ws = { id: 'ws1' } as Workspace
 beforeEach(() => vi.clearAllMocks())
 
 describe('destroyWorkspace', () => {
-  it('tears a built-in workspace down by shape (k8s.destroy), never the Deployment-only deleteInstance', async () => {
+  it('tears a built-in workspace down by shape (k8s.destroy)', async () => {
     vi.mocked(getWorkspacePlacementEnv).mockResolvedValue({ isBuiltin: true } as never)
 
     await destroyWorkspace(ws)
 
     expect(k8s.destroy).toHaveBeenCalledWith('ws1')
-    // The leak-prone path: deleteInstance only deletes the Deployment shape.
-    expect(k8s.deleteInstance).not.toHaveBeenCalled()
     expect(deleteWorkspace).toHaveBeenCalledWith('ws1')
     expect(setDesiredPhase).not.toHaveBeenCalled()
   })
@@ -57,7 +55,6 @@ describe('destroyWorkspace', () => {
     expect(setDesiredPhase).toHaveBeenCalledWith('ws1', 'deleted')
     expect(updateWorkspace).toHaveBeenCalledWith('ws1', { status: 'deleting' })
     expect(k8s.destroy).not.toHaveBeenCalled()
-    expect(k8s.deleteInstance).not.toHaveBeenCalled()
     expect(deleteWorkspace).not.toHaveBeenCalled()
   })
 })

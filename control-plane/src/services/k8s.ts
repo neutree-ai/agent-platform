@@ -36,14 +36,6 @@ const defaultProvider: KubernetesProvider = makeDefaultProvider()
 // P1 control inversion — those actions now go through workspace_placements and
 // the env-runner.
 
-export function getInstance(workspaceId: string) {
-  return defaultProvider.getInstance(workspaceId)
-}
-
-export function listInstances() {
-  return defaultProvider.listInstances()
-}
-
 export function getInstanceSpecMarkers(workspaceId: string) {
   return defaultProvider.getInstanceSpecMarkers(workspaceId)
 }
@@ -62,10 +54,6 @@ export function watchDeployments(
   onError: (err: unknown) => void,
 ) {
   return defaultProvider.watchDeployments(resourceVersion, onUpdate, onError)
-}
-
-export function deleteInstance(workspaceId: string) {
-  return defaultProvider.deleteInstance(workspaceId)
 }
 
 /**

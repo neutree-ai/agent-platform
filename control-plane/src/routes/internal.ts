@@ -16,13 +16,11 @@ import {
 } from '../services/db/memory'
 import { getUser } from '../services/db/users'
 import { getWorkspace, getWorkspaceConfig, updateWorkspace } from '../services/db/workspaces'
-import * as k8s from '../services/k8s'
 import { getToken, serverOriginFromUrl } from '../services/mcp-oauth'
 import { broadcastStoreInvalidate } from '../services/memory-fuse'
 import { bumpWorkspaceSpec } from '../services/placement'
 import { skillRepo, skillsService } from '../services/skills-composition'
 import { skillsContentFetch, skillsContentUrl } from '../services/skills-content'
-import { ConflictError, NotAllowedError, SkillNotFoundError } from '../services/skills-errors'
 import { applyWorkspaceConfigUpdate } from '../services/workspace-config'
 import { encodeOrigin } from './mcp-proxy'
 
@@ -30,59 +28,6 @@ const internal = new Hono()
 
 // Health check
 internal.get('/health', (c) => c.json({ status: 'ok' }))
-
-// Control plane info
-internal.get('/info', (c) => {
-  return c.json({
-    name: '@neutree-ai/control-plane',
-    version: '0.1.0',
-  })
-})
-
-// List all K8s instances (admin/debug)
-internal.get('/instances', async (c) => {
-  try {
-    const instances = await k8s.listInstances()
-    return c.json({ instances })
-  } catch (e: any) {
-    console.error('Failed to list instances:', e)
-    return c.json({ error: e.message }, 500)
-  }
-})
-
-// Get K8s instance by workspace ID (admin/debug)
-internal.get('/instances/:workspaceId', async (c) => {
-  try {
-    const workspaceId = c.req.param('workspaceId')
-    const instance = await k8s.getInstance(workspaceId)
-
-    if (!instance) {
-      return c.json({ error: 'Instance not found' }, 404)
-    }
-
-    return c.json({ instance })
-  } catch (e: any) {
-    console.error('Failed to get instance:', e)
-    return c.json({ error: e.message }, 500)
-  }
-})
-
-// Delete K8s instance by workspace ID (admin/debug)
-internal.delete('/instances/:workspaceId', async (c) => {
-  try {
-    const workspaceId = c.req.param('workspaceId')
-    const deleted = await k8s.deleteInstance(workspaceId)
-
-    if (!deleted) {
-      return c.json({ error: 'Instance not found' }, 404)
-    }
-
-    return c.json({ message: 'Instance deleted' })
-  } catch (e: any) {
-    console.error('Failed to delete instance:', e)
-    return c.json({ error: e.message }, 500)
-  }
-})
 
 // afs-fuse sidecar boot pull: list of AFS shares this ws should mount.
 // Daemon hits this on startup (via AFS_BOOTSTRAP_URL env), Mounts each at
@@ -475,26 +420,6 @@ internal.post('/skills/:id/reload-fanout', async (c) => {
   await Promise.all(workers)
 
   return c.json({ total: workspaces.length, notified, failed })
-})
-
-// Delete a skill. p3: cp doesn't own skill writes anymore — scs does. Route
-// this through the orchestrating service so we keep the pre-delete blocker
-// check + workspace reload coupling.
-internal.delete('/skills/:id', async (c) => {
-  const id = c.req.param('id')
-  // The internal API has no per-user auth context; use the skill's owner as
-  // the actor so the service-layer ACL passes.
-  const meta = await skillRepo.getSkillMeta(id)
-  if (!meta) return c.json({ error: 'Skill not found' }, 404)
-  try {
-    await skillsService.remove(meta.user_id, id)
-    return c.json({ success: true })
-  } catch (e) {
-    if (e instanceof SkillNotFoundError) return c.json({ error: e.message }, 404)
-    if (e instanceof NotAllowedError) return c.json({ error: e.message }, 403)
-    if (e instanceof ConflictError) return c.json({ error: e.message }, 409)
-    throw e
-  }
 })
 
 // Get workspace skill list. p3: returns the canonical UUIDs plus display names
