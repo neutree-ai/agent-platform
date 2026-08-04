@@ -124,10 +124,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true,
         },
-        '/_cp': {
-          target,
-          changeOrigin: true,
-        },
         '/_cg': {
           target,
           changeOrigin: true,

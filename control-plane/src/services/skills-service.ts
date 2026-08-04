@@ -714,7 +714,7 @@ export class SkillsService {
 
   // Defer the per-workspace reload fanout to the background queue instead of
   // blocking the write on every dependent agent's reload RTT. The scheduler
-  // worker calls back into `/_cp/skills/:id/reload-fanout` to do the actual
+  // worker calls back into `/svc/v1/skills/:id/reload-fanout` to do the actual
   // fanout. Enqueue reads the *current* active version at execution time, so
   // coalescing a burst of writes per skill is safe.
   private notifyAffectedWorkspaces(skillId: string): Promise<void> {

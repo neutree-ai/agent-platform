@@ -12,6 +12,7 @@ COPY internal/acp-adapter/ ./internal/acp-adapter/
 COPY internal/agent-skills/ ./internal/agent-skills/
 COPY internal/platform-prompt/ ./internal/platform-prompt/
 COPY internal/agent-usage/ ./internal/agent-usage/
+COPY internal/mcp-forward/ ./internal/mcp-forward/
 
 # Install shared package dependencies (needed for tsc to resolve imports).
 # @neutree-ai/types declares zod and is imported by the agent's tsc via paths; without

@@ -1,5 +1,5 @@
 // Workspace skill list for the web app. The agent reads the same data from
-// `/_cp/workspaces/:id/skills`, which is reachable only from inside the
+// `/workspace/v1/workspaces/:id/skills`, which is reachable only from inside the
 // cluster; this route is the browser-facing half and carries a real owner
 // check, so the two callers no longer share one unauthenticated surface.
 

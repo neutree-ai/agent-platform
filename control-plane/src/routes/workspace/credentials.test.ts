@@ -47,7 +47,7 @@ describe('GET /workspace/v1/workspaces/:id/credentials', () => {
     expect(listCreds).toHaveBeenCalledWith('ws1', 'alice')
   })
 
-  // The reason this route exists. On /_cp any caller could name any workspace.
+  // The reason this route exists. On the old prefix any caller could name any workspace.
   it('refuses to serve another workspace, valid token or not', async () => {
     verify.mockResolvedValue({ workspaceId: 'ws1' })
 

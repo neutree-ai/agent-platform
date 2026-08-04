@@ -1,20 +1,28 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { resolveTokenForUser } from '../lib/session-token'
+import type { WorkspaceAppEnv } from '../lib/types'
+import { callerWorkspaceId } from '../middleware/workspace-auth'
+import { getWorkspace } from '../services/db/workspaces'
 import { McpOAuthReauthRequired, getValidAccessToken } from '../services/mcp-oauth'
 
 /**
- * MCP Proxy: transparently forwards MCP traffic from agents to upstream MCP servers,
- * injecting OAuth Bearer tokens on every request with on-demand refresh.
+ * MCP Proxy: transparently forwards MCP traffic from a workspace to upstream MCP
+ * servers, injecting OAuth Bearer tokens on every request with on-demand refresh.
  *
- * Route pattern: /_proxy/mcp/:userId/:encodedOrigin/*
- * - userId: workspace owner, used to look up OAuth tokens
+ * Route: /workspace/v1/mcp/:encodedOrigin/*
  * - encodedOrigin: base64url-encoded origin of the upstream MCP server
- * - /*: the path on the upstream server (e.g., /mcp, /sse, etc.)
+ * - /*: the path on the upstream server (e.g. /mcp, /sse)
  *
- * This route is called by agents (internal), not by browsers.
+ * Whose OAuth tokens get attached comes from the caller's own workspace token,
+ * not from the URL. It used to be a path segment naming the owner, which made
+ * one workspace's proxy URL into everyone's: edit the segment, borrow another
+ * user's upstream access.
+ *
+ * The caller is the agent server, which holds the workspace token; the coding
+ * CLI reaches it over loopback and never sees a credential.
  */
-const mcpProxy = new Hono()
+const mcpProxy = new Hono<WorkspaceAppEnv>()
 
 function decodeOrigin(encoded: string): string {
   // base64url decode
@@ -45,10 +53,13 @@ function reauthRequired(c: Context, e: McpOAuthReauthRequired) {
   )
 }
 
-mcpProxy.all('/mcp/:userId/:encodedOrigin/*', async (c) => {
-  const userId = c.req.param('userId')
+mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
+  const workspaceId = callerWorkspaceId(c)
+  const workspace = await getWorkspace(workspaceId)
+  if (!workspace) return c.json({ error: 'Workspace not found' }, 404)
+  const userId = workspace.user_id
   const encodedOrigin = c.req.param('encodedOrigin')
-  const rest = c.req.path.replace(new RegExp(`^.*?/mcp/${userId}/${encodedOrigin}`), '')
+  const rest = c.req.path.replace(new RegExp(`^.*?/v1/mcp/${encodedOrigin}`), '')
 
   let origin: string
   try {

@@ -10,14 +10,11 @@
 // user-facing API docs, same as /env/v1 next door. The global user-auth
 // middleware skips /workspace/v1/* (see index.ts); this router's own middleware is
 // what guards it.
-//
-// This is the destination for the routes still sitting under the unauthenticated
-// /_cp prefix. They move one at a time, each one arriving here already
-// authenticated, and /_cp shrinks until it can be deleted outright.
 
 import { Hono } from 'hono'
 import type { WorkspaceAppEnv } from '../../lib/types'
 import { workspaceAuth } from '../../middleware/workspace-auth'
+import mcpProxy from '../mcp-proxy'
 import afs from './afs'
 import config from './config'
 import credentials from './credentials'
@@ -31,6 +28,7 @@ ws.use('*', workspaceAuth)
 ws.route('/', afs)
 ws.route('/', config)
 ws.route('/', credentials)
+ws.route('/', mcpProxy)
 ws.route('/', memory)
 ws.route('/', skills)
 

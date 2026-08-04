@@ -3,10 +3,12 @@ import { join } from 'node:path'
 import { createAcpAgentApp } from '../../../internal/acp-adapter/acp-server.js'
 import { registerSkillRoutes } from '../../../internal/agent-skills/src/routes.js'
 import { registerUsageRoutes } from '../../../internal/agent-usage/src/routes.js'
+import { registerMcpForwardRoutes } from '../../../internal/mcp-forward/src/routes.js'
 import {
   CP_URL,
   WORKSPACE_DIR,
   WORKSPACE_ID,
+  cpAuthHeaders,
   getSkillManager,
   hasMcpServers,
   loadAcpMcpServers,
@@ -131,6 +133,14 @@ registerSkillRoutes(app, '/skills', getSkillManager)
 registerUsageRoutes(app, '/usage', {
   homeDir: process.env.HOME ?? join(WORKSPACE_DIR, '.home'),
   fallbackModel: () => loadRuntimeConfig()?.model,
+})
+
+// The workspace's MCP hop: the CLI connects here so its configuration — which
+// it receives as argv, readable by anything in the container — names no
+// credential. The token is added on the way out to cp.
+registerMcpForwardRoutes(app, '/mcp', {
+  cpUrl: CP_URL ?? '',
+  authHeaders: cpAuthHeaders,
 })
 
 function setRestartBridge(fn: () => Promise<void>) {
