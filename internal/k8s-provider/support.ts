@@ -50,9 +50,6 @@ export function workspaceTokenSecretName(cfg: K8sConfig, workspaceId: string): s
   return `${resourceName(cfg, workspaceId)}-token`
 }
 
-/** Key inside that Secret, and the env var the workload reads it from. */
-export const WORKSPACE_TOKEN_ENV = 'WORKSPACE_TOKEN'
-
 /** A pod is Ready when it has container statuses and all of them are ready. */
 export function isPodReady(pod: k8s.V1Pod): boolean {
   const statuses = pod.status?.containerStatuses ?? []

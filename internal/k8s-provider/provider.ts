@@ -7,10 +7,10 @@ import type {
   ObservedState,
   WorkspaceSpec,
 } from '../types/environments'
+import { WORKSPACE_TOKEN_ENV } from '../types/workspace-token'
 import { AutoScalingWorkload } from './auto-scaling-workload'
 import { type K8sConfig, defaultCfg } from './config'
 import {
-  WORKSPACE_TOKEN_ENV,
   createOrAdopt,
   expandWorkspacePvc,
   isPodReady,
