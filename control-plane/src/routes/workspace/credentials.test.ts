@@ -37,7 +37,7 @@ beforeEach(() => {
 
 describe('GET /workspace/v1/workspaces/:id/credentials', () => {
   it('serves the workspace its own credentials', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await get('/v1/workspaces/ws1/credentials', 'ws_good')
 
@@ -49,7 +49,7 @@ describe('GET /workspace/v1/workspaces/:id/credentials', () => {
 
   // The reason this route exists. On the old prefix any caller could name any workspace.
   it('refuses to serve another workspace, valid token or not', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await get('/v1/workspaces/ws2/credentials', 'ws_good')
 
@@ -75,12 +75,14 @@ describe('GET /workspace/v1/workspaces/:id/credentials', () => {
     expect(listCreds).not.toHaveBeenCalled()
   })
 
-  it('404s when the workspace is gone', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
-    workspace.mockResolvedValue(null as never)
+  // No separate not-found branch: verify JOINs workspaces, so a token whose
+  // workspace is gone stops resolving and never reaches the handler.
+  it('rejects a token whose workspace is gone', async () => {
+    verify.mockResolvedValue(null)
 
-    const res = await get('/v1/workspaces/ws1/credentials', 'ws_good')
+    const res = await get('/v1/workspaces/ws1/credentials', 'ws_stale')
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(401)
+    expect(listCreds).not.toHaveBeenCalled()
   })
 })

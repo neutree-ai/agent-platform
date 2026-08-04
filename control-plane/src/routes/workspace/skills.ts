@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { WorkspaceAppEnv } from '../../lib/types'
-import { requireWorkspaceParam } from '../../middleware/workspace-auth'
-import { getWorkspace } from '../../services/db/workspaces'
+import { caller, requireWorkspaceParam } from '../../middleware/workspace-auth'
+import { toWorkspaceSkillDtos } from '../../services/skill-repository'
 import { skillRepo } from '../../services/skills-composition'
 import { skillsContentFetch, skillsContentUrl } from '../../services/skills-content'
 
@@ -56,23 +56,11 @@ skills.get('/v1/skills/:id/package', async (c) => {
 // unique now — agents and the web app should switch to id-keyed lookups.
 skills.get('/v1/workspaces/:id/skills', requireWorkspaceParam(), async (c) => {
   const id = c.req.param('id')
-  // One JOIN query for the skill rows + one for the workspace owner, in
-  // parallel. (Previously this fanned out into 1 + N×(getSkillMeta + getSource)
-  // round-trips per workspace skill.)
-  const [workspace, rows] = await Promise.all([
-    getWorkspace(id),
-    skillRepo.getWorkspaceSkillsForAgent(id),
-  ])
-  const wsOwner = workspace?.user_id ?? null
-
-  // p3 schema dropped `skills.git_source` — source kind comes from the joined
-  // `skill_sources` row.
-  const skills = rows.map((s) => ({
-    id: s.id,
-    name: s.name ?? '(unknown)',
-    editable: s.user_id === wsOwner || !s.user_id,
-    gitSource: s.source_kind === 'git',
-  }))
+  // One JOIN query for the skill rows; the owner comes from the token, which
+  // already read the workspace row. (Previously this fanned out into
+  // 1 + N×(getSkillMeta + getSource) round-trips per workspace skill.)
+  const rows = await skillRepo.getWorkspaceSkillsForAgent(id)
+  const skills = toWorkspaceSkillDtos(rows, caller(c).userId)
   // TODO(agent-skills): legacy agent-skills clients consume `{ name, editable,
   // gitSource }` shape. Once the agent-side client is updated to read `id`,
   // drop the duplicated `name` field at the top level.

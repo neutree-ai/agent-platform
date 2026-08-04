@@ -29,28 +29,70 @@ export interface McpForwardDeps {
 }
 
 /** Hop-by-hop headers, meaningless to re-send on a new connection. */
-const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'host']
+const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'host'])
+
+/**
+ * Long-lived MCP streams end by being cut off — the client navigates away, the
+ * upstream closes an idle SSE connection. Undici surfaces that as a socket
+ * error mid-body, which would otherwise escape as an unhandled rejection on the
+ * Node side rather than the ordinary end-of-stream it is.
+ */
+function tolerateStreamAbort(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = body.getReader()
+      try {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          controller.enqueue(value)
+        }
+        controller.close()
+      } catch {
+        try {
+          controller.close()
+        } catch {}
+      }
+    },
+    cancel(reason) {
+      body.cancel(reason).catch(() => {})
+    },
+  })
+}
+
+function isExpectedDisconnect(e: any): boolean {
+  return (
+    e?.name === 'AbortError' ||
+    e?.code === 'UND_ERR_SOCKET' ||
+    e?.cause?.code === 'UND_ERR_SOCKET'
+  )
+}
 
 /**
  * Mount the hop at `prefix` (e.g. '/mcp'). Everything under it is forwarded to
- * cp's proxy verbatim apart from the added credential — MCP traffic is
- * long-lived SSE / streamable HTTP, so request and response bodies stream
- * rather than buffer, and a client that goes away aborts the upstream leg
- * instead of leaving it dangling.
+ * cp's proxy verbatim apart from the added credential.
+ *
+ * Responses stream: MCP replies are long-lived SSE / streamable HTTP and must
+ * not be collected before being passed on. Requests are read whole first —
+ * JSON-RPC calls are small, and it keeps this hop to a plain fetch. A client
+ * that goes away aborts the upstream leg rather than leaving it dangling.
  */
 export function registerMcpForwardRoutes(
   app: RouteApp,
   prefix: string,
   deps: McpForwardDeps,
 ): void {
+  // Fixed at mount time, not recomputed per message.
+  const base = `${deps.cpUrl.replace(/\/+$/, '')}/workspace/v1/mcp`
+
   app.all(`${prefix}/*`, async (c: any) => {
     const tail = c.req.path.slice(prefix.length)
     const url = new URL(c.req.url)
-    const target = `${deps.cpUrl.replace(/\/+$/, '')}/workspace/v1/mcp${tail}${url.search}`
+    const target = `${base}${tail}${url.search}`
 
     const headers = new Headers()
     for (const [k, v] of c.req.raw.headers.entries()) {
-      if (!HOP_BY_HOP.includes(k.toLowerCase())) headers.set(k, v)
+      if (!HOP_BY_HOP.has(k.toLowerCase())) headers.set(k, v)
     }
     for (const [k, v] of Object.entries(deps.authHeaders())) headers.set(k, v)
 
@@ -68,15 +110,15 @@ export function registerMcpForwardRoutes(
       })
     } catch (e: any) {
       // The client hanging up mid-stream is how these requests normally end.
-      if (e?.name === 'AbortError') return new Response(null, { status: 499 })
+      if (isExpectedDisconnect(e)) return new Response(null, { status: 499 })
       return c.json({ error: `MCP forward failed: ${e?.message ?? e}` }, 502)
     }
 
     const respHeaders = new Headers()
     for (const [k, v] of upstream.headers.entries()) {
-      if (!HOP_BY_HOP.includes(k.toLowerCase())) respHeaders.set(k, v)
+      if (!HOP_BY_HOP.has(k.toLowerCase())) respHeaders.set(k, v)
     }
-    return new Response(upstream.body, {
+    return new Response(upstream.body ? tolerateStreamAbort(upstream.body) : null, {
       status: upstream.status,
       statusText: upstream.statusText,
       headers: respHeaders,

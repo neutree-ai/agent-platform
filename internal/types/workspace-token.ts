@@ -15,6 +15,15 @@ export function generateWorkspaceToken(): string {
   return `${WORKSPACE_TOKEN_PREFIX}${randomBytes(32).toString('hex')}`
 }
 
+/**
+ * Row id for a minted token. Both writers — cp and the built-in runner, which
+ * has its own pool — go through this, so one table does not end up carrying two
+ * id shapes depending on who inserted the row.
+ */
+export function newWorkspaceTokenId(): string {
+  return randomBytes(8).toString('hex')
+}
+
 /** The at-rest form of a token: SHA-256, hex. */
 export function hashWorkspaceToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')

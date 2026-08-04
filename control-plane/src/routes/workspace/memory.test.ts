@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe('memory routes', () => {
   it('serves the sidecar its own workspace attachments', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await req('/v1/workspaces/ws1/memory-attachments', 'ws_good')
 
@@ -53,7 +53,7 @@ describe('memory routes', () => {
   })
 
   it('serves a store attached to its own workspace', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await req('/v1/workspaces/ws1/memory-stores/store1/memories', 'ws_good')
 
@@ -64,7 +64,7 @@ describe('memory routes', () => {
   // The binding runs first, so a token cannot borrow another workspace's
   // attachment to reach its stores.
   it('refuses a store under another workspace before checking attachment', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await req('/v1/workspaces/ws2/memory-stores/store1/memories', 'ws_good')
 
@@ -73,7 +73,7 @@ describe('memory routes', () => {
   })
 
   it('refuses writes to another workspace', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await req('/v1/workspaces/ws2/memory-stores/store1/memory/a.md', 'ws_good', {
       method: 'PUT',
@@ -85,7 +85,7 @@ describe('memory routes', () => {
   })
 
   it('still refuses a store that is not attached, token and path agreeing', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
     attachment.mockResolvedValue(null as never)
 
     const res = await req('/v1/workspaces/ws1/memory-stores/store1/memories', 'ws_good')
@@ -94,7 +94,7 @@ describe('memory routes', () => {
   })
 
   it('keeps read-only stores read-only', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
     attachment.mockResolvedValue({ access: 'read_only' } as never)
 
     const res = await req('/v1/workspaces/ws1/memory-stores/store1/memory/a.md', 'ws_good', {

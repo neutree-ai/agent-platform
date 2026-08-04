@@ -45,13 +45,14 @@ function call(path: string, token?: string) {
 
 describe('MCP proxy', () => {
   it("attaches the calling workspace owner's upstream token", async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await call(`/v1/mcp/${encoded}/mcp`, 'ws_good')
 
     expect(res.status).toBe(200)
-    // Whose tokens to use came from the token's workspace, not from the URL.
-    expect(workspace).toHaveBeenCalledWith('ws1')
+    // Whose tokens to use came from the principal, not from the URL — and
+    // without re-reading the workspace the token check already read.
+    expect(workspace).not.toHaveBeenCalled()
     expect(accessToken).toHaveBeenCalledWith('alice', UPSTREAM)
 
     const [target, init] = fetchMock.mock.calls[0]
@@ -62,7 +63,7 @@ describe('MCP proxy', () => {
   // The point of the move. The old URL spelled the owner out in a path segment,
   // so editing it borrowed someone else's upstream access.
   it('offers no way to ask for another user, the path having no say', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     await call(`/v1/mcp/${encoded}/mcp`, 'ws_good')
 
@@ -79,13 +80,14 @@ describe('MCP proxy', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('404s when the calling workspace is gone', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
-    workspace.mockResolvedValue(null as never)
+  // A workspace that no longer exists takes its tokens with it: verify JOINs
+  // workspaces, so the token stops resolving and the request never gets in.
+  it('rejects a token whose workspace is gone', async () => {
+    verify.mockResolvedValue(null)
 
-    const res = await call(`/v1/mcp/${encoded}/mcp`, 'ws_good')
+    const res = await call(`/v1/mcp/${encoded}/mcp`, 'ws_stale')
 
-    expect(res.status).toBe(404)
+    expect(res.status).toBe(401)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

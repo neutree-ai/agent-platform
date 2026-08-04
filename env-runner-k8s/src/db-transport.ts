@@ -1,10 +1,13 @@
-import { randomBytes } from 'node:crypto'
 import type {
   ObservedUpdate,
   PlacementRow,
   PlacementTransport,
 } from '../../internal/env-runner-core'
-import { generateWorkspaceToken, hashWorkspaceToken } from '../../internal/types/workspace-token'
+import {
+  generateWorkspaceToken,
+  hashWorkspaceToken,
+  newWorkspaceTokenId,
+} from '../../internal/types/workspace-token'
 import { pool } from './db'
 
 // Direct-DB transport for the built-in runner: it reads and writes
@@ -57,7 +60,7 @@ export class DbTransport implements PlacementTransport {
     await pool.query(
       `INSERT INTO workspace_tokens (id, workspace_id, token_hash)
        VALUES ($1, $2, $3)`,
-      [randomBytes(5).toString('hex'), workspaceId, hashWorkspaceToken(token)],
+      [newWorkspaceTokenId(), workspaceId, hashWorkspaceToken(token)],
     )
     return token
   }

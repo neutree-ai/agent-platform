@@ -6,6 +6,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
 import { getWorkspace } from '../../services/db/workspaces'
+import { toWorkspaceSkillDtos } from '../../services/skill-repository'
 import { skillRepo, skillsService } from '../../services/skills-composition'
 import { canManage } from './_shared'
 
@@ -55,14 +56,7 @@ workspaceSkills.openapi(listRoute, async (c) => {
   }
 
   const rows = await skillRepo.getWorkspaceSkillsForAgent(id)
-  const skills = rows.map((s) => ({
-    id: s.id,
-    name: s.name ?? '(unknown)',
-    // A skill is editable in this workspace when the workspace owner owns it,
-    // or when it has no owner at all (built-in).
-    editable: s.user_id === workspace.user_id || !s.user_id,
-    gitSource: s.source_kind === 'git',
-  }))
+  const skills = toWorkspaceSkillDtos(rows, workspace.user_id)
   return c.json({ skills }, 200)
 })
 

@@ -6,7 +6,7 @@ vi.mock('../services/db/workspace-tokens', () => ({ verifyWorkspaceToken: vi.fn(
 import type { WorkspaceAppEnv } from '../lib/types'
 import workspaceProtocolRoutes from '../routes/workspace'
 import { verifyWorkspaceToken } from '../services/db/workspace-tokens'
-import { callerWorkspaceId, requireWorkspaceParam, workspaceAuth } from './workspace-auth'
+import { caller, requireWorkspaceParam, workspaceAuth } from './workspace-auth'
 
 const verify = vi.mocked(verifyWorkspaceToken)
 
@@ -14,7 +14,7 @@ const verify = vi.mocked(verifyWorkspaceToken)
 function makeApp() {
   const app = new Hono<WorkspaceAppEnv>()
   app.use('*', workspaceAuth)
-  app.get('/whoami', (c) => c.json({ workspaceId: callerWorkspaceId(c) }))
+  app.get('/whoami', (c) => c.json(caller(c)))
   app.get('/workspaces/:id/thing', requireWorkspaceParam(), (c) => c.json({ ok: true }))
   app.get('/stores/:wsId/thing', requireWorkspaceParam('wsId'), (c) => c.json({ ok: true }))
   return app
@@ -49,15 +49,15 @@ describe('workspaceAuth', () => {
     expect(res.status).toBe(401)
   })
 
-  it('passes the bare token to verify and exposes only the workspace id', async () => {
-    verify.mockResolvedValue({ workspaceId: 'ws1' })
+  it('passes the bare token to verify and exposes the workspace and its owner', async () => {
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
 
     const res = await makeApp().request('/whoami', {
       headers: { Authorization: 'Bearer ws_good' },
     })
 
     expect(verify).toHaveBeenCalledWith('ws_good')
-    expect(await res.json()).toEqual({ workspaceId: 'ws1' })
+    expect(await res.json()).toEqual({ workspaceId: 'ws1', userId: 'alice' })
   })
 })
 
@@ -73,7 +73,7 @@ describe('the /ws router', () => {
 
 describe('requireWorkspaceParam', () => {
   const asWorkspace = (id: string) => {
-    verify.mockResolvedValue({ workspaceId: id })
+    verify.mockResolvedValue({ workspaceId: id, userId: 'alice' })
     return { headers: { Authorization: 'Bearer ws_good' } }
   }
 

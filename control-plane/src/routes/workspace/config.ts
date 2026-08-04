@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import type { ApiWorkspaceConfig } from '../../../../internal/types/api'
 import type { WorkspaceAppEnv } from '../../lib/types'
-import { requireWorkspaceParam } from '../../middleware/workspace-auth'
+import { caller, requireWorkspaceParam } from '../../middleware/workspace-auth'
 import { getMemoryByPath, listAttachmentsForWorkspace } from '../../services/db/memory'
 import { getUser } from '../../services/db/users'
-import { getWorkspace, getWorkspaceConfig } from '../../services/db/workspaces'
+import { getWorkspaceConfig } from '../../services/db/workspaces'
 import { getToken, serverOriginFromUrl } from '../../services/mcp-oauth'
 import { encodeOrigin } from '../mcp-proxy'
 
@@ -32,8 +32,8 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
   //    argument, which any process in the container can read, so it must not
   //    name anything that would be worth stealing. The agent server holds the
   //    workspace token and adds it on the way out.
-  const workspace = await getWorkspace(id)
-  const user = workspace?.user_id ? await getUser(workspace.user_id) : null
+  const { userId } = caller(c)
+  const user = await getUser(userId)
   let mcpConfig = config.mcp_config
   try {
     const parsed = JSON.parse(mcpConfig)
@@ -50,10 +50,10 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
           server.headers = { ...server.headers, 'X-Workspace-ID': id, 'X-Agent-ID': id }
         }
         // Rewrite URL to CP proxy for servers with OAuth tokens
-        if (workspace?.user_id && server.url) {
+        if (server.url) {
           try {
             const origin = serverOriginFromUrl(server.url)
-            const token = await getToken(workspace.user_id, origin)
+            const token = await getToken(userId, origin)
             if (token) {
               const encodedOrig = encodeOrigin(origin)
               const path = new URL(server.url).pathname

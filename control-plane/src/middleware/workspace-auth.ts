@@ -51,7 +51,7 @@ export function requireWorkspaceParam(param = 'id'): MiddlewareHandler<Workspace
   }
 }
 
-/** The calling workspace's id. Only valid downstream of {@link workspaceAuth}. */
-export function callerWorkspaceId(c: Context<WorkspaceAppEnv>): string {
-  return c.get('workspacePrincipal').workspaceId
+/** The calling workspace and its owner. Only valid downstream of {@link workspaceAuth}. */
+export function caller(c: Context<WorkspaceAppEnv>): { workspaceId: string; userId: string } {
+  return c.get('workspacePrincipal')
 }
