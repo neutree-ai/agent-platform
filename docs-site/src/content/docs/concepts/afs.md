@@ -1,83 +1,81 @@
 ---
 title: "AFS: Cross-Agent file sharing"
-description: A permissioned shared file system that lets Workspaces exchange files safely
+description: A permissioned shared file system that lets workspaces hand files to each other
 ---
 
-Every Workspace has its own independent file system — this is the basis of Workspace isolation, but it also means that a file A writes is, by default, invisible to B. When multiple Agents need to collaborate on delivering an artifact (for example, a planner splits tasks, workers each do a segment, and finally it's archived), you need a controllable way to share files between Workspaces.
+Every workspace has its own file system. That isolation is the point — but it also means a file A writes is invisible to B. When several agents work on one deliverable (a planner splits the work, workers each take a piece, someone files the result), they need a controlled way to share files.
 
-**AFS (Agent File System)** is the capability NAP provides for this: a permissioned shared file system that, to an Agent, is just a directory in its container, and to a user, is the "Cloud Drive" tab in the **Files** app.
+**AFS (Agent File System)** is what NAP provides for that: a permissioned shared file system that an agent sees as a directory in its container, and a user sees as the **Cloud Drive** tab in the Files app.
 
 ## What it solves
 
-Without AFS, passing files across Workspaces is only possible by stuffing the content into the conversation or relaying it through third-party object storage — the former blows up the context, and the latter adds a layer of credential management. AFS turns this layer into infrastructure:
+Without it, moving a file between workspaces means either stuffing the content into the conversation or relaying it through object storage. The first blows up context; the second adds credentials to manage. AFS makes it infrastructure instead:
 
-- **Share by path, not by content** — an Agent writes a file to the shared directory, and the other party reads it at the same path directly in its own container; no serialization, no transfer needed
-- **Permission-controlled** — the sharing party decides who can access and whether it's read-only or writable
-- **Clean revocation** — once the sharing party stops sharing, all mount points immediately become invalid
+- **Share a path, not the content** — one agent writes into the shared directory, the other reads the same path in its own container. Nothing serialized, nothing transferred
+- **Permissioned** — whoever shares decides who gets in, and whether they can write
+- **Revocation is clean** — stop sharing and every mount point goes invalid at once
 
-## The visible parts
+## What you see
 
-### User's view: the "Cloud Drive" tab in the Files app
+### The user's side: the Cloud Drive tab
 
-Open the Workspace's **Files** app, and there are two tabs at the top:
+Open the workspace's **Files** app and there are two tabs:
 
-- **Local** — this Workspace's own file system
-- **Cloud Drive** — all shared directories the current Workspace can see
+- **Local** — this workspace's own file system
+- **Cloud Drive** — every shared directory this workspace can see
 
-Under the "Cloud Drive" root, each item is a **shared directory**: one you created, or one another Workspace shared with you. You can:
+Each item under Cloud Drive is a **shared directory**, either one you created or one another workspace shared with you. You can:
 
-- **Create a shared directory** — give it a name (lowercase letters, digits, hyphens), and it gets mounted into your own Workspace at the same time
-- **Manage members** — grant your other Workspaces access to this shared directory, choosing read-only or read-write
-- **Stop sharing** — revoke a member's access, or destroy the entire shared directory
+- **Create one** — name it (lowercase letters, digits, hyphens) and it mounts into your own workspace at the same time
+- **Manage members** — let your other workspaces in, read-only or read-write
+- **Stop sharing** — revoke one member, or destroy the directory outright
 
-A shared directory appears as the same path `/mnt/afs/<name>` to all parties that mount it — this is AFS's core contract: **the path is stable** and doesn't change across Workspaces.
+A shared directory appears at the same path, `/mnt/afs/<name>`, for everyone who mounts it. That stability is the core contract: **the path does not change from one workspace to the next.**
 
-### Agent's view: platform MCP tools
+### The agent's side: platform MCP tools
 
-The Agent doesn't look at the web interface directly; it manages sharing through the platform's built-in MCP tools. These tools work out of the box and don't need separate configuration:
+The agent doesn't use the web interface. It manages sharing through built-in MCP tools, which work with no setup:
 
-- `share_folder(name)` — create/ensure a shared directory, mounting it at its own Workspace's `/mnt/afs/<name>`
-- `grant_access(name, slug, readonly?)` — grant another Workspace access to this shared directory (identified by its slug); the target Workspace immediately sees the same-named path
-- `unshare_from_all(name)` — revoke all sharing of the directory and destroy the underlying storage
+- `share_folder(name)` — create or ensure a shared directory, mounted at its own `/mnt/afs/<name>`
+- `grant_access(name, slug, readonly?)` — let another workspace in, by slug; that workspace sees the same path immediately
+- `unshare_from_all(name)` — revoke every share and destroy the underlying storage
 
-In other words, an Agent can autonomously complete the entire flow of "create a share → write files → grant access to a collaborator → call that party" within a conversation, with no human intervention required.
+So an agent can run the whole sequence — create a share, write files, grant a collaborator access, call them — inside one conversation, with nobody stepping in.
 
 ## A typical flow: call_agent + AFS
 
-A common collaboration scenario: a parent agent prepares a set of materials and has a child agent complete the next step based on them. Pasting the content directly into the prompt would blow up the context, but going through AFS is smooth:
+A common shape: a parent agent prepares material and hands the next step to a child. Pasting the material into the prompt would blow up context. Through AFS it's straightforward:
 
-1. parent calls `share_folder("task-2026-05")` — gets the mount point `/mnt/afs/task-2026-05/`
-2. parent writes the files to hand off into this directory (using its usual file tools; the path is just an ordinary file)
-3. parent calls `grant_access("task-2026-05", "child-agent", readonly=true)` — the child's Workspace immediately sees these files at the same-named path
-4. parent calls the child agent (see [Multi-Agent collaboration](/nap/guides/6-compose-agents/)), and the prompt only needs to reference the path: `"Please process the files under /mnt/afs/task-2026-05/"`
-5. child reads the path directly in its own container, completes the task, and can write the artifact back (if access is read_write) or write it to its own Workspace's local
+1. parent calls `share_folder("task-2026-05")` and gets `/mnt/afs/task-2026-05/`
+2. parent writes the files to hand over into that directory, with its ordinary file tools — the path is just a path
+3. parent calls `grant_access("task-2026-05", "child-agent", readonly=true)`; the child's workspace sees the files at the same path
+4. parent calls the child ([Composing Agents](/nap/guides/6-compose-agents/)), and the prompt only has to name the path: `"Process the files under /mnt/afs/task-2026-05/"`
+5. child reads the path in its own container, does the work, and either writes the result back (if read-write) or into its own local files
 
-## How it works (a primer)
+## How it works
 
-> This section is for those curious about the internals; it doesn't affect usage.
+> Internals, for the curious. None of it changes how you use AFS.
 
-AFS is an independent set of components (implemented in Rust), made up of two kinds of processes:
+AFS is a separate set of components, written in Rust, in two kinds of process:
 
-- **afs-controller** — the centralized metadata + authorization service, with a gRPC interface and metadata stored in SQLite. It registers storage backends, creates/destroys shared directories, and records which hosts have mounted which directories
-- **afs-fuse** — a FUSE daemon that runs one copy on each agent host, with a gRPC interface. On receiving a mount instruction, it exposes the shared directory at the specified path via [FUSE](https://www.kernel.org/doc/html/latest/filesystems/fuse.html), with file reads and writes proxied to the corresponding storage backend
+- **afs-controller** — the metadata and authorization service, gRPC, metadata in SQLite. It registers storage backends, creates and destroys shared directories, and records which host has mounted what
+- **afs-fuse** — a FUSE daemon, one per agent host, also gRPC. Told to mount, it exposes the shared directory at the given path through [FUSE](https://www.kernel.org/doc/html/latest/filesystems/fuse.html) and proxies reads and writes to the storage backend
 
-**Storage backends** currently support two kinds:
+**Storage backends**, two of them today:
 
-- **local** — a local directory on the host where the controller resides (suited for single-machine or shared volumes)
-- **nfs** — mount an NFS export so that all agent hosts share the same copy of data
+- **local** — a directory on the controller's own host, for a single machine or a shared volume
+- **nfs** — an NFS export, so every agent host works on the same copy
 
-When each shared directory is created, the controller assigns it an immutable `access_key`. The access credential and the read-only/read-write mode at mount time are enforced by gRPC calls — any host that wants to mount this directory must present the correct key, and on revocation the controller notifies all mounting parties' afs-fuse to force an unmount, and that path in the business container vanishes instantly.
+Each shared directory gets an immutable `access_key` when it's created. The key and the read-only/read-write mode are enforced on the gRPC calls: a host that wants to mount has to present the right key, and on revocation the controller tells every mounting afs-fuse to unmount by force. The path inside the container disappears on the spot.
 
-In NAP, the shape of this set of components is: one afs-controller runs in the cluster, and each Workspace pod has an afs-fuse sidecar injected; the control plane maps the higher-level "user/Workspace/sharing-relationship" semantics onto the controller's "directory/mount/access_key" model — so what users and Agents see is the "Cloud Drive" and the MCP tools, without directly dealing with low-level concepts like access_key and directory IDs.
+In NAP the shape is: one afs-controller in the cluster, one afs-fuse sidecar injected into each workspace pod, and the control plane mapping "user / workspace / who-shared-with-whom" onto the controller's "directory / mount / access_key". Users and agents see the Cloud Drive and the MCP tools; access keys and directory IDs stay underneath.
 
-To Agents and users, all of this is transparent — what they see is just a directory.
+## A few habits worth having
 
-## A few usage tips
+**Keep directory names stable.** Once a slug and a directory name are written into a prompt or a skill, renaming breaks the reference. Choose the name as if it's permanent.
 
-**Keep directory names stable** — once the slug + directory name agreed upon between Agents is written into a prompt or skill, renaming will break the reference. Think it through when naming.
+**Default to read-only.** Read-only sharing has no write contention to reason about. Open read-write only when a child actually has to write something back.
 
-**Default to read-only; open read_write only when collaborative write-back is needed** — read-only sharing has no contended-write problems and is safer. Open the permission separately only when a child agent needs to write an artifact back.
+**Clean up.** After a one-off task, `unshare_from_all` reclaims the directory so the share list doesn't silt up. Long-running team drives are worth keeping.
 
-**Destroy when done** — after a one-off task ends, use `unshare_from_all` to reclaim the shared directory, so the share list doesn't keep piling up. Directories of a long-running "team drive" nature can be kept.
-
-**Don't use AFS as object storage** — AFS is designed for file handoff during Agent collaboration, not large-scale cold storage. Understand the file volume and access patterns in terms of a "working directory."
+**Don't use it as object storage.** AFS is built for handing files over during collaboration, not for bulk cold storage. Size it like a working directory.

@@ -1,65 +1,65 @@
 ---
 title: 2. Your First Agent
-description: Create a Workspace from scratch and complete your first conversation
+description: Create a workspace from nothing and finish your first conversation
 ---
 
-Once you have a working [API provider](/nap/guides/1-setup/), you can create your first Agent. The whole process takes less than 5 minutes.
+With a working [API provider](/nap/guides/1-setup/) in place, your first agent takes under five minutes.
 
-## Create a Workspace
+## Create a workspace
 
-Click the workspace switcher in the top menu bar and choose **Create Workspace**. In the dialog:
+Click the workspace switcher in the top bar and choose **Create Workspace**. In the dialog:
 
-1. Fill in the **name** — for example `my-first-agent`
+1. Give it a **name** — `my-first-agent`, say
 2. Choose a **mode**:
-   - **From Template** — start from a template shared on your instance. A template carries a complete Agent configuration (provider, model, prompt, possibly skills); if a suitable one exists, pick it and you're done with this step
-   - **Blank** — configure from scratch. On a fresh install with no templates yet, this is your path — it's only a few fields:
-     - **Agent Type** — Claude Code or Codex
-     - **API Provider** — the list only shows providers compatible with the chosen agent type (the mapping from [Getting Ready](/nap/guides/1-setup/))
-     - **Model** — pick one the chosen provider actually serves
-     - **Prompt** — fine to leave empty; write it after you enter the Workspace
+   - **From Template** — start from a template shared on your instance. A template carries a whole agent configuration (provider, model, prompt, sometimes skills). If one fits, take it and this step is done
+   - **Blank** — configure it yourself. On a fresh install with no templates yet, this is the way, and it's only a few fields:
+     - **Agent Type** — Claude Code, Codex or Goose
+     - **API Provider** — the list only shows providers that work with the type you picked (the mapping is in [Getting Ready](/nap/guides/1-setup/))
+     - **Model** — one the provider actually serves
+     - **Prompt** — leave it empty for now; write it once you're inside
 
 Click **Create**.
 
-## Enter the Workspace
+## Go in
 
-Once created, the Workspace starts and opens automatically. The first startup takes a few seconds — the platform is preparing a running instance for your Agent in the background.
+The workspace starts and opens on its own. The first start takes a few seconds while the platform brings up an instance for the agent.
 
-By default the Workspace opens as three columns:
+It opens as three columns:
 
-| Area | Purpose |
+| Area | What it's for |
 |---|---|
-| Left — **Session History** | Switch between or start sessions |
-| Middle — working area | App tabs: **Files / Browser / Skill Studio / Terminal / Automation / Memory / Settings** — the Agent's environment and configuration all live here |
-| Right — **Chat** | Where you talk to the Agent |
+| Left — **Session History** | Switching between sessions, or starting one |
+| Middle — working area | App tabs: **Files / Browser / Skill Studio / Terminal / Automation / Memory / Settings** — the agent's environment and configuration |
+| Right — **Chat** | Where you talk to it |
 
-The layout is yours to rearrange — move apps between columns, open more of them, or pop one out into its own window. `⌘K` gets you anywhere.
+Rearrange it however you like: move apps between columns, open more, or pop one into its own window. `⌘K` reaches anything.
 
-When you open any configuration item, the right side of the dialog shows the corresponding field descriptions. Whenever you're unsure about something, just look at the right side — you don't need to switch back to this document.
+Open any configuration item and the right side of the dialog explains its fields. When something's unclear, look there rather than coming back here.
 
 ## Your first conversation
 
-Type a message in the Chat input on the right:
+Type into the chat box on the right:
 
 ```
-Hi, please introduce yourself in one sentence
+Hi, introduce yourself in one sentence
 ```
 
-The Agent will reply. You can follow up, send images, paste links, or have it do simple things:
+It replies. Follow up, send images, paste links, or give it something to do:
 
 ```
-List all files in the current working directory for me
+List the files in the current working directory
 ```
 
-The Agent will run a command in its environment and reply with the result.
+It runs the command in its own environment and comes back with the result.
 
-If the prompt isn't written yet, the Agent responds as a generic assistant — it can chat but has no specific work style. Come back to talk to it after you finish the prompt, and you'll see a completely different Agent.
+With no prompt written yet, it answers as a generic assistant — able to talk, with no particular way of working. Come back after you've written the prompt and it's a different agent.
 
 ## A look at Files
 
-Open the **Files** tab in the middle column and you'll see the Agent's working directory — these are exactly the files it saw when you asked it to "list files." Anything you put here, the Agent can read; anything it produces shows up here for you.
+Open the **Files** tab in the middle column and you're looking at the agent's working directory — the files it just listed for you. What you put there it can read; what it produces shows up there for you.
 
-Files are **shared across Sessions**: when you start a new Session, everything is still in place.
+Files are **shared across sessions**. Start a new session and everything is still where it was.
 
 ## Next
 
-At this point you have an Agent that runs and can converse. The next step is making it do what you actually want — write a prompt to give it a "personality" and a way of working, add skills to give it specialties, configure MCP to connect it to external systems, and use memory so it understands you better the more you use it. All of this is in [Defining Agent Behavior](/nap/guides/3-agent-behavior/).
+You have an agent that runs and holds a conversation. Making it do what you actually want comes next: a prompt for how it works, skills for its specialties, MCP to reach external systems, memory so it fits you better over time. That's [Defining Agent Behavior](/nap/guides/3-agent-behavior/).

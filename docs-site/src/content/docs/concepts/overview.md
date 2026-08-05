@@ -1,45 +1,46 @@
 ---
 title: What is Neutree Agent Platform
-description: An Agent Cloud that lets Agents truly run inside your company
+description: A hosted, multi-user home for the agents you already run, on infrastructure you own
 ---
 
-You already know what the cloud is — with software, you don't have to buy your own servers, configure networking, or run operations; the cloud handles all of that and you just write the business logic. Neutree Agent Platform (NAP) does the same thing, only it swaps the object from software to Agents: the runtime environment, triggering, collaboration, and reuse are all handled by the platform, and you only need to define "what this Agent should do."
+Most people meet an Agent on their own machine: one terminal, one person, one session at a time. That works right up to the point where the Agent has to be there while the laptop is closed, or where someone on another team wants the same one.
 
-This is the **Agent Cloud**. The Agents you create run inside a Kubernetes cluster, online 24/7, waiting for you or external systems to hand them tasks.
+Neutree Agent Platform (NAP) is where that Agent goes next. **Close your laptop. Your agents keep working.** The core, the prompt and the skills stay the ones you already use — what changes is that they run as a hosted, multi-user service inside a Kubernetes cluster you control, online around the clock, waiting for you or an external system to hand over work.
 
-## What it solves
+## What the platform takes care of
 
-Writing a working prototype Agent isn't hard — a Python script, a prompt, and a few API calls are enough. But turning it into something that "the team uses every day, integrates with existing systems, can be debugged when it breaks, and new people can modify" is where things get tricky:
+A prototype Agent is easy: a script, a prompt, a few API calls. Turning it into something a team leans on every day is a different job, and almost none of that job is about what the Agent actually does:
 
-- It has to be **always online**, not a script that only runs when you manually start it
-- It has to be **triggerable by external systems** — a GitLab job failed, a Slack message arrived, a scheduled time was reached
-- It has to have a **controllable execution environment** — able to run shell, read files, and install tools, but not run wild
-- It has to be **reusable by the team** — a prompt one person tuned should be directly usable by others
-- It has to **not be locked into a single vendor** — today you use Claude, tomorrow some new model from OpenAI might be cheaper
+- **Always on** — not a script that runs when someone remembers to start it
+- **Reachable** — a Slack thread, an HTTP call, a CI webhook, a schedule. Five entrances, one Agent
+- **Contained** — it can run shell, read files and install tools, but inside a boundary you set
+- **Shared** — a prompt one person tuned is one the rest of the team points at, rather than copies
+- **Not welded to one vendor** — the core is swappable, and the configuration belongs to the Workspace rather than to the core running it
 
-NAP consolidates all of this into one platform. You focus on "what this Agent should do," and leave the rest to the platform.
+That half is the platform's. Yours is deciding what the Agent should do.
 
 ## The life of an Agent: Build → Distribute → Optimize
 
-Running an Agent on NAP means going through these three stages repeatedly — and the docs are organized around this main thread:
+Running an Agent on NAP means going around these three repeatedly, and the docs are organized along the same thread:
 
-- **Build** — define who it is and what it can do: model, prompt, skills, external tools, human-in-the-loop interface. Start with [your first Agent](/nap/guides/2-first-agent/).
-- **Distribute** — make it usable anytime, anywhere: scheduled, external events, API triggers, multi-Agent collaboration, team reuse. See [Triggering Agents](/nap/guides/5-trigger-agents/).
-- **Optimize** — make it better the more it's used: review real session history, continuously drive down per-task cost and raise task success rate. See [Optimize](/nap/concepts/optimize/).
+- **Build** — a neutral, swappable core, shaped by a prompt, skills and MCP, on top of middleware the platform runs so no Agent has to ship its own. Start with [your first Agent](/nap/guides/2-first-agent/).
+- **Distribute** — one Workspace, reachable five ways, served in whichever shape the workload needs. Nothing on the user's side: no install, no configuration, no key of their own. See [Triggering Agents](/nap/guides/5-trigger-agents/).
+- **Optimize** — the Agent reads its own session history and proposes changes to its prompt and skills. Nothing lands until you approve it. See [Optimize](/nap/concepts/optimize/).
 
-## Three sets of terms that run through the whole site
+## Terms that run through the whole site
 
-After reading the full set of docs, you'll repeatedly encounter these three sets of terms — just get familiar with them for now; each set has a dedicated chapter that expands on it later:
+Four sets of words come up again and again. Getting familiar with them is enough for now; each set has a chapter of its own later on:
 
-- **Workspace / Agent / Session** — A Workspace is the Agent's "desk," holding its configuration, files, and conversation records. An Agent is the instance that results from running that configuration. A Session is one specific conversation or task.
-- **Model / Prompt / Skills / MCP / Memory** — The five-piece set, respectively determining the Agent's "brain, identity, muscle memory, external tools, and long-term memory." These five are what you can tune.
-- **Provider / Connector / Route / Schedule** — These determine where the Agent receives tasks from. A Provider connects it to a large-model API; a Connector + Route bring external events in; a Schedule lets it start itself on time.
+- **Workspace / Agent / Session** — A Workspace is the Agent's desk, holding its configuration, its files and its conversation records. An Agent is what that configuration becomes once it runs. A Session is one conversation or one task.
+- **Model / Prompt / Skills / MCP / Memory** — The five-piece set: brain, identity, muscle memory, external tools, long-term memory. These five are what you tune.
+- **Middleware** — What the platform runs underneath every Workspace, so no Agent has to carry it: [code sandbox](/nap/self-host/sandbox-browser/), remote browser, Agent-to-Agent calls, [cross-agent filesystem](/nap/concepts/afs/), [memory store](/nap/concepts/memory-store/), MCP connections. You switch these on; you don't build them.
+- **Provider / Connector / Route / Schedule** — Where the Agent picks up work. A Provider connects it to a model API, a Connector plus a Route bring external events in, a Schedule starts it on time.
 
-## Design philosophy: each layer manages its own segment
+## Design philosophy: each layer minds its own segment
 
-These sets of concepts are deliberately kept separate. The Agent engine (Claude Code / Codex) is separate from the model, the Agent configuration is separate from the triggering mechanism, and a single Agent is separate from the team's reusable resources (Library). The cost is having to remember a few more terms; the benefit is that when you later want to swap out one of those layers, the others basically don't have to change — for example, if one day a model API becomes unavailable, you just switch to a different Provider and carry on, while the prompt and skills stay untouched.
+These layers are kept apart on purpose. The Agent core (Claude Code / Codex / Goose) is separate from the model, the Agent's configuration is separate from what triggers it, and a single Agent is separate from the team's reusable resources (Library). The cost is a few more terms to remember. The benefit shows up when one layer has to change: swap the core and the prompt, the skills and the schedule come along untouched, because they belong to the Workspace. Lose access to a model API and a different Provider carries on from there.
 
 ## What to read next
 
-- Want to build a complete mental model first → read through the [Concepts](/nap/concepts/agent-and-workspace/) chapter in order, about 10 minutes
-- Want to get hands-on immediately → jump to [Getting Ready](/nap/guides/1-setup/) and get your first Agent running
+- Want a complete mental model first → read the [Concepts](/nap/concepts/agent-and-workspace/) chapter in order, about 10 minutes
+- Want to get hands-on → jump to [Getting Ready](/nap/guides/1-setup/) and get your first Agent running

@@ -1,119 +1,118 @@
 ---
 title: 6. Composing Agents
-description: Let one Agent call another to compose complex capabilities
+description: One agent calling another, so capability composes instead of piling up
 ---
 
-By now you can tune an Agent well, and you can trigger it from a variety of channels. This chapter covers a new dimension—**letting Agents call each other**.
+You can shape an agent well, and you can start it from several directions. This chapter adds a dimension: **agents calling each other**.
 
-Why do this? Because many tasks are inherently multi-role: after writing code, have another Agent review it; after finishing a translation, have another Agent run QA; after triaging a request, hand it off to the real expert. Splitting these roles into separate Agents, each tuned well, and then composing them to work together is often more stable and more maintainable than training one "knows everything" Agent.
+Why bother? Because plenty of work is multi-role by nature. Code gets written, then reviewed. A translation gets done, then checked. A request gets triaged, then handed to whoever actually knows. Splitting those roles into separate agents, tuning each, and composing them usually holds up better — and is easier to maintain — than one agent that supposedly knows everything.
 
 ## How it works
 
-Neutree Agent Platform (NAP) lets one Agent **call another Agent like a tool** within a conversation. To make a Workspace callable by others, you need to do two things:
+NAP lets one agent **call another like a tool**, inside a conversation. Making a workspace callable takes two things:
 
-1. Give it a **recognizable Slug**
-2. Set its **Visibility**
+1. A recognizable **slug**
+2. A **visibility** setting
 
-Open the **Settings** app in the Workspace — both fields are in the **General** section.
+Both are in the workspace's **Settings** app, under **General**.
 
 ### Slug
 
-The Slug is the Workspace's unique identifier, by which other Agents reference it. For example `qa-checker`, `code-reviewer`, `translator`.
+The slug is the workspace's identifier, and how other agents name it: `qa-checker`, `code-reviewer`, `translator`.
 
-- Only lowercase letters, digits, and hyphens are allowed
-- Leave it empty to make the Workspace non-callable by other Agents
+- Lowercase letters, digits and hyphens
+- Leave it empty and no other agent can call it
 
 ### Visibility
 
-| Visibility | Who can call it | Call syntax |
+| Visibility | Who can call it | How they write it |
 |---|---|---|
-| **Private** | Not callable | — |
-| **User** | Your own other Agents | `@agent/slug` |
-| **Public** | Any user's Agents on the platform | `@agent/username/slug` |
+| **Private** | Nobody | — |
+| **User** | Your own other agents | `@agent/slug` |
+| **Public** | Any agent on the instance | `@agent/username/slug` |
 
-## Calling another Agent in a conversation
+## Calling another agent
 
-After setting the Slug and Visibility, write this in the calling Agent's conversation:
-
-```
-After writing this plan, have @agent/reviewer review it for me
-```
-
-The calling Agent automatically handles the cross-Workspace communication: it passes the context over, waits for the callee to return a result, then integrates it back into the current conversation and continues working.
-
-You can also use **background mode**—send it off without waiting, letting the callee work at its own pace in its own Workspace, and report back via a notification or by writing a file when done. This suits longer-running tasks.
-
-When you need to pass **large amounts of material** or **generated artifacts** between Agents, don't stuff them into the prompt—use [AFS (cross-Agent file sharing)](/nap/concepts/afs/): write the file to a shared directory, grant access to the collaborator, and they can read it directly at the same path inside their own container.
-
-## A few typical collaboration patterns
-
-Different business scenarios call for different collaboration structures. Here are the three most common ones:
-
-### 1. Triage → Expert
-
-The entry point is a **triage Agent** with a very short Prompt whose sole job is to judge "which category is this problem" and then hand it off to the corresponding expert Agent.
+With slug and visibility set, write it into the conversation:
 
 ```
-You are a triage assistant. User requests fall into one of three categories:
-- Translation-related → hand off to @agent/translator
-- Code issues → hand off to @agent/code-helper
-- Other → hand off to @agent/general
-
-After deciding, state your judgment in one sentence, then call the corresponding agent.
+Once this plan is written, have @agent/reviewer look it over
 ```
 
-The benefit: each expert Agent can be tuned, swapped to a different model, and maintained independently. Adding a new category just means adding a new expert, without changing the others.
+The calling agent handles the crossing itself: it passes the context over, waits for the result, folds it back into the conversation and carries on.
+
+There's also **background mode** — send it off without waiting, let the callee work at its own pace and report back with a notification or a file. That's the one for long jobs.
+
+When there's **real material** to hand over, or an artifact to return, don't put it in the prompt. Use [AFS](/nap/concepts/afs/): write the file into a shared directory, grant the collaborator access, and they read it at the same path in their own container.
+
+## Three patterns that recur
+
+### 1. Triage → expert
+
+The entry point is a **triage agent** with a very short prompt whose only job is deciding what kind of problem this is, then handing it over.
+
+```
+You are a triage assistant. Requests fall into three kinds:
+- Translation → hand to @agent/translator
+- Code → hand to @agent/code-helper
+- Anything else → hand to @agent/general
+
+Say which one this is in a sentence, then call that agent.
+```
+
+What it buys you: each expert is tuned, modelled and maintained on its own, and adding a category means adding an expert rather than editing the others.
 
 ### 2. Pipeline
 
-A task has fixed multiple steps: A finishes and hands off to B, B finishes and hands off to C. Each step is an Agent.
+Fixed steps, in order. A finishes and hands to B, B to C, one agent per step.
 
-Example: a translation pipeline —
-- `translator` —does the translation
-- `qa-checker` —checks translation quality
-- `formatter` —outputs in the target format
+A translation pipeline, say:
 
-After `translator` finishes, it calls `qa-checker`; once QA passes, it calls `formatter`. Any step that goes wrong can be pinpointed to a specific Agent.
+- `translator` — does the translation
+- `qa-checker` — checks it
+- `formatter` — emits the target format
 
-### 3. Planner + Worker
+`translator` calls `qa-checker` when it's done; QA passes and it calls `formatter`. When something comes out wrong, it belongs to a specific agent.
 
-A **planner** Agent breaks down the task and plans the steps, then hands each step to a corresponding **worker** Agent, and finally aggregates the results.
+### 3. Planner + workers
 
-This suits scenarios where the task structure isn't known in advance—the planner only knows how many steps to break it into and whom to call after reading the requirements.
+A **planner** reads the requirement, decides the steps, hands each to a **worker**, then merges what comes back.
 
-## Teamwork: task-level multi-Agent collaboration
+This is the one for work whose shape isn't known in advance — the planner only finds out how many steps there are, and who to call, after it has read what's being asked.
 
-The above describes **long-lived, fixed** collaboration relationships—A has a stable Slug, B is visible long-term and callable at any time, and the directory stays mounted. But a lot of collaboration is actually **one-off**:
+## Teamwork: collaboration scoped to a task
 
-> "This time I want to pull in two Agents to help me do a piece of research, then disband once it's done."
+Everything above is **standing** collaboration: a stable slug, long-term visibility, a directory that stays mounted. Plenty of collaboration is **one-off**:
+
+> "For this piece of research I want two agents helping, and then it's over."
 >
-> "I want to bring my private Agent in for a single use, without permanently promoting it to user/public visibility."
+> "I want my private agent in for one task, without promoting it to user or public for good."
 
-For this scenario, NAP provides **Teamwork** (in preview). On the home screen, press `⌘K`, open **Teamwork**, and create a team task:
+**Teamwork** (in preview) is for that. From the home screen, `⌘K` → **Teamwork**, create a team task:
 
-1. **Designate a coordinator Agent**—it's the main Agent, and all sub-agent calls are initiated by it
-2. **Add members**—the candidate list includes all public / user visible Agents, **plus your own private Agents** (if one doesn't have a slug yet, you can set it up right here). A private Agent added to a task is only visible within that task and doesn't affect other scenarios
-3. **Start the conversation**—the platform automatically creates a shared directory for this task and mounts it for all members; mounting/unmounting happens automatically as members join/leave; the directory is reclaimed automatically when the task ends
+1. **Set a coordinator** — the main agent; every sub-agent call comes from it
+2. **Add members** — candidates include every public and user-visible agent, **plus your own private ones** (and you can give one a slug right there). A private agent added to a task is visible inside that task only
+3. **Start** — the platform creates a shared directory for the task and mounts it for every member, mounting and unmounting as people join and leave, and reclaiming it when the task ends
 
-The task detail page has a **collaboration timeline**: one line per member's session, each `call_agent` lands a point on the line, showing the main→sub sub-message, the sub→main result, and whether the call is synchronous or asynchronous. Very intuitive when debugging multi-Agent collaboration.
+The task's detail page has a **collaboration timeline**: one track per member session, a point for each `call_agent` showing what went down, what came back, and whether the call was synchronous. When a multi-agent flow misbehaves, this is where you look.
 
-**When to use Teamwork vs. when to keep using plain `@agent`:**
+**Which one to use:**
 
-- Long-lived, fixed collaboration → configure Slug + Visibility, the approach in the first half of this chapter
-- **One-off tasks, needing to temporarily pull in a private Agent, needing shared files**—use Teamwork
+- Standing collaboration → slug plus visibility, as in the first half of this chapter
+- **One-off work, a private agent borrowed for a task, files to share** → Teamwork
 
-For the full design motivation and how it works, see the [Teamwork concepts page](/nap/concepts/teamwork/).
+The design and the reasoning are on the [Teamwork](/nap/concepts/teamwork/) page.
 
-## Some practical experience
+## Things worth knowing
 
-**Keep each Agent's responsibility narrow.** A "knows everything" Agent is hard to tune. One Agent doing one thing well beats five Agents each doing half a thing.
+**Keep each agent's job narrow.** An agent that does everything is hard to tune. One agent doing one thing well beats five doing half a thing each.
 
-**Keep Slug names stable.** Once other Agents reference your Slug, renaming it breaks those references. Think it through before settling on a name.
+**Keep slugs stable.** Once others reference a slug, renaming it breaks them. Choose it as if it's permanent.
 
-**Try Private/User first, then go Public.** Public exposes the Agent to the whole platform—any user's Agent can call yours. Unless you really intend to build a public capability, it's better to be conservative.
+**Start Private or User; go Public deliberately.** Public means any agent on the instance can call yours. Unless you meant to publish a capability, stay conservative.
 
-**Don't nest call relationships too deep.** A calling B calling C calling D is allowed, but each extra layer doubles the latency and makes troubleshooting harder. Three layers or fewer is a manageable range.
+**Don't nest too deep.** A calling B calling C calling D works, but every layer adds latency and makes a failure harder to place. Three is a sane ceiling.
 
 ## Next
 
-By now you've covered both the Agent's "capability surface" and its "collaboration surface." The final chapter covers how to **reuse, share, and scale** these capabilities → [Operating at Scale](/nap/guides/7-operate-at-scale/).
+Capability and collaboration are both covered. The last chapter is about making all of it **reusable, shared, and organized** → [Operating at Scale](/nap/guides/7-operate-at-scale/).

@@ -140,7 +140,7 @@ echo "新的偏好" >> /mnt/memory/user-prefs/notes.md
 
 **分层挂载**——账号级偏好（语言、风格）放一个独立的"用户记忆库"，挂给所有 Workspace；项目知识放 Workspace 专属库。别把所有东西塞一个库里。
 
-**敏感信息不要进记忆库**——API key、密码请用 [凭证](/nap/zh-cn/guides/1-setup/#凭证agent-访问资源的钥匙)。记忆库本质是 Agent 上下文，会进对话，不适合放秘密。
+**敏感信息不要进记忆库**——API key、密码请用 [凭证](/nap/zh-cn/guides/4-extend-workspace/#credentialsagent-访问外部资源的钥匙)。记忆库本质是 Agent 上下文，会进对话，不适合放秘密。
 
 ## 接下来
 

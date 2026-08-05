@@ -1,126 +1,126 @@
 ---
 title: 7. Operating at Scale
-description: Library, tags, shared sessions, team collaboration—make what one person tuned usable by the whole team
+description: Library, tags, shared sessions and team scope — turning one person's tuning into something the team runs on
 ---
 
-The previous six chapters were all about a single Agent—how to configure it, tune it, trigger it, make it collaborate. Once that craftsmanship is done, new problems emerge:
+The first six chapters were about one agent: configuring it, shaping it, triggering it, composing it. Once that craft is done, a different set of problems shows up:
 
-- The Prompt you tuned—how do you let others use it too?
-- The 5 Agents on your team—how do you keep their configurations consistent?
-- An Agent went wrong—how do you send this session to a colleague to look at?
-- 100 Workspaces piled up in your list—how do you find the one you want?
+- The prompt you got right — how does anyone else get it?
+- Five agents on the team — how do their configurations stay in step?
+- An agent went wrong — how do you hand that session to a colleague?
+- A hundred workspaces in the list — how do you find the one you want?
 
-This chapter covers everything in Neutree Agent Platform (NAP) related to "reuse, sharing, and organization."
+This chapter is everything in NAP about reuse, sharing and keeping order.
 
-## The Library trio: Prompts, Skills, Templates
+## The Library: prompts, skills, templates
 
-The **Library** app (`⌘K` → **Library**) holds three kinds of things, each solving one reuse problem.
+The **Library** app (`⌘K` → **Library**) holds three kinds of thing, each solving one reuse problem.
 
 ### Prompts
 
-Store a system Prompt you use repeatedly in the Library. Other Workspaces can **reference** this Prompt, and once a reference is established:
+Put a system prompt you keep reusing into the Library and other workspaces can **reference** it. Once referenced:
 
-- When the Prompt in the Library is updated, all referencing parties **sync automatically**
-- A Workspace that wants to deviate from the baseline can "override," after which it no longer follows updates (it can resume following at any time)
+- Update the library copy and everything referencing it **follows automatically**
+- A workspace that needs to differ can override, at which point it stops following (and can start again whenever)
 
-When to extract a Prompt into the Library:
+Worth extracting when:
 
-- **Multiple Workspaces use the same behavior** —the classic case is standardizing a class of Agents across a team
-- **The same Prompt is being iterated** —you don't want to manually sync to 5 places every time you change it
-- **You want version management** —Library Prompts support multiple versions, making it easy to trace back and compare
+- **Several workspaces need the same behavior** — the classic case being one class of agent standardized across a team
+- **The prompt is still moving** — you don't want to hand-copy every revision into five places
+- **You want versions** — library prompts keep them, so you can compare and go back
 
-If only one Workspace uses it, there's no need to extract it. Wait until there's actually a second consumer.
+If exactly one workspace uses it, leave it where it is. Extract it when a second consumer actually exists.
 
 ### Skills
 
-Skills are also stored in the Library, with a similar mechanism. [Defining Agent Behavior](/nap/guides/3-agent-behavior/#skills-reusable-capability-packages) covered how to **enable** a skill in a Workspace. Here we cover how to **create** one:
+Skills live in the Library too, on the same mechanism. [Defining Agent Behavior](/nap/guides/3-agent-behavior/#skills-reusable-capability-packages) covered **enabling** one; this is **creating** one.
 
-In the **Library** app, switch to **Skills** and create one. You can choose two methods:
+In the **Library** app, switch to **Skills** and create. Two ways in:
 
-- **Upload an archive** —package `SKILL.md` together with any tool scripts into a zip and upload it
-- **Import from a Git repository** —specify a repository address and path, and the platform pulls it down. You can re-sync after the repository is updated
+- **Upload an archive** — `SKILL.md` and any tool scripts, zipped
+- **Import from Git** — a repository and a path; the platform pulls it, and re-syncs when the repository moves
 
-A Skill's content structure follows a convention:
+The layout follows a convention:
 
 ```
 my-skill/
-├── SKILL.md       # describes what this skill does and which commands it provides
+├── SKILL.md       # what this skill does and what it provides
 └── scripts/       # tool scripts
     └── ...
 ```
 
-`SKILL.md` is what the Agent actually reads—it tells the Agent what capabilities this skill provides and how to use them. Writing a good `SKILL.md` is the core of writing a good skill.
+`SKILL.md` is what the agent actually reads. Writing a good one is most of writing a good skill.
 
 ### Templates
 
-A Template is a **complete snapshot of a Workspace configuration**—model, Prompt, Skills, MCP, settings, and resources all packaged together. A Workspace created from a Template directly owns this entire set of configuration.
+A template is a **snapshot of a whole workspace configuration** — model, prompt, skills, MCP, settings, resources. A workspace created from one starts with all of it.
 
-When to extract a Workspace into a Template:
+Worth extracting when:
 
-- **You need to batch-create similar Agents** —for example, giving everyone on the team a "translation Agent"
-- **You want to give new members a ready-to-use starting point** —they only need to create from the Template, not configure from scratch
-- **The configuration is being iterated** —after the Template is updated, Workspaces bound to it can be upgraded with one click
+- **You need similar agents in bulk** — a translation agent for everyone on the team
+- **New people need somewhere to start** — create from the template instead of configuring from nothing
+- **The configuration is still moving** — bound workspaces upgrade in one click when the template changes
 
-In the Workspace's **Settings** app, under **General**, click **Save as Template**. You can choose whether to **bind** the current Workspace to this new Template (binding lets it follow updates).
+In **Settings** → **General**, click **Save as Template**. You can choose whether to **bind** this workspace to it, which is what makes it follow updates.
 
-### The relationship between Templates and Library Prompts
+### Templates and library prompts together
 
-The two don't conflict; they're only complete when combined:
+They don't compete; they're only complete together:
 
-- **Templates** —manage the whole Agent's "default persona"
-- **Library Prompts** —manage fine-grained iteration of the Prompt item alone
+- A **template** carries the agent's whole default shape
+- A **library prompt** lets the prompt alone keep moving
 
-A common team practice is: the Prompt field in the Template references a Library Prompt. This way the Template provides the overall configuration baseline, the Prompt can iterate independently, and after an update all Workspaces created from the Template receive the new Prompt.
+The common arrangement: the template's prompt field references a library prompt. The template sets the baseline, the prompt iterates on its own, and every workspace created from the template picks up the new wording.
 
-## Tags: organizing your Workspace list
+## Tags: keeping the workspace list navigable
 
-Once dozens of Workspaces pile up, finding one starts to get hard. **Tags** are NAP's lightweight grouping tool.
+Once there are dozens of workspaces, finding one gets slow. **Tags** are the lightweight answer.
 
-Create and manage tags in the **Tags** app on the home screen (`⌘K` → **Tags**). Assign them to a Workspace in its **Settings** → **General**. The workspace switcher in the top menu bar filters the list by tag.
+Create and manage them in the **Tags** app (`⌘K` → **Tags**), and assign them per workspace in **Settings** → **General**. The workspace switcher in the top bar filters by tag.
 
-### Tag design suggestions
+Three axes that work:
 
-- By **purpose** —`production`, `staging`, `experiment`
-- By **team** —`frontend`, `backend`, `data`
-- By **status** —`active`, `archived`, `review`
+- By **purpose** — `production`, `staging`, `experiment`
+- By **team** — `frontend`, `backend`, `data`
+- By **state** — `active`, `archived`, `review`
 
-Colors are for at-a-glance differentiation. Tag filtering is OR logic—when multiple are selected, anything matching any one of them is shown.
+Colors are for scanning. Filtering is OR: select several and anything matching any of them shows.
 
 ## Shared sessions
 
-When debugging an Agent, you often need to send a session to a colleague to look at: you see the Agent took a wrong turn at some step and want a colleague to help diagnose it.
+Debugging an agent usually means showing someone a session — it went the wrong way at some step and another pair of eyes would help.
 
-Use the share button on a session (available in **Chat** and **Session History**). This generates a public link that anyone can open to see the full conversation of this Session—messages, tool calls, file operations all visible.
+Use the share button on a session, in **Chat** or in **Session History**. It generates a public link showing that session in full: messages, tool calls, file operations.
 
-Suitable scenarios:
+Good for:
 
-- **Asking for help** —send the problematic session to someone on the team who knows it better
-- **Demos** —show a business stakeholder a complete end-to-end flow
-- **Retrospectives** —when an Agent performed especially well or especially badly, archive it for reference
+- **Asking for help** — hand the bad session to whoever knows this part
+- **Showing the work** — walk a stakeholder through an end-to-end run
+- **Retrospectives** — file the runs that went unusually well or unusually badly
 
-Note that what you share is **public**—don't share sessions containing sensitive information.
+The link is **public**. Don't share sessions with anything sensitive in them.
 
-## Workspace visibility and team collaboration
+## Visibility and team scope
 
-[Composing Agents](/nap/guides/6-compose-agents/#visibility) covered how a Workspace's Visibility affects **who can call it**. The same field also affects **who can see it in their own list**:
+[Composing Agents](/nap/guides/6-compose-agents/#visibility) covered how a workspace's visibility decides **who can call it**. The same field decides **whose list it appears in**:
 
-- **Private** —only you can see it
-- **User** —you can see it (it doesn't appear in others' lists)
-- **Public** —visible to every user on the instance
+- **Private** — yours alone
+- **User** — yours across your own agents, and in nobody else's list
+- **Public** — visible to every user on the instance
 
-The Prompts, Skills, and Templates in the Library follow the platform's unified three-level sharing scope — **Private** / **Team** / **Public**. Public suits capabilities the whole instance should share, Team scopes them to selected teams, and Private suits personal use or the experimental stage.
+Library prompts, skills and templates use the platform's three scopes — **Private**, **Team**, **Public**. Public for what the whole instance should have, Team to keep it to selected teams, Private for personal or still-experimental work.
 
-### A common team pattern
+### The pattern most teams land on
 
-1. **Experiment in personal space** —tune Prompts and try skills in a Private Workspace, experimenting freely
-2. **Extract to the Library once stable** —put the Prompt into Public Prompts and the skill into Public Skills
-3. **Crystallize into a Template** —save the mature Workspace configuration as a Public Template so everyone on the team can create from it with one click
-4. **Keep iterating** —through the Library's "auto-sync updates" mechanism, configuration improvements roll out automatically
+1. **Experiment privately** — tune prompts and try skills in a Private workspace, freely
+2. **Extract once it's stable** — the prompt into Public Prompts, the skill into Public Skills
+3. **Freeze it into a template** — save the mature configuration as a Public Template the team creates from
+4. **Keep iterating** — the Library's automatic sync carries improvements out on its own
 
-This flow connects "personal exploration" and "team benefit"—what one person spends time tuning, the whole team gets to use.
+That's the path from one person's afternoon to something the team runs on.
 
 ## Next
 
-By now you've walked the full path from "creating your first Agent" to "turning it into a team-level capability."
+You've come the whole way, from a first agent to a team-level capability.
 
-If you want to dive deep into a specific topic, return to the [Concepts](/nap/concepts/overview/) chapter for a panoramic explanation of NAP's core concept groups.
+To go deeper on any one piece, the [Concepts](/nap/concepts/overview/) chapter lays out how the parts fit together.

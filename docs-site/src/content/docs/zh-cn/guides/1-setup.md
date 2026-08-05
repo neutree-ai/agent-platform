@@ -15,14 +15,15 @@ description: 接入大模型 API 供应商 —— 创建第一个 Agent 前唯�
 
 Provider Type 必须和你要跑的 agent、手里的 API 对得上：
 
-| 协议类型 | 对应 Agent | 适用场景 |
+| 协议类型 | 对应 core | 适用场景 |
 |---|---|---|
-| **OpenAI Compatible** | Codex | 实现了 OpenAI **Responses API** 的服务 —— OpenAI 官方 API、Azure OpenAI，或支持 Responses 的网关。**只提供 Chat Completions 的服务不能用**：Codex 依赖 Responses API。 |
-| **Anthropic** | Claude Code | Anthropic 官方 API，使用静态 API Key。 |
+| **Anthropic API** | Claude Code | Anthropic 官方 API，使用静态 API Key。 |
 | **Anthropic OAuth** | Claude Code | 第三方提供的 Anthropic 兼容 API —— 大部分都走这一类。填服务商给的 Base URL 和 key 即可；名字里虽有 OAuth，**并没有 OAuth 授权步骤**，只是复用了同一套协议。 |
 | **Claude Code OAuth** | Claude Code | 你个人的 Claude Pro / Team 订阅。本地执行 `claude setup-token`，把得到的 token 粘贴进来 —— 不需要 Base URL。 |
+| **OpenAI Responses** | Codex | 支持 OpenAI **Responses API**（`/v1/responses`）的服务 —— OpenAI 官方 API、Azure OpenAI，或其他兼容端点。**只提供 Chat Completions 的服务不能用**：Codex 依赖 Responses。 |
+| **OpenAI Chat Completions** | Goose | 支持 `/v1/chat/completions` 的服务。Goose 用的是这一类。 |
 
-判断方法：跑 Codex → 第一行，并确认服务支持 Responses；跑 Claude Code → 后三行按你的 API 来源选（官方 key / 第三方兼容 API / 个人订阅）。
+判断方法：跑 Claude Code → 前三行按你的 API 来源选（官方 key / 第三方兼容 API / 个人订阅）；跑 Codex → Responses；跑 Goose → Chat Completions。最后两行不能互换。
 
 按所选类型填好保存，供应商就绪。
 
