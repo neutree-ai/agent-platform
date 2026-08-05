@@ -1,105 +1,105 @@
 ---
 title: 4. Extending the Workspace
-description: Custom commands, Sandbox, MCP services, and custom UI tabs
+description: Custom commands, credentials, sandboxes, MCP services and custom UI tabs
 ---
 
-[The previous chapter](/nap/guides/3-agent-behavior/) covered tuning a single Agent with off-the-shelf means. This chapter takes a step further out — **expanding the Agent's range of activity** by connecting it to tools and capabilities it didn't originally have.
+[The last chapter](/nap/guides/3-agent-behavior/) shaped a single agent with what's already there. This one reaches further out — **widening what the agent can touch** by connecting it to capability it didn't start with.
 
-Five things, from shallow to deep:
+Five things, shallow to deep:
 
-1. **Custom commands** — package frequently used prompts into one-click shortcuts
-2. **Credentials** — give the Agent keys to external resources (Git, internal APIs, third-party services)
-3. **Sandbox** — a temporary isolated container for the Agent to run code (this section is explanatory, to help you understand the "sandbox" panel you see in the product)
-4. **MCP services** — connect the Agent to an independently running tool service
-5. **Custom UI tabs** — embed the interface of a business system into the Workspace (an engineering-team topic)
+1. **Custom commands** — prompts you keep retyping, turned into one click
+2. **Credentials** — keys to external resources (Git, internal APIs, third-party services)
+3. **Sandbox** — a throwaway container for running code (explanatory: this is the Sandbox panel you've seen in the product)
+4. **MCP services** — connecting the agent to a service that runs on its own
+5. **Custom UI tabs** — embedding a business system's interface into the workspace (an engineering topic)
 
-Read on as needed; the further down you go, the more engineering-oriented it gets.
+Read as far down as you need. It gets more engineering-shaped as it goes.
 
 ## Custom commands
 
-If you find yourself repeatedly sending the same kind of prompt to the Agent, you should turn it into a command. Open the **Automation** app (`⌘K` → **Automation**), switch to **Commands**, create a new one, and name the command something like `/review`.
+When you notice yourself sending the same shape of prompt over and over, make it a command. Open the **Automation** app (`⌘K` → **Automation**), switch to **Commands**, create one, and name it something like `/review`.
 
 ### Command types
 
-- **Plain** — fixed text, sent directly to the Agent when triggered
-- **Struct** — a template with variables; triggering pops up a form for you to fill in values
+- **Plain** — fixed text, sent as-is when triggered
+- **Struct** — a template with variables; triggering opens a form to fill in
 
-A Struct template defines variables with double curly braces:
+A Struct template marks variables with double braces:
 
 ```
-Please review the most recent commit on the {{BRANCH}} branch of repository {{REPO}}.
+Review the most recent commit on the {{BRANCH}} branch of {{REPO}}.
 Focus on: {{FOCUS}}
 ```
 
-When you type `/review` in the input box to trigger it, three input fields — `REPO`, `BRANCH`, `FOCUS` — pop up; after filling them in, the result is sent as the initial message of this conversation.
+Type `/review` in the input box and three fields appear — `REPO`, `BRANCH`, `FOCUS`. Fill them in and the result becomes the conversation's first message.
 
-### Command content source
+### Where a command's content comes from
 
-- **Custom** — write it directly in the configuration
-- **Library Prompt** — reference a shared Prompt from the library. When the Prompt is updated, all referencing parties sync automatically
+- **Custom** — written into the command itself
+- **Library Prompt** — a shared prompt from the library, which syncs to everything referencing it whenever it changes
 
-The latter is suitable when multiple Agents share the same set of commands.
+The second is the one you want when several agents share a set of commands.
 
 ## Credentials: Keys to external resources
 
-A provider lets the Agent "think"; credentials let it "do things" — access private Git repositories, call internal APIs, sign in to third-party services. Any external resource that requires authentication goes through a credential.
+A provider lets the agent think. Credentials let it *do things*: reach a private Git repository, call an internal API, sign in to a third-party service. Anything that needs authentication goes through one.
 
-Press `⌘K`, open **Credentials**, and create one. Three injection methods:
+`⌘K` → **Credentials** → create. Three ways to inject:
 
-- **env** — the value lands in an environment variable (such as `GITHUB_TOKEN`, `DATABASE_URL`)
-- **file** — the value is written to a file inside the container (such as `~/.gitconfig`, `credentials.json`)
-- **SSH Key** — a shortcut for a private-key credential, placed at the standard location (`~/.ssh/id_ed25519`)
+- **env** — lands in an environment variable (`GITHUB_TOKEN`, `DATABASE_URL`)
+- **file** — written to a file in the container (`~/.gitconfig`, `credentials.json`)
+- **SSH Key** — a shortcut for a private key, placed at `~/.ssh/id_ed25519`
 
-Each credential also declares its **scope**: available to all your Workspaces, or only to selected ones. When an Agent container starts, everything in scope is injected automatically — the Agent just reads `$GITHUB_TOKEN` or the file, the same way it would on any machine.
+Each credential declares its **scope**: every workspace of yours, or only the ones you choose. When a container starts, everything in scope is injected, and the agent reads `$GITHUB_TOKEN` or the file exactly as it would on any machine.
 
-When you open the credential dialog, the right side shows the field descriptions for each injection method.
+Open the dialog and the right side documents the fields for each injection method.
 
-## Sandbox: A temporary container for the Agent to run code
+## Sandbox: a throwaway container for running code
 
-The Workspace's built-in runtime environment (**Files / Terminal**) is enough for the Agent's day-to-day file operations and command calls, but when the Agent needs to **actually run a piece of code** — execute a Python script to verify an idea, run a bit of SQL to see the result, temporarily compile a tool — it needs a clean, isolated, disposable environment. That's the **Sandbox**.
+The workspace's own environment (**Files / Terminal**) is enough for everyday file work and commands. But when the agent needs to **actually run something** — a Python script to test an idea, a bit of SQL to see what comes back, a tool compiled for one job — it wants somewhere clean, isolated and disposable. That's the **sandbox**.
 
-A Sandbox is not the Workspace's own runtime environment, but **another container the Agent creates on demand**. Each sandbox has its own independent image, CPU, memory, and timeout; it's destroyed once it's done and won't pollute the Workspace's file system.
+A sandbox is not the workspace's environment. It's **another container the agent creates on demand**, with its own image, CPU, memory and timeout, destroyed when it's finished and leaving the workspace's file system untouched.
 
-### Who creates the sandbox
+### Who creates it
 
-The platform has a built-in set of MCP tools exposed to the Agent, letting it manage sandboxes autonomously:
+The platform exposes a set of MCP tools for exactly this, so the agent manages sandboxes itself:
 
-- `create_sandbox` — create one on demand
-- `sandbox_run_command` — execute a command inside it
-- `sandbox_read_file` / `sandbox_write_files` — read and write files inside the sandbox
-- `kill_sandbox` — destroy it when done
+- `create_sandbox` — bring one up
+- `sandbox_run_command` — run something in it
+- `sandbox_read_file` / `sandbox_write_files` — read and write inside it
+- `kill_sandbox` — tear it down
 
-In other words, when the Agent wants to "run some code and see the result," it calls these tools itself — you don't need to configure anything. **Sandbox is an out-of-the-box capability, not an extension you need to enable.**
+So when the agent wants to run code and look at the result, it calls these itself and you configure nothing. **The sandbox is there from the start, not an extension to enable.**
 
 ### Where you can see it
 
-The Workspace has a **Sandbox** panel that lists all currently active sandboxes: the image, resources, and remaining time-to-live of each. You can also manually create a sandbox here for debugging — fill in the image address, CPU, memory, and timeout, then confirm.
+The workspace has a **Sandbox** panel listing what's alive right now: image, resources and remaining time-to-live for each. You can also create one here by hand for debugging — image address, CPU, memory, timeout.
 
-### Image selection
+### Choosing an image
 
-Each time you create a sandbox, you need to choose a Docker image. The platform pre-warms two common ones for sub-second startup:
+Each sandbox needs a Docker image. Two are pre-warmed for sub-second starts:
 
-- `node:22-bookworm` — Node.js environment
-- `python:3.12-bookworm` — Python environment
+- `node:22-bookworm`
+- `python:3.12-bookworm`
 
-You can also fill in **any Docker image address** — the first startup needs to pull it, and it's cached afterward. If the team has its own standard image (preinstalled with certain tools or an internal CLI), you can put it in a registry for Agents / users to use.
+**Any Docker image address** works. The first start pulls it; after that it's cached. If your team has a standard image with its tools or internal CLI preinstalled, put it in a registry and agents and users can name it.
 
-### What you need to remember from this section
+### What to take away
 
-1. The Workspace's own runtime environment is **fixed** and the image cannot be changed
-2. When the Agent needs to run code, it creates a **sandbox** via MCP tools — choosing the image per task and discarding it when done
-3. You don't need to configure the sandbox separately; it's a built-in platform capability
-4. To see which sandboxes the Agent is currently running, go to the Workspace's **Sandbox** panel
+1. The workspace's own environment is **fixed** — its image can't be changed
+2. To run code, the agent creates a **sandbox** through MCP tools, picking the image per task and throwing it away after
+3. There's nothing to configure; it's built in
+4. To see what's running, open the workspace's **Sandbox** panel
 
 ## MCP services
 
-MCP (Model Context Protocol) is a standardized protocol that lets an Agent call tools provided by an **independently running service**. The difference from Skills is covered in [Agent Anatomy](/nap/concepts/agent-anatomy/): Skills are files mounted into the container, read and used by the Agent itself; MCP is a protocol-layer call to an external service, suitable for "connecting external systems, crossing networks, having its own state."
+MCP (Model Context Protocol) is a standard for calling tools provided by a **service that runs on its own**. How it differs from skills is in [Anatomy of an Agent](/nap/concepts/agent-anatomy/): a skill is files in the container that the agent reads and runs itself; MCP is a call across the wire, for capability that lives outside, holds its own state, and is somebody else's to run.
 
-### Connecting an existing MCP service
+### Connecting a service that already exists
 
-If the team has already deployed an MCP service, connecting it only takes a few lines in the Agent configuration:
+If the team has an MCP service deployed, connecting it is a few lines of configuration.
 
-Open **Agent Config** → **Settings** and find the **MCP Configuration** area. Configuration format:
+Open **Settings** → **MCP**:
 
 ```json
 {
@@ -112,40 +112,40 @@ Open **Agent Config** → **Settings** and find the **MCP Configuration** area. 
 }
 ```
 
-Two transports are supported:
+Two transports:
 
-| Type | When to use |
+| Type | When |
 |---|---|
 | `http` | A remote HTTP Streamable service |
-| `stdio` | A local process, requires the `command` + `args` fields |
+| `stdio` | A local process; needs `command` and `args` |
 
-After saving, the Agent restarts and connects automatically at startup, and all the tools that service exposes become capabilities the Agent can call.
+Save, the agent restarts, and it connects at startup. Everything the service exposes becomes callable.
 
-### Deploying your own MCP service
+### Building your own
 
-If you need to give the Agent a brand-new capability, and that capability **has its own data, state, or background process**, then it's worth building it as an MCP service.
+If the capability you want is genuinely new, and it **has its own data, state or background work**, it's worth building as an MCP service.
 
-Writing an MCP service is essentially writing an ordinary backend service that exposes a tool interface per the [MCP specification](https://modelcontextprotocol.io). The common approach is to use the official SDK:
+Writing one is writing an ordinary backend service that exposes a tool interface per the [MCP specification](https://modelcontextprotocol.io). The usual route is an official SDK:
 
 - TypeScript — `@modelcontextprotocol/sdk`
 - Python — `mcp`
 
-After deploying, fill its URL into the Agent configuration and the Agent can use it. The specific deployment details are an engineering topic beyond the scope of this guide — if your team has engineers, it's best to coordinate with them directly.
+Deploy it, put its URL in the configuration, and the agent has it. The deployment itself is beyond this guide; if your team has engineers, it's their kind of job.
 
 ## Custom UI tabs (Mini SaaS)
 
-> This section is an engineering-team topic. Users who don't write code can skip it.
+> An engineering topic. Skip it if you don't write code.
 
-A Workspace's apps (**Files / Terminal**, etc.) are extensible — you can register a standalone web interface as an app of the Workspace, so that while the Agent works, users can directly see the real-time status of the relevant business.
+A workspace's apps (**Files**, **Terminal**, and the rest) are extensible: register a standalone web interface as one, and while the agent works, users can watch the business state it's acting on.
 
-This integration pattern is called **Mini SaaS** — an independently deployed microservice integrated back into the platform through three standardized channels:
+This shape is called **Mini SaaS** — an independently deployed service integrated back through three standard channels:
 
-- **Management UI** — a standalone management interface for maintaining domain data (such as a terminology base, a rule set, a knowledge base)
-- **MCP service** — a tool interface for the Agent to call
-- **UI tab** — a custom panel embedded in the Workspace
+- **Management UI** — a standalone interface for maintaining domain data (a terminology base, a rule set, a knowledge base)
+- **MCP service** — the tool interface the agent calls
+- **UI tab** — a panel embedded in the workspace
 
-If your business scenario needs this kind of deep integration, it's best to contact the Neutree Agent Platform team to discuss an approach.
+If your scenario needs integration this deep, come and talk it through in [Discord](https://discord.gg/MnsQ73d8dq) or [Discussions](https://github.com/orgs/neutree-ai/discussions) before you build.
 
 ## Next
 
-At this point the Agent's "capability surface" has a complete set of extension means. The next chapter covers how to make the Agent **triggered by more than just manual conversation** — [Triggering Agents](/nap/guides/5-trigger-agents/).
+The agent's surface now has a full set of ways to extend it. Next: getting it started by something other than you typing — [Triggering Agents](/nap/guides/5-trigger-agents/).

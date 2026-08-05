@@ -32,7 +32,7 @@ cron 表达式的标准五段格式：`分 时 日 月 周`。
 
 ### 注意事项
 
-- **每次触发都是独立的 Session** ——不共享上下文。如果你需要"接着上次的状态继续做"，让 Agent 把状态写到文件里或者放进 [Memory](/nap/zh-cn/guides/3-agent-behavior/#memory让-agent-记住)
+- **每次触发都是独立的 Session** ——不共享上下文。如果你需要"接着上次的状态继续做"，让 Agent 把状态写到文件里或者放进 [Memory](/nap/zh-cn/guides/3-agent-behavior/#memory跨-session-的记忆)
 - **最小间隔建议不低于 5 分钟** ——平台调度有缓冲，过短的间隔意义不大
 - **禁用后保留配置** ——临时停掉一段时间不必删除
 

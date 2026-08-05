@@ -1,61 +1,61 @@
 ---
 title: Anatomy of an Agent
-description: What Model, Prompt, Skills, MCP, and Memory each handle
+description: What Model, Prompt, Skills, MCP and Memory each take care of
 ---
 
-There are five things you can tune to shape an Agent's behavior. These five don't sit at the same level — sort out the levels first, and writing prompts and picking tools later will go more smoothly.
+Five things shape how an agent behaves. They don't sit at the same level, and sorting the levels out first makes writing prompts and picking tools go more smoothly later.
 
-## Model: the Agent's brain
+## Model: the agent's brain
 
-The Model determines how smart the Agent is, what its style is like, and how expensive it is. With the same prompt and the same set of skills, swapping the model can make a big difference in performance.
+The model sets how sharp the agent is, how it writes, and what it costs. Same prompt, same skills, different model — the difference in the result can be large.
 
-NAP isn't tied to a specific vendor. You connect a model API into the platform through a **Provider** — it can be the team's centrally procured API gateway, your own Anthropic / OpenAI key, OpenRouter, Azure OpenAI, or another compatible endpoint — the [provider type must match the agent](/nap/guides/1-setup/), so check the mapping there. An Agent picks one Provider and one specific model.
+NAP is not tied to a vendor. You bring a model API in through a **Provider**: the endpoint your team already procured, your own Anthropic / OpenAI key, OpenRouter, Azure OpenAI, or anything else compatible. The [provider type has to match the core](/nap/guides/1-setup/), so check the mapping there. An agent picks one Provider and one model on it.
 
-Advanced: you can also configure a **Small Model** for an Agent — used for lightweight internal operations like file search and code indexing, to save money. The Agent itself decides when to use the big brain and when to use the small one.
+Beyond that, an agent can also carry a **Small Model** for cheap internal work like file search and code indexing. The agent decides for itself when the big brain is needed and when the small one will do.
 
 ## Prompt: identity and way of working
 
-The System Prompt is an Agent's most important configuration. It tells the Agent **who you are and how you work** — role definition, the steps for doing things, output format, safety constraints.
+The system prompt is the agent's most consequential setting. It says **who it is and how it works**: the role, the steps, the output format, the limits it stays inside.
 
-The Prompt can be written directly in the Workspace, or it can reference a shared one from the **Prompt Library**. When you use a reference, any update to the Prompt automatically syncs to all Agents that reference it — this is the foundation of operating at scale.
+You can write the prompt into the workspace directly, or point it at a shared one in the **Prompt Library**. Point at one and every update follows through to each agent referencing it — that reference is what makes running many agents tractable.
 
-Writing a good prompt is itself a sizable topic; [Defining Agent Behavior](/nap/guides/3-agent-behavior/) covers how to write one separately.
+Writing one well is a topic of its own; [Defining Agent Behavior](/nap/guides/3-agent-behavior/) covers it.
 
 ## Skills: reusable sub-procedures
 
-A Skill is a **packaged "method for doing a certain class of thing"** — a directory containing a `SKILL.md` description file plus a handful of tool scripts. Once a skill is enabled, its files are mounted into the Agent's container, and the Agent automatically reads `SKILL.md` at startup, learning that this capability is available.
+A skill packages **a way of doing one class of thing**: a directory with a `SKILL.md` description and a handful of tool scripts. Enable it and the files are mounted into the agent's container; the agent reads `SKILL.md` at startup and knows the capability is there.
 
-A few examples: packaging a set of common GitLab API operations into a `gitlab-api` skill; packaging the standard troubleshooting steps for diagnosing a certain class of service failure into a skill that you enable with one click when needed; packaging the authentication and call details for integrating with a third-party SaaS into a skill, so the agent doesn't have to figure it out from scratch each time.
+Some examples: the GitLab API calls you keep repeating, wrapped as a `gitlab-api` skill; the standard triage steps for one class of service failure, ready to switch on the day it happens; the auth and call details for a third-party SaaS, so the agent doesn't rediscover them every time.
 
-When a Skill fits: **the task has relatively fixed steps or knowledge, but it isn't worth loading by default for every Agent.** Just check it on to enable it when needed. Skills are managed centrally in the **Library**, support uploading an archive or importing from a Git repository, and are shared by all Agents.
+A skill fits when **the steps or the knowledge are fairly fixed, but not worth loading into every agent by default**. Tick it on when you need it. Skills live in the **Library**, arrive by archive upload or Git import, and are shared across agents.
 
-## MCP: the gateway to external tools
+## MCP: the way out to external tools
 
-MCP (Model Context Protocol) is a standardized protocol that lets an Agent invoke the capabilities of **external services**. You give the Agent the connection details for an MCP Server (a command or URL); the Agent connects to it at startup, and all the tools that server exposes become tools the Agent can call.
+MCP (Model Context Protocol) is a standard for calling **external services**. Give the agent an MCP server's connection details (a command or a URL) and it connects at startup; everything that server exposes becomes a tool the agent can call.
 
-People often can't tell MCP and Skill apart; the difference is:
+Skills and MCP get mixed up often. The line between them:
 
-- A **Skill** is files mounted into the container that the Agent reads and executes itself — suited for "procedural, knowledge-based" capabilities
-- **MCP** is a protocol-level call to an external service — suited for capabilities that "connect to external systems, cross the network, and have their own state"
+- A **skill** is files in the container that the agent reads and runs itself — good for procedural, knowledge-shaped capability
+- **MCP** is a call across the wire to a service — good for capability that lives outside, holds its own state, and is somebody else's to run
 
-For example: a guide for "querying a certain knowledge base according to a convention" (a file is enough) is well suited as a Skill; a service that runs independently and has its own API and data (such as Grafana) is well suited as an MCP.
+A convention for querying an internal knowledge base is a file, so it's a skill. Grafana runs on its own with its own API and data, so it's an MCP.
 
-## Memory: long-term memory across Sessions
+## Memory: long-term memory across sessions
 
-By default, each Session is independent — what the Agent learned in the last conversation won't automatically be remembered in the next. Memory solves this.
+Sessions are independent by default: what the agent worked out last time is not there the next time. Memory is what closes that gap.
 
-NAP's Memory takes the form of a **Memory Store** — an independent resource that can be mounted on one or more Workspaces. Each store holds multiple versioned records, classified into four categories: user / feedback / project / reference. To the Agent, a Memory Store is mounted in the container as a **file directory** (`/mnt/memory/<store>/`), and can be operated on with familiar methods like grep, bash pipes, and on-demand reads.
+Memory in NAP takes the shape of a **memory store** — a resource of its own that mounts onto one workspace or several. A store holds many records, each versioned, each typed as user / feedback / project / reference. The agent sees a store as a **directory** in its container (`/mnt/memory/<store>/`), which it reads and writes with grep, pipes and on-demand reads.
 
-"The user prefers Chinese," "this project's code style is X," "the pitfall we hit last time" — these are well suited to Memory and shouldn't have to be restated by the user each time. The Agent can also write to the Memory Store itself (via a platform built-in tool).
+"This user writes in Chinese", "this project's code style is X", "the thing that bit us last time" — all worth keeping, none worth the user repeating. The agent can write to the store itself through a built-in platform tool.
 
-For the full concept and how it works, see [Memory Store](/nap/concepts/memory-store/).
+For the whole concept and how it works underneath, see [Memory Store](/nap/concepts/memory-store/).
 
-## How the five-piece set fits together
+## How the five fit together
 
-- **Model** is the foundation, setting the baseline
-- **Prompt** is the contract, deciding the Agent's persona and working framework
-- **Skills** are on-demand "specialties"
-- **MCP** is the bridge "out to the external world"
-- **Memory** is the experience the Agent accumulates for itself
+- **Model** sets the baseline
+- **Prompt** is the contract: who the agent is and how it works
+- **Skills** are specialties, loaded on demand
+- **MCP** is the way out to systems you don't run
+- **Memory** is what the agent accumulates for itself
 
-A typical order: first pick the Model and write the Prompt to get the simplest version working, then add Skills and MCP as needed to extend capabilities, and finally use Memory to make it understand you better the more it's used.
+The usual order: pick the model and write the prompt until the simplest version works, add skills and MCP as the job demands, then let memory make it fit you better the longer it runs.

@@ -17,7 +17,7 @@ Workspace 是一个完整的"工作环境"，里面装着一个 Agent 工作所�
 
 **一个 Workspace 对应一个 Agent**。当我们说"创建一个 Agent"，本质上就是在创建一个 Workspace。
 
-为什么不直接叫"Agent"？因为 Agent 这个词单独说时容易和"agent 引擎"（Claude Code / Codex）混淆。Workspace 强调的是**环境**——配置、状态、资源都在里面，不是一个悬空的 AI。
+为什么不直接叫"Agent"？因为 Agent 这个词单独说时容易和 agent core（Claude Code / Codex / Goose）混淆。Workspace 强调的是**环境**——配置、状态、资源都在里面，不是一个悬空的 AI。
 
 ## Agent 是 Workspace 跑起来的样子
 

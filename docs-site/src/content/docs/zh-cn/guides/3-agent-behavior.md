@@ -27,7 +27,7 @@ Memory 有自己的 **记忆库** app —— 不在设置里。
 
 **模型** 区域决定 Agent 用哪个大模型思考。要选的字段：
 
-- **Agent 类型** ——Claude Code 或 Codex。Claude Code 走 Anthropic 协议，Codex 走 OpenAI 协议。这一项决定你后面能选哪些供应商
+- **Agent 类型** ——Claude Code、Codex 或 Goose。Claude Code 走 Anthropic 协议，Codex 走 OpenAI Responses，Goose 走 OpenAI Chat Completions。这一项决定你后面能选哪些供应商
 - **API 供应商** ——上一章准备好的那个
 - **模型** —— 选一个该供应商实际提供的模型
 - **小模型** ——供 Agent 内部做轻量操作用（文件搜索、代码索引等）。默认与主模型相同；想省钱可以单独换成更便宜更快的小模型

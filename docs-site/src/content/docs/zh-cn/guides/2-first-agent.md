@@ -13,7 +13,7 @@ description: 从零创建一个 Workspace 并完成第一次对话
 2. 选择 **模式**：
    - **从模板创建** —— 从实例里已共享的模板创建。模板包含完整的 Agent 配置（供应商、模型、Prompt，可能还有 skills）；有合适的直接选，这一步就完成了
    - **空白** —— 从零配置。全新安装还没有模板时走这条路 —— 其实只有几个字段：
-     - **Agent Type** —— Claude Code 或 Codex
+     - **Agent Type** —— Claude Code、Codex 或 Goose
      - **API 供应商** —— 列表只显示与所选 agent type 兼容的供应商（对应关系见[准备工作](/nap/zh-cn/guides/1-setup/)）
      - **模型** —— 选一个该供应商实际提供的模型
      - **Prompt** —— 可以先留空，进入 Workspace 后再写

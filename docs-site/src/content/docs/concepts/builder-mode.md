@@ -1,71 +1,71 @@
 ---
 title: "Builder Mode: Let the Agent Configure Its Own Workspace"
-description: Let the Agent modify its own Workspace configuration within the conversation
+description: Changing a workspace's configuration from inside the conversation, with your approval on every change
 ---
 
-A Workspace's configuration—system prompt, enabled skills, schedules, model choice—can all be changed via UI forms. But the more you use it, the more you'll notice that some adjustments are simpler to just say in conversation:
+A workspace's configuration — system prompt, enabled skills, schedules, model choice — is all editable through UI forms. The longer you use it, though, the more some changes are easier to just say out loud:
 
-> "In the last few chats you've been missing the point. See if something's wrong with the prompt, and make it clearer."
+> "You've been missing the point the last few times. See what's wrong with the prompt and make it clearer."
 >
-> "Turn the set of questions I just asked into a `/review` command."
+> "Turn the questions I just asked into a `/review` command."
 >
-> "Run this for me every morning at 9 a.m."
+> "Run this for me at 9 every morning."
 
-**Builder Mode** lets the Agent understand this kind of request in conversation—it sends the change to you as a proposal, you click "Approve," and the change takes effect.
+**Builder mode** is the agent understanding that kind of request. It sends the change back as a proposal, you click Approve, and the change takes effect.
 
-## Core Value
+## What it buys you
 
-- **More flexible than forms, and it harnesses the Agent's intelligence**—you only describe the intent; how to make the change is designed by the Agent. It knows what the current prompt looks like and how to coordinate multiple configurations to achieve the goal—more thorough than tuning by hand
-- **Changes can come from past conversations**—the Agent can pull up recent chat history and analyze it, proposing "the last few times you got stuck on this part of the prompt; I suggest changing it to this"
-- **You approve every change**—the Agent won't make changes behind your back. Every proposal is an approval card in the chat, where you can preview the change, and only after you click "Approve" or "Reject" does it take effect
+- **More reach than a form** — you describe the intent; the agent works out the change. It knows what the prompt currently says and which settings have to move together to get where you asked, which is more than most hand-edits account for
+- **Changes can come out of past conversations** — the agent can pull up recent history and read it, then come back with "you got stuck on this stretch of the prompt three times; here's a rewrite"
+- **Nothing lands without your approval** — no change happens behind your back. Every proposal is a card in the conversation with the change laid out; it applies only after you click Approve
 
-## When to Use
+## When to reach for it
 
-- You want to optimize the prompt but don't know where to start—have the Agent look at a few recent conversations and then propose
-- The same kind of question comes up repeatedly—have the Agent save it as a command itself
-- Adding/adjusting a schedule—just describe the requirement clearly; no need to learn cron expressions
-- Switching the model / provider / enabling a skill—just say "switch to xxx"
-- You're unsure about a parameter—for example, you say "use China time zone," and the Agent knows to map it to `Asia/Shanghai`, instead of stalling you with an option tab you don't understand
+- The prompt needs work and you don't know where to start — have the agent read a few recent sessions and propose
+- The same question keeps coming up — have the agent save it as a command
+- Adding or shifting a schedule — describe when, and skip learning cron
+- Switching model or Provider, enabling a skill — say "switch to xxx"
+- You're unsure what a setting wants — say "use China time" and the agent maps it to `Asia/Shanghai`, instead of parking you on a form field you'd have to go look up
 
-## When Not To Use
+## When not to
 
-- **Cross-Workspace editing**—for safety, the default **This workspace** capability only changes the current Workspace's own configuration; account-wide resources require enabling the separate **Account-wide** capability (see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode))
-- **Fine-grained field tweaks**—for example, changing a single word in the prompt; the UI editor may be handier
+- **Editing across workspaces** — the default **This workspace** capability only changes the workspace you're in. Account-wide resources need the separate **Account-wide** capability turned on (see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode))
+- **Small precise edits** — changing one word in the prompt is faster in the editor
 
-## The Safety Guarantees of the Approval Model
+## What the approval model actually guarantees
 
-In Builder Mode, every change the Agent makes goes through the two steps of "propose → user approves → apply." This is more than a UX "just confirm"—there's a structural safeguard behind it.
+Every change goes through propose → approve → apply. That's more than a confirmation dialog; there's a structural guarantee under it.
 
-**What you approve = what you apply**—when a proposal is generated, the platform persists the complete source data of this change to the backend and **returns an ID**. After approval, when the Agent calls the `apply` tool, it passes this **ID, not the raw payload**. After the backend receives the ID, it:
+**What you approve is what gets applied.** When a proposal is generated, the platform persists the complete change to the backend and **returns an ID**. On approval, the agent calls the `apply` tool with **that ID, not the payload**. The backend then:
 
-1. Uses the ID to find the original approval data
-2. Validates that it indeed conforms to the schema of the corresponding resource (schedule / prompt / skill, etc.)
-3. Only writes it after it passes
+1. Looks up the original approved data by ID
+2. Validates it against the schema for that resource (schedule / prompt / skill, and so on)
+3. Writes it only if it passes
 
-This means:
+Which means:
 
-- The Agent has no way to "secretly" swap in a payload you didn't see at apply time—all it can pass is an ID
-- The platform performs another layer of schema validation—for example, even if a cron expression passed your visual inspection, a schema-invalid one will be rejected by the backend
+- The agent has no way to swap in something you never saw at apply time. An ID is all it can pass
+- The platform validates once more on its own account — a cron expression that looked fine to you but isn't valid gets rejected here
 
-In the UI, each approval card **breaks the source data into fields** for display (rather than dumping raw JSON), making review less tedious. Click to open and you see the fields, their meanings, and the changes; reject if you don't like it, click approve if you do.
+In the UI, each approval card **breaks the change into fields** rather than dumping raw JSON, so reviewing one isn't a chore. Open it, read the fields and what they change, then approve or reject.
 
-## The Mechanism for Reading Historical Sessions
+## How the agent reads past sessions
 
-A very useful scenario for Builder Mode is having the Agent "look at a few recent conversations and analyze where my prompt needs changing." To do this, the Agent must be able to read the contents of historical sessions.
+One of builder mode's best uses is "read a few recent conversations and tell me what to fix in my prompt." That means the agent has to get at session content.
 
-But **directly stuffing session content into the tool result isn't feasible**—a session can be very long, and pouring tens of thousands of lines of tool calls into context at once wastes tokens and still can't read it all.
+**Returning the content in the tool result doesn't work.** A session can run very long, and pouring tens of thousands of lines of tool calls into context burns tokens without ever fitting.
 
-So the builder tool's approach is: return an **export URL**, which the Agent downloads to a local file with `curl` / `bash`, then analyzes using file tools (grep, reading fragments on demand). This way:
+So the builder tool returns an **export URL** instead. The agent downloads it to a file with `curl`, then works on it with file tools — grep, and reading the parts that matter. Two things follow:
 
-- The main conversation's context only bears the "analysis process," not the session's raw content
-- The Agent can use the file-operation semantics it's most familiar with, reading the relevant parts on demand
+- The main conversation carries the analysis, not the raw transcript
+- The agent uses the file semantics it already knows, and reads on demand
 
-This is why Builder Mode is more efficient than the early standalone "prompt optimizer" feature—the latter required you to manually select a few sessions and manually declare the optimization goal, and the Agent could only analyze based on the few sessions you provided; Builder Mode lets the Agent list sessions itself in conversation, download on demand, set its own optimization approach, and finally land the change through the same approval mechanism.
+This is why builder mode beats the standalone prompt optimizer that came before it. That one made you pick the sessions by hand and state the goal by hand, and it could only work from what you handed over. Builder mode lets the agent list sessions itself, download what it wants, decide its own angle, and land the result through the same approval gate.
 
-> Note for existing users: the original **prompt optimizer** experimental feature has been retired. Builder Mode is its better version—no need to leave the familiar conversation entry; session selection, topic declaration, and landing the change all happen in the same conversation.
+> For existing users: the **prompt optimizer** experiment has been retired. Builder mode is the better version of it — no separate screen to go to; picking sessions, saying what you're after, and landing the change all happen in the conversation you were already in.
 
-Having the Agent review historical sessions and improve its own configuration is itself part of [Optimization](/nap/concepts/optimize/)—Builder Mode is the entry point for landing and approving it; the full picture of optimization (autonomous tuning, and later model replacement) is laid out in that chapter.
+Having the agent review its own history and improve its own configuration is one half of [Optimization](/nap/concepts/optimize/) — builder mode is where those changes land and get approved. The full picture, including model replacement, is in that chapter.
 
 ---
 
-For specific setup steps and the capability list, see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode).
+For the setup steps and the capability list, see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode).

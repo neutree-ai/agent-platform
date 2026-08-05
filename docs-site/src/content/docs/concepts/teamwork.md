@@ -1,131 +1,131 @@
 ---
-title: "Teamwork: Multiple Agents Collaborating on a Single Task"
-description: Task-scoped multi-Agent collaboration, with automatic management of visibility, shared directories, and a collaboration timeline
+title: "Teamwork: Multiple Agents on One Task"
+description: Task-scoped collaboration, with visibility, the shared directory and the timeline handled for you
 ---
 
-> Teamwork is currently in preview. The core mechanics are stable, but the final shape may change. We welcome your feedback as you use it.
+> Teamwork is in preview. The mechanics are stable; the final shape may still move. Tell us how it goes.
 
-Neutree Agent Platform (NAP) has always supported multi-Agent collaboration: in any Workspace you can call another Agent with `@agent/slug`, and to pass files you can create a shared directory with [AFS](/nap/concepts/afs/). But both of these are **Workspace-level** configurations—an Agent is either visible to others or not, and a shared directory is either mounted or not.
+NAP has always supported several agents working together: call another one with `@agent/slug` from any workspace, and hand files over through an [AFS](/nap/concepts/afs/) shared directory. But both of those are **workspace-level** settings — an agent is either visible to others or it isn't, a directory is either mounted or it isn't.
 
-Yet much collaboration is actually **task-scoped**:
+Plenty of collaboration is **task-shaped** instead:
 
-> "Just this once, I want my private Agent to temporarily help me do some research, then go back to being invisible when it's done."
+> "Just for this, I want my private agent to help with some research, and go back to being invisible afterwards."
 >
-> "Several Agents write into one directory together, then archive it when done; next task, swap in a different set of members and a different directory."
+> "Several agents write into one directory, then it gets filed. Next task, different members, different directory."
 
-**Teamwork** is built for exactly this—you create a team task in "Apps", pull members in, and the platform automatically manages visibility, the shared directory, and the collaboration timeline. When the task ends, everything is reclaimed.
+**Teamwork** is built for exactly that. Create a team task in Apps, pull members in, and the platform handles visibility, the shared directory and the collaboration timeline. When the task ends, it all gets reclaimed.
 
-## The Value of Multi-Agent Collaboration
+## What multi-agent is actually for
 
-To understand Teamwork's design, you first need to understand what problem multi-Agent collaboration actually solves.
+Teamwork's design follows from a view about what collaboration between agents is good for.
 
-Our view: **the essence of multi-Agent is managing context well so tasks run more reliably**—not drawing a bunch of colorful CEO/CTO personas on a canvas. That style of dragging Agents into nodes and connecting them with lines doesn't genuinely help task completion.
+**It's about managing context so tasks land more reliably** — not drawing CEO and CTO personas on a canvas. Dragging agents into nodes and joining them with arrows doesn't make the work come out better.
 
-A single Agent's context usually crams in:
+One agent's context usually holds:
 
-- The system prompt, loaded skills, and available tools (**the static part**—representing responsibilities and knowledge)
-- User messages, model replies, and tool-call requests and results (**the dynamic part**—the content accumulated over this conversation)
+- The system prompt, the loaded skills, the available tools — **the static part**, its responsibilities and knowledge
+- User messages, model replies, tool calls and their results — **the dynamic part**, what this conversation has accumulated
 
-This hits two bottlenecks:
+Both hit a ceiling:
 
-1. **The static part bloats**—if one Agent must build slide decks, edit Excel, and query databases, every added capability lengthens the system prompt and skills. But any single conversation only uses a small fraction of it; the rest is wasted.
-2. **The dynamic part gets dirty**—an Agent often has to explore before finishing a task (list directories, read files, trial and error). Once it finds the answer, that process content is "non-essential," but it has already taken up context space as fragments, distracting subsequent reasoning, and it's hard to remove.
+1. **The static part bloats.** If one agent has to build slide decks, edit spreadsheets and query databases, every added capability lengthens the prompt and the skill list. Any single conversation uses a fraction of it, and pays for all of it.
+2. **The dynamic part gets dirty.** Agents explore before they finish: listing directories, reading files, trying things. Once the answer is found, that exploration is dead weight — but it's already taken up space, it distracts the reasoning that follows, and it's hard to get rid of.
 
-**How sub-agents mitigate both:**
+Sub-agents ease both:
 
-- **Separation of responsibilities**—the main Agent only handles decomposition and dispatch. The slide-building capability lives in one sub-agent, Excel in another. Whoever the current task needs gets woken up; capabilities that aren't needed never enter the main Agent's context.
-- **Isolation of the exploration process**—a sub-agent explores, experiments, and reads files in its own session, and those tokens stay in the sub-session. The main Agent only receives the sub-agent's **final result** through a tool call (a distilled summary). Once the sub-session ends, the exploration process is naturally discarded and won't pollute the main context.
+- **Responsibilities separate** — the main agent decomposes and dispatches. Slide-building lives in one sub-agent, spreadsheets in another. Whatever this task needs wakes up; the rest never touches the main context.
+- **Exploration stays contained** — a sub-agent explores in its own session, and those tokens stay there. The main agent gets the **result** back through a tool call, distilled. When the sub-session ends, the exploration goes with it.
 
-This is the core mechanism Teamwork aims to leverage. All the collaboration UI, visibility configuration, and shared-directory management exist to make this smoother from both the user's and the Agent's perspective.
+That's the mechanism Teamwork is built to exploit. The collaboration UI, the visibility settings and the managed directory all exist to make it smoother from both sides.
 
-## The Existing Multi-Agent Foundation
+## What it builds on
 
-Teamwork isn't built from scratch. It rests on two existing capabilities:
+Teamwork isn't from scratch. Two existing capabilities carry it.
 
-### Agent-calling tools: `call_agent` / `get_agent_result`
+### Agent calls: `call_agent` / `get_agent_result`
 
-The main Agent calls another Agent through these two built-in tools:
+The main agent calls another through two built-in tools:
 
-- `call_agent`—initiates a call. The parameters are the target Agent's slug and the task description to hand off (this description becomes the first user message of the sub-session—the main Agent distills the part of its context relevant to this call as the parameter). It supports both **synchronous** and **asynchronous** modes: synchronous waits for the sub-agent to finish; asynchronous lets you proactively push a long task into the background. Either way, the tool returns the sub-session's ID.
-- `get_agent_result`—queries the result by sub-session ID. It can poll asynchronous tasks and also revisit past collaboration.
+- `call_agent` — starts a call, taking the target's slug and the task description to hand over. That description becomes the first user message of the sub-session, so the main agent distills the relevant part of its own context into it. It runs **synchronously** or **asynchronously**: synchronous waits, asynchronous pushes a long job into the background. Either way you get the sub-session's ID back.
+- `get_agent_result` — looks up a result by sub-session ID. It polls asynchronous work and it reads back collaboration that already happened.
 
-`call_agent` also supports **starting a new session** or **continuing a previous one**—two Agents can have multi-turn, multi-threaded conversations, much like people collaborating.
+`call_agent` can also **start a new session or continue an old one**, so two agents can hold a multi-turn conversation across several threads, much as people do.
 
 ### File-level context: AFS shared directories
 
-Conversations can pass text, but not things like slide-deck binaries, PDFs, or hundreds of lines of CSV. By default, two Agents' file systems are isolated—files a sub-agent writes in its own container can't be read by the main Agent.
+A conversation carries text. It doesn't carry a slide deck, a PDF or a few hundred lines of CSV. And two agents' file systems are isolated by default, so what a sub-agent writes in its own container the main agent can't read.
 
-[AFS](/nap/concepts/afs/) solves this: you can create a shared directory and mount it for multiple Agents; you control whether access is read-only or read-write, and you can revoke it anytime. Agents can also initiate sharing themselves through MCP tools.
+[AFS](/nap/concepts/afs/) is the answer: create a shared directory, mount it for several agents, set read-only or read-write, revoke whenever. Agents can set this up themselves through MCP tools.
 
-Teamwork uses this same underlying layer—it just automates "create directory, mount, reclaim."
+Teamwork sits on the same layer. It just automates create, mount and reclaim.
 
-## Teamwork's Three Enhancements
+## What Teamwork adds
 
-Teamwork doesn't replace the two capabilities above; it adds a layer of "**task**" semantics on top of them. On the home screen, press `⌘K` and open **Teamwork** (marked as preview), create a team task, set a **coordinator** Agent, then add members. From that moment, the following three things take effect automatically.
+Teamwork doesn't replace either of those. It puts a layer of **task** semantics over them. From the home screen, `⌘K` → **Teamwork** (marked preview), create a team task, set a **coordinator** agent, add members. Three things then happen on their own.
 
-### 1. Task-scoped Agent visibility
+### 1. Visibility scoped to the task
 
-Normally, a Workspace's [Visibility](/nap/guides/6-compose-agents/#visibility) has three tiers: Private / User / Public. This is a Workspace-level standing configuration—an Agent is either visible to collaborators or not.
+Normally a workspace's [Visibility](/nap/guides/6-compose-agents/#visibility) has three tiers — Private, User, Public — and it's a standing setting: an agent is reachable by collaborators or it isn't.
 
-But if what you want is "just this once, have a private Agent do something for me, then keep it invisible afterward," the standing configuration is too heavyweight—you'd have to keep toggling back and forth.
+For "just this once, let my private agent help, then go back to invisible", a standing setting is the wrong tool. You'd be flipping it back and forth.
 
-When adding members to a team task, the candidate list includes:
+When you add members to a task, the candidates are:
 
-- All Public-visible Agents
-- All User-level-visible Agents (your own)
-- Your own **Private** Agents—if one doesn't have a slug configured yet, you can configure one right here when adding it
+- Every Public agent
+- Every User-visible agent of yours
+- Your own **Private** agents — and if one has no slug yet, you can give it one right there
 
-After adding a Private Agent to a task, it is **visible only within this task** and doesn't affect other scenarios. The task takes **priority over** the Workspace's global visibility configuration. So you don't have to expose an Agent at the user/public level just for a single task.
+A private agent added to a task is **visible inside that task only**, and nowhere else. The task takes **precedence** over the workspace's standing visibility. So a single task never forces you to expose an agent account-wide.
 
-### 2. Automatically managed shared directory
+### 2. A shared directory, managed for you
 
-Each team task automatically creates a shared directory when created (named after the task ID, like `team-<uid>`), and the platform mounts it for all current members.
+Each team task creates a shared directory when it's created, named after the task (`team-<uid>`), and mounts it for every member.
 
-- Member joins → automatically mounted
-- Member leaves → automatically unmounted
-- Task ends → shared directory reclaimed
+- A member joins → mounted
+- A member leaves → unmounted
+- The task ends → reclaimed
 
-Members no longer need the two steps of "create directory → grant access"—as long as they're in the task, there's an interconnected working directory available. When you need finer-grained control (for instance, a separate temporary directory between just two Agents), you can still do it manually via the AFS API; the automatic management simply covers the vast majority of cases.
+Nobody has to create a directory and grant access. Being in the task is enough. For finer control — a private scratch directory between two agents, say — the AFS API is still there; the automatic version just covers the common case.
 
-### 3. Collaboration timeline
+### 3. The collaboration timeline
 
-As noted earlier, **a complex multi-Agent dispatch canvas doesn't genuinely help the end result**—but there is one observability view that is genuinely useful: seeing exactly what context Agents exchange with each other.
+As said above, an elaborate dispatch canvas doesn't improve the outcome. But one view genuinely helps: seeing what context the agents actually pass each other.
 
-A team task's detail page provides a **collaboration timeline**:
+A team task's detail page has a **timeline**:
 
-- Each member's session is one timeline (the coordinator at the top, sub-agents below in order)
-- Each `call_agent` drops a point on the timeline, indicating: the **sub-message sent main→sub**, the **result returned sub→main**, and whether the call is **synchronous or asynchronous**
+- One track per member session, coordinator on top, sub-agents below in order
+- Each `call_agent` drops a point on it, showing the **message sent down**, the **result sent back**, and whether the call was synchronous or asynchronous
 
-You can collapse it if you don't like it. But when debugging multi-Agent collaboration, this is the most direct tool—you can immediately see exactly what the main Agent passed to the sub-agent and what the sub-agent summarized back, without scrolling through the conversation record line by line.
+Collapse it if you'd rather. But when a multi-agent flow is misbehaving, it's the most direct instrument there is — you see what the main agent handed over and what came back, without reading the whole conversation line by line.
 
-## Typical Scenarios
+## Two shapes that work well
 
-### Split research + main Agent merges
+### Split the research, merge in the main agent
 
-The main Agent splits the task across two sub-agents: one researches competitor ACME, one researches competitor Beta, and each writes its report to the shared directory. Once done, the main Agent reads both files and merges them into one overall report.
+The main agent splits the work across two sub-agents: one researches competitor ACME, the other Beta, each writing its report into the shared directory. The main agent then reads both files and merges them.
 
-The full flow is visible in the collaboration timeline: two `call_agent` calls issued in parallel → the two sub-agents each write markdown to `team-<uid>/ACME.md` and `team-<uid>/Beta.md` → the main Agent reads both and writes out `report.md`.
+The timeline shows the whole run: two `call_agent` calls in parallel → the sub-agents write `team-<uid>/ACME.md` and `team-<uid>/Beta.md` → the main agent reads both and writes `report.md`.
 
-### Multiple parallel sessions of the same Agent
+### One agent, several parallel sessions
 
-A team task doesn't have to contain multiple kinds of Agent. **The same Agent** can also open several parallel sessions, each doing one thing—as noted, the essence of multi-Agent is managing context well, and a single Agent's multiple sessions benefit from this just as much.
+A team task doesn't need several kinds of agent. **The same agent** can open several sessions, each on one thing — the point being context management, which a single agent's sessions benefit from just as much.
 
-For example, have a code-review Agent open three sessions to inspect the same piece of code in parallel—one checks naming conventions, one checks SQL safety, one checks frontend error handling. Each session loads only the context for that one direction, with a much higher hit rate than "one session checking all aspects."
+A code-review agent, say, opening three sessions on the same diff: one on naming, one on SQL safety, one on frontend error handling. Each loads only the context for its own angle, and hits far more than one session trying to cover everything.
 
-## When to Use and When Not To
+## When to use it, and when not
 
-**Use Teamwork:**
+**Use Teamwork when:**
 
-- This task needs **temporary members** (including your private Agents), and you'll disband when done
-- Members need to **share files**, but you don't want to manage AFS directories manually
-- You want to observe the context exchange between Agents and debug a multi-Agent flow
+- The task needs **temporary members** (including private agents) and disbands afterwards
+- Members need to **share files** and you'd rather not manage AFS directories by hand
+- You want to watch the context move between agents and debug the flow
 
-**Keep using plain `@agent` calls:**
+**Stay with plain `@agent` calls when:**
 
-- A long-standing fixed collaboration relationship (e.g., a reviewer Agent that's constantly called by various dev Agents)—configuring Visibility and Slug is enough; no need to spin up a task each time
-- Simple one-off calls with no file exchange
+- The collaboration is standing — a reviewer agent that everyone's dev agents call — where Visibility and a slug are enough, and spinning up a task each time is overhead
+- The call is a one-off with no files involved
 
 ## Next
 
-- Want to know exactly how Agents call each other and how to configure Visibility → [Composing Agents](/nap/guides/6-compose-agents/)
-- Want to understand the underpinnings of cross-Agent file sharing → [AFS: Cross-Agent File Sharing](/nap/concepts/afs/)
+- How agents call each other, and how Visibility is configured → [Composing Agents](/nap/guides/6-compose-agents/)
+- What's underneath cross-agent file sharing → [AFS: Cross-Agent file sharing](/nap/concepts/afs/)

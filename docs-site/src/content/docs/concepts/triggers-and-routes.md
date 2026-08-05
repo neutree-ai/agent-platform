@@ -1,92 +1,101 @@
 ---
 title: Where an Agent receives tasks
-description: The three triggering mechanisms — Web UI, Schedule, and Connector + Route
+description: The four ways work reaches an agent — web UI, Schedule, Connector + Route, and the HTTP API
 ---
 
-Once a Workspace is created, how does the Agent start working? NAP offers three triggering mechanisms, covering everything from "a human uses it manually" to "fully unattended."
+A workspace exists. How does the agent start working? NAP has four ways in, covering everything from a person typing to nobody being there at all.
 
-## Three triggering mechanisms
+## The ways in
 
-| Triggering mechanism | Who calls it | Typical scenario |
+| Way in | Who calls it | Typical use |
 |---|---|---|
-| **Web UI** | You start a conversation in your browser | Daily debugging, ad-hoc tasks, exploratory use |
-| **Schedule** | The platform fires on a cron expression | Run a report every morning, check status every hour |
-| **Connector + Route** | An external system sends events in via Slack / Webhook | Diagnose when a GitLab pipeline fails, respond when a Slack message arrives |
+| **Web UI** | You, starting a conversation in the browser | Everyday debugging, one-off tasks, exploring |
+| **Schedule** | The platform, firing on a cron expression | A report every morning, a status check every hour |
+| **Connector + Route** | An external system, sending events in via Slack / WeCom / Webhook | A GitLab pipeline fails and gets diagnosed, a Slack message gets answered |
+| **HTTP API** | Your own code, holding a Service Token | A CI pipeline, a script, a tool you wrote |
 
-No matter which one it is, the result is the same: **open a new Session in the Workspace and hand the task to the Agent as the initial prompt.** The Agent doesn't know or care who called it — which is why these triggering mechanisms can be freely combined.
+Whichever it is, the outcome is the same: **a new session opens in the workspace and the task arrives as the first prompt.** The agent neither knows nor cares who called it, which is why these three combine freely.
 
 ## Web UI
 
-The simplest case. Open the Workspace, type text into the conversation box, paste an image, or enter a `/command` — and a Session begins.
+The simplest case. Open the workspace, type into the conversation box, paste an image, or run a `/command`. A session begins.
 
-Suited for: when you haven't fully thought through the task, when you need to adjust as you converse, or when you want to watch the Agent do each step. For all new Agents we recommend first getting them working via the Web UI before considering how to automate.
+Good for tasks you haven't fully thought through, work you want to steer as it goes, or watching each step. For any new agent, get it working here before automating it.
 
 ## Schedule: fire on time
 
-You configure one or more scheduled tasks on a Workspace, each task being a pair of `(cron expression, prompt)`. When the time comes, the platform automatically creates a new Session in this Workspace and sends out the prompt.
+A workspace can carry one or more schedules, each a pair of `(cron expression, prompt)`. When the time comes, the platform opens a new session in that workspace and sends the prompt.
 
-Schedule is the **cheapest form of automation** — zero external dependencies, no system integration required, as long as the Agent can complete the task on its own. Common uses: have the Agent inspect system status every morning, pull and summarize new email every hour, aggregate last week's data every Monday.
+Schedule is **the cheapest automation there is** — nothing external to depend on, nothing to integrate, as long as the agent can finish the job alone. Common shapes: check system status every morning, pull and summarize new mail every hour, roll up last week's numbers every Monday.
 
-Each trigger is an independent Session and doesn't share context. If you need to "continue from where you left off last time," you should use Memory or write state to a file, rather than relying on Session context.
+Each firing is its own session and shares no context with the last. To carry something forward, use memory or write it to a file rather than leaning on session context.
 
 ## Connector + Route: external systems push events
 
-This is the most powerful and also the one that needs the most explanation. It solves: "when a GitLab pipeline fails, I want to automatically trigger an Agent to diagnose it" — letting external systems send events into NAP.
+The most capable of the three, and the one that needs the most explaining. It answers "when a GitLab pipeline fails, I want an agent to look at it" — letting outside systems send events in.
 
-For external events to come in, three questions need answering:
+Getting an event in means answering three questions:
 
-- **Where do they come in** — NAP exposes an endpoint waiting to receive
-- **Who handles them once in** — which Workspace a given event should go to
-- **How they become something the Agent understands** — how an HTTP request or Slack message turns into a prompt
+- **Where does it arrive** — NAP has to expose something listening
+- **Who handles it** — which workspace this particular event belongs to
+- **How does it become something the agent can act on** — how an HTTP request or a Slack message turns into a prompt
 
-NAP uses two objects to answer these three questions:
+Two objects answer all three.
 
 ### Connector: the receiving endpoint
 
-A Connector is a "receiving end." NAP currently supports three types:
+A Connector is the receiving end. Three types today:
 
-- **Webhook** — exposes an HTTP endpoint that external systems POST to. Requires configuring a secret for signature verification
-- **Slack** — connects a Slack bot and listens for messages that @ that bot
-- **WeCom** — connects a WeCom smart bot; @-mentioning it in a group triggers the Agent
+- **Webhook** — an HTTP endpoint external systems POST to, with a secret configured for signature checks
+- **Slack** — a Slack bot, listening for messages that @ it
+- **WeCom** — a WeCom bot; @-mentioning it in a group triggers the agent
 
-A Connector is a "door." The door itself doesn't decide what happens behind it — that's the Route's job.
+A Connector is a door. What happens behind the door is the Route's business.
 
 ### Route: routing rules
 
-Multiple Routes can hang off a single Connector. Each Route defines:
+One Connector can carry many Routes. Each Route says:
 
-- **Which event it matches** — a Webhook uses path + filter rules (such as `body.build_status = failed`); Slack uses a specific channel
-- **Which Workspace it triggers**
-- **How it turns the event into a prompt** — a template that can reference variables like `{body}`, `{message}`, `{user}`
+- **Which events it matches** — a Webhook matches on path plus filter rules (`body.build_status = failed`, say); Slack matches on a channel
+- **Which workspace it triggers**
+- **How the event becomes a prompt** — a template that can pull in `{body}`, `{message}`, `{user}`
 
-A concrete example: GitLab has a webhook configured on a repo that sends to NAP, and the Route on the NAP side sets `path = /ci-doctor`, filter = `build_status = failed`, workspace = `ci-doctor`, prompt template = `Here is this CI job event data: {body}`. Each time a job fails, GitLab sends the event over, and after NAP matches the path and the filter passes, it opens a new Session in the corresponding Workspace to trigger the diagnosis.
+Concretely: GitLab has a webhook on a repo pointing at NAP; the Route on the NAP side sets `path = /ci-doctor`, filter `build_status = failed`, workspace `ci-doctor`, and a prompt template of `Here is this CI job event data: {body}`. A job fails, GitLab sends the event, NAP matches the path, the filter passes, and a new session opens in that workspace to start the diagnosis.
 
-### Why Filter matters
+### Why the filter matters
 
-Filtering happens at the Route layer, **done before the Session is even opened**. Non-matching events are dropped directly — no Agent started, no tokens burned.
+Filtering happens in the Route, **before a session ever opens**. Events that don't match are dropped: no agent started, no tokens spent.
 
-You could also let the Agent decide for itself whether "this event should be handled" — but having to open a Session, load context, and call a large model every time just to "take a look and then decide not to act" is an obvious waste. The principle is: **if a filter condition can be written clearly with fixed rules, put it in the Route Filter.** Reserve the Agent prompt for the complex judgments that require semantic understanding.
+You could let the agent decide whether an event is worth handling — but opening a session, loading context and calling a model just to conclude "not this one" is waste you can see. The rule of thumb: **if a condition can be written down as a fixed rule, it belongs in the Route filter.** Save the prompt for judgments that actually need reading comprehension.
+
+## HTTP API: your own code calls in
+
+The three above are things you configure. The fourth is something you write against: a **Service Token** authenticates a request, and a workspace takes it as a turn. That's how a CI pipeline, a cron job on your own machine, or an internal tool starts an agent — no Connector to set up, because the caller is code you control.
+
+Turns can stream back, or the API can hand the whole turn off and return when it's done. See [Triggering Agents](/nap/guides/5-trigger-agents/) for the token and the endpoints.
 
 ## Where Provider fits
 
-A Provider is not a triggering mechanism — it's the foundation the Agent uses to call a large-model API when it's running. You can think of it this way: the triggering mechanism decides "when to call the Agent to work," and the Provider decides "what the Agent thinks with when it works." These are two independent things.
+A Provider isn't a way in. It's what the agent thinks with once it's running. The way in decides *when the agent works*; the Provider decides *what it works with*. Two independent things.
 
-Each Workspace picks one Provider. Providers are managed centrally in the **API Providers** app (`⌘K` → **API Providers**); see [Getting Ready](/nap/guides/1-setup/) for details.
+Each workspace picks one Provider. They're managed in the **API Providers** app (`⌘K` → **API Providers**); see [Getting Ready](/nap/guides/1-setup/).
 
-## The full picture of how they relate
+## How they relate
 
 <pre class="mermaid">
 flowchart TD
-  UI["Web UI (manual conversation)"]
-  SCH["Schedule (cron trigger)"]
-  CR["Connector + Route (external system push)"]
-  S(("New Session"))
-  A["Agent (running inside Workspace)"]
+  UI["Web UI (a person types)"]
+  SCH["Schedule (cron fires)"]
+  CR["Connector + Route (an external system pushes)"]
+  API["HTTP API (your code calls, with a Service Token)"]
+  S(("New session"))
+  A["Agent (running inside the workspace)"]
 
   UI --> S
   SCH --> S
   CR --> S
+  API --> S
   S --> A
 </pre>
 
-Next, head to [Triggering Agents](/nap/guides/5-trigger-agents/) for the specific configuration steps of each triggering mechanism.
+Next: [Triggering Agents](/nap/guides/5-trigger-agents/) has the setup steps for each.

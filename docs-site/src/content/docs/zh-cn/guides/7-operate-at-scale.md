@@ -33,7 +33,7 @@ description: 资源库、标签、共享会话、团队协作——让一个人�
 
 ### Skills
 
-Skill 也存在资源库里，机制类似。[定义 Agent 行为](/nap/zh-cn/guides/3-agent-behavior/#skills可复用的特长)里讲过怎么在 Workspace 里**启用**一个 skill。这里讲怎么**创建**一个：
+Skill 也存在资源库里，机制类似。[定义 Agent 行为](/nap/zh-cn/guides/3-agent-behavior/#skills可复用的能力封装)里讲过怎么在 Workspace 里**启用**一个 skill。这里讲怎么**创建**一个：
 
 在 **资源库** app 里切到 **Skills**，新建一个。可以选两种方式：
 

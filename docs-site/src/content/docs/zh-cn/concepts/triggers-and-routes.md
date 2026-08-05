@@ -1,17 +1,18 @@
 ---
 title: Agent 从哪里接到任务
-description: Web UI、Schedule、Connector + Route 三种触发方式
+description: Web UI、Schedule、Connector + Route、HTTP API 四种触发方式
 ---
 
-Workspace 创建好之后，Agent 怎么开始工作？Neutree Agent Platform 提供三种触发方式，从"人手动用"到"完全无人值守"都覆盖。
+Workspace 创建好之后，Agent 怎么开始工作？Neutree Agent Platform 提供四种触发方式，从"人手动用"到"完全无人值守"都覆盖。
 
-## 三种触发方式
+## 四种触发方式
 
 | 触发方式 | 谁在叫它 | 典型场景 |
 |---|---|---|
 | **Web UI** | 你自己在浏览器里发起对话 | 日常调试、临时任务、探索性使用 |
 | **Schedule** | 平台按 cron 表达式定时触发 | 每天早上跑一次报告、每小时查一次状态 |
-| **Connector + Route** | 外部系统通过 Slack / Webhook 把事件送进来 | GitLab pipeline 失败时诊断、Slack 收到消息时应答 |
+| **Connector + Route** | 外部系统通过 Slack / 企业微信 / Webhook 把事件送进来 | GitLab pipeline 失败时诊断、Slack 收到消息时应答 |
+| **HTTP API** | 你自己的代码，带着 Service Token 调进来 | CI 流水线、脚本、你写的小工具 |
 
 不管是哪一种，结果都一样：**在 Workspace 里开一个新 Session，把任务当初始 prompt 交给 Agent**。Agent 不知道也不关心是谁叫它——所以这几种触发方式可以自由组合。
 
@@ -67,6 +68,12 @@ Filter 在 Route 层过滤，**在 Session 开出来之前就做完**。不匹�
 
 也可以让 Agent 自己判断"这个事件该不该处理"——但每次都要先开 Session、加载上下文、调一次大模型，只为了"看一眼再决定不做"，浪费明显。原则是：**过滤条件能用固定规则写清楚，就放在 Route Filter 里**。Agent prompt 只处理需要语义理解的复杂判断。
 
+## HTTP API：你自己的代码调进来
+
+前三种是配出来的，第四种是写代码对接的：用 **Service Token** 认证一次请求，Workspace 就把它当成一轮对话。CI 流水线、你本机的 cron、内部小工具都走这条——不需要建 Connector，因为调用方本来就是你自己的代码。
+
+一轮对话可以流式返回，也可以整轮交出去、跑完再回来。Token 和端点见[触发 Agent](/nap/zh-cn/guides/5-trigger-agents/)。
+
 ## Provider 在哪里
 
 Provider 不是一种触发方式——它是 Agent 跑起来时调用大模型 API 的底座。可以这样理解：触发方式决定"什么时候叫 Agent 工作"，Provider 决定"Agent 工作时拿什么去想"。这是两件独立的事。
@@ -80,12 +87,14 @@ flowchart TD
   UI["Web UI（手动对话）"]
   SCH["Schedule（cron 触发）"]
   CR["Connector + Route（外部系统推送）"]
+  API["HTTP API（你的代码带 Service Token 调用）"]
   S(("新 Session"))
   A["Agent（Workspace 内运行）"]
 
   UI --> S
   SCH --> S
   CR --> S
+  API --> S
   S --> A
 </pre>
 
