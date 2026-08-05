@@ -138,7 +138,7 @@ After that it goes in the `Authorization` header:
 Authorization: Bearer <token>
 ```
 
-The full endpoint list lives on your own instance: `⌘K` → **API Docs**, served at `/api/docs`.
+The full endpoint list lives on your own instance: `⌘K` → **API Docs**, served at `/api/docs`. [REST API](/nap/api/rest/) covers the conventions, and the [nap-api skill](/nap/api/skills/) hands the whole surface to a local agent.
 
 ## Quick reference
 
