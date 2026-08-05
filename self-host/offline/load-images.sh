@@ -130,10 +130,13 @@ retag_push() {
 # prefix), excluding the target registry: a previous (possibly failed) run
 # leaves retagged ${TARGET_REGISTRY}/... images in the local store, and matching
 # one of those would point the sweep at the wrong registry.
+# `|| true`: no match makes grep exit non-zero, which under `set -e -o pipefail`
+# aborts here silently instead of reaching the diagnostic below — the one place
+# that can tell the operator their bundle or --app-prefix is wrong.
 SOURCE_REGISTRY=$("$CONTAINER_CLI" images --format '{{.Repository}}' \
   | grep -E "/${APP_PREFIX}-cp$" \
   | grep -vF "${TARGET_REGISTRY}/" \
-  | head -1 | sed "s|/${APP_PREFIX}-cp$||")
+  | head -1 | sed "s|/${APP_PREFIX}-cp$||" || true)
 
 if [ -z "$SOURCE_REGISTRY" ]; then
   echo "ERROR: could not find a '${APP_PREFIX}-cp' image in the loaded bundle." >&2

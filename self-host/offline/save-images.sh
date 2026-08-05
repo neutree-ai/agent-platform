@@ -55,16 +55,21 @@ echo "==> Rendering manifests to derive the authoritative image set ..."
 ( cd "$SELF_HOST_DIR" && ./install.sh --render-only >/dev/null )
 [ -d "$RENDERED_DIR" ] || { echo "ERROR: render produced no $RENDERED_DIR" >&2; exit 1; }
 
-# Pull the resolved `image:` values out of every rendered manifest. envsubst has
+# Pull the resolved image values out of every rendered manifest. envsubst has
 # already substituted REGISTRY / *_IMAGE / tags, so these are concrete refs
 # (first-party services, postgres, gotenberg, coturn, nfs-server, afs, the
 # language runtimes, pause, chromium-headful, and registry:2 from registry.yaml).
+#
+# imageName: counts too. The CNPG Cluster spec names the PostgreSQL image under
+# that key rather than image:, so grepping for image: alone leaves the database
+# out of the bundle — an air-gapped install then comes up with everything except
+# postgres, which is the one thing nothing else can wait for.
 RENDERED_IMAGES=()
 while IFS= read -r img; do
   [ -n "$img" ] && RENDERED_IMAGES+=("$img")
 done < <(
-  grep -hE '^[[:space:]]*image:[[:space:]]' "$RENDERED_DIR"/*.yaml \
-    | sed -E 's/^[[:space:]]*image:[[:space:]]*//; s/["'\'']//g' \
+  grep -hE '^[[:space:]]*(image|imageName):[[:space:]]' "$RENDERED_DIR"/*.yaml \
+    | sed -E 's/^[[:space:]]*(image|imageName):[[:space:]]*//; s/["'\'']//g' \
     | grep -v '\${' \
     | sort -u
 )
@@ -79,6 +84,7 @@ done < <(
 SUPPLEMENT_IMAGES=(
   "${AGENT_IMAGE_PREFIX}-claude-code:${AGENT_IMAGE_TAG}"
   "${AGENT_IMAGE_PREFIX}-codex:${AGENT_IMAGE_TAG}"
+  "${AGENT_IMAGE_PREFIX}-goose:${AGENT_IMAGE_TAG}"
   "${REGISTRY}/${APP_PREFIX}-memory-fuse:${IMAGE_TAG}"
   "ghcr.io/cloudnative-pg/cloudnative-pg:${CNPG_VERSION}"
   "registry.k8s.io/sig-storage/nfs-subdir-external-provisioner:${NFS_PROVISIONER_VERSION}"
