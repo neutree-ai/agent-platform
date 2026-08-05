@@ -82,6 +82,24 @@ function isAnthropicType(pt: string): boolean {
   return pt === 'anthropic' || pt === 'anthropic-oauth' || pt === 'claude-code-oauth'
 }
 
+// A Claude Code setup token is a bearer token, not an API key: at runtime the
+// agent hands it to Claude Code as CLAUDE_CODE_OAUTH_TOKEN, which authenticates
+// with `Authorization: Bearer`. Probing it with `x-api-key` always 401s no
+// matter whether the token is valid. `anthropic-oauth` is deliberately left on
+// the x-api-key path — those providers front self-hosted gateways that accept it.
+function isClaudeCodeOauth(pt: string): boolean {
+  return pt === 'claude-code-oauth'
+}
+
+function anthropicAuthHeaders(pt: string, apiKey: string): Record<string, string> {
+  return isClaudeCodeOauth(pt) ? { Authorization: `Bearer ${apiKey}` } : { 'x-api-key': apiKey }
+}
+
+// A subscription OAuth token is only accepted on /v1/messages when the request
+// looks like Claude Code — without this system prompt the API rejects it with a
+// 429 rate_limit_error, which reads as a quota problem but is really a refusal.
+const CLAUDE_CODE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI for Claude."
+
 // Both OpenAI-family types list models the same way (GET /v1/models); they
 // differ only in the chat wire protocol used at runtime and by the test probe:
 // `openai` = Responses API (Codex), `openai-chat` = Chat Completions (goose).
@@ -292,7 +310,7 @@ providers.openapi(listModelsRoute, async (c) => {
       const baseUrl = resolveAnthropicUrl(provider)
       const res = await fetch(`${baseUrl}/v1/models`, {
         headers: {
-          'x-api-key': provider.api_key,
+          ...anthropicAuthHeaders(provider.provider_type, provider.api_key),
           'anthropic-version': '2023-06-01',
         },
       })
@@ -387,13 +405,16 @@ providers.openapi(testRoute, async (c) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': effective.api_key,
+          ...anthropicAuthHeaders(effective.provider_type, effective.api_key),
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
           model,
           max_tokens: 1,
           messages: [{ role: 'user', content: 'hi' }],
+          ...(isClaudeCodeOauth(effective.provider_type)
+            ? { system: [{ type: 'text', text: CLAUDE_CODE_SYSTEM_PROMPT }] }
+            : {}),
         }),
       })
     } else if (isOpenAIType(effective.provider_type)) {
