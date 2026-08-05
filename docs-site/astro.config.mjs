@@ -161,10 +161,20 @@ export default defineConfig({
             ]
           : []),
         {
-          label: 'API Docs',
-          translations: { 'zh-CN': 'API 文档' },
-          link: 'https://docs.neutree.ai/nap/api/docs',
-          attrs: { target: '_blank', rel: 'noopener' },
+          // The interactive reference is served by each instance at /api/docs,
+          // generated from the control plane that instance runs — so it can't
+          // be a link on this static site. These pages say where it is, and
+          // cover the skills that drive the same API.
+          label: 'API',
+          translations: { 'zh-CN': 'API' },
+          items: [
+            { label: 'REST API', translations: { 'zh-CN': 'REST API' }, slug: 'api/rest' },
+            {
+              label: 'Agent Skills',
+              translations: { 'zh-CN': 'Agent Skills' },
+              slug: 'api/skills',
+            },
+          ],
         },
       ],
     }),

@@ -140,7 +140,7 @@ Slack 路由额外支持 thread 内多轮对话：同一个 thread 里的连续�
 Authorization: Bearer <token>
 ```
 
-具体能调哪些接口、URL 是什么，打开你实例上的 **API 文档** 查看（`⌘K` → **API 文档**；路径为 `/api/docs`）。
+具体能调哪些接口、URL 是什么，打开你实例上的 **API 文档** 查看（`⌘K` → **API 文档**；路径为 `/api/docs`）。[REST API](/nap/zh-cn/api/rest/) 讲了调用约定，[nap-api skill](/nap/zh-cn/api/skills/) 则把整个 API 面交给本地 agent。
 
 ## 一张速查表
 
