@@ -255,7 +255,7 @@ const SCHEMA_ZH: {
     },
     AFS_STORAGE_SIZE: { hint: 'AFS RWX PVC 的大小' },
     AGENT_IMAGE_PREFIX: {
-      hint: '默认引用 REGISTRY；可填写完整前缀进行自定义',
+      hint: '留空即可 —— 安装器会按平台镜像前缀推导；仅当 agent 镜像放在别处时才填写完整前缀',
     },
     AGENT_STORAGE_CLASS: {
       hint: 'agent workspace PVC 使用的 StorageClass（ReadWriteOnce 即可）。卷根目录必须是 0777 —— 安装器自带的 nfs-subdir provisioner（nfs-nap）满足这一点。安装后请确认后端：kubectl get sc <class> -o jsonpath={.provisioner}；若为 nfs.csi.k8s.io / SFS，卷根目录是 0755，agent 会遇到 mkdir EACCES，需要设置 mountPermissions:"0777"',
@@ -562,8 +562,15 @@ const SCHEMA: SectionDef[] = [
         key: 'AGENT_IMAGE_PREFIX',
         kind: 'text',
         label: 'AGENT_IMAGE_PREFIX',
-        default: '${REGISTRY}/nap-agent',
-        hint: 'References REGISTRY by default; supply a full prefix to customize',
+        // Left blank on purpose: the installer derives it from
+        // PLATFORM_IMAGE_PREFIX. Writing the public nap-agent prefix in here
+        // pinned it for everyone, including a redistribution whose agent images
+        // carry a different prefix entirely — and since agents are spawned
+        // rather than templated, the wrong value surfaced only when someone
+        // started a workspace and it sat in ImagePullBackOff.
+        default: '',
+        placeholder: '${REGISTRY}/nap-agent',
+        hint: 'Leave empty unless your agent images live somewhere else — the installer derives it from the platform image prefix',
       },
       {
         key: 'AGENT_IMAGE_TAG',

@@ -291,8 +291,13 @@ check_app_prefix() {
   # a second, empty ${APP_PREFIX}-* stack (empty database included) beside the
   # old objects. Detect the existing prefix from its control-plane deployment.
   local existing
+  # `|| true`: with no cluster to talk to, kubectl exits non-zero, and under
+  # `set -e -o pipefail` that ended the script right here — with kubectl's
+  # stderr already sent to /dev/null, so it exited 1 having printed nothing at
+  # all. --render-only has no cluster by definition and hit this every time.
+  # An absent cluster simply means there is no existing install to compare to.
   existing=$(kubectl -n "${NAMESPACE}" get deploy -o name 2>/dev/null \
-    | sed -n 's|^deployment.apps/\(.*\)-cp$|\1|p' | head -1)
+    | sed -n 's|^deployment.apps/\(.*\)-cp$|\1|p' | head -1 || true)
   if [ -n "$existing" ] && [ "$existing" != "$APP_PREFIX" ]; then
     die "namespace '${NAMESPACE}' already has an install with prefix '${existing}' (deployment ${existing}-cp).
        Changing APP_PREFIX on an existing install would deploy a second, empty '${APP_PREFIX}-*' stack
