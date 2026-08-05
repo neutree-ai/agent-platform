@@ -449,8 +449,13 @@ export async function listEvents(opts: {
   const values: unknown[] = []
   let idx = 1
 
-  // Filter events by user's connectors
-  conditions.push(`c.user_id = $${idx++}`)
+  // A connector can be shared: one user owns it, others build routes on top
+  // (which is why a job runs as `route.user_id`, not the connector owner's).
+  // Scoping events to the connector owner alone hid every event from the very
+  // user whose route produced it — their Events tab was simply empty while the
+  // route fired normally. Either ownership makes the event yours to see.
+  conditions.push(`(c.user_id = $${idx} OR r.user_id = $${idx})`)
+  idx++
   values.push(opts.user_id)
 
   if (opts.route_id) {
@@ -472,6 +477,7 @@ export async function listEvents(opts: {
             j.retry_count AS job_retry_count
      FROM channel.event_log e
      LEFT JOIN channel.connectors c ON c.id = e.connector_id
+     LEFT JOIN channel.routes r ON r.id = e.route_id
      LEFT JOIN pgboss.job j ON j.id::text = e.job_id
      ${where} ORDER BY e.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
     [...values, limit, offset],
@@ -482,6 +488,7 @@ export async function listEvents(opts: {
   } = await pool.query(
     `SELECT COUNT(*)::int AS count FROM channel.event_log e
      LEFT JOIN channel.connectors c ON c.id = e.connector_id
+     LEFT JOIN channel.routes r ON r.id = e.route_id
      ${where}`,
     values,
   )
