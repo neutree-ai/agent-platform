@@ -1,21 +1,16 @@
 ---
-title: Neutree Agent Platform Docs
-description: "The open-source agent platform to build, distribute, and optimize AI agents, on infrastructure you own."
-template: splash
-hero:
-  title: Neutree Agent Platform
-  tagline: The open-source agent platform to build, distribute, and optimize AI agents, on infrastructure you own.
+title: Start here
+description: Install Neutree Agent Platform on one machine, then find your way around the docs.
+tableOfContents: false
 ---
 
-import LandingTerminal from '../../components/LandingTerminal.astro'
+One Linux machine, one command:
 
-<LandingTerminal
-  copyLabel="Copy"
-  copiedLabel="Copied ✓"
-  runningLine="... installing k3s + platform, ~5 minutes ..."
-/>
+```bash
+curl -sfL https://docs.neutree.ai/nap/get.sh | sudo sh -
+```
 
-<p class="nap-note">A single Linux machine is all it takes. Overrides and the existing-cluster install: <a href="/nap/self-host/single-node/">single-node quickstart</a>.</p>
+It installs a single-node k3s cluster and the whole platform on it, then prints the URL and the admin credentials. Around five minutes. Overrides and the existing-cluster install are in the [single-node quickstart](/nap/self-host/single-node/).
 
 <div class="nap-paths">
   <a class="nap-next" href="/nap/guides/1-setup/">
