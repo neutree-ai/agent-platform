@@ -90,4 +90,28 @@ describe('MCP proxy', () => {
     expect(res.status).toBe(401)
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('does not claim an encoding for a body fetch already decoded', async () => {
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
+    // What an ingress that gzips JSON hands to `fetch`: the header survives on
+    // the Response, the body arrives decoded. Re-sending the header left the
+    // client waiting for the rest of a gzip member that was never coming.
+    fetchMock.mockResolvedValue(
+      new Response('{"jsonrpc":"2.0"}', {
+        status: 200,
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+          'content-length': '42',
+        },
+      }),
+    )
+
+    const res = await call(`/v1/mcp/${encoded}/mcp`, 'ws_good')
+
+    expect(res.headers.get('content-encoding')).toBeNull()
+    expect(res.headers.get('content-length')).toBeNull()
+    expect(res.headers.get('content-type')).toBe('application/json')
+    expect(await res.text()).toBe('{"jsonrpc":"2.0"}')
+  })
 })

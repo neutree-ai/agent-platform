@@ -32,6 +32,15 @@ export interface McpForwardDeps {
 const HOP_BY_HOP = new Set(['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'host'])
 
 /**
+ * `fetch` decodes a compressed response before we ever see it, so the upstream
+ * `Content-Encoding` describes bytes that no longer exist and the length no
+ * longer matches. Re-sending either leaves the client decoding a gzip stream
+ * that never arrives — it waits for the rest of a member that was never sent,
+ * and the request hangs with its headers already delivered.
+ */
+const DECODED_BY_FETCH = new Set(['content-encoding', 'content-length'])
+
+/**
  * Long-lived MCP streams end by being cut off — the client navigates away, the
  * upstream closes an idle SSE connection. Undici surfaces that as a socket
  * error mid-body, which would otherwise escape as an unhandled rejection on the
@@ -116,7 +125,9 @@ export function registerMcpForwardRoutes(
 
     const respHeaders = new Headers()
     for (const [k, v] of upstream.headers.entries()) {
-      if (!HOP_BY_HOP.has(k.toLowerCase())) respHeaders.set(k, v)
+      const key = k.toLowerCase()
+      if (HOP_BY_HOP.has(key) || DECODED_BY_FETCH.has(key)) continue
+      respHeaders.set(k, v)
     }
     return new Response(upstream.body ? tolerateStreamAbort(upstream.body) : null, {
       status: upstream.status,

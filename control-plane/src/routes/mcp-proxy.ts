@@ -172,10 +172,20 @@ mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
       }
     }
 
-    // Return the upstream response with its headers and streaming body
+    // Return the upstream response with its headers and streaming body.
+    //
+    // `content-encoding` / `content-length` are dropped: `fetch` decoded the
+    // body before handing it over, so both describe bytes the client will
+    // never receive. Passing the encoding through left the client waiting on
+    // the rest of a gzip member that was never sent — headers delivered, body
+    // hanging. Only compressible replies were affected (an upstream serving
+    // `text/event-stream` is not compressed), which is why this surfaced as
+    // one MCP server going quiet rather than all of them.
     const responseHeaders = new Headers()
     for (const [key, value] of upstreamResp.headers.entries()) {
-      if (['transfer-encoding', 'connection'].includes(key.toLowerCase())) continue
+      const name = key.toLowerCase()
+      if (['transfer-encoding', 'connection', 'content-encoding', 'content-length'].includes(name))
+        continue
       responseHeaders.set(key, value)
     }
 
