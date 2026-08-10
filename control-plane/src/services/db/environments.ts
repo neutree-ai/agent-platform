@@ -110,6 +110,28 @@ export async function getEnvironmentForUser(
 
 // ── Projection: drive workspaces.status from runner reports ──
 
+/**
+ * Whether a workspace's environment has no live runner, as a SQL fragment over
+ * an `environments e` alias, with the heartbeat threshold in `$1`.
+ *
+ * Shared rather than repeated because two passes read it for different reasons —
+ * the status projection turns it into the status users see, the runtime meter
+ * records it as "the phase on this row is a stale reading" — and a change to the
+ * heartbeat rule applied to only one of them would make the billing log disagree
+ * with the UI with nothing to surface the drift.
+ *
+ * False for the built-in environment by construction: its runner shares cp's own
+ * cluster and sends no heartbeat to go stale.
+ */
+export const ENV_OFFLINE_SQL = `NOT (
+              e.is_builtin
+              OR (
+                e.status = 'online'
+                AND e.last_heartbeat_at IS NOT NULL
+                AND e.last_heartbeat_at >= now() - make_interval(secs => $1)
+              )
+            )`
+
 export interface WorkspaceObservation {
   workspace_id: string
   environment_id: string
@@ -140,9 +162,8 @@ export interface WorkspaceObservation {
  * projection pass over N workspaces is one query rather than N: at steady state
  * almost every row is unchanged and the pass writes nothing.
  *
- * `env_offline` is false for the built-in environment by construction: its
- * runner shares cp's own cluster, and it sends no heartbeat to go stale.
- * `thresholdSec` is how long without a heartbeat makes a remote one offline.
+ * `thresholdSec` is how long without a heartbeat makes a remote environment
+ * offline; see {@link ENV_OFFLINE_SQL}.
  */
 export async function listWorkspaceObservations(
   thresholdSec: number,
@@ -150,14 +171,7 @@ export async function listWorkspaceObservations(
   const { rows } = await pool.query(
     `SELECT p.workspace_id, p.environment_id, e.is_builtin,
             p.observed_phase, p.observed_template_version,
-            NOT (
-              e.is_builtin
-              OR (
-                e.status = 'online'
-                AND e.last_heartbeat_at IS NOT NULL
-                AND e.last_heartbeat_at >= now() - make_interval(secs => $1)
-              )
-            ) AS env_offline,
+            ${ENV_OFFLINE_SQL} AS env_offline,
             p.endpoint->'readyReplicaIds' AS ready_replica_ids,
             w.status, w.runtime_version
        FROM workspace_placements p

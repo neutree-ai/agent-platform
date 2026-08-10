@@ -6,10 +6,12 @@ import {
   listAllUserCredentials,
   listUsersWithDeletingCredentials,
 } from '../services/db/credentials'
+import { closeDeletedWorkspaceIntervals } from '../services/db/runtime-meter'
 import { sweepSupersededWorkspaceTokens } from '../services/db/workspace-tokens'
 import { runEnvProjection } from '../services/env-projection'
 import { runIdleWorkspaceGC } from '../services/idle-workspace-gc'
 import { refreshReplicaRouter } from '../services/replica-router'
+import { runRuntimeMeter } from '../services/runtime-meter'
 import { sweepRunningWorkspaces } from '../services/usage/pull'
 import { runAutoscaler } from '../services/workspace-autoscaler'
 
@@ -105,6 +107,37 @@ export function startReconcileLoop() {
       .catch((e) =>
         console.error(
           '[Reconcile] replica router refresh error:',
+          e instanceof Error ? e.message : e,
+        ),
+      ),
+  )
+
+  // Runtime meter: append a row wherever a workspace's observed runtime state
+  // moved. Its own pass rather than a step inside the projection above, so that
+  // a failure of the billing log cannot stop cp from projecting status — and so
+  // that its coverage mark, which is what makes an outage visible to rating,
+  // depends only on the meter's own success. protect:true so a slow pass never
+  // stacks.
+  new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
+    runRuntimeMeter(ENV_HEARTBEAT_TIMEOUT_SEC).catch((e) =>
+      console.error('[Reconcile] runtime meter error:', e instanceof Error ? e.message : e),
+    ),
+  )
+
+  // Deleted-workspace close-out for the meter: a workspace leaves the pass the
+  // moment its placement goes, so its last logged row would stay open forever.
+  // Reads the log rather than the placements, and an interval that ends a few
+  // minutes late on an already-deleted workspace changes nothing.
+  new Cron('*/5 * * * *', { protect: true }, () =>
+    closeDeletedWorkspaceIntervals()
+      .then((ids) => {
+        if (ids.length > 0) {
+          console.log(`[RuntimeMeter] closed ${ids.length} deleted workspace interval(s)`)
+        }
+      })
+      .catch((e) =>
+        console.error(
+          '[Reconcile] runtime meter close-out error:',
           e instanceof Error ? e.message : e,
         ),
       ),
