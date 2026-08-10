@@ -1,11 +1,10 @@
--- BYOI environments — foundation schema + zero-downtime backfill (P0, step 1).
+-- Environments — foundation schema + zero-downtime backfill.
 --
 -- Introduces the environment abstraction and the desired/observed placement
--- queue WITHOUT changing any runtime behavior: reconcile still runs the legacy
--- path, these tables are read-only side rows until P1 wires the in-process
--- runner as a consumer. See tmp/byoi-environments-design.md §3, §10 (P0), §13.
+-- queue. The tables start out as read-only side rows: nothing consumes them
+-- until a runner is wired in, so this migration changes no runtime behaviour.
 --
--- Safety invariant (design §13.1): every existing workspace is backfilled with
+-- Safety invariant: every existing workspace is backfilled with
 -- desired_phase == observed_phase and spec_version == observed_version, so the
 -- runner sees "already converged" → zero apply / zero lifecycle action → pods
 -- are never rebuilt. spec fidelity is intentionally a placeholder baseline;
@@ -21,7 +20,7 @@
 -- An environment is a place where workspaces can be provisioned. The built-in
 -- environment is the platform's own cluster, served by KubernetesProvider via
 -- an in-process runner. Reuses the platform's private|team|public visibility
--- model (design §3.1, §8); credentials are NEVER stored here.
+-- model; credentials are NEVER stored here.
 CREATE TABLE IF NOT EXISTS environments (
     id                text PRIMARY KEY,
     user_id           text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -39,7 +38,7 @@ CREATE TABLE IF NOT EXISTS environments (
     CONSTRAINT environments_user_name_unique UNIQUE (user_id, name)
 );
 
--- Team sharing — mirrors prompt_grants / template_grants exactly (design §3.1).
+-- Team sharing — mirrors prompt_grants / template_grants exactly.
 CREATE TABLE IF NOT EXISTS environment_grants (
     environment_id text NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
     team_id        text NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
@@ -52,7 +51,7 @@ CREATE TABLE IF NOT EXISTS environment_grants (
 );
 
 -- The desired/observed placement queue, partitioned by environment_id
--- (design §3.3). One row per workspace.
+-- One row per workspace.
 CREATE TABLE IF NOT EXISTS workspace_placements (
     workspace_id     text PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
     environment_id   text NOT NULL REFERENCES environments(id),
@@ -78,7 +77,7 @@ CREATE TABLE IF NOT EXISTS workspace_placements (
 CREATE INDEX IF NOT EXISTS idx_workspace_placements_environment
     ON workspace_placements (environment_id);
 
--- Placement result also recorded on workspace_config; NULL = built-in (design §3.4).
+-- Placement result also recorded on workspace_config; NULL = built-in.
 ALTER TABLE workspace_config ADD COLUMN IF NOT EXISTS environment_id text;
 
 ----------------------------------------------------------------------

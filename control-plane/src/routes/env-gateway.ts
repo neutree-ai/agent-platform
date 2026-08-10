@@ -7,7 +7,7 @@ import { registerSession, removeSession } from '../services/env-gateway/registry
 
 // Reverse-flow targets (runner→cp). SYMBOLIC allowlist, not free host:port — a
 // runner may only reach these specific cp-internal services, never an arbitrary
-// address, so a compromised runner can't pivot through the gateway (design §9).
+// address, so a compromised runner can't pivot through the gateway.
 const CP_INTERNAL_ADDR = process.env.CP_INTERNAL_ADDR || `127.0.0.1:${process.env.PORT || '3000'}`
 const AFS_CONTROLLER_ADDR = process.env.AFS_CONTROLLER_ADDR || 'afs-controller.default.svc:9100'
 
@@ -22,10 +22,10 @@ function reverseTarget(meta: string): { host: string; port: number } | null {
 // In-cp env-gateway: the WS terminus a remote runner dials out to. One outbound
 // WebSocket per environment carries a byte-level mux (internal/env-tunnel); cp's
 // data plane opens forward streams on it to reach NAT'd workspaces, and the
-// runner opens reverse streams back to cp (wired in C3). Authn is the env token
-// at handshake (design §9 revision): no mTLS for v1, the token already binds the
-// connection to a single environment. The raw `ws` socket is wrapped as a Node
-// Duplex via createWebSocketStream so the mux gets real stream backpressure.
+// runner opens reverse streams back to cp. Authn is the env token at handshake —
+// no mTLS, since the token already binds the connection to a single environment.
+// The raw `ws` socket is wrapped as a Node Duplex via createWebSocketStream so
+// the mux gets real stream backpressure.
 
 type UpgradeWebSocket = ReturnType<typeof createNodeWebSocket>['upgradeWebSocket']
 

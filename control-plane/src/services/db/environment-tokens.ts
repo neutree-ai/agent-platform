@@ -1,4 +1,4 @@
-// BYOI P2 — environment_tokens service (design §3.2, §9).
+// environment_tokens: the credentials a runner authenticates with.
 //
 // Per-environment runner credentials. Mirrors the service-token *mechanics*
 // (random secret shown once, SHA-256 hash at rest, Bearer → hash compare,

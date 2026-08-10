@@ -41,10 +41,11 @@ export function desiredReplicas(
 /**
  * Which ready ordinals a scale-down to `desired` removes. Encodes the k8s
  * StatefulSet convention directly — scaling to N keeps ordinals 0..N-1 and drops
- * the rest — because cp can't call a remote provider's nextRemovedReplicaIds
- * across the tunnel (design §7). A non-k8s provider with a different removal
- * order would need this convention taught per-provider; today every provider is
- * k8s, so the assumption holds. Pure.
+ * the rest — because cp decides which replicas to drain before it hands the
+ * count to a runner, and cannot ask a remote provider across the tunnel which
+ * ones it would remove. A backend with a different removal order would have to
+ * teach cp its convention; every provider is k8s today, so the assumption holds.
+ * Pure.
  */
 export function replicasToRemove(readyIds: readonly number[], desired: number): number[] {
   return readyIds.filter((id) => id >= desired).sort((a, b) => a - b)

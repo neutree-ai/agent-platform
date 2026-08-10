@@ -7,7 +7,7 @@ import { Mux } from '../../internal/env-tunnel'
 // over it. Forward streams (cp→workspace) arrive via onStream; reverse streams
 // (workspace→cp) are opened with mux.openStream. The raw socket is wrapped as a
 // Node Duplex so the mux gets real backpressure. Outbound only — works behind
-// NAT. See tmp/byoi-environments-design.md §6.
+// NAT.
 
 interface TunnelClient {
   mux: Mux

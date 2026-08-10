@@ -1,8 +1,8 @@
 import { defaultCfg } from '../../../internal/k8s-provider'
 import { type EnvironmentWithAccess, getEnvironmentForUser } from './db/environments'
 
-// Placement decision (design §8): choose the environment a new workspace runs
-// on, from the set the user can see, and negotiate capabilities. The built-in
+// Placement decision: choose the environment a new workspace runs on, from the
+// set the user can see, and negotiate capabilities. The built-in
 // environment is the platform's own cluster — always reachable and fully
 // capable; remote environments must be online and advertise the required
 // features via their runner heartbeat (environments.capabilities).
@@ -12,7 +12,7 @@ const BUILTIN_ENV = 'builtin'
 interface RequiredFeatures {
   sharedFs?: boolean
   persistentMemory?: boolean
-  /** Auto-scaling: multiple replicas on one RWX volume (design §7). */
+  /** Auto-scaling: multiple replicas sharing one ReadWriteMany volume. */
   multiReplica?: boolean
 }
 

@@ -1,8 +1,8 @@
--- BYOI P2 — environment_tokens: per-environment runner credentials.
+-- environment_tokens: per-environment runner credentials.
 --
 -- A remote env-runner (running in customer infra, behind NAT) authenticates its
 -- outbound /env/v1/* calls with a long-lived, revocable token scoped to ONE
--- environment. See tmp/byoi-environments-design.md §3.2, §9.
+-- environment.
 --
 -- Deliberately a SEPARATE table, NOT a reuse of service_tokens: a service token
 -- resolves to user.sub == created_by (full user authority), far too broad for a
@@ -10,7 +10,7 @@
 -- the *mechanics* (tos_-prefixed secret shown once, token_hash at rest, Bearer →
 -- hash compare, revoked_at) but the auth middleware yields a restricted principal
 -- ({ environmentId }), never a user — every downstream query is forced to
--- WHERE environment_id = $principal.environmentId (design §9 tenant isolation).
+-- WHERE environment_id = $principal.environmentId, which is the tenant boundary.
 --
 -- Pure additive: no backfill. The built-in environment never gets a token — it
 -- is served by the in-process / same-cluster direct-DB runner, not the protocol.

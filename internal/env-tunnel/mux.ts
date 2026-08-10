@@ -10,7 +10,7 @@ import multiplex from 'multiplex'
 // straight to/from sockets. We use a vetted library rather than hand-rolling
 // framing + flow control: backpressure rides Node's stream machinery, and
 // substreams being Node Duplexes means zero adapter layer (the main quality
-// risk). See tmp/byoi-environments-design.md §6.
+// risk).
 //
 // This wrapper keeps a tiny stable surface (openStream/onStreamOpen/close) so
 // the gateway and tunnel client never touch `multiplex` directly.

@@ -1,4 +1,4 @@
-// BYOI P2 — env-token auth middleware for the runner protocol (design §3.2, §9).
+// Env-token auth for the runner protocol.
 //
 // Guards /env/v1/*. Resolves a Bearer environment token to a RESTRICTED
 // principal ({ environmentId }) — deliberately not a user. Route handlers read
