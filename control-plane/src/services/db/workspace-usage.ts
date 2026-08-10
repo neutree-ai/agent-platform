@@ -235,6 +235,8 @@ export interface SessionSettlementFacts {
   drained_through: string | null
   /** 'agent' while a turn runs. Null when the session row is gone. */
   chat_status: string | null
+  /** Null when the workspace is gone. Only a running one can still be pulled. */
+  workspace_status: string | null
 }
 
 export async function getSessionSettlementFacts(
@@ -251,7 +253,8 @@ export async function getSessionSettlementFacts(
          (SELECT MAX(created_at) FROM messages WHERE session_id = $2 AND workspace_id = $1),
          (SELECT MAX(ts) FROM workspace_usage_events WHERE workspace_id = $1 AND session_id = $2)
        ) AS activity_at,
-       (SELECT drained_through FROM workspace_usage_cursor WHERE workspace_id = $1) AS drained_through`,
+       (SELECT drained_through FROM workspace_usage_cursor WHERE workspace_id = $1) AS drained_through,
+       (SELECT status FROM workspaces WHERE id = $1) AS workspace_status`,
     [workspaceId, sessionId],
   )
   const r = rows[0]
@@ -259,6 +262,7 @@ export async function getSessionSettlementFacts(
     activity_at: r?.activity_at ?? null,
     drained_through: r?.drained_through ?? null,
     chat_status: r?.chat_status ?? null,
+    workspace_status: r?.workspace_status ?? null,
   }
 }
 

@@ -15,13 +15,14 @@ function facts(over: Partial<SessionSettlementFacts> = {}): SessionSettlementFac
     activity_at: ACTIVITY,
     drained_through: drainedAfter(DEFAULT_SETTLE_GRACE_MS + 1_000),
     chat_status: 'human',
+    workspace_status: 'running',
     ...over,
   }
 }
 
 describe('evaluateSettlement', () => {
   it('settles once a drain clears the activity by more than the settle grace', () => {
-    expect(evaluateSettlement(facts(), 'drained')).toMatchObject({
+    expect(evaluateSettlement(facts())).toMatchObject({
       complete: true,
       reason: null,
     })
@@ -31,7 +32,7 @@ describe('evaluateSettlement', () => {
     // The parser holds back a file's trailing entry until it has been quiescent
     // for the grace, so this drain cannot have seen the session's last record.
     const inside = facts({ drained_through: drainedAfter(DEFAULT_SETTLE_GRACE_MS - 1_000) })
-    expect(evaluateSettlement(inside, 'drained')).toMatchObject({
+    expect(evaluateSettlement(inside)).toMatchObject({
       complete: false,
       reason: 'pending_settle',
     })
@@ -39,7 +40,7 @@ describe('evaluateSettlement', () => {
 
   it('withholds a drain that predates the activity', () => {
     const before = facts({ drained_through: drainedAfter(-60_000) })
-    expect(evaluateSettlement(before, 'drained').complete).toBe(false)
+    expect(evaluateSettlement(before).complete).toBe(false)
   })
 
   it('never settles while a turn is running, however old the drain', () => {
@@ -47,19 +48,19 @@ describe('evaluateSettlement', () => {
       chat_status: 'agent',
       drained_through: drainedAfter(3_600_000),
     })
-    expect(evaluateSettlement(running, 'drained')).toMatchObject({
+    expect(evaluateSettlement(running)).toMatchObject({
       complete: false,
       reason: 'turn_in_progress',
     })
   })
 
-  it('reports a running turn ahead of a failed pull', () => {
-    const running = facts({ chat_status: 'agent' })
-    expect(evaluateSettlement(running, 'agent_unreachable').reason).toBe('turn_in_progress')
+  it('reports a running turn ahead of an unreachable workspace', () => {
+    const running = facts({ chat_status: 'agent', workspace_status: 'stopped' })
+    expect(evaluateSettlement(running).reason).toBe('turn_in_progress')
   })
 
   it('does not settle a workspace that was never drained', () => {
-    expect(evaluateSettlement(facts({ drained_through: null }), null)).toMatchObject({
+    expect(evaluateSettlement(facts({ drained_through: null }))).toMatchObject({
       complete: false,
       reason: 'pending_settle',
     })
@@ -67,32 +68,34 @@ describe('evaluateSettlement', () => {
 
   it('settles an empty session once the workspace has been drained', () => {
     // Nothing to account for, and a drain proved the agent had nothing to give.
-    expect(evaluateSettlement(facts({ activity_at: null }), 'drained')).toMatchObject({
+    expect(evaluateSettlement(facts({ activity_at: null }))).toMatchObject({
       complete: true,
       reason: null,
     })
   })
 
   it('does not settle an empty session before any drain', () => {
-    expect(
-      evaluateSettlement(facts({ activity_at: null, drained_through: null }), null).complete,
-    ).toBe(false)
+    expect(evaluateSettlement(facts({ activity_at: null, drained_through: null })).complete).toBe(
+      false,
+    )
   })
 
   it.each([
-    ['agent_unreachable', 'agent_unreachable'],
-    ['agent_error', 'agent_unreachable'],
-    ['workspace_gone', 'workspace_gone'],
-    // A capped drain made real progress; it just has more to read.
-    ['batch_cap', 'pending_settle'],
-  ] as const)('maps a %s stop to reason %s', (stop, reason) => {
-    const stale = facts({ drained_through: drainedAfter(-60_000) })
-    expect(evaluateSettlement(stale, stop).reason).toBe(reason)
+    // Transcripts are read out of the running pod, so anything else is a wait
+    // that polling alone will not end.
+    ['running', 'pending_settle'],
+    ['stopped', 'agent_unreachable'],
+    ['error', 'agent_unreachable'],
+    ['starting', 'agent_unreachable'],
+    [null, 'workspace_gone'],
+  ] as const)('reads workspace status %s as reason %s', (workspace_status, reason) => {
+    const stale = facts({ drained_through: drainedAfter(-60_000), workspace_status })
+    expect(evaluateSettlement(stale).reason).toBe(reason)
   })
 
   it('echoes the facts the verdict was drawn from', () => {
     const f = facts()
-    expect(evaluateSettlement(f, 'drained')).toMatchObject({
+    expect(evaluateSettlement(f)).toMatchObject({
       drained_through: f.drained_through,
       activity_at: f.activity_at,
     })

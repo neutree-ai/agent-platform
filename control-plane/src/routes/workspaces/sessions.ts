@@ -13,7 +13,7 @@ import {
 } from '../../services/db/sessions'
 import { getSessionUsage, getSessionUsageOwner } from '../../services/db/workspace-usage'
 import { getWorkspace } from '../../services/db/workspaces'
-import { MAX_WAIT_SEC, settleSessionUsage } from '../../services/usage/settle'
+import { settleSessionUsage } from '../../services/usage/settle'
 import { canManage, interruptAgentSession } from './_shared'
 
 const sessions = new OpenAPIHono<AppEnv>()
@@ -377,22 +377,13 @@ const getSessionUsageRoute = createRoute({
     '',
     '`settlement` says whether the ledger already holds everything the session',
     'spent. Usage arrives by pulling the agent transcripts and the pull fired at',
-    'the end of a turn is detached, so a read taken immediately can be short.',
-    'Pass `wait` (seconds, max 60) to pull and block until the account settles;',
-    'a timeout returns the real verdict rather than a false success.',
+    'the end of a turn is detached, so a read taken immediately can be short —',
+    'poll until `complete`, which for a session that just ended takes about as',
+    "long as the parser's settle grace. `reason` distinguishes an account that",
+    'is still converging from one nothing will advance.',
   ].join('\n'),
   security: [{ bearerAuth: [] }],
-  request: {
-    params: SessionScopedParam,
-    query: z.object({
-      wait: z.coerce
-        .number()
-        .min(0)
-        .max(MAX_WAIT_SEC)
-        .optional()
-        .openapi({ param: { name: 'wait', in: 'query' } }),
-    }),
-  },
+  request: { params: SessionScopedParam },
   responses: {
     200: {
       description: 'Session usage',
@@ -408,7 +399,6 @@ const getSessionUsageRoute = createRoute({
 sessions.openapi(getSessionUsageRoute, async (c) => {
   const currentUser = c.get('user')
   const { id, sessionId } = c.req.valid('param')
-  const { wait } = c.req.valid('query')
 
   // The ledger has no foreign key and outlives both the session and the
   // workspace, on purpose: a harness that recycles a workspace after a run must
@@ -433,9 +423,7 @@ sessions.openapi(getSessionUsageRoute, async (c) => {
     }
   }
 
-  // Settle first: with `wait` this is what pulls the outstanding records, so
-  // reading the totals before it would return the account it just completed.
-  const settlement = await settleSessionUsage(id, sessionId, wait ?? 0)
+  const settlement = await settleSessionUsage(id, sessionId)
   const usage = await getSessionUsage(id, sessionId)
   return c.json({ session_id: sessionId, ...usage, settlement }, 200)
 })

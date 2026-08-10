@@ -37,12 +37,7 @@ const PULL_BATCH_FILES = 50
 const MAX_BATCHES_PER_PULL = 40
 
 /** Why a pull stopped. Only `drained` means the agent had nothing left to give. */
-export type PullStop =
-  | 'drained'
-  | 'workspace_gone'
-  | 'agent_unreachable'
-  | 'agent_error'
-  | 'batch_cap'
+type PullStop = 'drained' | 'workspace_gone' | 'agent_unreachable' | 'agent_error' | 'batch_cap'
 
 interface PullOutcome {
   /** Ledger rows actually appended (duplicates already excluded). */

@@ -1,6 +1,6 @@
 import { DEFAULT_SETTLE_GRACE_MS } from '../../../../internal/agent-usage/src/index'
 import { type SessionSettlementFacts, getSessionSettlementFacts } from '../db/workspace-usage'
-import { type PullStop, pullWorkspaceUsage } from './pull'
+import { pullWorkspaceUsage } from './pull'
 
 /**
  * Whether the ledger holds everything a session spent.
@@ -33,20 +33,22 @@ interface Settlement {
   reason: SettlementReason | null
 }
 
-/** Stops that no amount of retrying will get past. */
-const TERMINAL: PullStop[] = ['workspace_gone']
+/** Shortest gap between two background pulls of one workspace. */
+const PULL_MIN_INTERVAL_MS = 2_000
 
-/** How long a `wait` request sleeps between attempts. */
-const POLL_INTERVAL_MS = 3_000
-
-/** Upper bound on `wait`, so a caller cannot pin a request open indefinitely. */
-export const MAX_WAIT_SEC = 60
-
-function reasonFor(facts: SessionSettlementFacts, stop: PullStop | null): SettlementReason {
+/**
+ * Why an incomplete account is incomplete — read off the same facts as the
+ * verdict rather than off the last pull's outcome, so it means the same thing
+ * on every cp replica and survives a restart. It separates "wait, this is
+ * converging" from "waiting will not help", which is all a polling caller
+ * needs to decide whether to keep going.
+ */
+function reasonFor(facts: SessionSettlementFacts): SettlementReason {
   if (facts.chat_status === 'agent') return 'turn_in_progress'
-  if (stop === 'workspace_gone') return 'workspace_gone'
-  if (stop === 'agent_unreachable' || stop === 'agent_error') return 'agent_unreachable'
-  // 'batch_cap' included: the drain is real progress, just unfinished.
+  if (facts.workspace_status === null) return 'workspace_gone'
+  // Transcripts are read out of the running pod; a stopped workspace keeps them
+  // on its volume, but nothing can collect them until it runs again.
+  if (facts.workspace_status !== 'running') return 'agent_unreachable'
   return 'pending_settle'
 }
 
@@ -54,10 +56,7 @@ function reasonFor(facts: SessionSettlementFacts, stop: PullStop | null): Settle
  * Decide a verdict from already-gathered facts. Pure, so the rule can be tested
  * against the clock skews it exists to handle without a database or an agent.
  */
-export function evaluateSettlement(
-  facts: SessionSettlementFacts,
-  stop: PullStop | null,
-): Settlement {
+export function evaluateSettlement(facts: SessionSettlementFacts): Settlement {
   const base = {
     drained_through: facts.drained_through,
     activity_at: facts.activity_at,
@@ -73,58 +72,56 @@ export function evaluateSettlement(
 
   return settled
     ? { ...base, complete: true, reason: null }
-    : { ...base, complete: false, reason: reasonFor(facts, stop) }
+    : { ...base, complete: false, reason: reasonFor(facts) }
 }
 
-// Collapses concurrent pulls of the same workspace onto one round trip. Several
-// clients waiting on sibling sessions of one workspace is the expected shape,
-// and each pull is a full drain — without this they would multiply into
-// redundant load on the agent for an answer they all share.
-const inFlight = new Map<string, Promise<PullStop>>()
-
-function pullOnce(workspaceId: string): Promise<PullStop> {
-  const existing = inFlight.get(workspaceId)
-  if (existing) return existing
-  const p = pullWorkspaceUsage(workspaceId)
-    .then((o) => o.stop)
-    .catch((e): PullStop => {
-      console.warn(`[usage] settle pull ws=${workspaceId}:`, e instanceof Error ? e.message : e)
-      return 'agent_error'
-    })
-    .finally(() => inFlight.delete(workspaceId))
-  inFlight.set(workspaceId, p)
-  return p
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+// Last time a background pull was started per workspace. Together with the
+// in-flight map this bounds how much agent traffic a polling client can cause:
+// concurrent reads share one round trip, and a fast poll cannot start a new one
+// more often than PULL_MIN_INTERVAL_MS.
+const inFlight = new Map<string, Promise<unknown>>()
+const lastPullAt = new Map<string, number>()
 
 /**
- * Report whether a session's account is complete, optionally pulling and
- * waiting for it to become so.
+ * Nudge a workspace's usage forward without making the caller wait for it.
  *
- * With `waitSec` unset this only reads what is already known — no round trip to
- * the agent. With it set, the wait ends the moment the account settles, at the
- * deadline, or on a stop that retrying cannot fix; a timeout returns the real
- * verdict rather than pretending to have succeeded.
+ * The pull on `session.ended` fires while the transcript is still inside its
+ * settle grace, so it drains but cannot cover the entry the parser is holding
+ * back. Nothing else pulls until the half-hourly sweep — a client polling a
+ * purely passive read would sit at `complete: false` for that long. Reading an
+ * unsettled account is therefore what schedules the next pull, which makes a
+ * poll loop converge in seconds while keeping the read itself a database query.
+ */
+function schedulePull(workspaceId: string, workspaceStatus: string | null): void {
+  const now = Date.now()
+  // Only a running workspace can be read; anything else already says so in the
+  // verdict's reason, and pulling it would just burn a request to find out.
+  if (workspaceStatus !== 'running') return
+  if (inFlight.has(workspaceId)) return
+  if (now - (lastPullAt.get(workspaceId) ?? 0) < PULL_MIN_INTERVAL_MS) return
+
+  lastPullAt.set(workspaceId, now)
+  const p = pullWorkspaceUsage(workspaceId)
+    .catch((e) =>
+      console.warn(`[usage] settle pull ws=${workspaceId}:`, e instanceof Error ? e.message : e),
+    )
+    .finally(() => inFlight.delete(workspaceId))
+  inFlight.set(workspaceId, p)
+}
+
+/**
+ * Report whether a session's account is complete.
+ *
+ * Always a plain read — the verdict describes what the ledger holds right now,
+ * never what a pull might be about to add. An incomplete answer schedules a
+ * pull in the background so the next read can differ; poll until `complete`.
  */
 export async function settleSessionUsage(
   workspaceId: string,
   sessionId: string,
-  waitSec = 0,
 ): Promise<Settlement> {
-  if (waitSec <= 0) {
-    return evaluateSettlement(await getSessionSettlementFacts(workspaceId, sessionId), null)
-  }
-
-  const deadline = Date.now() + Math.min(waitSec, MAX_WAIT_SEC) * 1000
-  let stop: PullStop | null = null
-  while (true) {
-    stop = await pullOnce(workspaceId)
-    const result = evaluateSettlement(await getSessionSettlementFacts(workspaceId, sessionId), stop)
-    if (result.complete || TERMINAL.includes(stop)) return result
-
-    const remaining = deadline - Date.now()
-    if (remaining <= 0) return result
-    await sleep(Math.min(POLL_INTERVAL_MS, remaining))
-  }
+  const facts = await getSessionSettlementFacts(workspaceId, sessionId)
+  const result = evaluateSettlement(facts)
+  if (!result.complete) schedulePull(workspaceId, facts.workspace_status)
+  return result
 }
