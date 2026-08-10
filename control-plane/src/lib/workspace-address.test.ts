@@ -1,21 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The workspace data-plane routing seam: builtin workspaces resolve to
-// cluster DNS, remote (BYOI) workspaces to their localhost forward proxy, and
-// resolveAgentAddress must stay identity-equal to getWorkspaceAddress for
-// every route context while workspaces are single-replica.
+// The workspace data-plane routing seam. A workspace on a remote environment
+// resolves to its localhost forward proxy; a built-in one to cluster DNS, whose
+// shape depends on the runtime mode — a ClusterIP Service for the static shape,
+// per-ordinal headless DNS for auto-scaling.
 
-const {
-  getRemoteProxyPortMock,
-  anyReadyReplicaMock,
-  readyReplicaIdsMock,
-  isAutoScalingWorkspaceMock,
-} = vi.hoisted(() => ({
-  getRemoteProxyPortMock: vi.fn<(workspaceId: string, replicaId?: number) => number | undefined>(),
-  anyReadyReplicaMock: vi.fn<(workspaceId: string) => number | undefined>(),
-  readyReplicaIdsMock: vi.fn<(workspaceId: string) => readonly number[]>(),
-  isAutoScalingWorkspaceMock: vi.fn<(workspaceId: string) => boolean>(),
-}))
+const { getRemoteProxyPortMock, anyReadyReplicaMock, readyReplicaIdsMock, runtimeModeOfMock } =
+  vi.hoisted(() => ({
+    getRemoteProxyPortMock:
+      vi.fn<(workspaceId: string, replicaId?: number) => number | undefined>(),
+    anyReadyReplicaMock: vi.fn<(workspaceId: string) => number | undefined>(),
+    readyReplicaIdsMock: vi.fn<(workspaceId: string) => readonly number[]>(),
+    runtimeModeOfMock: vi.fn<(workspaceId: string) => 'static' | 'auto-scaling' | undefined>(),
+  }))
 
 vi.mock('./remote-proxy', () => ({
   getRemoteProxyPort: getRemoteProxyPortMock,
@@ -24,7 +21,7 @@ vi.mock('./remote-proxy', () => ({
 vi.mock('../services/replica-router', () => ({
   anyReadyReplica: anyReadyReplicaMock,
   readyReplicaIds: readyReplicaIdsMock,
-  isAutoScalingWorkspace: isAutoScalingWorkspaceMock,
+  runtimeModeOf: runtimeModeOfMock,
 }))
 
 import {
@@ -34,11 +31,15 @@ import {
   resolveAgentAddress,
 } from './workspace-address'
 
+const SERVICE = 'http://tos-ws1.default.svc.cluster.local:3001'
+const HEADLESS = 'http://tos-ws1-hl.default.svc.cluster.local:3001'
+const replica = (id: number) => `http://tos-ws1-${id}.tos-ws1-hl.default.svc.cluster.local:3001`
+
 beforeEach(() => {
   getRemoteProxyPortMock.mockReturnValue(undefined)
-  anyReadyReplicaMock.mockReturnValue(undefined) // static: no ready replicas
+  anyReadyReplicaMock.mockReturnValue(undefined)
   readyReplicaIdsMock.mockReturnValue([])
-  isAutoScalingWorkspaceMock.mockReturnValue(false) // static unless a test says otherwise
+  runtimeModeOfMock.mockReturnValue('static')
 })
 
 afterEach(() => {
@@ -47,49 +48,66 @@ afterEach(() => {
 })
 
 describe('getWorkspaceAddress', () => {
-  it('resolves builtin workspaces to cluster DNS', () => {
-    expect(getWorkspaceAddress('ws1')).toBe('http://tos-ws1.default.svc.cluster.local:3001')
+  it('resolves a static workspace to its ClusterIP Service', () => {
+    expect(getWorkspaceAddress('ws1')).toBe(SERVICE)
   })
 
-  it('resolves a specific replica to its per-ordinal headless DNS', () => {
-    expect(getWorkspaceAddress('ws1', 2)).toBe(
-      'http://tos-ws1-2.tos-ws1-hl.default.svc.cluster.local:3001',
-    )
+  // A static workspace has exactly one replica and its Service already points at
+  // it, so a replica id says nothing new. It reports a ready set like every other
+  // workspace, so ids DO reach here — and per-ordinal DNS, which the static shape
+  // never creates, would NXDOMAIN.
+  it('ignores a replica id for a static workspace', () => {
+    anyReadyReplicaMock.mockReturnValue(0)
+
+    expect(getWorkspaceAddress('ws1')).toBe(SERVICE)
+    expect(getWorkspaceAddress('ws1', 0)).toBe(SERVICE)
+  })
+
+  it('resolves a named replica of an auto-scaling workspace to its per-ordinal DNS', () => {
+    runtimeModeOfMock.mockReturnValue('auto-scaling')
+
+    expect(getWorkspaceAddress('ws1', 2)).toBe(replica(2))
+  })
+
+  // An auto-scaling workspace has no ClusterIP Service — a VIP would round-robin
+  // across replicas and defeat session affinity — so a call with no replica
+  // affinity goes to whichever one is ready.
+  it('resolves an unbound call on an auto-scaling workspace to any ready replica', () => {
+    runtimeModeOfMock.mockReturnValue('auto-scaling')
+    anyReadyReplicaMock.mockReturnValue(1)
+
+    expect(getWorkspaceAddress('ws1')).toBe(replica(1))
+  })
+
+  // Scaled to zero or cold-starting: the headless Service names pods as k8s marks
+  // them ready, so the first health poll lands without waiting for cp's next
+  // observation. The ClusterIP name would NXDOMAIN for the whole cold start.
+  it('resolves an auto-scaling workspace with nothing ready to its headless Service', () => {
+    runtimeModeOfMock.mockReturnValue('auto-scaling')
+    anyReadyReplicaMock.mockReturnValue(undefined)
+
+    expect(getWorkspaceAddress('ws1')).toBe(HEADLESS)
+  })
+
+  // A workspace created since the last router refresh has no known shape. Its
+  // Service is what a workspace has unless it is auto-scaling.
+  it('resolves a workspace of unknown shape to its Service', () => {
+    runtimeModeOfMock.mockReturnValue(undefined)
+
+    expect(getWorkspaceAddress('ws1')).toBe(SERVICE)
   })
 
   it('resolves remote workspaces to their localhost forward proxy', () => {
     getRemoteProxyPortMock.mockReturnValue(41234)
+
     expect(getWorkspaceAddress('ws1')).toBe('http://127.0.0.1:41234')
-  })
-
-  it('resolves a built-in auto-scaling workspace (no replica) to any ready replica', () => {
-    // no ClusterIP Service exists → the bare name would not resolve; pick a ready one
-    isAutoScalingWorkspaceMock.mockReturnValue(true)
-    anyReadyReplicaMock.mockReturnValue(1)
-    expect(getWorkspaceAddress('ws1')).toBe(
-      'http://tos-ws1-1.tos-ws1-hl.default.svc.cluster.local:3001',
-    )
-  })
-
-  it('resolves a cold-starting auto-scaling workspace (no ready replica) to its headless Service, not the absent ClusterIP', () => {
-    // scaled to zero / cold-starting: no ready replica yet. The ClusterIP name an
-    // auto-scaling workspace never has would NXDOMAIN for the whole cold-start
-    // budget; the headless Service resolves to pods as they become ready.
-    isAutoScalingWorkspaceMock.mockReturnValue(true)
-    anyReadyReplicaMock.mockReturnValue(undefined)
-    expect(getWorkspaceAddress('ws1')).toBe('http://tos-ws1-hl.default.svc.cluster.local:3001')
-  })
-
-  it('a static workspace with no ready replica still falls back to its ClusterIP Service', () => {
-    // isAutoScalingWorkspace=false (default) → unchanged bare-name behaviour.
-    anyReadyReplicaMock.mockReturnValue(undefined)
-    expect(getWorkspaceAddress('ws1')).toBe('http://tos-ws1.default.svc.cluster.local:3001')
   })
 })
 
 describe('resolveAgentAddress', () => {
-  it('matches the default builtin address when no replica is bound', () => {
+  it('matches the default address when no replica is bound', () => {
     const expected = getWorkspaceAddress('ws1')
+
     expect(resolveAgentAddress('ws1')).toBe(expected)
     expect(resolveAgentAddress('ws1', {})).toBe(expected)
     expect(resolveAgentAddress('ws1', { sessionId: null })).toBe(expected)
@@ -98,19 +116,21 @@ describe('resolveAgentAddress', () => {
   })
 
   it('routes a replica-bound session to that replica', () => {
-    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: 0 })).toBe(
-      'http://tos-ws1-0.tos-ws1-hl.default.svc.cluster.local:3001',
-    )
+    runtimeModeOfMock.mockReturnValue('auto-scaling')
+
+    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: 0 })).toBe(replica(0))
   })
 
   it('follows the remote-proxy path too', () => {
     getRemoteProxyPortMock.mockReturnValue(41234)
+
     expect(resolveAgentAddress('ws1', { sessionId: 'sess-1' })).toBe('http://127.0.0.1:41234')
   })
 
   it('routes a replica-bound remote session to that replica’s proxy', () => {
     // proxy exists only for replica 2 → a turn bound to 2 reaches it, others miss
     getRemoteProxyPortMock.mockImplementation((_ws, id) => (id === 2 ? 41250 : undefined))
+
     expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: 2 })).toBe(
       'http://127.0.0.1:41250',
     )
@@ -128,13 +148,14 @@ describe('postToAgent', () => {
     expect(resp?.ok).toBe(true)
     expect(fetchMock).toHaveBeenCalledOnce()
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('http://tos-ws1.default.svc.cluster.local:3001/reload-config')
+    expect(url).toBe(`${SERVICE}/reload-config`)
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ scope: ['skills'] })
   })
 
   it('returns null instead of throwing when the agent is unreachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')))
+
     expect(await postToAgent('ws1', '/reload-config', {}, 1_000)).toBeNull()
   })
 })
@@ -142,6 +163,7 @@ describe('postToAgent', () => {
 describe('notifyAgentReload', () => {
   it('true when the agent acknowledges', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })))
+
     expect(await notifyAgentReload('ws1', ['skills'])).toBe(true)
   })
 
@@ -153,22 +175,34 @@ describe('notifyAgentReload', () => {
     expect(await notifyAgentReload('ws1', ['config'])).toBe(false)
   })
 
+  // The reload mutates a per-process cache, so every ready replica has to get it.
   it('fans out to every ready replica of an auto-scaling workspace', async () => {
+    runtimeModeOfMock.mockReturnValue('auto-scaling')
     readyReplicaIdsMock.mockReturnValue([0, 1, 2])
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
     expect(await notifyAgentReload('ws1', ['config'])).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    const urls = fetchMock.mock.calls.map((c) => c[0])
-    expect(urls).toEqual([
-      'http://tos-ws1-0.tos-ws1-hl.default.svc.cluster.local:3001/reload-config',
-      'http://tos-ws1-1.tos-ws1-hl.default.svc.cluster.local:3001/reload-config',
-      'http://tos-ws1-2.tos-ws1-hl.default.svc.cluster.local:3001/reload-config',
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      `${replica(0)}/reload-config`,
+      `${replica(1)}/reload-config`,
+      `${replica(2)}/reload-config`,
     ])
   })
 
+  // A running static workspace reports one ready replica like any other, and the
+  // fan-out over it lands on the workspace's Service — one call, one process.
+  it('reaches a running static workspace once, through its Service', async () => {
+    readyReplicaIdsMock.mockReturnValue([0])
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await notifyAgentReload('ws1', ['config'])).toBe(true)
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([`${SERVICE}/reload-config`])
+  })
+
   it('reports false when any replica in the fan-out fails (caller retries)', async () => {
+    runtimeModeOfMock.mockReturnValue('auto-scaling')
     readyReplicaIdsMock.mockReturnValue([0, 1])
     const fetchMock = vi
       .fn()

@@ -9,7 +9,7 @@
  * Both speak the same snake_case PlacementRow shape — which is exactly the JSON
  * the /env/v1/placements endpoint returns and the workspace_placements columns
  * the db transport selects — so the core never needs to know which side it talks
- * to. See tmp/byoi-environments-design.md §5.
+ * to.
  */
 
 /** A placement as the runner sees it (db columns / protocol JSON, 1:1). */
@@ -21,6 +21,9 @@ export interface PlacementRow {
   spec_version: number
   observed_phase: string | null
   observed_version: number | null
+  /** Last observation written back, so a pass can tell a no-op from a change. */
+  endpoint: unknown
+  observed_template_version: number | null
 }
 
 /** Observed-state write-back. version is set only post-apply (convergence). */
@@ -28,6 +31,12 @@ export interface ObservedUpdate {
   phase: string
   endpoint?: unknown
   message?: string | null
+  /**
+   * Pod-template version of the running workload. null leaves the stored value
+   * alone — a workspace with nothing provisioned reports no version, and that is
+   * not the same as having lost the one it last ran.
+   */
+  templateVersion?: number | null
   version?: number | null
 }
 

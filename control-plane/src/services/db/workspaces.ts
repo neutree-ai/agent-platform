@@ -160,11 +160,6 @@ export async function markAllSessionsSeen(workspaceId: string): Promise<number> 
   return result.rowCount ?? 0
 }
 
-export async function listAllWorkspaces(): Promise<Workspace[]> {
-  const { rows } = await pool.query('SELECT * FROM workspaces')
-  return rows as Workspace[]
-}
-
 /** Running workspaces with their owner, for the usage sweep (one query, no per-ws lookups). */
 export async function listRunningWorkspaces(): Promise<Array<{ id: string; user_id: string }>> {
   const { rows } = await pool.query("SELECT id, user_id FROM workspaces WHERE status = 'running'")
@@ -183,9 +178,10 @@ interface IdleWorkspace {
  * workspace's "last used" is the latest of: any session's last_active_at, any
  * message's created_at, and the workspace's own created_at (the fallback for a
  * workspace created but never chatted). System workspaces are excluded — they
- * are platform infrastructure and must not be GC'd. Auto-scaling workspaces are
- * excluded too — the autoscaler owns their scale-to-zero, and letting the
- * day-scale GC also stop them would be double control on the same lifecycle.
+ * are platform infrastructure and must not be GC'd. Only static workspaces are
+ * eligible — the autoscaler owns an auto-scaling workspace's scale-to-zero, and
+ * letting the day-scale GC also stop one would be double control over the same
+ * lifecycle. The shape is read from the placement, the one place it is declared.
  * Ordered oldest-idle first.
  */
 export async function listIdleRunningWorkspaces(idleDays: number): Promise<IdleWorkspace[]> {
@@ -204,11 +200,9 @@ export async function listIdleRunningWorkspaces(idleDays: number): Promise<IdleW
            )
          ) AS last_used
        FROM workspaces w
+       JOIN workspace_placements p ON p.workspace_id = w.id
        WHERE w.status = 'running' AND w.is_system = false
-         AND NOT EXISTS (
-           SELECT 1 FROM workspace_config wc
-            WHERE wc.workspace_id = w.id AND wc.auto_scaling IS NOT NULL
-         )
+         AND p.runtime_mode = 'static'
      )
      SELECT id, name, last_used FROM activity
      WHERE last_used < NOW() - make_interval(days => $1::int)

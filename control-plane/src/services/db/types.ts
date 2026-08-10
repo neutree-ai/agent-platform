@@ -139,10 +139,11 @@ export interface WorkspaceConfig {
   muted: boolean
   /**
    * Auto-scaling parameters, or null for a static (single fixed replica)
-   * workspace. Its PRESENCE is the runtime-shape discriminant — there is no
-   * separate mode flag, and a static workspace has no replica parameters to
-   * mis-read. Fixed at creation, immutable after. Per-replica turn capacity
-   * reuses max_concurrency, so it is not part of this object.
+   * workspace. This is the creation-time *input*: buildWorkspaceSpec reads its
+   * presence to decide the workspace's runtimeMode, which the placement spec
+   * then carries and everything downstream branches on. Fixed at creation,
+   * immutable after. Per-replica turn capacity reuses max_concurrency, so it is
+   * not part of this object.
    */
   auto_scaling: AutoScalingConfig | null
   updated_at: string

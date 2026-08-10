@@ -1,22 +1,33 @@
 import { dropRemoteProxy, ensureRemoteProxy, syncReplicaProxies } from '../lib/remote-proxy'
 import { type WorkspaceStatus, applyStatusChange } from '../lib/workspace-status'
 import {
-  listBuiltinAutoScalingObservations,
+  type WorkspaceObservation,
   listReapableWorkspaces,
-  listRemoteWorkspaceObservations,
+  listWorkspaceObservations,
   markStaleEnvironmentsOffline,
 } from './db/environments'
-import { deleteWorkspace, getWorkspace } from './db/workspaces'
+import { deleteWorkspace, updateWorkspace } from './db/workspaces'
 
-// Remote environment projection (design §5.3, §7). cp can't watch a remote
-// cluster's k8s, so a remote workspace's status is derived from what its runner
-// reports (observed_phase) plus the environment's heartbeat: a stale heartbeat
-// makes the environment offline and its workspaces 'unknown'. This is the remote
-// counterpart of the built-in watch-k8s reconcile. It also keeps the forward
-// data-plane proxies in step — created when a remote workspace is reachable,
-// dropped otherwise.
+// Status projection. A workspace's status is derived from what its runner
+// reports into workspace_placements — one path for every environment kind and
+// every workload shape, because every runner writes the same columns. cp reads
+// no infrastructure of its own here.
+//
+// For a remote environment the report is qualified by the runner's heartbeat: a
+// stale heartbeat makes the environment offline and its workspaces 'unknown',
+// since cp then has no basis for a better answer. The pass also keeps the
+// forward data-plane proxies in step for those workspaces.
 
-function mapObservedToStatus(phase: string | null): WorkspaceStatus {
+/**
+ * Map a reported phase onto the status the API exposes.
+ *
+ * The 'unknown' / null case is the one that depends on where the workspace runs.
+ * It means nothing is provisioned, which on the built-in environment is
+ * unambiguous — the workspace is simply not up, so 'stopped'. On a remote
+ * environment the same report may instead mean the runner cannot see its own
+ * cluster, so 'unknown' is the honest answer.
+ */
+function mapObservedToStatus(phase: string | null, isBuiltin: boolean): WorkspaceStatus {
   switch (phase) {
     case 'running':
       return 'running'
@@ -28,14 +39,33 @@ function mapObservedToStatus(phase: string | null): WorkspaceStatus {
     case 'starting':
       return 'starting'
     default:
-      return 'unknown'
+      return isBuiltin ? 'stopped' : 'unknown'
   }
 }
 
 /**
- * One projection pass: mark stale environments offline, then for each remote
- * workspace derive its status and reconcile its forward proxy. Cheap no-op when
- * there are no remote environments.
+ * Forward proxy lifecycle for a remote workspace: a reachable, running one gets
+ * a localhost proxy so cp's fetch sites can reach it through the tunnel;
+ * anything else has none. A workspace reporting a ready-replica set gets one
+ * proxy per ready ordinal, one reporting none gets the single ordinal-less
+ * proxy. Built-in workspaces are reached over cluster DNS and never take part.
+ */
+async function reconcileProxy(o: WorkspaceObservation, status: WorkspaceStatus): Promise<void> {
+  if (o.is_builtin) return
+  if (o.env_offline || status !== 'running') {
+    dropRemoteProxy(o.workspace_id)
+    return
+  }
+  if (o.ready_replica_ids && o.ready_replica_ids.length > 0) {
+    await syncReplicaProxies(o.workspace_id, o.environment_id, o.ready_replica_ids)
+  } else {
+    await ensureRemoteProxy(o.workspace_id, o.environment_id)
+  }
+}
+
+/**
+ * One projection pass: mark stale environments offline, reap confirmed deletes,
+ * then project every placed workspace's status and reconcile its proxy.
  */
 export async function runEnvProjection(thresholdSec: number): Promise<void> {
   const offlined = await markStaleEnvironmentsOffline(thresholdSec)
@@ -52,50 +82,23 @@ export async function runEnvProjection(thresholdSec: number): Promise<void> {
     console.log(`[EnvProjection] reaped deleted workspace ${wsId}`)
   }
 
-  const observations = await listRemoteWorkspaceObservations(thresholdSec)
-  for (const o of observations) {
+  for (const o of await listWorkspaceObservations(thresholdSec)) {
     const status: WorkspaceStatus = o.env_offline
       ? 'unknown'
-      : mapObservedToStatus(o.observed_phase)
+      : mapObservedToStatus(o.observed_phase, o.is_builtin)
 
-    const ws = await getWorkspace(o.workspace_id)
-    if (ws && ws.status !== status) {
-      await applyStatusChange(o.workspace_id, status, ws.status)
+    if (o.status !== status) {
+      await applyStatusChange(o.workspace_id, status, o.status)
     }
 
-    // Forward proxy lifecycle: a reachable, running remote workspace gets a
-    // localhost proxy so cp's fetch sites can reach it through the tunnel;
-    // anything else (stopped/starting/offline) has none. An auto-scaling
-    // workspace reports a ready-replica set → one proxy per ready ordinal; a
-    // static one reports none → the single ordinal-less proxy, unchanged.
-    if (!o.env_offline && status === 'running') {
-      if (o.ready_replica_ids && o.ready_replica_ids.length > 0) {
-        await syncReplicaProxies(o.workspace_id, o.environment_id, o.ready_replica_ids)
-      } else {
-        await ensureRemoteProxy(o.workspace_id, o.environment_id)
-      }
-    } else {
-      dropRemoteProxy(o.workspace_id)
+    // Cache the running pod-template version so "rebuild available" is a pure DB
+    // comparison. Only when one was reported — a stopped workspace has no
+    // workload to read it from, and its last known version is still the truth.
+    const reported = o.observed_template_version
+    if (reported !== null && reported !== o.runtime_version) {
+      await updateWorkspace(o.workspace_id, { runtime_version: reported })
     }
-  }
-}
 
-/**
- * Project workspace.status for BUILT-IN auto-scaling workspaces from the runner's
- * observed_phase. They are StatefulSets, so the watch-k8s Deployment reconcile
- * has no Deployment for them and skips them (see reconcile.ts); without this they
- * would be stuck / wrongly 'stopped'. This is the built-in analogue of the remote
- * projection above, minus proxies/heartbeat (the built-in runner shares cp's
- * cluster and reaches pods via cluster DNS). Cheap no-op while no built-in
- * workspace is auto-scaling (the query returns nothing) — static workspaces are
- * never selected, so their status path is untouched.
- */
-export async function projectBuiltinAutoScalingStatus(): Promise<void> {
-  for (const o of await listBuiltinAutoScalingObservations()) {
-    const status = mapObservedToStatus(o.observed_phase)
-    const ws = await getWorkspace(o.workspace_id)
-    if (ws && ws.status !== status) {
-      await applyStatusChange(o.workspace_id, status, ws.status)
-    }
+    await reconcileProxy(o, status)
   }
 }

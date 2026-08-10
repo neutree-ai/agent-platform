@@ -21,7 +21,8 @@ export class DbTransport implements PlacementTransport {
   async listPlacements(): Promise<PlacementRow[]> {
     const { rows } = await pool.query(
       `SELECT p.workspace_id, p.environment_id, p.desired_phase, p.spec,
-              p.spec_version, p.observed_phase, p.observed_version
+              p.spec_version, p.observed_phase, p.observed_version, p.endpoint,
+              p.observed_template_version
          FROM workspace_placements p
          JOIN environments e ON e.id = p.environment_id
         WHERE e.is_builtin = true`,
@@ -36,6 +37,7 @@ export class DbTransport implements PlacementTransport {
               endpoint = $3,
               message = $4,
               observed_version = COALESCE($5, observed_version),
+              observed_template_version = COALESCE($6, observed_template_version),
               reported_at = now()
         WHERE workspace_id = $1`,
       [
@@ -44,6 +46,7 @@ export class DbTransport implements PlacementTransport {
         o.endpoint != null ? JSON.stringify(o.endpoint) : null,
         o.message ?? null,
         o.version ?? null,
+        o.templateVersion ?? null,
       ],
     )
   }

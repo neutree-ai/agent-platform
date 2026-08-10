@@ -6,12 +6,10 @@
  * the built-in environment, remote for BYOI — reconciles it against an
  * {@link EnvironmentProvider} implementation (KubernetesProvider being the
  * first). These types are the infra-agnostic seam between the two halves.
- *
- * See tmp/byoi-environments-design.md §3–§5. v1 (P0/P1) only exercises the
- * built-in environment via an in-process runner; remote-only fields are marked.
  */
 
 import type { ComputeResources } from './api.js'
+import type { RuntimeMode } from './runtime-mode.js'
 
 /** Provisioning backend kind. Open-ended; KubernetesProvider is the first. */
 export type EnvironmentKind = 'kubernetes' | 'docker' | 'nomad' | 'opensandbox'
@@ -36,11 +34,11 @@ export interface PortSpec {
 }
 
 /**
- * Optional stateful features. v1 models these as enable-flags: the sidecar
- * (afs-fuse / memory-fuse) inclusion is gated by them, but the actual mounts
- * are resolved at runtime (afs via bootstrap pull, memory via CP), not carried
- * statically in the spec. Richer per-feature specs may be added when data
- * services sink into BYOI environments (design §6, P3).
+ * Optional stateful features, modelled as enable-flags: they gate whether the
+ * afs-fuse / memory-fuse sidecar is included, while the actual mounts are
+ * resolved at runtime (afs via bootstrap pull, memory via cp) rather than
+ * carried statically in the spec. A feature that needs its own parameters can
+ * grow a richer shape here.
  */
 export interface WorkspaceFeatures {
   /** Include the shared-AgentFS sidecar (afs-fuse). */
@@ -68,20 +66,18 @@ export interface WorkspaceSpec {
   version: number
 
   /**
-   * Runtime shape of the workspace. Omitted / `'static'` = today's only
-   * behavior: a single fixed replica on a ReadWriteOnce workspace volume.
-   * `'auto-scaling'` = 0..N replicas sharing one ReadWriteMany workspace volume,
-   * sized by an autoscaler. A provider only honors `'auto-scaling'` when it
-   * advertises the `multiReplica` capability. Fixed at creation, immutable after.
+   * Runtime shape of the workspace, and the sole discriminator providers branch
+   * on. See {@link RuntimeMode}. Always present: a spec that reaches a provider
+   * has been normalised, so no consumer defaults it.
    */
-  runtimeMode?: 'static' | 'auto-scaling'
+  runtimeMode: RuntimeMode
   /**
    * Desired replica count under `'auto-scaling'` (the autoscaler writes it).
-   * Ignored for `'static'` (always 1); omitted → the provider treats it as 1.
+   * Ignored for `'static'`, which is always 1.
    */
   replicas?: number
 
-  // ── Reserved / forward-looking (unused by the v1 k8s provider) ──
+  // ── Reserved: accepted by the contract, unused by the k8s provider ──
   /** Explicit container image, if a backend takes one directly instead of agentType. */
   image?: string
   env?: Record<string, string>
@@ -111,21 +107,24 @@ export interface Capabilities {
 
 /**
  * How a running workspace is reached. For the built-in environment this is
- * cluster DNS; for a remote environment it is a tunnel routing key reported by
- * the runner (design §6). Shape is intentionally loose during v1.
+ * cluster DNS; for a remote environment it is a tunnel routing key the runner
+ * reports. Deliberately loose — what constitutes an address is the backend's
+ * business, and cp only passes it to the routing seam.
  */
 export interface EnvironmentEndpoint {
   /** Direct address for built-in (e.g. host:port resolvable from cp). */
   address?: string
-  /** Tunnel routing key for remote environments (P2). */
+  /** Tunnel routing key for remote environments. */
   routeKey?: string
   /**
-   * For an auto-scaling workspace: the provider-assigned ids of the Ready
-   * replicas. This is the readiness signal cp routes on — the replicas reachable
-   * right now. It rides on the endpoint (not a separate observed field) because
-   * for a multi-replica workspace the ready set IS its reachability; it therefore
-   * flows to cp through the existing observed-endpoint channel with no extra
-   * plumbing. Omitted for single-replica (static) workspaces.
+   * The provider-assigned ids of the Ready replicas — the readiness signal cp
+   * routes on, sizes turn capacity from, and fans reloads out over. Reported by
+   * every runtime shape, so reachability is one uniform signal: a running static
+   * workspace reports its single replica, an auto-scaling one reports however
+   * many are ready, and anything not up reports none.
+   *
+   * It rides on the endpoint rather than being a separate observed field because
+   * the ready set IS a workspace's reachability.
    */
   readyReplicaIds?: number[]
 }
@@ -135,8 +134,15 @@ export interface ObservedState {
   phase: ObservedPhase
   /** The spec version the runner has converged to. */
   version?: number
-  // Reachability, incl. the ready replica set for auto-scaling workspaces
-  // (endpoint.readyReplicaIds) — the readiness signal cp routes on.
+  /**
+   * Version of the pod template the workload is actually built from — distinct
+   * from {@link version}, which tracks placement-spec convergence. cp caches it
+   * on the workspace row so "rebuild available" is a DB comparison rather than a
+   * live infra read. Omitted when the backend stamps no such version, or when
+   * nothing is provisioned to read one from.
+   */
+  templateVersion?: number
+  /** Reachability, including the ready replica set cp routes on. */
   endpoint?: EnvironmentEndpoint
   message?: string
 }
@@ -148,14 +154,18 @@ export interface Closable {
 
 /**
  * The single abstraction all provisioning backends implement. KubernetesProvider
- * (extracted from control-plane/src/services/k8s.ts) is the first; the built-in
- * environment uses it in-process. All lifecycle methods are idempotent and take
- * infra-agnostic arguments.
+ * is the first, and the built-in environment uses it in-process. All lifecycle
+ * methods are idempotent and take infra-agnostic arguments.
  */
 export interface EnvironmentProvider {
   /** Create if absent; converge if drifted. */
   apply(workspaceId: string, spec: WorkspaceSpec): Promise<void>
-  start(workspaceId: string): Promise<void>
+  /**
+   * Bring the workspace up. The mode is passed in rather than discovered,
+   * because acting on a workspace means acting on one specific shape's infra and
+   * the caller is the one holding its desired state.
+   */
+  start(workspaceId: string, mode: RuntimeMode): Promise<void>
 
   /**
    * Optional: put a freshly minted workspace token where the workload will find
@@ -172,13 +182,19 @@ export interface EnvironmentProvider {
    * without a token and can only reach the endpoints that do not require one.
    */
   deliverWorkspaceToken?(workspaceId: string, token: string): Promise<void>
-  stop(workspaceId: string): Promise<void>
+  stop(workspaceId: string, mode: RuntimeMode): Promise<void>
+  /**
+   * Remove the workspace's infra. Takes no mode: teardown must not depend on
+   * getting the shape right, since a wrong guess leaks infra nothing will come
+   * back for.
+   */
   destroy(workspaceId: string): Promise<void>
-  resize(workspaceId: string, resources: ComputeResources): Promise<void>
-  expandStorage(workspaceId: string, sizeGi: number): Promise<void>
 
-  /** Point-in-time observation. */
-  observe(workspaceId: string): Promise<ObservedState>
+  /**
+   * Point-in-time observation. `mode` lets a caller that knows the shape skip
+   * discovering it; without one the backend answers by looking.
+   */
+  observe(workspaceId: string, mode?: RuntimeMode): Promise<ObservedState>
   /**
    * Optional batch observation: one round-trip for every workspace the provider
    * currently has (e.g. a single k8s LIST). The map is keyed by workspace id;

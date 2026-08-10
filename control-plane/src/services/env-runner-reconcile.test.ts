@@ -36,7 +36,7 @@ const RESOURCES: ComputeResources = {
 }
 
 function makeSpec(version: number): WorkspaceSpec {
-  return { agentType: 'claude-code', resources: RESOURCES, version }
+  return { agentType: 'claude-code', resources: RESOURCES, version, runtimeMode: 'static' }
 }
 
 class FakeProvider implements EnvironmentProvider {
@@ -143,6 +143,8 @@ function placement(over: Partial<PlacementRow>): PlacementRow {
     spec: makeSpec(1),
     spec_version: 1,
     observed_phase: 'running',
+    endpoint: null,
+    observed_template_version: null,
     observed_version: 1,
     ...over,
   }
@@ -170,7 +172,9 @@ describe('reconcileOnce decision table', () => {
     const result = await reconcileOnce(provider, transport)
 
     expect(provider.count('stop')).toBe(1)
-    expect(transport.writes()).toEqual([{ phase: 'stopped', endpoint: undefined, message: null }])
+    expect(transport.writes()).toEqual([
+      { phase: 'stopped', endpoint: undefined, message: null, templateVersion: null },
+    ])
     expect(result).toMatchObject({ acted: 1, failed: 0 })
   })
 
@@ -215,7 +219,7 @@ describe('reconcileOnce decision table', () => {
     expect(applies).toHaveLength(1)
     expect(applies[0].args[1]).toBe(spec)
     expect(transport.writes()).toEqual([
-      { phase: 'running', endpoint: undefined, version: 2, message: null },
+      { phase: 'running', endpoint: undefined, version: 2, message: null, templateVersion: null },
     ])
     expect(result).toMatchObject({ acted: 1 })
   })
@@ -231,7 +235,7 @@ describe('reconcileOnce decision table', () => {
 
     expect(provider.count('apply')).toBe(1)
     expect(transport.writes()).toEqual([
-      { phase: 'starting', endpoint: undefined, version: 1, message: null },
+      { phase: 'starting', endpoint: undefined, version: 1, message: null, templateVersion: null },
     ])
     expect(result).toMatchObject({ acted: 1 })
   })
@@ -252,7 +256,9 @@ describe('reconcileOnce decision table', () => {
 
     expect(provider.count('start')).toBe(1)
     expect(provider.count('apply')).toBe(0)
-    expect(transport.writes()).toEqual([{ phase: 'running', endpoint: undefined, message: null }])
+    expect(transport.writes()).toEqual([
+      { phase: 'running', endpoint: undefined, message: null, templateVersion: null },
+    ])
     expect(result).toMatchObject({ acted: 1 })
   })
 
@@ -343,7 +349,9 @@ describe('reconcileOnce decision table', () => {
     expect(provider.count('apply')).toBe(0)
     expect(provider.count('start')).toBe(0)
     expect(provider.count('stop')).toBe(0)
-    expect(transport.writes()).toEqual([{ phase: 'starting', endpoint: undefined, message: null }])
+    expect(transport.writes()).toEqual([
+      { phase: 'starting', endpoint: undefined, message: null, templateVersion: null },
+    ])
     expect(result).toMatchObject({ noop: 1 })
   })
 
@@ -367,15 +375,18 @@ describe('reconcileOnce decision table', () => {
     expect(result).toMatchObject({ acted: 0, noop: 1, failed: 0 })
   })
 
-  it('converged auto-scaling (running/running) → writeObserved refreshes the ready-replica set every pass', async () => {
-    // A phase-only gate would let readyReplicaIds go stale: pods die/recover and
-    // scale-up readiness fills in while phase stays 'running'. An observation
-    // carrying readyReplicaIds must be recorded even when phase is unchanged.
+  // A phase-only gate would let readyReplicaIds go stale: pods die and recover,
+  // and scale-up readiness fills in, while phase stays 'running'.
+  it('converged but the ready set moved → writeObserved refreshes it', async () => {
     const provider = new FakeProvider({
       observeAll: new Map([['ws1', { phase: 'running', endpoint: { readyReplicaIds: [0, 2] } }]]),
     })
     const transport = new FakeTransport([
-      placement({ desired_phase: 'running', observed_phase: 'running' }),
+      placement({
+        desired_phase: 'running',
+        observed_phase: 'running',
+        endpoint: { readyReplicaIds: [0] },
+      }),
     ])
 
     const result = await reconcileOnce(provider, transport)
@@ -384,6 +395,27 @@ describe('reconcileOnce decision table', () => {
     expect(transport.count('writeObserved')).toBe(1)
     expect(transport.writes()[0].endpoint).toEqual({ readyReplicaIds: [0, 2] })
     // Still a no-op action (no mutation) — the write only refreshes observed state.
+    expect(result).toMatchObject({ acted: 0, noop: 1, failed: 0 })
+  })
+
+  // Every workspace reports a ready set, so "it has one" says nothing. Without
+  // comparing it, a steady-state pass would rewrite every running workspace in
+  // the environment on every tick.
+  it('converged with an unchanged ready set → no write at all', async () => {
+    const provider = new FakeProvider({
+      observeAll: new Map([['ws1', { phase: 'running', endpoint: { readyReplicaIds: [0] } }]]),
+    })
+    const transport = new FakeTransport([
+      placement({
+        desired_phase: 'running',
+        observed_phase: 'running',
+        endpoint: { readyReplicaIds: [0] },
+      }),
+    ])
+
+    const result = await reconcileOnce(provider, transport)
+
+    expect(transport.count('writeObserved')).toBe(0)
     expect(result).toMatchObject({ acted: 0, noop: 1, failed: 0 })
   })
 

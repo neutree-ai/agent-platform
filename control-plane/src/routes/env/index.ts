@@ -1,4 +1,4 @@
-// BYOI P2 — runner protocol endpoints (/env/v1/*, design §5.4).
+// Runner protocol endpoints (/env/v1/*).
 //
 // All routes are OUTBOUND calls made by a remote env-runner (behind NAT, it can
 // only dial out). Auth is the env-token middleware, which yields a single
@@ -47,6 +47,7 @@ env.post('/v1/placements/:wsId/observed', async (c) => {
     endpoint: body.endpoint,
     message: body.message ?? null,
     version: typeof body.version === 'number' ? body.version : null,
+    templateVersion: typeof body.templateVersion === 'number' ? body.templateVersion : null,
   })
   if (!ok) return c.json({ error: 'placement not found in this environment' }, 404)
   return c.json({ ok: true })

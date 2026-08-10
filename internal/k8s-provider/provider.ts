@@ -1,70 +1,51 @@
 import * as k8s from '@kubernetes/client-node'
-import type { ComputeResources } from '../types/api'
 import type {
   Capabilities,
   EnvironmentProvider,
-  ObservedPhase,
   ObservedState,
   WorkspaceSpec,
 } from '../types/environments'
+import { type RuntimeMode, assertNever } from '../types/runtime-mode'
 import { WORKSPACE_TOKEN_ENV } from '../types/workspace-token'
 import { AutoScalingWorkload } from './auto-scaling-workload'
 import { type K8sConfig, defaultCfg } from './config'
 import {
-  createOrAdopt,
-  expandWorkspacePvc,
-  isPodReady,
-  resourceName,
-  swallow404,
-  workspaceLabels,
-  workspacePvcName,
-  workspaceTokenSecretName,
-} from './support'
-import {
-  MEMORY_FUSE_CONTAINER_NAME,
-  type ReconciledStatus,
-  TEMPLATE_VERSION_ANNOTATION,
-  WORKSPACE_SERVICE_PORTS,
-  buildDeploymentSpec,
-  resolveDeploymentStatus,
-} from './workspace-spec'
+  type InstanceSpecMarkers,
+  type K8sResourceStatus,
+  StaticWorkload,
+} from './static-workload'
+import { swallow404, workspaceLabels, workspaceSelector, workspaceTokenSecretName } from './support'
+import type { WorkspaceWorkload } from './workload'
 
-interface K8sInstance {
-  workspaceId: string
-  status: 'pending' | 'running' | 'failed'
-  createdAt: string
-}
+export type { InstanceSpecMarkers, K8sResourceStatus }
 
-interface K8sResourceStatus {
-  deployment: {
-    exists: boolean
-    ready: boolean
-    replicas: number
-    readyReplicas: number
-  }
-  service: { exists: boolean }
-  pvc: { exists: boolean; phase?: string; capacity?: string }
-  pods: { total: number; ready: number }
-  warnings: Array<{ reason: string; message: string }>
-  conditions: Array<{ type: string; status: boolean; message?: string }>
-}
-
-interface InstanceSpecMarkers {
-  templateVersion: number | null
-  agentImage: string | null
-  hasMemoryFuseSidecar: boolean
-}
+// A pod flipping ready also restates its Deployment/StatefulSet, so events for
+// one workspace arrive in bursts; collapse a burst into a single observe.
+const WATCH_COALESCE_MS = 200
+// Above this many workspaces in one window, read the whole namespace once
+// instead of per workspace. A cluster-wide event (rolling restart, node drain)
+// moves hundreds of workspaces at once, and one read each would be thousands of
+// concurrent apiserver calls — enough to be throttled, which turns a burst of
+// events into a burst of DROPPED observations.
+const WATCH_BATCH_THRESHOLD = 20
+// Backoff before re-establishing a stream that ended, so a persistently failing
+// watch (RBAC, apiserver down) cannot spin.
+const WATCH_RECONNECT_MS = 2_000
 
 /**
- * Kubernetes provisioning backend. Holds its own API clients + config so a
- * remote runner can construct one with injected credentials/config; the
- * built-in environment uses the provider from {@link makeDefaultProvider},
- * which loads from env. Lifecycle methods are the same logic that used to
- * live in module-level functions — control-plane keeps thin wrappers over a
- * default instance so existing call sites stay unchanged.
+ * Kubernetes provisioning backend.
+ *
+ * A facade over the two workload shapes. Everything here is shape-independent —
+ * the workspace token Secret, the change stream, capabilities — and the shapes
+ * themselves live in {@link StaticWorkload} and {@link AutoScalingWorkload}.
+ * {@link workloadFor} is the only place they are told apart.
+ *
+ * Holds its own API clients + config so a remote runner can construct one with
+ * injected credentials; the built-in environment uses {@link makeDefaultProvider},
+ * which loads from env.
  */
 export class KubernetesProvider implements EnvironmentProvider {
-  /** The auto-scaling (StatefulSet) workload shape; the facade dispatches here. */
+  private readonly static: StaticWorkload
   private readonly autoScaling: AutoScalingWorkload
 
   constructor(
@@ -73,688 +54,188 @@ export class KubernetesProvider implements EnvironmentProvider {
     private readonly kc: k8s.KubeConfig,
     private readonly cfg: K8sConfig,
   ) {
+    this.static = new StaticWorkload(appsApi, coreApi, cfg)
     this.autoScaling = new AutoScalingWorkload(appsApi, coreApi, cfg)
   }
 
-  private getResourceName(workspaceId: string): string {
-    return resourceName(this.cfg, workspaceId)
+  /**
+   * Pick the workload for a runtime mode. The single point where the two shapes
+   * are distinguished: adding a third mode fails to compile here until it has a
+   * workload of its own.
+   */
+  private workloadFor(mode: RuntimeMode): WorkspaceWorkload {
+    switch (mode) {
+      case 'static':
+        return this.static
+      case 'auto-scaling':
+        return this.autoScaling
+      default:
+        return assertNever(mode)
+    }
   }
 
-  private getLabels(workspaceId: string): Record<string, string> {
-    return workspaceLabels(this.cfg, workspaceId)
+  async apply(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
+    await this.workloadFor(spec.runtimeMode).apply(workspaceId, spec)
+  }
+
+  async start(workspaceId: string, mode: RuntimeMode): Promise<void> {
+    await this.workloadFor(mode).start(workspaceId)
+  }
+
+  async stop(workspaceId: string, mode: RuntimeMode): Promise<void> {
+    await this.workloadFor(mode).stop(workspaceId)
   }
 
   /**
-   * Create the workspace's ClusterIP Service if it isn't there (agents are
-   * reached via cluster DNS at `<prefix>-<wsId>.<ns>.svc:3001`; afs-fuse via
-   * :9101). Idempotent — a 409 means it already exists.
+   * Remove everything belonging to a workspace.
    *
-   * Called from every converge path, not just create: the Service is the one
-   * workspace resource whose creation can fail for a *cluster-wide* reason
-   * (ClusterIP range exhausted) rather than a per-workspace one, so a
-   * workspace can outlive its Service. Without a repair on start()/apply(),
-   * such a workspace stays unreachable forever — its Deployment is healthy, so
-   * nothing in reconcile ever fires.
+   * Deliberately not routed by mode: teardown is the one operation where acting
+   * on the wrong shape leaks infra that nothing will ever come back for — the
+   * placement row is deleted right after. Both shapes are 404-tolerant, so
+   * removing both cannot leak. An environment that cannot host the auto-scaling
+   * shape has provably none of it, which is the same reasoning that lets the
+   * change stream and the batch observe skip StatefulSets there.
    */
-  private async ensureService(workspaceId: string): Promise<void> {
-    const name = this.getResourceName(workspaceId)
-    const labels = this.getLabels(workspaceId)
-    await createOrAdopt(() =>
-      this.coreApi.createNamespacedService(this.cfg.namespace, {
-        apiVersion: 'v1',
-        kind: 'Service',
-        metadata: { name, labels },
-        spec: {
-          selector: labels,
-          ports: WORKSPACE_SERVICE_PORTS,
-          type: 'ClusterIP',
-        },
-      }),
-    )
+  async destroy(workspaceId: string): Promise<void> {
+    await Promise.all([
+      this.static.destroy(workspaceId),
+      this.cfg.multiReplica ? this.autoScaling.destroy(workspaceId) : Promise.resolve(),
+    ])
+    // Out here rather than inside either shape: both have a token Secret.
+    await this.deleteWorkspaceTokenSecret(workspaceId)
   }
 
-  /** Create K8s resources for a workspace */
-  async createInstance(
-    workspaceId: string,
-    agentType = 'claude-code',
-    resources?: ComputeResources,
-  ): Promise<K8sInstance> {
-    const name = this.getResourceName(workspaceId)
-    const labels = this.getLabels(workspaceId)
-    const pvcName = workspacePvcName(this.cfg, workspaceId)
+  /**
+   * Point-in-time observation.
+   *
+   * Routed by mode when the caller knows it — the reconcile pass always does,
+   * since it holds the placement's spec. Without one, the shapes are tried in
+   * turn: a change stream reports that a workspace moved without saying what
+   * shape it is, and asking what is actually there is a fair question to answer
+   * by looking. The cost of not knowing is one extra read.
+   */
+  async observe(workspaceId: string, mode?: RuntimeMode): Promise<ObservedState> {
+    if (mode) return this.workloadFor(mode).observe(workspaceId)
+    const observed = await this.static.observe(workspaceId)
+    if (observed.phase !== 'unknown') return observed
+    return this.autoScaling.observe(workspaceId)
+  }
 
-    // Create PVC for workspace persistent storage
-    const storageSize = resources?.storage || this.cfg.workspaceStorageSize
-    await createOrAdopt(() =>
-      this.coreApi.createNamespacedPersistentVolumeClaim(this.cfg.namespace, {
-        apiVersion: 'v1',
-        kind: 'PersistentVolumeClaim',
-        metadata: { name: pvcName, labels },
-        spec: {
-          accessModes: ['ReadWriteOnce'],
-          storageClassName: this.cfg.storageClass,
-          resources: { requests: { storage: storageSize } },
-        },
-      }),
-    )
+  /** Both shapes in one pass. A workspace is only ever one, so keys never collide. */
+  async observeAll(): Promise<Map<string, ObservedState>> {
+    const [staticStates, autoScalingStates] = await Promise.all([
+      this.static.observeAll(),
+      this.autoScaling.observeAll(),
+    ])
+    for (const [wsId, state] of autoScalingStates) staticStates.set(wsId, state)
+    return staticStates
+  }
 
-    // Service before Deployment: it is the step that can fail on a cluster-wide
-    // resource (ClusterIP range full). Creating it first means such a failure
-    // leaves no Deployment behind — observe() reports 'unknown' and reconcile
-    // keeps retrying, instead of a running-but-unreachable workspace nothing
-    // ever re-converges.
-    await this.ensureService(workspaceId)
+  /**
+   * Stream infra changes as observations.
+   *
+   * The watches are a change *trigger*, not a second way to compute state: an
+   * event only says which workspace moved, and the answer still comes from
+   * {@link observe}. That keeps one implementation of "what phase is this
+   * workspace in" for both workload shapes, and means a watch can never disagree
+   * with a reconcile pass.
+   *
+   * Three resources are watched because each carries changes the others do not:
+   * Pods for readiness, Deployments and StatefulSets for scale 0↔N and for
+   * create/delete. Events for one workspace arriving together (a pod flipping
+   * ready restates its workload too) are coalesced into one observe.
+   *
+   * Self-healing: a k8s watch ends routinely (timeout, apiserver restart, a
+   * too-old resourceVersion), so each stream reconnects on its own with a
+   * backoff. Nothing is lost across a gap — the next observe reads live state,
+   * and the reconcile loop's periodic pass is the floor.
+   */
+  watch(onChange: (workspaceId: string, state: ObservedState) => void): { close(): void } {
+    const watcher = new k8s.Watch(this.kc)
+    const selector = workspaceSelector(this.cfg)
+    let closed = false
+    const requests = new Set<{ destroy(): void }>()
+    const pending = new Set<string>()
+    let flushTimer: ReturnType<typeof setTimeout> | undefined
 
-    // Create Deployment. A 409 here can only be a race with a concurrent
-    // create building the same fresh spec (a pre-existing Deployment routes
-    // apply() to rebuildInstance instead), so adopting is safe.
-    await createOrAdopt(() =>
-      this.appsApi.createNamespacedDeployment(
-        this.cfg.namespace,
-        buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
-      ),
-    )
+    const report = (workspaceId: string, state: ObservedState) => {
+      if (!closed) onChange(workspaceId, state)
+    }
+
+    const flush = async () => {
+      flushTimer = undefined
+      if (closed || pending.size === 0) return
+      const ids = [...pending]
+      pending.clear()
+      try {
+        if (ids.length >= WATCH_BATCH_THRESHOLD) {
+          const all = await this.observeAll()
+          for (const id of ids) report(id, all.get(id) ?? { phase: 'unknown' })
+        } else {
+          await Promise.all(
+            ids.map((id) => this.observe(id).then((state) => report(id, state))),
+          )
+        }
+      } catch (err) {
+        console.error('[k8s-provider] observe after watch events failed:', err)
+      }
+    }
+
+    const emit = (workspaceId: string) => {
+      if (closed) return
+      pending.add(workspaceId)
+      if (!flushTimer) flushTimer = setTimeout(() => void flush(), WATCH_COALESCE_MS)
+    }
+
+    const stream = (path: string) => {
+      if (closed) return
+      let current: { destroy(): void } | undefined
+      watcher
+        .watch(
+          path,
+          { labelSelector: selector },
+          (_type, obj: { metadata?: { labels?: { [key: string]: string } } }) => {
+            const wsId = obj.metadata?.labels?.['workspace-id']
+            if (wsId) emit(wsId)
+          },
+          (err) => {
+            // Drop the finished request before reconnecting; a stream that ends
+            // routinely (apiserver timeout / rollout) would otherwise leave one
+            // retained socket behind per reconnect for the process's lifetime.
+            if (current) requests.delete(current)
+            if (closed) return
+            if (err) console.warn(`[k8s-provider] watch ${path} ended:`, err)
+            setTimeout(() => stream(path), WATCH_RECONNECT_MS)
+          },
+        )
+        .then((req) => {
+          current = req
+          if (closed) req.destroy()
+          else requests.add(req)
+        })
+        .catch((err) => {
+          if (closed) return
+          console.error(`[k8s-provider] watch ${path} failed to start:`, err)
+          setTimeout(() => stream(path), WATCH_RECONNECT_MS)
+        })
+    }
+
+    const ns = this.cfg.namespace
+    stream(`/api/v1/namespaces/${ns}/pods`)
+    stream(`/apis/apps/v1/namespaces/${ns}/deployments`)
+    // An environment that cannot host the auto-scaling shape has provably zero
+    // StatefulSets, so there is nothing to watch for.
+    if (this.cfg.multiReplica) stream(`/apis/apps/v1/namespaces/${ns}/statefulsets`)
 
     return {
-      workspaceId,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    }
-  }
-
-  /** Get K8s instance by workspace ID */
-  async getInstance(workspaceId: string): Promise<K8sInstance | null> {
-    const name = this.getResourceName(workspaceId)
-
-    try {
-      const deploymentRes = await this.appsApi.readNamespacedDeployment(name, this.cfg.namespace)
-      const deployment = deploymentRes.body
-      const readyReplicas = deployment.status?.readyReplicas || 0
-
-      return {
-        workspaceId,
-        status: readyReplicas > 0 ? 'running' : 'pending',
-        createdAt: deployment.metadata?.creationTimestamp?.toISOString() || '',
-      }
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) {
-        return null
-      }
-      throw e
-    }
-  }
-
-  /** List all K8s instances */
-  async listInstances(): Promise<K8sInstance[]> {
-    const response = await this.appsApi.listNamespacedDeployment(
-      this.cfg.namespace,
-      undefined, // pretty
-      undefined, // allowWatchBookmarks
-      undefined, // _continue
-      undefined, // fieldSelector
-      `app=${this.cfg.namePrefix}`, // labelSelector
-    )
-
-    const instances: K8sInstance[] = []
-
-    for (const dep of response.body.items) {
-      const workspaceId = dep.metadata?.labels?.['workspace-id']
-      if (!workspaceId) continue
-
-      const readyReplicas = dep.status?.readyReplicas || 0
-      instances.push({
-        workspaceId,
-        status: readyReplicas > 0 ? 'running' : 'pending',
-        createdAt: dep.metadata?.creationTimestamp?.toISOString() || '',
-      })
-    }
-
-    return instances
-  }
-
-  /** Scale K8s deployment (0 = stopped, 1 = running) */
-  private async scaleInstance(workspaceId: string, replicas: number): Promise<boolean> {
-    const name = this.getResourceName(workspaceId)
-
-    try {
-      await this.appsApi.patchNamespacedDeploymentScale(
-        name,
-        this.cfg.namespace,
-        { spec: { replicas } },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { headers: { 'Content-Type': 'application/merge-patch+json' } },
-      )
-      return true
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) {
-        return false
-      }
-      throw e
-    }
-  }
-
-  /** Stop instance (scale to 0) */
-  async stopInstance(workspaceId: string): Promise<boolean> {
-    return this.scaleInstance(workspaceId, 0)
-  }
-
-  /** Start/resume instance (scale to 1) */
-  async startInstance(workspaceId: string): Promise<boolean> {
-    return this.scaleInstance(workspaceId, 1)
-  }
-
-  /**
-   * Roll the instance's pods without changing the Deployment spec — the
-   * equivalent of `kubectl rollout restart`. Stamps a template annotation so
-   * the Deployment controller recreates the pod (e.g. to re-pull a moving
-   * `:latest` tag). Returns false when the Deployment doesn't exist.
-   */
-  async restartInstance(workspaceId: string): Promise<boolean> {
-    const name = this.getResourceName(workspaceId)
-    try {
-      await this.appsApi.patchNamespacedDeployment(
-        name,
-        this.cfg.namespace,
-        {
-          spec: {
-            template: {
-              metadata: {
-                annotations: {
-                  'kubectl.kubernetes.io/restartedAt': new Date().toISOString(),
-                },
-              },
-            },
-          },
-        },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
-          headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
-        },
-      )
-      return true
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) return false
-      throw e
-    }
-  }
-
-  /**
-   * Read the markers needed to decide whether a Deployment is in sync with the
-   * desired spec: template_version (from annotation), agent image (from the
-   * `agent` container), and memory-fuse sidecar presence (from container list).
-   * Returns null when no Deployment exists for the workspace.
-   */
-  async getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
-    const name = this.getResourceName(workspaceId)
-    try {
-      const res = await this.appsApi.readNamespacedDeployment(name, this.cfg.namespace)
-      const dep = res.body
-      const containers = dep.spec?.template?.spec?.containers ?? []
-      const agent = containers.find((c) => c.name === 'agent')
-      const ver = dep.metadata?.annotations?.[TEMPLATE_VERSION_ANNOTATION]
-      return {
-        templateVersion: ver ? Number(ver) : null,
-        agentImage: agent?.image ?? null,
-        hasMemoryFuseSidecar: containers.some((c) => c.name === MEMORY_FUSE_CONTAINER_NAME),
-      }
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) return null
-      throw e
-    }
-  }
-
-  /**
-   * Rebuild a workspace deployment with a new agent type.
-   * Deletes only the Deployment and recreates it, preserving PVC and Service.
-   */
-  async rebuildInstance(
-    workspaceId: string,
-    agentType: string,
-    resources?: ComputeResources,
-  ): Promise<void> {
-    const name = this.getResourceName(workspaceId)
-    const labels = this.getLabels(workspaceId)
-    const pvcName = workspacePvcName(this.cfg, workspaceId)
-
-    // Delete existing deployment
-    try {
-      await this.appsApi.deleteNamespacedDeployment(name, this.cfg.namespace)
-    } catch (e: any) {
-      if (e.response?.statusCode !== 404) throw e
-    }
-
-    // Recreate deployment with new agent type
-    await this.appsApi.createNamespacedDeployment(
-      this.cfg.namespace,
-      buildDeploymentSpec(name, labels, workspaceId, agentType, pvcName, resources, this.cfg),
-    )
-  }
-
-  /** Update Deployment CPU/memory resources (triggers rolling restart) */
-  async updateInstanceResources(
-    workspaceId: string,
-    resources: ComputeResources,
-  ): Promise<boolean> {
-    const name = this.getResourceName(workspaceId)
-
-    try {
-      await this.appsApi.patchNamespacedDeployment(
-        name,
-        this.cfg.namespace,
-        {
-          spec: {
-            template: {
-              spec: {
-                containers: [
-                  {
-                    name: 'agent',
-                    resources: {
-                      requests: {
-                        cpu: resources.cpu_request || '100m',
-                        memory: resources.memory_request || '256Mi',
-                      },
-                      limits: {
-                        cpu: resources.cpu_limit || '500m',
-                        memory: resources.memory_limit || '1Gi',
-                      },
-                    },
-                  },
-                ],
-              },
-            },
-          },
-        },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        {
-          headers: { 'Content-Type': 'application/strategic-merge-patch+json' },
-        },
-      )
-      return true
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) return false
-      throw e
-    }
-  }
-
-  /** Expand PVC storage (grow-only, 404/shrink-tolerant). See expandWorkspacePvc. */
-  async expandInstanceStorage(workspaceId: string, newSize: string): Promise<boolean> {
-    const pvcName = workspacePvcName(this.cfg, workspaceId)
-    return expandWorkspacePvc(this.coreApi, this.cfg, pvcName, newSize)
-  }
-
-  /** Get detailed K8s resource status for a workspace */
-  async getInstanceStatus(workspaceId: string): Promise<K8sResourceStatus> {
-    const name = this.getResourceName(workspaceId)
-    const labelSelector = `app=${this.cfg.namePrefix},workspace-id=${workspaceId}`
-
-    const result: K8sResourceStatus = {
-      deployment: {
-        exists: false,
-        ready: false,
-        replicas: 0,
-        readyReplicas: 0,
+      close() {
+        closed = true
+        if (flushTimer) clearTimeout(flushTimer)
+        pending.clear()
+        for (const req of requests) req.destroy()
+        requests.clear()
       },
-      service: { exists: false },
-      pvc: { exists: false },
-      pods: { total: 0, ready: 0 },
-      warnings: [],
-      conditions: [],
     }
-
-    const pvcName = workspacePvcName(this.cfg, workspaceId)
-
-    // Query all resources concurrently
-    const [depResult, svcResult, pvcResult, podsResult] = await Promise.allSettled([
-      this.appsApi.readNamespacedDeployment(name, this.cfg.namespace),
-      this.coreApi.readNamespacedService(name, this.cfg.namespace),
-      this.coreApi.readNamespacedPersistentVolumeClaim(pvcName, this.cfg.namespace),
-      this.coreApi.listNamespacedPod(
-        this.cfg.namespace,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        labelSelector,
-      ),
-    ])
-
-    // Process Deployment
-    if (depResult.status === 'fulfilled') {
-      const dep = depResult.value.body
-      const replicas = dep.spec?.replicas || 0
-      const readyReplicas = dep.status?.readyReplicas || 0
-
-      result.deployment = {
-        exists: true,
-        ready: readyReplicas >= replicas && replicas > 0,
-        replicas,
-        readyReplicas,
-      }
-
-      // Extract conditions. Skip Available=False with reason MinimumReplicasUnavailable —
-      // this is the transient state during a rolling update (e.g. resize) where old pods
-      // are terminating and new pods are not yet ready. Surfacing it as a failure makes
-      // the Settings page flash red during routine scale-up/down.
-      if (dep.status?.conditions) {
-        for (const c of dep.status.conditions) {
-          if (c.type === 'Available' || c.type === 'Progressing') {
-            if (
-              c.type === 'Available' &&
-              c.status !== 'True' &&
-              c.reason === 'MinimumReplicasUnavailable'
-            ) {
-              continue
-            }
-            result.conditions.push({
-              type: c.type,
-              status: c.status === 'True',
-              message: c.message,
-            })
-          }
-        }
-      }
-    } else if ((depResult.reason as any)?.response?.statusCode !== 404) {
-      result.conditions.push({
-        type: 'DeploymentError',
-        status: false,
-        message: depResult.reason?.message,
-      })
-    }
-
-    // Process Service
-    if (svcResult.status === 'fulfilled') {
-      result.service = { exists: true }
-    } else if ((svcResult.reason as any)?.response?.statusCode !== 404) {
-      result.conditions.push({
-        type: 'ServiceError',
-        status: false,
-        message: svcResult.reason?.message,
-      })
-    }
-
-    // Process PVC
-    if (pvcResult.status === 'fulfilled') {
-      const pvc = pvcResult.value.body
-      result.pvc = {
-        exists: true,
-        phase: pvc.status?.phase,
-        capacity: pvc.status?.capacity?.storage,
-      }
-    } else if ((pvcResult.reason as any)?.response?.statusCode !== 404) {
-      result.conditions.push({
-        type: 'PVCError',
-        status: false,
-        message: pvcResult.reason?.message,
-      })
-    }
-
-    // Process Pods and fetch events
-    if (podsResult.status === 'fulfilled') {
-      const pods = podsResult.value.body.items
-      const podNames: string[] = []
-
-      for (const pod of pods) {
-        const podName = pod.metadata?.name || ''
-        podNames.push(podName)
-
-        result.pods.total++
-        if (isPodReady(pod)) result.pods.ready++
-      }
-
-      // Fetch events for all pods concurrently
-      if (podNames.length > 0) {
-        const eventResults = await Promise.allSettled(
-          podNames.map((podName) =>
-            this.coreApi.listNamespacedEvent(
-              this.cfg.namespace,
-              undefined,
-              undefined,
-              undefined,
-              `involvedObject.name=${podName},involvedObject.kind=Pod`,
-            ),
-          ),
-        )
-
-        // Deduplicate warnings by reason+message
-        const seen = new Set<string>()
-        for (const eventResult of eventResults) {
-          if (eventResult.status === 'fulfilled') {
-            for (const event of eventResult.value.body.items) {
-              if (event.type !== 'Warning') continue
-              const key = `${event.reason}:${event.message}`
-              if (seen.has(key)) continue
-              seen.add(key)
-              result.warnings.push({
-                reason: event.reason || '',
-                message: event.message || '',
-              })
-            }
-          }
-        }
-        // Limit to 5 warnings
-        result.warnings = result.warnings.slice(0, 5)
-      }
-    }
-
-    return result
-  }
-
-  /**
-   * The workspace-ids that currently have a ClusterIP Service. Same label
-   * selector as {@link listWorkspaceDeployments}; only the ids are kept, since
-   * every caller asks "does this workspace have one" and nothing else.
-   */
-  async listWorkspaceServiceIds(timeoutMs = 30_000): Promise<Set<string>> {
-    const response = await Promise.race([
-      this.coreApi.listNamespacedService(
-        this.cfg.namespace,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        `app=${this.cfg.namePrefix},component=workspace`,
-      ),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`listWorkspaceServiceIds timed out after ${timeoutMs}ms`)),
-          timeoutMs,
-        ),
-      ),
-    ])
-
-    const ids = new Set<string>()
-    for (const svc of response.body.items) {
-      // Skip the auto-scaling headless Service (`<name>-hl`), which carries the
-      // same labels but is not the ClusterIP one this check is about.
-      if (svc.spec?.clusterIP === 'None') continue
-      const wsId = svc.metadata?.labels?.['workspace-id']
-      if (wsId) ids.add(wsId)
-    }
-    return ids
-  }
-
-  /**
-   * Full list of all workspace deployments. Returns deployments indexed by
-   * workspace-id plus the response resourceVersion for starting a watch.
-   */
-  async listWorkspaceDeployments(timeoutMs = 30_000): Promise<{
-    deployments: Map<string, k8s.V1Deployment>
-    resourceVersion: string
-  }> {
-    const response = await Promise.race([
-      this.appsApi.listNamespacedDeployment(
-        this.cfg.namespace,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        `app=${this.cfg.namePrefix},component=workspace`,
-      ),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`listWorkspaceDeployments timed out after ${timeoutMs}ms`)),
-          timeoutMs,
-        ),
-      ),
-    ])
-
-    const deployments = new Map<string, k8s.V1Deployment>()
-    for (const dep of response.body.items) {
-      const wsId = dep.metadata?.labels?.['workspace-id']
-      if (wsId) deployments.set(wsId, dep)
-    }
-
-    const resourceVersion = response.body.metadata?.resourceVersion ?? ''
-    return { deployments, resourceVersion }
-  }
-
-  /**
-   * Watch workspace deployments for changes starting from a resourceVersion.
-   * Calls `onUpdate(workspaceId, status)` for each change.
-   * Returns an abort function to stop the watch.
-   */
-  watchDeployments(
-    resourceVersion: string,
-    onUpdate: (workspaceId: string, status: ReconciledStatus) => void,
-    onError: (err: unknown) => void,
-  ): () => void {
-    const watch = new k8s.Watch(this.kc)
-    let aborted = false
-
-    const path = `/apis/apps/v1/namespaces/${this.cfg.namespace}/deployments`
-    const params = {
-      labelSelector: `app=${this.cfg.namePrefix},component=workspace`,
-      resourceVersion,
-    }
-
-    const req: ReturnType<typeof watch.watch> = watch.watch(
-      path,
-      params,
-      (type, dep: k8s.V1Deployment) => {
-        const wsId = dep.metadata?.labels?.['workspace-id']
-        if (!wsId) return
-        const status = type === 'DELETED' ? ('stopped' as const) : resolveDeploymentStatus(dep)
-        onUpdate(wsId, status)
-      },
-      (err) => {
-        if (!aborted) onError(err)
-      },
-    )
-
-    return () => {
-      aborted = true
-      req?.then((r) => r.destroy()).catch(() => {})
-    }
-  }
-
-  /** Delete K8s resources for a workspace */
-  async deleteInstance(workspaceId: string): Promise<boolean> {
-    const name = this.getResourceName(workspaceId)
-
-    try {
-      await Promise.all([
-        this.appsApi.deleteNamespacedDeployment(name, this.cfg.namespace),
-        this.coreApi.deleteNamespacedService(name, this.cfg.namespace),
-        this.coreApi.deleteNamespacedPersistentVolumeClaim(
-          workspacePvcName(this.cfg, workspaceId),
-          this.cfg.namespace,
-        ),
-      ])
-      return true
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) {
-        return false
-      }
-      throw e
-    }
-  }
-
-  // ── EnvironmentProvider interface ──
-  // Infra-agnostic facade over the methods above, consumed by the runner. The
-  // legacy methods stay (their callers are unchanged); these adapt signatures
-  // to WorkspaceSpec / ObservedState. Lifecycle methods discard the legacy
-  // boolean return (false = "no such Deployment", which is a no-op for an
-  // idempotent converge).
-
-  /** Create if absent, else rebuild to converge (v1: cp bumps version → rebuild). */
-  async apply(workspaceId: string, spec: WorkspaceSpec): Promise<void> {
-    if (spec.runtimeMode === 'auto-scaling') {
-      await this.autoScaling.apply(workspaceId, spec)
-      return
-    }
-    const existing = await this.getInstance(workspaceId)
-    if (existing) {
-      // rebuild swaps the Deployment (new container resources/image) but
-      // preserves the PVC, so grow storage separately when the spec asks for it
-      // (expand only ever increases; same-size is a no-op).
-      await this.ensureService(workspaceId)
-      await this.rebuildInstance(workspaceId, spec.agentType, spec.resources)
-      if (spec.resources?.storage) {
-        await this.expandInstanceStorage(workspaceId, spec.resources.storage)
-      }
-    } else {
-      await this.createInstance(workspaceId, spec.agentType, spec.resources)
-    }
-  }
-
-  async start(workspaceId: string): Promise<void> {
-    // Detect the shape by what exists (no spec here). A static workspace scales
-    // its Deployment 0→1; startInstance returns false (404) when there is none,
-    // i.e. an auto-scaling workspace, whose StatefulSet we wake instead (also a
-    // no-op if it has neither shape).
-    const started = await this.startInstance(workspaceId)
-    if (!started) {
-      await this.autoScaling.start(workspaceId)
-      return
-    }
-    // Static shape woke up — repair its Service on the way. A stopped workspace
-    // keeps its Service while scaled to 0, but that Service may have been
-    // reclaimed (or never created), and waking the pod alone would leave it
-    // unreachable. Only on this branch: the auto-scaling shape routes through
-    // its own headless Service and a ClusterIP one would just burn an IP.
-    await this.ensureService(workspaceId)
-  }
-
-  async stop(workspaceId: string): Promise<void> {
-    // runtime_mode isn't passed here — detect the form by what exists. A static
-    // workspace scales its Deployment; stopInstance returns false (404) when
-    // there is none, i.e. an auto-scaling workspace, whose StatefulSet we scale.
-    const scaled = await this.stopInstance(workspaceId)
-    if (!scaled) {
-      await this.autoScaling.stop(workspaceId)
-      return
-    }
-    // Release the ClusterIP while scaled to 0. A stopped workspace routes
-    // nothing, but its Service holds an address out of a range that is finite
-    // and cluster-wide (a /22 is 1022 of them) — with stopped workspaces
-    // typically outnumbering running ones, holding those is what exhausts the
-    // range and starves *new* workspaces. start() recreates it on the way up,
-    // which is what makes releasing it safe.
-    await this.coreApi
-      .deleteNamespacedService(this.getResourceName(workspaceId), this.cfg.namespace)
-      .catch(swallow404)
-  }
-
-  async destroy(workspaceId: string): Promise<void> {
-    // A StatefulSet-backed workspace has no Deployment/ClusterIP Service to
-    // delete; route teardown by the shape that actually exists.
-    if (await this.autoScaling.exists(workspaceId)) await this.autoScaling.destroy(workspaceId)
-    else await this.deleteInstance(workspaceId)
-    // Out here rather than inside deleteInstance: both shapes have a token
-    // Secret, only one of them goes through that path.
-    await this.deleteWorkspaceTokenSecret(workspaceId)
   }
 
   /**
@@ -766,16 +247,16 @@ export class KubernetesProvider implements EnvironmentProvider {
    * to retire.
    *
    * The value reaches the container as an env var, so it stays out of the
-   * Deployment spec — which is dumped by `kubectl get`, compared by reconcile,
-   * and generally treated as inspectable — and the agent server scrubs it from
-   * its environment before spawning anything.
+   * workload spec — which is dumped by `kubectl get`, compared by reconcile, and
+   * generally treated as inspectable — and the agent server scrubs it from its
+   * environment before spawning anything.
    */
   async deliverWorkspaceToken(workspaceId: string, token: string): Promise<void> {
     const name = workspaceTokenSecretName(this.cfg, workspaceId)
     const body = {
       apiVersion: 'v1',
       kind: 'Secret',
-      metadata: { name, labels: this.getLabels(workspaceId) },
+      metadata: { name, labels: workspaceLabels(this.cfg, workspaceId) },
       type: 'Opaque',
       stringData: { [WORKSPACE_TOKEN_ENV]: token },
     }
@@ -788,118 +269,9 @@ export class KubernetesProvider implements EnvironmentProvider {
   }
 
   private async deleteWorkspaceTokenSecret(workspaceId: string): Promise<void> {
-    try {
-      await this.coreApi.deleteNamespacedSecret(
-        workspaceTokenSecretName(this.cfg, workspaceId),
-        this.cfg.namespace,
-      )
-    } catch (e: any) {
-      // 404 is the normal case for a workspace that predates token delivery.
-      if (e.response?.statusCode !== 404) throw e
-    }
-  }
-
-  async resize(workspaceId: string, resources: ComputeResources): Promise<void> {
-    await this.updateInstanceResources(workspaceId, resources)
-  }
-
-  async expandStorage(workspaceId: string, sizeGi: number): Promise<void> {
-    await this.expandInstanceStorage(workspaceId, `${sizeGi}Gi`)
-  }
-
-  /**
-   * A workspace whose pods are up but whose Service is gone is reachable by
-   * nothing: cp addresses agents by cluster DNS, which resolves through that
-   * Service. Reported as 'error' rather than 'running' so the placement row
-   * says what a caller would find, instead of a `running` that every HTTP hop
-   * turns into a 502.
-   *
-   * Only applied to 'running': a stopped workspace legitimately has no Service
-   * once one is reclaimed, and start() recreates it on the way up.
-   */
-  private withServiceCheck(phase: ObservedPhase, hasService: boolean): ObservedState['phase'] {
-    return phase === 'running' && !hasService ? 'error' : phase
-  }
-
-  private static readonly SERVICE_MISSING_MESSAGE =
-    'Service missing — workspace is running but unreachable via cluster DNS'
-
-  /**
-   * Point-in-time observation via a single Deployment read. `version` is left
-   * undefined: the spec-convergence version is a placement concept the runner
-   * tracks itself (NOT the pod-template version stamped on the Deployment).
-   */
-  async observe(workspaceId: string): Promise<ObservedState> {
-    const name = this.getResourceName(workspaceId)
-    try {
-      const res = await this.appsApi.readNamespacedDeployment(name, this.cfg.namespace)
-      const deployPhase = resolveDeploymentStatus(res.body)
-      // Only pay for the Service read when its absence would change the answer.
-      const hasService =
-        deployPhase !== 'running' ||
-        (await this.coreApi
-          .readNamespacedService(name, this.cfg.namespace)
-          .then(() => true)
-          .catch((e: any) => {
-            if (e.response?.statusCode === 404) return false
-            throw e
-          }))
-      const phase = this.withServiceCheck(deployPhase, hasService)
-      return {
-        phase,
-        endpoint: {
-          address: `${name}.${this.cfg.namespace}.svc.cluster.local:3001`,
-        },
-        ...(phase === 'error' && deployPhase === 'running'
-          ? { message: KubernetesProvider.SERVICE_MISSING_MESSAGE }
-          : {}),
-      }
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) {
-        // No Deployment — maybe an auto-scaling (StatefulSet) workspace.
-        return this.autoScaling.observe(workspaceId)
-      }
-      throw e
-    }
-  }
-
-  /**
-   * Batch counterpart to {@link observe}: a single LIST over all workspace
-   * deployments instead of one GET per workspace. Mirrors observe()'s shape
-   * (status + cluster-DNS endpoint); workspaces with no deployment are simply
-   * absent from the map (the reconcile loop treats them as 'unknown', exactly
-   * as observe()'s 404 path does).
-   *
-   * Two LISTs, not one: the Service set is fetched alongside the Deployments so
-   * the running-but-unreachable case {@link observe} catches per workspace is
-   * caught here too, still in O(1) round-trips per pass.
-   */
-  async observeAll(): Promise<Map<string, ObservedState>> {
-    const [{ deployments }, services] = await Promise.all([
-      this.listWorkspaceDeployments(),
-      this.listWorkspaceServiceIds(),
-    ])
-    const out = new Map<string, ObservedState>()
-    for (const [wsId, dep] of deployments) {
-      const name = this.getResourceName(wsId)
-      const deployPhase = resolveDeploymentStatus(dep)
-      const phase = this.withServiceCheck(deployPhase, services.has(wsId))
-      out.set(wsId, {
-        phase,
-        endpoint: {
-          address: `${name}.${this.cfg.namespace}.svc.cluster.local:3001`,
-        },
-        ...(phase === 'error' && deployPhase === 'running'
-          ? { message: KubernetesProvider.SERVICE_MISSING_MESSAGE }
-          : {}),
-      })
-    }
-    // Merge in auto-scaling (StatefulSet) workspaces. A workspace is only ever
-    // one shape, so keys never collide.
-    for (const [wsId, state] of await this.autoScaling.observeAll()) {
-      out.set(wsId, state)
-    }
-    return out
+    await this.coreApi
+      .deleteNamespacedSecret(workspaceTokenSecretName(this.cfg, workspaceId), this.cfg.namespace)
+      .catch(swallow404)
   }
 
   capabilities(): Capabilities {
@@ -908,6 +280,23 @@ export class KubernetesProvider implements EnvironmentProvider {
       persistentMemory: this.cfg.memoryFuseImage !== '',
       multiReplica: this.cfg.multiReplica,
     }
+  }
+
+  // ── Live infra reads ──
+  // Detail about the objects themselves rather than a workspace's state, for the
+  // workspace UI and the admin drift sweep. Deployment-shaped, so they come
+  // straight off the static workload.
+
+  getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
+    return this.static.getInstanceSpecMarkers(workspaceId)
+  }
+
+  getInstanceStatus(workspaceId: string): Promise<K8sResourceStatus> {
+    return this.static.getInstanceStatus(workspaceId)
+  }
+
+  listWorkspaceDeployments(timeoutMs?: number): Promise<Map<string, k8s.V1Deployment>> {
+    return this.static.listDeployments(timeoutMs)
   }
 }
 

@@ -22,8 +22,8 @@ export interface EnvironmentWithAccess extends Environment {
 
 /**
  * Environments visible to the user — owned, public, or shared via team grants.
- * This is the placement candidate set (design §8): "which environments may this
- * user place workspaces onto".
+ * This is the placement candidate set: "which environments may this user place
+ * workspaces onto".
  */
 export async function listVisibleToUser(userId: string): Promise<EnvironmentWithAccess[]> {
   const { rows } = await pool.query(
@@ -108,98 +108,65 @@ export async function getEnvironmentForUser(
   return decorateEnvironment(row, userId)
 }
 
-// ── Remote projection (P2-D): drive workspaces.status from runner reports ──
+// ── Projection: drive workspaces.status from runner reports ──
 
-/**
- * Workspace ids placed on a remote (non-builtin) environment. The built-in
- * watch-k8s reconcile skips these — they have no Deployment in cp's cluster, so
- * their status comes from the projection below, not from k8s.
- */
-export async function getRemoteWorkspaceIds(): Promise<Set<string>> {
-  const { rows } = await pool.query(
-    `SELECT p.workspace_id
-       FROM workspace_placements p
-       JOIN environments e ON e.id = p.environment_id
-      WHERE e.is_builtin = false`,
-  )
-  return new Set(rows.map((r) => r.workspace_id as string))
-}
-
-/**
- * Ids of auto-scaling workspaces (auto_scaling config present). Like remote
- * ones, these have no Deployment for the watch-k8s reconcile to read — they are
- * StatefulSets — so that reconcile skips them and their status comes from the
- * runner-reported observed_phase (see {@link listBuiltinAutoScalingObservations}).
- * Only auto-scaling workspaces are returned, so a static workspace is never
- * affected: it stays on the watch-k8s status path, unchanged.
- */
-export async function getAutoScalingWorkspaceIds(): Promise<Set<string>> {
-  const { rows } = await pool.query(
-    'SELECT workspace_id FROM workspace_config WHERE auto_scaling IS NOT NULL',
-  )
-  return new Set(rows.map((r) => r.workspace_id as string))
-}
-
-/**
- * Observed state of every built-in auto-scaling workspace, for projecting
- * workspace.status from the runner's observed_phase — the built-in counterpart
- * of {@link listRemoteWorkspaceObservations}, minus the heartbeat/offline logic
- * (the built-in runner shares cp's cluster). Scoped to auto_scaling IS NOT NULL,
- * so static workspaces are never returned.
- */
-export async function listBuiltinAutoScalingObservations(): Promise<
-  { workspace_id: string; observed_phase: string | null }[]
-> {
-  const { rows } = await pool.query(
-    `SELECT p.workspace_id, p.observed_phase
-       FROM workspace_placements p
-       JOIN environments e ON e.id = p.environment_id
-       JOIN workspace_config wc ON wc.workspace_id = p.workspace_id
-      WHERE e.is_builtin = true
-        AND wc.auto_scaling IS NOT NULL
-        AND p.desired_phase <> 'deleted'`,
-  )
-  return rows
-}
-
-interface RemoteObservation {
+export interface WorkspaceObservation {
   workspace_id: string
   environment_id: string
+  is_builtin: boolean
   observed_phase: string | null
+  /** Pod-template version of the running workload; null when none was reported. */
+  observed_template_version: number | null
   /** True when the environment has no live runner (offline/pending/stale beat). */
   env_offline: boolean
   /**
-   * Ready replica ordinals the runner reported (auto-scaling workspaces only);
-   * null for a static workspace, which never carries the field. Drives the
-   * per-replica forward proxies the projection keeps for a remote auto-scaling
-   * workspace.
+   * Ready replica ordinals the runner reported; null for a workspace that
+   * reports no set. Drives the per-replica forward proxies of a remote
+   * auto-scaling workspace.
    */
   ready_replica_ids: number[] | null
+  /** Current stored status, to compare the projection against. */
+  status: string
+  /** Currently cached pod-template version, to compare the report against. */
+  runtime_version: number | null
 }
 
 /**
- * Observed state for every remote-environment workspace, with an offline flag
- * derived from the environment's heartbeat freshness. `thresholdSec` is how long
- * without a heartbeat counts as offline.
+ * Observed state for every placed workspace, built-in and remote alike — the
+ * single source cp projects workspace.status from. Every runner writes these
+ * columns, so one query covers both environment kinds and both workload shapes.
+ *
+ * The workspace's own stored status and cached template version ride along, so a
+ * projection pass over N workspaces is one query rather than N: at steady state
+ * almost every row is unchanged and the pass writes nothing.
+ *
+ * `env_offline` is false for the built-in environment by construction: its
+ * runner shares cp's own cluster, and it sends no heartbeat to go stale.
+ * `thresholdSec` is how long without a heartbeat makes a remote one offline.
  */
-export async function listRemoteWorkspaceObservations(
+export async function listWorkspaceObservations(
   thresholdSec: number,
-): Promise<RemoteObservation[]> {
+): Promise<WorkspaceObservation[]> {
   const { rows } = await pool.query(
-    `SELECT p.workspace_id, p.environment_id, p.observed_phase,
+    `SELECT p.workspace_id, p.environment_id, e.is_builtin,
+            p.observed_phase, p.observed_template_version,
             NOT (
-              e.status = 'online'
-              AND e.last_heartbeat_at IS NOT NULL
-              AND e.last_heartbeat_at >= now() - make_interval(secs => $1)
+              e.is_builtin
+              OR (
+                e.status = 'online'
+                AND e.last_heartbeat_at IS NOT NULL
+                AND e.last_heartbeat_at >= now() - make_interval(secs => $1)
+              )
             ) AS env_offline,
-            p.endpoint->'readyReplicaIds' AS ready_replica_ids
+            p.endpoint->'readyReplicaIds' AS ready_replica_ids,
+            w.status, w.runtime_version
        FROM workspace_placements p
        JOIN environments e ON e.id = p.environment_id
-      WHERE e.is_builtin = false
-        AND p.desired_phase <> 'deleted'`,
+       JOIN workspaces w ON w.id = p.workspace_id
+      WHERE p.desired_phase <> 'deleted'`,
     [thresholdSec],
   )
-  return rows as RemoteObservation[]
+  return rows as WorkspaceObservation[]
 }
 
 /**

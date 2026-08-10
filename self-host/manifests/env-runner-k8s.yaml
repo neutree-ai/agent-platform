@@ -18,8 +18,11 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "services", "events", "persistentvolumeclaims", "secrets"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # statefulsets: the auto-scaling workload shape. Only used where the storage
+  # class supports ReadWriteMany, but granted unconditionally so enabling that
+  # does not also require a permissions change.
   - apiGroups: ["apps"]
-    resources: ["deployments", "deployments/scale"]
+    resources: ["deployments", "deployments/scale", "statefulsets", "statefulsets/scale"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

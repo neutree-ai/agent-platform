@@ -40,6 +40,35 @@ export function workspaceLabels(cfg: K8sConfig, workspaceId: string): Record<str
   }
 }
 
+/**
+ * Label selector matching every workspace resource, whatever its shape. Derived
+ * from {@link workspaceLabels} so the selector cannot drift from the labels the
+ * objects are actually created with.
+ */
+export function workspaceSelector(cfg: K8sConfig): string {
+  const { app, component } = workspaceLabels(cfg, '')
+  return `app=${app},component=${component}`
+}
+
+/**
+ * Patch a workload's replica count, tolerating a 404 as "no such workload"
+ * (false) rather than an error — the reconcile loop calls this on shapes that
+ * may not exist yet. Shared by both workload shapes, which differ only in which
+ * scale subresource they patch.
+ */
+export async function scaleWorkload(patch: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await patch()
+    return true
+  } catch (e: any) {
+    if (e.response?.statusCode === 404) return false
+    throw e
+  }
+}
+
+/** JSON merge-patch headers, the form both scale subresources take. */
+export const MERGE_PATCH = { headers: { 'Content-Type': 'application/merge-patch+json' } }
+
 /** The workspace's persistent-volume-claim name. */
 export function workspacePvcName(cfg: K8sConfig, workspaceId: string): string {
   return `${resourceName(cfg, workspaceId)}-workspace`

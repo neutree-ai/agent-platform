@@ -1,13 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Workspace } from './db/types'
 
-// destroyWorkspace must tear a built-in workspace down by the shape that exists
-// (Deployment OR StatefulSet) via k8s.destroy — never the provider's
-// Deployment-only deleteInstance, which leaks an auto-scaling workspace's
-// StatefulSet, pods, and headless Service. cp no longer re-exports that method,
-// so the shape is enforced at the type level. Remote environments invert control
-// (mark desired=deleted and let the runner reap), so cp must not try to delete
-// their k8s directly.
+// destroyWorkspace tears a built-in workspace down through k8s.destroy, which
+// removes both workload shapes — a teardown that knew only one would leave the
+// other's objects behind, and the workspace row goes next, so nothing would ever
+// come back for them. Remote environments invert control (mark desired=deleted
+// and let the runner reap), so cp must not delete their k8s directly.
 
 vi.mock('../routes/workspaces/_shared', () => ({ interruptAllSessions: vi.fn() }))
 vi.mock('./db/schedules', () => ({ listSchedulesByWorkspace: vi.fn().mockResolvedValue([]) }))

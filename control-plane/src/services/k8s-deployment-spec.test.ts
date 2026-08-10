@@ -13,14 +13,14 @@ import type { ComputeResources } from '../../../internal/types/api'
 import {
   type K8sConfig,
   buildDeploymentSpec,
-  deploymentTemplateVersion,
   resolveDeploymentStatus,
+  workloadTemplateVersion,
 } from './k8s'
 
-// Golden-master snapshots for buildDeploymentSpec. This locks the exact
-// Deployment shape so the upcoming KubernetesProvider extraction (step 3b/3c)
-// can be verified byte-for-byte against today's output. Config is passed
-// explicitly so permutations don't depend on process.env.
+// Golden-master snapshots for buildDeploymentSpec: they pin the exact Deployment
+// shape, so any change to what runs inside a workspace pod has to be made
+// deliberately rather than drift in. Config is passed explicitly so permutations
+// don't depend on process.env.
 
 const baseCfg: K8sConfig = {
   namespace: 'nap',
@@ -195,23 +195,23 @@ describe('resolveDeploymentStatus', () => {
   })
 })
 
-describe('deploymentTemplateVersion', () => {
+describe('workloadTemplateVersion', () => {
   const ANNOTATION = 'agent-platform/workspace-version'
 
   it('reads a numeric annotation', () => {
-    expect(deploymentTemplateVersion(dep({ annotations: { [ANNOTATION]: '6' } }))).toBe(6)
+    expect(workloadTemplateVersion(dep({ annotations: { [ANNOTATION]: '6' } }))).toBe(6)
   })
 
   it('no deployment → null', () => {
-    expect(deploymentTemplateVersion(undefined)).toBeNull()
+    expect(workloadTemplateVersion(undefined)).toBeNull()
   })
 
   it('annotation absent → null', () => {
-    expect(deploymentTemplateVersion(dep({ annotations: {} }))).toBeNull()
+    expect(workloadTemplateVersion(dep({ annotations: {} }))).toBeNull()
   })
 
   it('unparseable annotation → null', () => {
-    expect(deploymentTemplateVersion(dep({ annotations: { [ANNOTATION]: 'v6' } }))).toBeNull()
+    expect(workloadTemplateVersion(dep({ annotations: { [ANNOTATION]: 'v6' } }))).toBeNull()
   })
 })
 

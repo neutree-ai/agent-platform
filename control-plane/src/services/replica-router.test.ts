@@ -1,19 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __resetReplicaRouter,
-  isAutoScalingWorkspace,
   perReplicaCapacity,
   pickReplicaForTurn,
   readyReplicaIds,
+  runtimeModeOf,
   setDraining,
-  syncAutoScalingIds,
   syncReadyReplicas,
+  syncRouting,
 } from './replica-router'
 
-// The replica router is pure in-memory state: a ready set fed by observation
-// and a session→replica pick. It must be a no-op (undefined) for any workspace
-// that has never reported replicas, so a static workspace routes to its default
-// address exactly as before.
+// The replica router is pure in-memory state: each workspace's runtime shape,
+// the ready set its runner reported, and the session→replica pick built on them.
 
 beforeEach(() => {
   __resetReplicaRouter()
@@ -22,20 +20,39 @@ beforeEach(() => {
 const snapshot = (entries: Record<string, number[]>) =>
   new Map(Object.entries(entries).map(([ws, ids]) => [ws, { ids }]))
 
-describe('isAutoScalingWorkspace / syncAutoScalingIds', () => {
-  it('tracks auto-scaling ids independently of the ready set (survives scale to zero)', () => {
-    expect(isAutoScalingWorkspace('ws1')).toBe(false)
-    syncAutoScalingIds(['ws1', 'ws2'])
-    expect(isAutoScalingWorkspace('ws1')).toBe(true)
-    expect(isAutoScalingWorkspace('ws2')).toBe(true)
-    expect(isAutoScalingWorkspace('ws3')).toBe(false)
-    // still auto-scaling even with no reported replicas (scaled to zero)
+describe('runtimeModeOf / syncRouting', () => {
+  const modes = (entries: Record<string, string>) =>
+    Object.entries(entries).map(([workspace_id, runtime_mode]) => ({ workspace_id, runtime_mode }))
+
+  it('reports undefined for a workspace cp has not polled', () => {
+    expect(runtimeModeOf('ws1')).toBeUndefined()
+  })
+
+  it('tracks the shape independently of the ready set, so it survives scale to zero', () => {
+    syncRouting(modes({ ws1: 'auto-scaling', ws2: 'static' }))
+
+    expect(runtimeModeOf('ws1')).toBe('auto-scaling')
+    expect(runtimeModeOf('ws2')).toBe('static')
+
     syncReadyReplicas(snapshot({}))
-    expect(isAutoScalingWorkspace('ws1')).toBe(true)
-    // a full replace drops one no longer configured as auto-scaling
-    syncAutoScalingIds(['ws2'])
-    expect(isAutoScalingWorkspace('ws1')).toBe(false)
-    expect(isAutoScalingWorkspace('ws2')).toBe(true)
+
+    expect(runtimeModeOf('ws1')).toBe('auto-scaling')
+  })
+
+  it('is a full replace, so a workspace that is gone stops being known', () => {
+    syncRouting(modes({ ws1: 'auto-scaling', ws2: 'static' }))
+    syncRouting(modes({ ws2: 'static' }))
+
+    expect(runtimeModeOf('ws1')).toBeUndefined()
+    expect(runtimeModeOf('ws2')).toBe('static')
+  })
+
+  // Addressing a workspace as the wrong shape routes its turns into nowhere, so
+  // a mode this cp does not know is left unknown rather than guessed at.
+  it('skips a mode it does not recognise', () => {
+    syncRouting(modes({ ws1: 'serverless' }))
+
+    expect(runtimeModeOf('ws1')).toBeUndefined()
   })
 })
 

@@ -1,17 +1,16 @@
 import { resetAllSessionsIdle } from '../services/db/sessions'
 import { updateWorkspace } from '../services/db/workspaces'
 
-// The set of statuses cp projects onto a workspace. The first four come from the
-// built-in k8s reconcile (ReconciledStatus); 'unknown' is added by the remote
-// projection when an environment goes offline (design §5.3) and 'pending' is
-// used by some create paths.
+// The set of statuses cp projects onto a workspace. Most are mapped from the
+// phase its runner reports; 'unknown' is what a remote environment's workspaces
+// become when that environment goes offline and cp has no basis for a better
+// answer, and 'pending' is used by some create paths.
 export type WorkspaceStatus = 'running' | 'stopped' | 'starting' | 'error' | 'pending' | 'unknown'
 
 /**
  * Apply a status transition to a workspace: write it (skipping no-ops) and reset
- * stale chat sessions when the agent is no longer reachable. Shared by the
- * built-in watch-k8s reconcile and the remote projection so both treat status
- * changes identically.
+ * stale chat sessions when the agent is no longer reachable. The single place a
+ * workspace's status changes, so every transition is treated identically.
  */
 export async function applyStatusChange(
   workspaceId: string,

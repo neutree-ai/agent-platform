@@ -1,31 +1,31 @@
-// Replica routing for auto-scaling workspaces.
+// Replica routing.
 //
-// An auto-scaling workspace runs 0..N replicas that all mount the same RWX
-// workspace volume. A session's turns must keep hitting the SAME replica (the
-// turn is a long-lived SSE to one agent process, and its transcript file can't
-// be appended by two replicas at once). This module owns that affinity: it
-// tracks which replicas are reachable and picks / keeps a session's replica.
-//
-// It is driven ENTIRELY by the reported ready-replica set, never by a
-// workspace's configured runtime_mode: a static workspace never reports a ready
-// set, so its entry stays absent and every routing call resolves to "no replica"
-// → the workspace's default address, byte-identical to a pre-auto-scaling cp.
-// This keeps the router dormant until an auto-scaling workspace actually reports
-// replicas, with no dependency on the config columns that gate creation.
+// Every workspace runs some number of replicas — one for the static shape, 0..N
+// for auto-scaling — and reports which of them are ready. A session's turns must
+// keep hitting the SAME replica (the turn is a long-lived SSE to one agent
+// process, and its transcript file can't be appended by two replicas at once).
+// This module owns that affinity: it tracks which replicas are reachable and
+// picks / keeps a session's replica. Routing is therefore one mechanism sized by
+// the reported set, not two code paths.
 //
 // Source of the ready set: cp does NOT observe replicas in-process — the runner
 // (a separate env-runner deployment, built-in and remote alike) writes its
 // observation, including endpoint.readyReplicaIds, to workspace_placements. cp
 // polls that column periodically ({@link refreshReplicaRouter}) and rebuilds
-// this in-memory set. So the set is cp-memory only: it survives cp restart by
+// this in-memory picture. So it is cp-memory only: it survives cp restart by
 // being rebuilt from the next poll, and a session's chosen replica — the one
 // thing that must persist — lives on sessions.replica_ordinal.
+//
+// The runtime mode is tracked alongside because it decides the SHAPE of a
+// workspace's address, which is a question the ready set cannot answer: a
+// workspace scaled to zero reports nothing yet still has to be addressed as what
+// it is.
 //
 // The provider-assigned replica id is an opaque int here (k8s: a StatefulSet
 // ordinal); the router assumes nothing about it being contiguous or ordered.
 
-import { listWorkspaceReplicaSets } from './db/env-placements'
-import { getAutoScalingWorkspaceIds } from './db/environments'
+import type { RuntimeMode } from '../../../internal/types/runtime-mode'
+import { listWorkspaceRouting } from './db/env-placements'
 
 /** Per-workspace snapshot of one observation: ready replicas + capacity input. */
 interface ReplicaSnapshot {
@@ -39,7 +39,7 @@ interface ReplicaSnapshot {
   perReplicaCapacity?: number
 }
 
-/** Ready replica ids per workspace, sorted. Absent = no auto-scaling replicas. */
+/** Ready replica ids per workspace, sorted. Absent = nothing ready right now. */
 const readyReplicas = new Map<string, number[]>()
 /** Per-replica turn capacity (max_concurrency) per workspace. */
 const perReplicaCap = new Map<string, number>()
@@ -54,14 +54,13 @@ const rrCursor = new Map<string, number>()
  */
 const drainingReplicas = new Map<string, Set<number>>()
 /**
- * Workspaces whose config has an auto_scaling block — kept independently of the
- * ready set so it survives a scale to zero, when {@link readyReplicas} is empty
- * but the workspace is still auto-scaling. Lets the address seam pick the
- * headless-Service fallback (which exists) over the ClusterIP one (which an
- * auto-scaling workspace never has) during a cold start. Populated every refresh
- * from workspace_config, so it includes stopped/starting auto-scaling workspaces.
+ * Each workspace's runtime shape, kept independently of the ready set so it
+ * survives a scale to zero — when {@link readyReplicas} is empty but the
+ * workspace still has to be addressed as what it is. Populated every refresh
+ * from the placement's runtime_mode, so it covers stopped and starting
+ * workspaces too. A workspace absent from this map is one cp has not polled yet.
  */
-const autoScalingIds = new Set<string>()
+const runtimeModes = new Map<string, RuntimeMode>()
 
 /**
  * Replace the whole ready-replica picture from one observation snapshot (every
@@ -100,46 +99,58 @@ export function syncReadyReplicas(snapshot: ReadonlyMap<string, ReplicaSnapshot>
 }
 
 /**
- * Poll the runner-reported ready-replica sets out of workspace_placements and
- * refresh the in-memory picture. Run on a cp cron. Cheap no-op while no
- * workspace is auto-scaling (the query returns nothing).
+ * Poll the routing picture out of workspace_placements and rebuild the in-memory
+ * state. Run on a cp cron.
  */
 export async function refreshReplicaRouter(): Promise<void> {
-  const [rows, asIds] = await Promise.all([
-    listWorkspaceReplicaSets(),
-    getAutoScalingWorkspaceIds(),
-  ])
-  syncReadyReplicas(
-    new Map(
-      rows.map((r) => [
-        r.workspace_id,
-        { ids: r.ready_replica_ids, perReplicaCapacity: r.max_concurrency ?? undefined },
-      ]),
-    ),
-  )
-  syncAutoScalingIds(asIds)
+  syncRouting(await listWorkspaceRouting())
 }
 
 /**
- * Replace the set of auto-scaling workspace ids (a full replace). Kept separate
- * from the ready-set sync because it must include auto-scaling workspaces that
- * currently report no replicas (scaled to zero / cold-starting).
+ * Replace the whole routing picture from one row set — a full replace, so a
+ * workspace that is gone drops out of every map at once.
+ *
+ * A row whose mode is not a value this build knows is left out rather than
+ * guessed at: the column is constrained to the known set, so an unknown value
+ * can only mean a mode the running cp predates, and addressing a workspace as
+ * the wrong shape would route its turns into nowhere.
  */
-export function syncAutoScalingIds(ids: Iterable<string>): void {
-  autoScalingIds.clear()
-  for (const id of ids) autoScalingIds.add(id)
+export function syncRouting(
+  rows: Iterable<{
+    workspace_id: string
+    runtime_mode: string
+    ready_replica_ids?: number[] | null
+    max_concurrency?: number | null
+  }>,
+): void {
+  const snapshot = new Map<string, ReplicaSnapshot>()
+  runtimeModes.clear()
+  for (const r of rows) {
+    snapshot.set(r.workspace_id, {
+      ids: r.ready_replica_ids ?? [],
+      perReplicaCapacity: r.max_concurrency ?? undefined,
+    })
+    if (r.runtime_mode === 'static' || r.runtime_mode === 'auto-scaling') {
+      runtimeModes.set(r.workspace_id, r.runtime_mode)
+    }
+  }
+  syncReadyReplicas(snapshot)
 }
 
-/** Whether a workspace is auto-scaling — true even while it is scaled to zero. */
-export function isAutoScalingWorkspace(workspaceId: string): boolean {
-  return autoScalingIds.has(workspaceId)
+/**
+ * A workspace's runtime shape, or undefined when cp has not polled it yet (a
+ * workspace created since the last refresh). Callers decide what an unknown
+ * shape means for them rather than being handed a guess.
+ */
+export function runtimeModeOf(workspaceId: string): RuntimeMode | undefined {
+  return runtimeModes.get(workspaceId)
 }
 
 /**
  * Resolve the replica a turn should hit.
  *
- * - No ready set (static workspace, or auto-scaling scaled to zero / not yet
- *   observed) → undefined: the caller routes to the default address.
+ * - No ready set (nothing running yet, scaled to zero, not yet observed) →
+ *   undefined: the caller routes to the workspace's default address.
  * - A `currentBinding` still in the ready set and NOT draining → keep it (session
  *   affinity holds across turns, and across a stream drop where the replica
  *   stayed alive).
@@ -149,8 +160,8 @@ export function isAutoScalingWorkspace(workspaceId: string): boolean {
  *   draining replica sheds its sessions. This is the observe-driven rebind: the
  *   session resumes on a healthy replica from the shared-volume transcript.
  *
- * The load-aware refinement (pick the least-busy replica using live turn counts)
- * arrives with the turn gate; round-robin is the dormant-stage placeholder.
+ * Round-robin, not load-aware: the turn gate already caps how much work a
+ * replica can be given, so spreading evenly is enough to keep them level.
  */
 export function pickReplicaForTurn(
   workspaceId: string,
@@ -195,9 +206,9 @@ export function setDraining(workspaceId: string, ids: number[]): void {
 }
 
 /**
- * The ready replica ids of a workspace, sorted ascending (empty for a static or
- * scaled-to-zero workspace). The autoscaler reads this to compute which ordinals
- * a scale-down would remove; the address seam fans a reload out across it.
+ * The ready replica ids of a workspace, sorted ascending; empty when nothing is
+ * running. The autoscaler reads this to compute which ordinals a scale-down
+ * would remove; the address seam fans a reload out across it.
  */
 export function readyReplicaIds(workspaceId: string): readonly number[] {
   return readyReplicas.get(workspaceId) ?? []
@@ -208,10 +219,9 @@ export function readyReplicaIds(workspaceId: string): readonly number[] {
  * affinity) call — health, config/skills reload, usage pull, file export. All
  * replicas share the workspace volume, so any answers; a non-draining one is
  * preferred so the pick doesn't land on a replica about to be removed. undefined
- * for a static or scaled-to-zero workspace (the caller then uses the default
- * address). This is what lets a built-in auto-scaling workspace — which has no
- * ClusterIP Service, only per-ordinal headless DNS — be reached without a
- * replica binding.
+ * when nothing is ready, and the caller falls back to the workspace's default
+ * address. This is what lets an auto-scaling workspace — which has no ClusterIP
+ * Service, only per-ordinal headless DNS — be reached without a replica binding.
  */
 export function anyReadyReplica(workspaceId: string): number | undefined {
   const ready = readyReplicas.get(workspaceId)
@@ -222,10 +232,9 @@ export function anyReadyReplica(workspaceId: string): number | undefined {
 }
 
 /**
- * How many replicas a workspace currently has ready. 0 for a static workspace
- * (never reports a ready set) or an auto-scaling one scaled to zero / not yet
- * observed. The turn gate uses this both to tell the two shapes apart (0 =
- * static = account-only) and to size auto-scaling capacity.
+ * How many replicas a workspace currently has ready — 1 for a running static
+ * workspace, 0..N for an auto-scaling one, 0 when nothing is up or cp has not
+ * observed it yet. The turn gate multiplies it by the per-replica capacity.
  */
 export function readyReplicaCount(workspaceId: string): number {
   return readyReplicas.get(workspaceId)?.length ?? 0
@@ -233,8 +242,8 @@ export function readyReplicaCount(workspaceId: string): number {
 
 /**
  * A workspace's per-replica turn capacity (its own max_concurrency), or
- * undefined for a static workspace or one whose capacity is unknown. The turn
- * gate multiplies this by the ready replica count to size admission.
+ * undefined when it is unknown. The turn gate multiplies this by the ready
+ * replica count to size admission.
  */
 export function perReplicaCapacity(workspaceId: string): number | undefined {
   return perReplicaCap.get(workspaceId)
@@ -246,5 +255,5 @@ export function __resetReplicaRouter(): void {
   perReplicaCap.clear()
   rrCursor.clear()
   drainingReplicas.clear()
-  autoScalingIds.clear()
+  runtimeModes.clear()
 }

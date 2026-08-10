@@ -459,12 +459,14 @@ export function resolveDeploymentStatus(dep: k8s.V1Deployment | undefined): Reco
 }
 
 /**
- * Read the template version stamped on a Deployment (the workspace-version
- * annotation), or null if absent/unparseable. The reconcile loop caches this
- * onto the workspace row so drift checks don't need a live k8s read.
+ * Read the template version stamped on a workspace workload (the
+ * workspace-version annotation), or null if absent/unparseable. Both workload
+ * shapes carry it, so drift checks read one value regardless of shape.
  */
-export function deploymentTemplateVersion(dep: k8s.V1Deployment | undefined): number | null {
-  const raw = dep?.metadata?.annotations?.[TEMPLATE_VERSION_ANNOTATION]
+export function workloadTemplateVersion(
+  workload: { metadata?: { annotations?: { [key: string]: string } } } | undefined,
+): number | null {
+  const raw = workload?.metadata?.annotations?.[TEMPLATE_VERSION_ANNOTATION]
   if (raw === undefined) return null
   const n = Number(raw)
   return Number.isFinite(n) ? n : null

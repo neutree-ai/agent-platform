@@ -1,13 +1,34 @@
+import { type RuntimeMode, assertNever } from '../../../internal/types/runtime-mode'
 import { pool } from './db/pool'
 import { revokeAllWorkspaceTokens } from './db/workspace-tokens'
 import { getWorkspaceConfig } from './db/workspaces'
 
-// Desired-state writes for the BYOI placement queue. After the P1 control
-// inversion, cp no longer calls k8s directly — it records *desired* state here
-// and the env-runner (built-in or remote) converges actual → desired. The target
-// environment is chosen at create time (see placement-decision.ts).
+// Desired-state writes for the placement queue. cp does not call k8s: it records
+// *desired* state here and the env-runner (built-in or remote) converges actual →
+// desired. The target environment is chosen at create time (placement-decision.ts).
 
 const BUILTIN_ENV = 'builtin'
+
+/** A workspace_config row, narrowed to what the placement spec is built from. */
+interface SpecConfig {
+  agent_type?: string | null
+  compute_resources?: unknown
+  auto_scaling?: { min_replicas: number } | null
+}
+
+/**
+ * Which runtime shape a config row asks for. An auto_scaling block is what makes
+ * a workspace auto-scaling; its absence is what makes one static. This is the
+ * only place the two are told apart from config — past here the placement spec
+ * states the mode outright and everything downstream reads it from there.
+ *
+ * Declaring the return type keeps callers seeing the full {@link RuntimeMode}
+ * union: assigned to a const, a bare literal expression would narrow to just the
+ * two branches below and quietly make any `switch` over it exhaustive again.
+ */
+function runtimeModeOf(config: SpecConfig | null): RuntimeMode {
+  return config?.auto_scaling ? 'auto-scaling' : 'static'
+}
 
 /**
  * Build the infra-agnostic spec the runner applies, from a workspace_config
@@ -16,17 +37,13 @@ const BUILTIN_ENV = 'builtin'
  * means adding a field here (and a column migration), not editing callers.
  */
 export function buildWorkspaceSpec(
-  config: {
-    agent_type?: string | null
-    compute_resources?: unknown
-    auto_scaling?: { min_replicas: number } | null
-  } | null,
+  config: SpecConfig | null,
   version: number,
 ): {
   agentType: string
   resources: unknown
   version: number
-  runtimeMode?: 'auto-scaling'
+  runtimeMode: RuntimeMode
   replicas?: number
 } {
   const base = {
@@ -34,19 +51,27 @@ export function buildWorkspaceSpec(
     resources: config?.compute_resources ?? {},
     version,
   }
-  // The presence of auto_scaling is the shape discriminant: absent → static,
-  // which projects byte-identically (no new fields, so the Deployment it becomes
-  // is unchanged) and, by construction, cannot read a replica count. An
-  // auto-scaling workspace carries the shape and an initial count:
-  // max(min_replicas, 1) so a freshly-created one is runnable before the
-  // autoscaler's first pass (and before scale-to-zero can apply). Once the
-  // autoscaler exists it owns the count via setDesiredReplicas, and a config
-  // bump must preserve it there.
-  if (!config?.auto_scaling) return base
-  return {
-    ...base,
-    runtimeMode: 'auto-scaling',
-    replicas: Math.max(config.auto_scaling.min_replicas, 1),
+  const autoScaling = config?.auto_scaling
+  const mode = runtimeModeOf(config)
+  switch (mode) {
+    case 'static':
+      // One replica, so no count to carry: the static shape is a single-replica
+      // Deployment by construction.
+      return { ...base, runtimeMode: mode }
+    case 'auto-scaling':
+      // max(min_replicas, 1) so a freshly-created workspace is runnable before
+      // the autoscaler's first pass and before scale-to-zero can apply. From
+      // then on the autoscaler owns the count via setDesiredReplicas, which
+      // bumpWorkspaceSpec preserves. The floor also makes the absent case moot:
+      // auto_scaling is what selected this arm, so it cannot be missing, and if
+      // it somehow were the result would still be the same 1.
+      return {
+        ...base,
+        runtimeMode: mode,
+        replicas: Math.max(autoScaling?.min_replicas ?? 0, 1),
+      }
+    default:
+      return assertNever(mode)
   }
 }
 
@@ -54,7 +79,7 @@ export function buildWorkspaceSpec(
  * Place a freshly-created workspace on an environment: desired=running, spec from
  * its config, spec_version=1 with observed_version=0 so the runner applies
  * (creates the pod) on its next pass. Records the environment on workspace_config
- * too (design §3.4). Idempotent — a re-create bumps the spec instead.
+ * too. Idempotent — a re-create bumps the spec instead.
  */
 export async function placeWorkspace(
   workspaceId: string,

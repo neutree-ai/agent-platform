@@ -19,14 +19,16 @@ describe('buildWorkspaceSpec', () => {
       agentType: 'codex',
       resources: { cpu_request: '500m', memory_limit: '4Gi' },
       version: 3,
+      runtimeMode: 'static',
     })
   })
 
-  it('null config → platform defaults (claude-code, empty resources)', () => {
+  it('null config → platform defaults (claude-code, empty resources, static)', () => {
     expect(buildWorkspaceSpec(null, 1)).toEqual({
       agentType: 'claude-code',
       resources: {},
       version: 1,
+      runtimeMode: 'static',
     })
   })
 
@@ -39,10 +41,14 @@ describe('buildWorkspaceSpec', () => {
     expect(buildWorkspaceSpec({ agent_type: 'codex' }, 2).resources).toEqual({})
   })
 
-  it('static config (auto_scaling null/absent) projects no auto-scaling fields', () => {
-    expect(buildWorkspaceSpec({ agent_type: 'codex', auto_scaling: null }, 1)).not.toHaveProperty(
-      'runtimeMode',
+  // The shape is always stated, never inferred from a missing field: every spec
+  // that reaches a provider names its runtimeMode, and a static one carries no
+  // replica count to mis-read.
+  it('static config (auto_scaling null/absent) projects the static shape, no replicas', () => {
+    expect(buildWorkspaceSpec({ agent_type: 'codex', auto_scaling: null }, 1).runtimeMode).toBe(
+      'static',
     )
+    expect(buildWorkspaceSpec({ agent_type: 'codex' }, 1).runtimeMode).toBe('static')
     expect(buildWorkspaceSpec({ agent_type: 'codex' }, 1)).not.toHaveProperty('replicas')
   })
 

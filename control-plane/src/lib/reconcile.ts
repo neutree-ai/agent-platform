@@ -1,139 +1,22 @@
 import { Cron } from 'croner'
 import { reloadUserWorkspaces } from '../routes/credentials'
+import { drainAll } from '../services/chat/turn-gate'
 import {
   hardDeleteUserCredentials,
   listAllUserCredentials,
   listUsersWithDeletingCredentials,
 } from '../services/db/credentials'
-import { getAutoScalingWorkspaceIds, getRemoteWorkspaceIds } from '../services/db/environments'
 import { sweepSupersededWorkspaceTokens } from '../services/db/workspace-tokens'
-import { getWorkspace, listAllWorkspaces, updateWorkspace } from '../services/db/workspaces'
-import { projectBuiltinAutoScalingStatus, runEnvProjection } from '../services/env-projection'
+import { runEnvProjection } from '../services/env-projection'
 import { runIdleWorkspaceGC } from '../services/idle-workspace-gc'
-import * as k8s from '../services/k8s'
 import { refreshReplicaRouter } from '../services/replica-router'
 import { sweepRunningWorkspaces } from '../services/usage/pull'
 import { runAutoscaler } from '../services/workspace-autoscaler'
-import { applyStatusChange } from './workspace-status'
 
-const WATCH_CYCLE_MS = 10 * 60 * 1000 // 10 minutes
-
-// How often to project remote placements → workspaces.status, and how long
-// without a runner heartbeat before an environment is considered offline.
+// How often to project placements → workspaces.status, and how long without a
+// runner heartbeat before a remote environment is considered offline.
 const ENV_PROJECTION_INTERVAL = '*/15 * * * * *'
 const ENV_HEARTBEAT_TIMEOUT_SEC = Number(process.env.ENV_HEARTBEAT_TIMEOUT_SEC) || 60
-
-/**
- * Full list reconcile: fetch all workspaces from DB and all deployments from
- * K8s, compare and update. Returns the resourceVersion for starting a watch.
- */
-async function fullReconcile(): Promise<string> {
-  const start = Date.now()
-  let t1 = start
-  let t2 = start
-  let dbUpdates = 0
-  let wsCount = 0
-  try {
-    const allWorkspaces = await listAllWorkspaces()
-    wsCount = allWorkspaces.length
-    if (wsCount === 0) return ''
-    t1 = Date.now()
-
-    const { deployments, resourceVersion } = await k8s.listWorkspaceDeployments()
-    t2 = Date.now()
-
-    // Workspaces on remote environments have no Deployment in cp's cluster —
-    // their status is driven by the env projection (observed + heartbeat), not
-    // this watch-k8s path. Skip them so resolveDeploymentStatus(undefined) never
-    // clobbers a remote workspace to 'stopped'. Auto-scaling workspaces are the
-    // same case for a different reason: they are StatefulSets, so they have no
-    // Deployment here either — their status is projected from the runner's
-    // observed_phase (projectBuiltinAutoScalingStatus). Both sets are empty for a
-    // plain static workspace, so its watch-k8s status path is unchanged.
-    const remoteIds = await getRemoteWorkspaceIds()
-    const autoScalingIds = await getAutoScalingWorkspaceIds()
-
-    for (const ws of allWorkspaces) {
-      if (remoteIds.has(ws.id) || autoScalingIds.has(ws.id)) continue
-      // A workspace mid-delete (inverted remote delete) is being reaped by the
-      // projection once its placement clears — don't let watch-k8s clobber its
-      // 'deleting' status to 'stopped' (which would strand it unreaped).
-      if (ws.status === 'deleting') continue
-      const dep = deployments.get(ws.id)
-      const resolved = k8s.resolveDeploymentStatus(dep)
-      if (resolved !== ws.status) {
-        await applyStatusChange(ws.id, resolved, ws.status)
-        dbUpdates++
-      }
-      // Cache the deployed template version so "update available" is a pure DB
-      // comparison (no live k8s read per status request). Backfills legacy rows
-      // and catches annotations changed outside cp (e.g. manual patches). Only
-      // sync when the Deployment actually carries a version — don't clobber the
-      // last-known value when the Deployment is absent/stopped.
-      const ver = k8s.deploymentTemplateVersion(dep)
-      if (ver !== null && ver !== ws.runtime_version) {
-        await updateWorkspace(ws.id, { runtime_version: ver })
-        dbUpdates++
-      }
-    }
-
-    const elapsed = Date.now() - start
-    const level = elapsed > 5000 ? 'warn' : 'log'
-    console[level](
-      `[Reconcile] full list ${elapsed}ms (db=${t1 - start}ms k8s=${t2 - t1}ms updates=${Date.now() - t2}ms/${dbUpdates}writes workspaces=${wsCount})`,
-    )
-
-    return resourceVersion
-  } catch (e) {
-    console.error('[Reconcile] full list error:', e)
-    return ''
-  }
-}
-
-/**
- * Watch callback: handle a single deployment status change event.
- * We query the workspace from DB to get current status for comparison.
- */
-async function handleWatchEvent(workspaceId: string, resolved: k8s.ReconciledStatus) {
-  try {
-    const ws = await getWorkspace(workspaceId)
-    if (!ws) return
-    if (resolved === ws.status) return
-    await applyStatusChange(workspaceId, resolved, ws.status)
-  } catch (e) {
-    console.error(`[Reconcile] watch event error for workspace=${workspaceId}:`, e)
-  }
-}
-
-/**
- * Run one list+watch cycle: full reconcile then watch until the cycle expires.
- * Returns when the cycle duration elapses or the watch errors out.
- */
-async function listWatchCycle(): Promise<void> {
-  const resourceVersion = await fullReconcile()
-  if (!resourceVersion) {
-    console.warn('[Reconcile] no resourceVersion from list, skipping watch phase')
-    return
-  }
-
-  return new Promise<void>((resolve) => {
-    const timer = setTimeout(() => {
-      console.log('[Reconcile] watch cycle expired, rebuilding')
-      abort()
-      resolve()
-    }, WATCH_CYCLE_MS)
-
-    const abort = k8s.watchDeployments(
-      resourceVersion,
-      (wsId, status) => handleWatchEvent(wsId, status),
-      (err) => {
-        console.warn('[Reconcile] watch ended:', err ?? 'connection closed')
-        clearTimeout(timer)
-        resolve()
-      },
-    )
-  })
-}
 
 async function reconcileDeletingCredentials() {
   try {
@@ -201,41 +84,30 @@ export function startReconcileLoop() {
     console.log(`[Reconcile] idle-workspace GC enabled — hourly sweep, threshold ${gcDays}d`)
   }
 
-  // Remote env projection: derive workspaces.status from runner-reported
-  // observed state + heartbeat freshness, and keep the forward proxies in step.
-  // Cheap no-op while there are no remote environments. protect:true so a slow
-  // pass never stacks.
+  // Status projection: derive every workspace's status from what its runner
+  // reported into workspace_placements, and keep the remote forward proxies in
+  // step. This is the only path that writes workspaces.status. protect:true so a
+  // slow pass never stacks.
   new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
     runEnvProjection(ENV_HEARTBEAT_TIMEOUT_SEC).catch((e) =>
-      console.error('[Reconcile] env projection error:', e instanceof Error ? e.message : e),
+      console.error('[Reconcile] status projection error:', e instanceof Error ? e.message : e),
     ),
   )
 
-  // Built-in auto-scaling status projection: drive workspace.status from the
-  // runner's observed_phase for built-in auto-scaling (StatefulSet) workspaces,
-  // which the watch-k8s Deployment reconcile skips. Same 15s cadence; a cheap
-  // no-op while none is auto-scaling, and never touches static workspaces.
+  // Replica-router refresh: rebuild cp's in-memory routing picture — each
+  // workspace's runtime shape and its runner-reported ready replicas — from
+  // workspace_placements. Draining afterwards releases turns that were waiting
+  // on capacity the refresh just revealed (a replica became ready), which no
+  // slot release would have triggered. protect:true so a slow pass never stacks.
   new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
-    projectBuiltinAutoScalingStatus().catch((e) =>
-      console.error(
-        '[Reconcile] auto-scaling status projection error:',
-        e instanceof Error ? e.message : e,
+    refreshReplicaRouter()
+      .then(drainAll)
+      .catch((e) =>
+        console.error(
+          '[Reconcile] replica router refresh error:',
+          e instanceof Error ? e.message : e,
+        ),
       ),
-    ),
-  )
-
-  // Replica-router refresh: rebuild the in-memory ready-replica set of every
-  // auto-scaling workspace from the runner-reported observed endpoint. Same
-  // 15s cadence as the projection; a cheap no-op while no workspace is
-  // auto-scaling (the query returns nothing). protect:true so a slow pass never
-  // stacks.
-  new Cron(ENV_PROJECTION_INTERVAL, { protect: true }, () =>
-    refreshReplicaRouter().catch((e) =>
-      console.error(
-        '[Reconcile] replica router refresh error:',
-        e instanceof Error ? e.message : e,
-      ),
-    ),
   )
 
   // Autoscaler: size each auto-scaling workspace's replicas to live turn demand.
@@ -248,16 +120,5 @@ export function startReconcileLoop() {
     ),
   )
 
-  // List+watch loop: runs continuously, each cycle is ~10 minutes
-  const run = async () => {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      await listWatchCycle()
-      // Brief pause before rebuilding to avoid tight loops on repeated errors
-      await new Promise((r) => setTimeout(r, 1000))
-    }
-  }
-  run().catch((e) => console.error('[Reconcile] fatal error:', e))
-
-  console.log(`[Reconcile] Started (list+watch, cycle=${WATCH_CYCLE_MS / 1000}s)`)
+  console.log('[Reconcile] Started')
 }

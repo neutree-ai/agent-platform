@@ -5,20 +5,22 @@
 // the top of executeChat, released when the turn ends). It does two jobs:
 //
 //   1. Account: track how many turns each workspace is running concurrently.
-//      This is the demand signal the autoscaler reads (added with the
-//      autoscaler); it is also the base a load-aware replica pick will use.
-//   2. Admit: cap concurrency for AUTO-SCALING workspaces at
-//      readyReplicas × per-replica capacity, making turns over the cap wait for
-//      a slot (as the scheduler already does for per-workspace concurrency),
-//      with a bounded queue as a flood backstop.
+//      This is the demand signal the autoscaler scales on.
+//   2. Admit: cap a workspace at readyReplicas × its per-replica capacity
+//      (max_concurrency), making turns over the cap wait for a slot, as the
+//      scheduler already does for per-workspace concurrency.
 //
-// A static (single-replica) workspace has no reported ready set, so its capacity
-// is Infinity: preview ACCOUNTS its turns but never blocks — existing single-pod
-// behavior is byte-unchanged. Enforcement is therefore reachable only for an
-// auto-scaling workspace, and none can exist yet, so the gate is dormant beyond
-// its (harmless) counter. Shape is told apart the same way the router does it —
-// by the reported ready set, not runtime_mode — so there is no dependency on the
-// config columns that gate creation.
+// The cap is one rule for every workspace: a running single-replica workspace
+// admits max_concurrency turns, and one running three replicas admits three
+// times that. max_concurrency therefore means the same thing everywhere — how
+// much concurrent work one replica of this workspace may carry, whatever the
+// work came in through.
+//
+// A waiting turn is not a failed turn, so waiting is the normal response to a
+// full workspace. It is bounded twice, because a workspace whose capacity cannot
+// grow has nothing to wait FOR beyond its own turns finishing: by queue depth (a
+// flood backstop) and by time (a stuck agent must not silently freeze every
+// caller behind it). Both give up with a 503 the caller can retry.
 //
 // cp is single-process, so a plain in-memory counter + FIFO queue is the whole
 // coordination primitive; no distributed locking.
@@ -29,15 +31,21 @@ import { perReplicaCapacity, readyReplicaCount } from '../replica-router'
 // outright instead of queued — a memory backstop against a flood, nothing more.
 const MAX_QUEUE_PER_WS = Number(process.env.TURN_GATE_MAX_QUEUE) || 50
 
+// How long a turn may wait for a slot before giving up. Generous, because the
+// wait is legitimate — it is bounded only so a stuck turn cannot hold its
+// workspace's callers indefinitely with no answer.
+const MAX_WAIT_MS = Number(process.env.TURN_GATE_MAX_WAIT_MS) || 120_000
+
 /** Per-workspace count of turns currently holding a slot. */
 const activeTurns = new Map<string, number>()
 
 interface Waiter {
   grant: () => void
-  /** Only used by {@link __resetTurnGate} to unstick pending promises in tests. */
   reject: (e: Error) => void
+  /** Fires when this turn has waited long enough; cleared once it is granted. */
+  timer: ReturnType<typeof setTimeout>
 }
-/** Per-workspace FIFO of turns waiting for a slot (auto-scaling only). */
+/** Per-workspace FIFO of turns waiting for a slot. */
 const waiters = new Map<string, Waiter[]>()
 
 /** Raised when a workspace is at capacity and its wait queue is already full. */
@@ -54,11 +62,14 @@ export interface TurnSlot {
 }
 
 /**
- * A workspace's concurrency ceiling right now, sized entirely from the replica
- * router's live snapshot — no gate-side constant. Static (no ready replicas) or
- * a workspace whose per-replica capacity is unknown → Infinity, so preview
- * accounts but never blocks. Auto-scaling → readyReplicas × its own
- * max_concurrency, so the cap grows and shrinks with the live replica count.
+ * A workspace's concurrency ceiling right now: ready replicas × its own
+ * per-replica capacity, sized entirely from the replica router's live snapshot
+ * with no gate-side constant, so the cap follows the live replica count.
+ *
+ * A workspace cp cannot size — none reported ready, or no known capacity — is
+ * Infinity rather than zero: it is accounted but never blocked, because
+ * rejecting the first turns of a workspace cp has simply not observed yet would
+ * be worse than admitting them.
  */
 function capacityOf(workspaceId: string): number {
   const ready = readyReplicaCount(workspaceId)
@@ -91,6 +102,7 @@ function drain(workspaceId: string): void {
   if (!q || q.length === 0) return
   while (q.length > 0 && (activeTurns.get(workspaceId) ?? 0) < capacityOf(workspaceId)) {
     const w = q.shift() as Waiter
+    clearTimeout(w.timer)
     activeTurns.set(workspaceId, (activeTurns.get(workspaceId) ?? 0) + 1)
     w.grant()
   }
@@ -98,14 +110,26 @@ function drain(workspaceId: string): void {
 }
 
 /**
+ * Re-run admission for every workspace with turns waiting. A slot freeing is not
+ * the only way spare capacity appears — an auto-scaling workspace's cap also
+ * grows when a new replica becomes ready, and nothing releases a slot at that
+ * moment, so without this the turns that scale-up was meant to serve would wait
+ * for an unrelated turn to finish. Called after the replica-router refresh.
+ */
+export function drainAll(): void {
+  for (const workspaceId of [...waiters.keys()]) drain(workspaceId)
+}
+
+/**
  * Admit one turn against a workspace, resolving to a slot the caller releases
- * when the turn ends. Under capacity (and always for a static workspace) it
- * resolves immediately. Over an auto-scaling workspace's capacity it WAITS for a
- * slot to free — the same "wait for your turn" behavior the scheduler already
- * uses for per-workspace concurrency — resolving as soon as one frees or the cap
- * grows. The only rejection is {@link TurnCapacityError} when the wait queue is
- * already full (a flood backstop), never a timeout: a queued turn is not a
- * failed turn, it is a turn whose replica is coming.
+ * when the turn ends. Under capacity it resolves immediately. Over capacity it
+ * WAITS for a slot — the same "wait for your turn" behaviour the scheduler
+ * already uses for per-workspace concurrency — resolving as soon as one frees or
+ * the cap grows.
+ *
+ * Rejects with {@link TurnCapacityError} when the queue is already full, or when
+ * this turn has waited past the limit. Both mean the same thing to the caller:
+ * the workspace is saturated, try again.
  */
 export function acquireTurn(workspaceId: string): Promise<TurnSlot> {
   const active = activeTurns.get(workspaceId) ?? 0
@@ -114,13 +138,23 @@ export function acquireTurn(workspaceId: string): Promise<TurnSlot> {
     return Promise.resolve(makeSlot(workspaceId))
   }
 
-  // Over capacity — only reachable for an auto-scaling workspace (static is
-  // Infinity). Queue behind a bound; the slot is handed over by drain(), which
-  // has already incremented the active count on this workspace's behalf.
+  // Over capacity: queue behind a bound. The slot is handed over by drain(),
+  // which has already incremented the active count on this workspace's behalf.
   const q = waiters.get(workspaceId) ?? []
   if (q.length >= MAX_QUEUE_PER_WS) return Promise.reject(new TurnCapacityError(workspaceId))
   return new Promise<TurnSlot>((resolve, reject) => {
-    q.push({ grant: () => resolve(makeSlot(workspaceId)), reject })
+    const waiter: Waiter = {
+      grant: () => resolve(makeSlot(workspaceId)),
+      reject,
+      timer: setTimeout(() => {
+        const queue = waiters.get(workspaceId)
+        const at = queue?.indexOf(waiter) ?? -1
+        if (at >= 0) queue?.splice(at, 1)
+        if (queue?.length === 0) waiters.delete(workspaceId)
+        reject(new TurnCapacityError(workspaceId))
+      }, MAX_WAIT_MS),
+    }
+    q.push(waiter)
     waiters.set(workspaceId, q)
   })
 }
@@ -128,8 +162,6 @@ export function acquireTurn(workspaceId: string): Promise<TurnSlot> {
 /**
  * A workspace's current turn demand: turns in flight plus turns waiting for a
  * slot. This is the one signal the autoscaler scales on — no separate metric.
- * queued is always 0 for a static workspace (capacity is Infinity, nothing
- * queues), so a static workspace reads as pure in-flight count.
  */
 export function turnDemand(workspaceId: string): { active: number; queued: number } {
   return {
@@ -141,7 +173,10 @@ export function turnDemand(workspaceId: string): { active: number; queued: numbe
 /** Test seam: drop all admission state, rejecting any still-pending waiters. */
 export function __resetTurnGate(): void {
   for (const q of waiters.values()) {
-    for (const w of q) w.reject(new TurnCapacityError('__reset__'))
+    for (const w of q) {
+      clearTimeout(w.timer)
+      w.reject(new TurnCapacityError('__reset__'))
+    }
   }
   waiters.clear()
   activeTurns.clear()

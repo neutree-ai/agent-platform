@@ -3,53 +3,63 @@ import {
   builtinReplicaAddress,
   defaultCfg,
 } from '../../../internal/k8s-provider'
-import {
-  anyReadyReplica,
-  isAutoScalingWorkspace,
-  readyReplicaIds,
-} from '../services/replica-router'
+import { assertNever } from '../../../internal/types/runtime-mode'
+import { anyReadyReplica, readyReplicaIds, runtimeModeOf } from '../services/replica-router'
 import { getRemoteProxyPort } from './remote-proxy'
 
 /**
  * Resolve the base URL cp uses to reach a workspace's agent, optionally a
- * specific replica of an auto-scaling workspace.
+ * specific replica of it.
  *
- * This is the workspace data-plane routing seam (design §6). A built-in
- * workspace is reached via cluster DNS — the k8s address format lives in the
- * provider package ({@link builtinReplicaAddress}), so cp-core never hardcodes
- * cluster-DNS shape. `replicaId` omitted → the workspace's own Service
- * (single-replica / static, byte-identical to before); `replicaId` given → that
- * StatefulSet pod's stable per-ordinal DNS.
+ * This is the workspace data-plane routing seam, and the one place the two
+ * runtime shapes are addressed differently — a difference in the *shape* of the
+ * address, which no amount of replica bookkeeping can paper over:
+ *
+ * - `'static'` — one pod behind a ClusterIP Service. The Service IS the address,
+ *   so a replica id is meaningless here and is ignored: there is exactly one
+ *   replica and the Service already points at it.
+ * - `'auto-scaling'` — no ClusterIP Service at all (a VIP would round-robin
+ *   across replicas and defeat session affinity). A named replica resolves to
+ *   that StatefulSet pod's stable per-ordinal DNS; with none named, any ready
+ *   replica serves (they share the volume). While nothing is ready yet — scaled
+ *   to zero, cold-starting, not yet observed — it resolves to the HEADLESS
+ *   Service, whose DNS names pods as k8s marks them ready, so the first health
+ *   poll and the first turn land the moment a pod comes up rather than waiting
+ *   for cp's next observation.
+ *
+ * A workspace cp has not polled yet has no known shape; it is addressed by its
+ * Service, which is what a workspace has unless it is auto-scaling.
+ *
+ * The k8s address formats live in the provider package, so cp-core never
+ * hardcodes cluster-DNS shape.
  *
  * A workspace on a remote (BYOI) environment is reached through that
- * environment's tunnel instead. cp keeps localhost forward proxies per reachable
- * remote workspace (lib/remote-proxy) — one per replica for an auto-scaling
- * workspace, carrying the ordinal in the tunnel meta so the runner dials the
- * right pod. This stays a synchronous O(1) map lookup — built-in workspaces are
- * never in the map, so their path is byte-identical. `replicaId` is threaded
- * through so a session-bound turn reaches its own replica; if that replica's
- * proxy isn't up yet (observe lag), the lookup misses and we fall through, which
- * fails fast rather than mis-routing the turn to another replica.
- *
- * With no `replicaId`, a workspace-scoped call (health, reload, usage, export):
- * a static workspace resolves to its single Service (unchanged); a built-in
- * auto-scaling one has NO ClusterIP Service — only per-ordinal headless DNS — so
- * it resolves to any one ready replica (all share the volume). When no replica is
- * ready yet (scaled to zero / cold-starting / not yet observed) an auto-scaling
- * workspace resolves to its HEADLESS Service, whose DNS names the ready pods as
- * k8s adds them — so a cold-start /health poll and the first turn become
- * reachable the moment a pod is ready, without waiting for cp's ready-set
- * observation to catch up. A static workspace keeps falling back to its Service
- * (which exists), byte-identical to before.
+ * environment's tunnel instead, and that lookup comes first. cp keeps localhost
+ * forward proxies per reachable remote workspace (lib/remote-proxy) — one per
+ * replica, carrying the ordinal in the tunnel meta so the runner dials the right
+ * pod. It stays a synchronous O(1) map lookup that built-in workspaces always
+ * miss. `replicaId` is threaded through so a session-bound turn reaches its own
+ * replica; if that replica's proxy isn't up yet, the lookup misses and we fall
+ * through, which fails fast rather than mis-routing the turn elsewhere.
  */
 export function getWorkspaceAddress(workspaceId: string, replicaId?: number): string {
   const remotePort = getRemoteProxyPort(workspaceId, replicaId)
   if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
-  const id = replicaId ?? anyReadyReplica(workspaceId)
-  if (id === undefined && isAutoScalingWorkspace(workspaceId)) {
-    return builtinHeadlessAddress(defaultCfg, workspaceId)
+
+  const mode = runtimeModeOf(workspaceId)
+  switch (mode) {
+    case 'auto-scaling': {
+      const id = replicaId ?? anyReadyReplica(workspaceId)
+      return id === undefined
+        ? builtinHeadlessAddress(defaultCfg, workspaceId)
+        : builtinReplicaAddress(defaultCfg, workspaceId, id)
+    }
+    case 'static':
+    case undefined:
+      return builtinReplicaAddress(defaultCfg, workspaceId)
+    default:
+      return assertNever(mode)
   }
-  return builtinReplicaAddress(defaultCfg, workspaceId, id)
 }
 
 /**
@@ -65,11 +75,9 @@ interface AgentRouteContext {
    */
   sessionId?: string | null
   /**
-   * The replica (auto-scaling workspaces only) this request is bound to — the
-   * session's `replica_ordinal` binding. undefined/null → the workspace's
-   * default address (a static workspace, or a call with no replica affinity).
-   * The binding that fills this comes from the replica router (a later stage);
-   * until then every caller leaves it unset and routing is byte-identical.
+   * The replica this request is bound to — the session's `replica_ordinal`.
+   * undefined/null → a call with no replica affinity, which takes the
+   * workspace's default address.
    */
   replicaId?: number | null
 }
@@ -126,11 +134,12 @@ export async function postToAgent(
  * acknowledged.
  *
  * A reload mutates the agent's IN-MEMORY config/skills/credentials cache, which
- * — unlike the shared workspace volume — is per-process. So an auto-scaling
- * workspace must reload EVERY ready replica, or the ones missed keep serving
- * stale config. We fan out and require all to ack; a partial failure returns
- * false so the caller (e.g. the skill-reload queue) retries. A static workspace
- * has no ready set → the single default-address call, unchanged.
+ * — unlike the shared workspace volume — is per-process. Every ready replica has
+ * to be reloaded, or the ones missed keep serving stale config, so we fan out
+ * over the ready set and require all to ack; a partial failure returns false and
+ * the caller (e.g. the skill-reload queue) retries. With nothing reported ready
+ * — a stopped workspace, or one cp has not observed yet — the fan-out collapses
+ * to a single call to the workspace's default address.
  */
 export async function notifyAgentReload(
   workspaceId: string,

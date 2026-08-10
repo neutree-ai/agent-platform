@@ -9,32 +9,26 @@
 //     the historical free-function API kept as thin wrappers so the existing
 //     `import * as k8s from '../services/k8s'` call sites are unchanged.
 
-import {
-  type KubernetesProvider,
-  type ReconciledStatus,
-  makeDefaultProvider,
-} from '../../../internal/k8s-provider'
+import { type KubernetesProvider, makeDefaultProvider } from '../../../internal/k8s-provider'
 
 export {
   CURRENT_TEMPLATE_VERSION,
   type K8sConfig,
-  type ReconciledStatus,
   buildDeploymentSpec,
-  deploymentTemplateVersion,
   getAgentImage,
   isMemoryFuseAvailable,
   resolveDeploymentStatus,
+  workloadTemplateVersion,
 } from '../../../internal/k8s-provider'
 
 /** The built-in environment's provider instance (today's only environment). */
 const defaultProvider: KubernetesProvider = makeDefaultProvider()
 
-// ── Backward-compatible read/observe wrappers ──
-// Thin wrappers over defaultProvider for the cp paths that still talk to k8s
-// (status reads, the delete teardown, the reconcile watch). The mutation
-// wrappers (create/start/stop/restart/rebuild/resize/expand) were removed in the
-// P1 control inversion — those actions now go through workspace_placements and
-// the env-runner.
+// ── Read wrappers ──
+// The few cp paths that still read k8s directly: a workspace's live resource
+// detail, its spec markers for drift checks, the admin drift sweep, and the
+// delete teardown. Everything else — provisioning, and status — goes through
+// workspace_placements and the env-runner.
 
 export function getInstanceSpecMarkers(workspaceId: string) {
   return defaultProvider.getInstanceSpecMarkers(workspaceId)
@@ -44,25 +38,20 @@ export function getInstanceStatus(workspaceId: string) {
   return defaultProvider.getInstanceStatus(workspaceId)
 }
 
+/**
+ * Every workspace Deployment in the cluster. The admin rebuild-stale sweep reads
+ * these to find workloads still running an outdated image — a question about
+ * live infra detail, not about a workspace's status.
+ */
 export function listWorkspaceDeployments(timeoutMs?: number) {
   return defaultProvider.listWorkspaceDeployments(timeoutMs)
 }
 
-export function watchDeployments(
-  resourceVersion: string,
-  onUpdate: (workspaceId: string, status: ReconciledStatus) => void,
-  onError: (err: unknown) => void,
-) {
-  return defaultProvider.watchDeployments(resourceVersion, onUpdate, onError)
-}
-
 /**
- * Tear down a workspace's instance by whatever shape actually exists: a static
- * Deployment (+ ClusterIP Service) or an auto-scaling StatefulSet (+ headless
- * Service). Both share the PVC name. The provider also has a deleteInstance,
- * which only knows the Deployment shape and would leak an auto-scaling
- * workspace's StatefulSet, pods, and headless Service — it is deliberately not
- * re-exported here.
+ * Tear down everything belonging to a workspace, both workload shapes and the
+ * volume they share a name for. Deliberately shape-independent: the workspace
+ * row and its placement are deleted straight after, so anything missed here is
+ * infra nothing will ever come back for.
  */
 export function destroy(workspaceId: string) {
   return defaultProvider.destroy(workspaceId)

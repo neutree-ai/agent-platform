@@ -226,23 +226,25 @@ describe('stop releases the ClusterIP', () => {
       deployments: [deployment('ws1', 1, 1)],
       services: [service('ws1')],
     })
-    await provider.stop('ws1')
+    await provider.stop('ws1', 'static')
     expect(services).toHaveLength(0)
 
-    await provider.start('ws1')
+    await provider.start('ws1', 'static')
     expect(services.map((s) => s.metadata?.name)).toEqual(['nap-ws1'])
   })
 
   it('stop: tolerates a Service that is already gone', async () => {
     const { provider } = makeApis({ deployments: [deployment('ws1', 1, 1)], services: [] })
-    await expect(provider.stop('ws1')).resolves.toBeUndefined()
+    await expect(provider.stop('ws1', 'static')).resolves.toBeUndefined()
   })
 
-  it('stop: leaves the auto-scaling shape to its own teardown', async () => {
-    // No Deployment → stopInstance 404s → the StatefulSet path takes over; its
-    // headless Service holds no ClusterIP, so there is nothing to release.
+  // The auto-scaling shape routes through a headless Service, which holds no
+  // ClusterIP, so there is nothing to release on the way down.
+  it('stop: releases nothing for the auto-scaling shape', async () => {
     const { provider, methods } = makeApis({ deployments: [], services: [] })
-    await provider.stop('ws1')
+
+    await provider.stop('ws1', 'auto-scaling')
+
     expect(methods()).not.toContain('deleteNamespacedService')
   })
 })
@@ -253,16 +255,18 @@ describe('converge paths repair a missing Service', () => {
       deployments: [deployment('ws1', 0, 0)],
       services: [],
     })
-    await provider.start('ws1')
+    await provider.start('ws1', 'static')
     expect(methods()).toContain('createNamespacedService')
     expect(services.map((s) => s.metadata?.name)).toEqual(['nap-ws1'])
   })
 
+  // A ClusterIP Service on the auto-scaling shape would burn an IP it never
+  // routes with — and round-robin across replicas if anything used it.
   it('start: does not create a ClusterIP Service for the auto-scaling shape', async () => {
-    // No Deployment → startInstance 404s → the StatefulSet path takes over, and
-    // a ClusterIP Service there would just burn an IP it never routes with.
     const { provider, methods } = makeApis({ deployments: [], services: [] })
-    await provider.start('ws1')
+
+    await provider.start('ws1', 'auto-scaling')
+
     expect(methods()).not.toContain('createNamespacedService')
   })
 
@@ -271,15 +275,27 @@ describe('converge paths repair a missing Service', () => {
       deployments: [deployment('ws1', 1, 1)],
       services: [],
     })
-    await provider.apply('ws1', { agentType: 'claude-code', resources: {}, version: 1 })
+    await provider.apply('ws1', {
+      agentType: 'claude-code',
+      resources: {},
+      version: 1,
+      runtimeMode: 'static',
+    })
     expect(methods()).toContain('createNamespacedService')
   })
 })
 
-describe('createInstance orders the Service before the Deployment', () => {
+describe('creating a workspace orders the Service before the Deployment', () => {
+  const freshSpec = {
+    agentType: 'claude-code',
+    resources: {},
+    version: 1,
+    runtimeMode: 'static',
+  } as const
+
   it('creates the Service first', async () => {
     const { provider, methods } = makeApis({})
-    await provider.createInstance('ws1')
+    await provider.apply('ws1', freshSpec)
     const order = methods()
     expect(order.indexOf('createNamespacedService')).toBeLessThan(
       order.indexOf('createNamespacedDeployment'),
@@ -292,7 +308,7 @@ describe('createInstance orders the Service before the Deployment', () => {
     // reconcile keeps retrying — instead of a running-but-unreachable workspace
     // that no drift trigger ever revisits.
     const { provider, deployments } = makeApis({ serviceCreateFails: true })
-    await expect(provider.createInstance('ws1')).rejects.toThrow('range is full')
+    await expect(provider.apply('ws1', freshSpec)).rejects.toThrow('range is full')
     expect(deployments).toHaveLength(0)
   })
 })

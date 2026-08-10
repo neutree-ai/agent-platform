@@ -2,13 +2,17 @@ import * as k8s from '@kubernetes/client-node'
 import type { ObservedState, WorkspaceSpec } from '../types/environments'
 import type { K8sConfig } from './config'
 import {
+  MERGE_PATCH,
   createOrAdopt,
   expandWorkspacePvc,
   resourceName,
+  scaleWorkload,
   swallow404,
   workspaceLabels,
   workspacePvcName,
+  workspaceSelector,
 } from './support'
+import type { WorkspaceWorkload } from './workload'
 import {
   CURRENT_TEMPLATE_VERSION,
   TEMPLATE_VERSION_ANNOTATION,
@@ -16,6 +20,7 @@ import {
   buildStatefulSetSpec,
   readyReplicaIdsFromPods,
   resolveStatefulSetStatus,
+  workloadTemplateVersion,
 } from './workspace-spec'
 
 /**
@@ -28,7 +33,7 @@ import {
  * only the surrounding workload / service / PVC differ; StatefulSet is used
  * purely for stable per-ordinal DNS + ordered scale-down.
  */
-export class AutoScalingWorkload {
+export class AutoScalingWorkload implements WorkspaceWorkload {
   constructor(
     private readonly appsApi: k8s.AppsV1Api,
     private readonly coreApi: k8s.CoreV1Api,
@@ -40,14 +45,9 @@ export class AutoScalingWorkload {
     try {
       return (await this.appsApi.readNamespacedStatefulSet(name, this.cfg.namespace)).body
     } catch (e: any) {
-      if (e.response?.statusCode === 404) return null
-      throw e
+      swallow404(e)
+      return null
     }
-  }
-
-  /** Whether this workspace is backed by a StatefulSet (i.e. is auto-scaling). */
-  async exists(workspaceId: string): Promise<boolean> {
-    return (await this.getStatefulSet(workspaceId)) !== null
   }
 
   /** Create-or-converge the StatefulSet, headless Service and shared RWX PVC. */
@@ -130,10 +130,9 @@ export class AutoScalingWorkload {
 
   /** Scale the StatefulSet; 404-tolerant (false when it doesn't exist). */
   async scale(workspaceId: string, replicas: number): Promise<boolean> {
-    const name = resourceName(this.cfg, workspaceId)
-    try {
-      await this.appsApi.patchNamespacedStatefulSetScale(
-        name,
+    return scaleWorkload(() =>
+      this.appsApi.patchNamespacedStatefulSetScale(
+        resourceName(this.cfg, workspaceId),
         this.cfg.namespace,
         { spec: { replicas } },
         undefined,
@@ -141,13 +140,9 @@ export class AutoScalingWorkload {
         undefined,
         undefined,
         undefined,
-        { headers: { 'Content-Type': 'application/merge-patch+json' } },
-      )
-      return true
-    } catch (e: any) {
-      if (e.response?.statusCode === 404) return false
-      throw e
-    }
+        MERGE_PATCH,
+      ),
+    )
   }
 
   /**
@@ -180,12 +175,14 @@ export class AutoScalingWorkload {
 
   /** The observed state (phase + ready replica set on the endpoint) for a set. */
   private observed(name: string, sts: k8s.V1StatefulSet, pods: k8s.V1Pod[]): ObservedState {
+    const templateVersion = workloadTemplateVersion(sts)
     return {
       phase: resolveStatefulSetStatus(sts),
       endpoint: {
         address: `${name}-hl.${this.cfg.namespace}.svc.cluster.local:3001`,
         readyReplicaIds: readyReplicaIdsFromPods(pods, name),
       },
+      ...(templateVersion !== null ? { templateVersion } : {}),
     }
   }
 
@@ -219,7 +216,7 @@ export class AutoScalingWorkload {
       undefined,
       undefined,
       undefined,
-      `app=${this.cfg.namePrefix},component=workspace`,
+      workspaceSelector(this.cfg),
     )
     const sets = res.body.items.filter((s) => s.metadata?.labels?.['workspace-id'])
     if (sets.length === 0) return out
@@ -231,7 +228,7 @@ export class AutoScalingWorkload {
       undefined,
       undefined,
       undefined,
-      `app=${this.cfg.namePrefix},component=workspace`,
+      workspaceSelector(this.cfg),
     )
     const podsByWs = new Map<string, k8s.V1Pod[]>()
     for (const pod of pods.body.items) {

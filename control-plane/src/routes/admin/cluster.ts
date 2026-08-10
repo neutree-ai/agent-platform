@@ -180,7 +180,7 @@ cluster.post('/rebuild-stale', async (c) => {
 
   const wantImage = agentType ? k8sService.getAgentImage(agentType) : null
 
-  const { deployments } = await k8sService.listWorkspaceDeployments()
+  const deployments = await k8sService.listWorkspaceDeployments()
   const targets: string[] = []
   let stoppedSkipped = 0
   for (const [wsId, dep] of deployments) {

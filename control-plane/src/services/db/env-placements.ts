@@ -1,10 +1,10 @@
-// BYOI P2 — environment-scoped placement queries for the /env/v1 protocol.
+// Environment-scoped placement queries for the /env/v1 protocol.
 //
 // Every function takes the caller's environmentId (from the env-token principal)
 // and forces WHERE environment_id = $env into the SQL. A runner can therefore
 // only ever read/write placements of its own environment, no matter what
-// workspace id it passes (design §9). This is the data-layer half of that
-// guarantee; the middleware is the auth half.
+// workspace id it passes. This is the data-layer half of that guarantee; the
+// middleware is the auth half.
 
 import { pool } from './pool'
 
@@ -16,6 +16,8 @@ interface ProtocolPlacement {
   spec_version: number
   observed_phase: string | null
   observed_version: number | null
+  endpoint: unknown
+  observed_template_version: number | null
 }
 
 /**
@@ -24,14 +26,14 @@ interface ProtocolPlacement {
  * `since` is an optional bandwidth optimization: only rows whose spec changed
  * beyond that version. Lifecycle drift (desired≠observed) is detected by the
  * runner from the rows themselves, so callers that pass `since` should still do
- * periodic full pulls — mirrors the direct-DB runner's full-list behavior.
+ * periodic full pulls.
  */
 export async function listPlacementsForEnvironment(
   environmentId: string,
   since?: number,
 ): Promise<ProtocolPlacement[]> {
   const cols = `workspace_id, environment_id, desired_phase, spec, spec_version,
-                observed_phase, observed_version`
+                observed_phase, observed_version, endpoint, observed_template_version`
   if (since != null) {
     const { rows } = await pool.query(
       `SELECT ${cols} FROM workspace_placements
@@ -53,6 +55,8 @@ interface ObservedReport {
   message?: string | null
   /** Set only after converging to a spec version (post-apply); else untouched. */
   version?: number | null
+  /** Pod-template version of the running workload; null leaves the stored one. */
+  templateVersion?: number | null
 }
 
 /**
@@ -71,6 +75,7 @@ export async function writeObservedForEnvironment(
             endpoint = $4,
             message = $5,
             observed_version = COALESCE($6, observed_version),
+            observed_template_version = COALESCE($7, observed_template_version),
             reported_at = now()
       WHERE workspace_id = $1 AND environment_id = $2`,
     [
@@ -80,52 +85,59 @@ export async function writeObservedForEnvironment(
       o.endpoint != null ? JSON.stringify(o.endpoint) : null,
       o.message ?? null,
       o.version ?? null,
+      o.templateVersion ?? null,
     ],
   )
   return (result.rowCount ?? 0) > 0
 }
 
+interface WorkspaceRouting {
+  workspace_id: string
+  /** The workspace's runtime shape, which decides how its address is formed. */
+  runtime_mode: string
+  /** Ready replica ids the runner reported; null before its first observation. */
+  ready_replica_ids: number[] | null
+  /**
+   * The workspace's per-replica turn capacity — the same per-workspace knob the
+   * scheduler caps concurrent jobs with. Null only for a placement with no
+   * config row (shouldn't happen); the turn gate then leaves it unenforced.
+   */
+  max_concurrency: number | null
+}
+
 /**
- * The runner-reported ready-replica set of every auto-scaling workspace, read
- * out of the observed endpoint, plus that workspace's own `max_concurrency`
- * (its per-replica turn capacity — the same per-workspace knob the scheduler
- * caps concurrent jobs with). Only rows whose endpoint actually carries
- * `readyReplicaIds` are returned (static workspaces never do), so the result is
- * empty until an auto-scaling workspace is running. Environment-agnostic: the
- * built-in runner and remote runners all write the same column, so cp gets a
- * uniform picture from one query. Feeds the in-memory replica router (routing +
- * the turn gate's capacity sizing). `max_concurrency` is null only for a
- * placement without a config row (shouldn't happen); the gate then leaves that
- * workspace unenforced.
+ * Everything the in-memory replica router needs, in one query: each workspace's
+ * runtime shape, the ready-replica set its runner reported, and its per-replica
+ * turn capacity. Environment-agnostic — built-in and remote runners write the
+ * same columns, so cp gets a uniform picture without knowing where a workspace
+ * runs.
  */
-export async function listWorkspaceReplicaSets(): Promise<
-  { workspace_id: string; ready_replica_ids: number[]; max_concurrency: number | null }[]
-> {
+export async function listWorkspaceRouting(): Promise<WorkspaceRouting[]> {
   const { rows } = await pool.query(
     `SELECT p.workspace_id,
+            p.runtime_mode,
             p.endpoint->'readyReplicaIds' AS ready_replica_ids,
             wc.max_concurrency
        FROM workspace_placements p
-       LEFT JOIN workspace_config wc ON wc.workspace_id = p.workspace_id
-      WHERE jsonb_exists(p.endpoint, 'readyReplicaIds')`,
+       LEFT JOIN workspace_config wc ON wc.workspace_id = p.workspace_id`,
   )
-  return rows
+  return rows as WorkspaceRouting[]
 }
 
 /**
  * Ready/desired replica counts for an auto-scaling workspace, for the status
  * API (e.g. rendering "running (2/3)"). `desired` is the autoscaler-owned
  * `spec.replicas`; `ready` is how many the runner reports Ready
- * (`endpoint.readyReplicaIds`). Returns null for a static workspace — its spec
- * has no `runtimeMode: 'auto-scaling'` — so callers show replica counts only
- * where they mean something. Uniform across built-in and remote (both write the
- * same columns), so no live-k8s read is needed.
+ * (`endpoint.readyReplicaIds`). Returns null for a static workspace, whose
+ * replica count is a constant and means nothing to render. Uniform across
+ * built-in and remote (both write the same columns), so no live-k8s read is
+ * needed.
  */
 export async function getWorkspaceReplicaStatus(
   workspaceId: string,
 ): Promise<{ ready: number; desired: number } | null> {
   const { rows } = await pool.query(
-    `SELECT spec->>'runtimeMode' AS mode,
+    `SELECT runtime_mode AS mode,
             COALESCE((spec->>'replicas')::int, 0) AS desired,
             COALESCE(jsonb_array_length(endpoint->'readyReplicaIds'), 0) AS ready
        FROM workspace_placements
