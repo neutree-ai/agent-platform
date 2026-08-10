@@ -5,7 +5,7 @@ description: 让 Agent 在合适的时机自己开始工作——定时、外部
 
 到这一步，你的 Agent 已经能在 Web UI 里手动对话工作了。这一章讲怎么让它**不靠人工就能开始工作**——按时间、按外部事件、按 API 调用。
 
-三种触发方式的概念、边界和"为什么这么分"在 [Agent 从哪里接到任务](/nap/zh-cn/concepts/triggers-and-routes/) 里讲过。这一章是动手版，按从易到难的顺序：
+三种触发方式的概念、边界和"为什么这么分"在 [Agent 从哪里接到任务](/zh-cn/concepts/triggers-and-routes/) 里讲过。这一章是动手版，按从易到难的顺序：
 
 1. **定时任务** ——零外部依赖，最简单
 2. **外部事件** ——通过 Slack、Webhook、企业微信接入外部系统
@@ -32,7 +32,7 @@ cron 表达式的标准五段格式：`分 时 日 月 周`。
 
 ### 注意事项
 
-- **每次触发都是独立的 Session** ——不共享上下文。如果你需要"接着上次的状态继续做"，让 Agent 把状态写到文件里或者放进 [Memory](/nap/zh-cn/guides/3-agent-behavior/#memory跨-session-的记忆)
+- **每次触发都是独立的 Session** ——不共享上下文。如果你需要"接着上次的状态继续做"，让 Agent 把状态写到文件里或者放进 [Memory](/zh-cn/guides/3-agent-behavior/#memory跨-session-的记忆)
 - **最小间隔建议不低于 5 分钟** ——平台调度有缓冲，过短的间隔意义不大
 - **禁用后保留配置** ——临时停掉一段时间不必删除
 
@@ -45,7 +45,7 @@ cron 表达式的标准五段格式：`分 时 日 月 周`。
 - **连接器** ——接收事件的"门"。一个连接器对应一个外部系统的接入端点
 - **路由** ——挂在连接器下面的规则。决定哪些事件交给哪个 Workspace 处理、怎么变成 Prompt
 
-> 这两个对象的设计思路在 [概念页](/nap/zh-cn/concepts/triggers-and-routes/#connector--route外部系统推送事件) 讲过——这里直接讲怎么配。
+> 这两个对象的设计思路在 [概念页](/zh-cn/concepts/triggers-and-routes/#connector--route外部系统推送事件) 讲过——这里直接讲怎么配。
 
 ### Webhook：最通用的接入方式
 
@@ -140,7 +140,7 @@ Slack 路由额外支持 thread 内多轮对话：同一个 thread 里的连续�
 Authorization: Bearer <token>
 ```
 
-具体能调哪些接口、URL 是什么，打开你实例上的 **API 文档** 查看（`⌘K` → **API 文档**；路径为 `/api/docs`）。[REST API](/nap/zh-cn/api/rest/) 讲了调用约定，[nap-api skill](/nap/zh-cn/api/skills/) 则把整个 API 面交给本地 agent。
+具体能调哪些接口、URL 是什么，打开你实例上的 **API 文档** 查看（`⌘K` → **API 文档**；路径为 `/api/docs`）。[REST API](/zh-cn/api/rest/) 讲了调用约定，[nap-api skill](/zh-cn/api/skills/) 则把整个 API 面交给本地 agent。
 
 ## 一张速查表
 
@@ -154,4 +154,4 @@ Authorization: Bearer <token>
 
 ## 接下来
 
-让 Agent 之间互相协作 → [多 Agent 协作](/nap/zh-cn/guides/6-compose-agents/)。
+让 Agent 之间互相协作 → [多 Agent 协作](/zh-cn/guides/6-compose-agents/)。

@@ -3,7 +3,7 @@ title: 2. Your First Agent
 description: Create a workspace from nothing and finish your first conversation
 ---
 
-With a working [API provider](/nap/guides/1-setup/) in place, your first agent takes under five minutes.
+With a working [API provider](/guides/1-setup/) in place, your first agent takes under five minutes.
 
 ## Create a workspace
 
@@ -14,7 +14,7 @@ Click the workspace switcher in the top bar and choose **Create Workspace**. In 
    - **From Template** — start from a template shared on your instance. A template carries a whole agent configuration (provider, model, prompt, sometimes skills). If one fits, take it and this step is done
    - **Blank** — configure it yourself. On a fresh install with no templates yet, this is the way, and it's only a few fields:
      - **Agent Type** — Claude Code, Codex or Goose
-     - **API Provider** — the list only shows providers that work with the type you picked (the mapping is in [Getting Ready](/nap/guides/1-setup/))
+     - **API Provider** — the list only shows providers that work with the type you picked (the mapping is in [Getting Ready](/guides/1-setup/))
      - **Model** — one the provider actually serves
      - **Prompt** — leave it empty for now; write it once you're inside
 
@@ -62,4 +62,4 @@ Files are **shared across sessions**. Start a new session and everything is stil
 
 ## Next
 
-You have an agent that runs and holds a conversation. Making it do what you actually want comes next: a prompt for how it works, skills for its specialties, MCP to reach external systems, memory so it fits you better over time. That's [Defining Agent Behavior](/nap/guides/3-agent-behavior/).
+You have an agent that runs and holds a conversation. Making it do what you actually want comes next: a prompt for how it works, skills for its specialties, MCP to reach external systems, memory so it fits you better over time. That's [Defining Agent Behavior](/guides/3-agent-behavior/).

@@ -12,7 +12,7 @@ Code Sandbox (sandbox-service) and Agent Browser (browser-service) are two optio
 | Code Sandbox | Lets agents run code and serve temporary web previews | The third-party OpenSandbox (you install it yourself; the platform points at it via `OPENSANDBOX_URL`) |
 | Agent Browser | Lets agents drive a real browser while users watch live over WebRTC | The bundled TURN relay (coturn), enabled together with `BROWSER_ENABLED` |
 
-In the [configuration generator](/nap/self-host/#configure), toggle the corresponding module to produce a `values.env` with these sections, or set `SANDBOX_ENABLED` / `BROWSER_ENABLED` to `true` by hand.
+In the [configuration generator](/self-host/#configure), toggle the corresponding module to produce a `values.env` with these sections, or set `SANDBOX_ENABLED` / `BROWSER_ENABLED` to `true` by hand.
 
 ## Enabling
 
@@ -33,7 +33,7 @@ TURN_HOST=               # public / LAN IP browsers can reach, required
 TURN_AUTH_SECRET=        # openssl rand -hex 32
 ```
 
-`SANDBOX_JWT_SECRET` / `BROWSER_JWT_SECRET` are each service's session signing key; `SANDBOX_SERVICE_KEY` is the shared key the browser uses to call the sandbox (reused by the browser when both modules are on). For `TURN_HOST` and its troubleshooting, see [Ingress Integration](/nap/self-host/ingress/) and "Debugging" below.
+`SANDBOX_JWT_SECRET` / `BROWSER_JWT_SECRET` are each service's session signing key; `SANDBOX_SERVICE_KEY` is the shared key the browser uses to call the sandbox (reused by the browser when both modules are on). For `TURN_HOST` and its troubleshooting, see [Ingress Integration](/self-host/ingress/) and "Debugging" below.
 
 ## Installing OpenSandbox
 
@@ -66,7 +66,7 @@ The Job is idempotent: after changing a NodePort or public URL, re-running `inst
 
 ## Optional: public-URL override
 
-Service addresses are derived from the NodePort by default. When you expose the services through your own ingress / a custom domain (typically `INGRESS_MODE=external`, see [Ingress Integration](/nap/self-host/ingress/)), the NodePort-form address is neither externally correct nor matches the OAuth callback. Override it with `*_PUBLIC_URL`:
+Service addresses are derived from the NodePort by default. When you expose the services through your own ingress / a custom domain (typically `INGRESS_MODE=external`, see [Ingress Integration](/self-host/ingress/)), the NodePort-form address is neither externally correct nor matches the OAuth callback. Override it with `*_PUBLIC_URL`:
 
 ```bash
 SANDBOX_PUBLIC_URL=https://sandbox.example.com

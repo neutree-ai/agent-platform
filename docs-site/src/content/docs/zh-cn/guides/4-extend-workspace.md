@@ -3,7 +3,7 @@ title: 4. 扩展 Workspace
 description: 自定义命令、Sandbox、MCP 服务和自定义 UI 标签
 ---
 
-[上一章](/nap/zh-cn/guides/3-agent-behavior/)讲的是用现成手段调教单个 Agent。这一章往外走一步——**扩大 Agent 的活动范围**，给它接上原本没有的工具和能力。
+[上一章](/zh-cn/guides/3-agent-behavior/)讲的是用现成手段调教单个 Agent。这一章往外走一步——**扩大 Agent 的活动范围**，给它接上原本没有的工具和能力。
 
 由浅入深五件事：
 
@@ -93,7 +93,7 @@ Workspace 里有一个 **沙箱** 面板，列出当前活跃的所有 sandbox�
 
 ## MCP 服务
 
-MCP（Model Context Protocol）是一个标准化的协议，让 Agent 调用**独立运行的服务**所提供的工具。和 Skills 的区别在 [Agent 的组成](/nap/zh-cn/concepts/agent-anatomy/) 里讲过：Skills 是文件挂载到容器、Agent 自读自用；MCP 是协议层调用外部服务，适合"接外部系统、跨网络、有自己的状态"。
+MCP（Model Context Protocol）是一个标准化的协议，让 Agent 调用**独立运行的服务**所提供的工具。和 Skills 的区别在 [Agent 的组成](/zh-cn/concepts/agent-anatomy/) 里讲过：Skills 是文件挂载到容器、Agent 自读自用；MCP 是协议层调用外部服务，适合"接外部系统、跨网络、有自己的状态"。
 
 ### 接入一个现成的 MCP 服务
 
@@ -148,4 +148,4 @@ Workspace 的 app（**文件 / 终端** 等）是可以扩展的 —— 你可�
 
 ## 接下来
 
-到这里 Agent 的"能力面"已经有了完整的扩展手段。下一章讲怎么让 Agent **不止靠人工对话触发** —— [触发 Agent](/nap/zh-cn/guides/5-trigger-agents/)。
+到这里 Agent 的"能力面"已经有了完整的扩展手段。下一章讲怎么让 Agent **不止靠人工对话触发** —— [触发 Agent](/zh-cn/guides/5-trigger-agents/)。

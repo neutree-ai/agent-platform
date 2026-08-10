@@ -49,7 +49,7 @@ A common shape: a parent agent prepares material and hands the next step to a ch
 1. parent calls `share_folder("task-2026-05")` and gets `/mnt/afs/task-2026-05/`
 2. parent writes the files to hand over into that directory, with its ordinary file tools — the path is just a path
 3. parent calls `grant_access("task-2026-05", "child-agent", readonly=true)`; the child's workspace sees the files at the same path
-4. parent calls the child ([Composing Agents](/nap/guides/6-compose-agents/)), and the prompt only has to name the path: `"Process the files under /mnt/afs/task-2026-05/"`
+4. parent calls the child ([Composing Agents](/guides/6-compose-agents/)), and the prompt only has to name the path: `"Process the files under /mnt/afs/task-2026-05/"`
 5. child reads the path in its own container, does the work, and either writes the result back (if read-write) or into its own local files
 
 ## How it works

@@ -9,7 +9,7 @@ description: Model、Prompt、Skills、MCP、Memory 各自负责什么
 
 Model 决定 Agent 有多聪明、风格如何、贵不贵。同一个 prompt、同一组 skills，换个模型表现可能差很多。
 
-Neutree Agent Platform 不绑定特定厂商。你通过 **Provider** 把模型 API 接进平台——可以是团队统一采购的 API 网关、你自己的 Anthropic / OpenAI key、OpenRouter、Azure OpenAI，或其他兼容端点 —— [协议类型必须和 agent 对得上](/nap/zh-cn/guides/1-setup/)，对应关系见该页。一个 Agent 选一个 Provider 和一个具体模型。
+Neutree Agent Platform 不绑定特定厂商。你通过 **Provider** 把模型 API 接进平台——可以是团队统一采购的 API 网关、你自己的 Anthropic / OpenAI key、OpenRouter、Azure OpenAI，或其他兼容端点 —— [协议类型必须和 agent 对得上](/zh-cn/guides/1-setup/)，对应关系见该页。一个 Agent 选一个 Provider 和一个具体模型。
 
 进阶：你还可以为 Agent 配一个 **Small Model**——用于文件搜索、代码索引这些轻量内部操作，省钱。Agent 自己决定什么时候用大脑、什么时候用小脑。
 
@@ -19,7 +19,7 @@ System Prompt 是 Agent 最重要的配置。它告诉 Agent **你是谁、你�
 
 Prompt 可以直接写在 Workspace 里，也可以从 **Prompt Library** 引用一份共享的。用引用的方式时，Prompt 一旦更新，所有引用它的 Agent 自动同步——这是规模化运营的基础。
 
-写好 prompt 本身是个不小的话题，[定义 Agent 行为](/nap/zh-cn/guides/3-agent-behavior/)单独讲怎么写。
+写好 prompt 本身是个不小的话题，[定义 Agent 行为](/zh-cn/guides/3-agent-behavior/)单独讲怎么写。
 
 ## Skills：可复用的子流程
 
@@ -48,7 +48,7 @@ Neutree Agent Platform 的 Memory 形态是**记忆库（Memory Store）**——
 
 "用户偏好用中文"、"这个项目的代码风格是 X"、"上次踩过的坑"——这些适合放在 Memory，不适合每次都让用户重述。Agent 自己也能写记忆库（通过平台内置工具）。
 
-完整的概念和工作原理见 [记忆库（Memory Store）](/nap/zh-cn/concepts/memory-store/)。
+完整的概念和工作原理见 [记忆库（Memory Store）](/zh-cn/concepts/memory-store/)。
 
 ## 五件套的搭配方式
 

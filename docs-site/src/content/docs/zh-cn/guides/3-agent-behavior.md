@@ -3,7 +3,7 @@ title: 3. 定义 Agent 行为
 description: 用 Prompt、Skills、Memory 调教你的 Agent
 ---
 
-到这一步你应该已经有一个能跑的 Agent（如果还没有，先去[创建第一个 Agent](/nap/zh-cn/guides/2-first-agent/)）。这一章讲怎么真正"调教"它——让它有特定的角色、按你想要的方式做事、知道该用哪些工具、记住该记的事。
+到这一步你应该已经有一个能跑的 Agent（如果还没有，先去[创建第一个 Agent](/zh-cn/guides/2-first-agent/)）。这一章讲怎么真正"调教"它——让它有特定的角色、按你想要的方式做事、知道该用哪些工具、记住该记的事。
 
 ## 配置入口
 
@@ -97,19 +97,19 @@ Skills 是封装好的"做某类事情的方法"——一个目录，里面有�
 - 这件事**只在某些 Agent 里需要** ——比如翻译类 Agent 需要术语查询的 skill，但代码 review Agent 用不上，没必要默认加载
 - **已经有人封装好了** ——直接勾选用，不用重新教 Agent
 
-如果你需要的 skill 还不存在，可以自己创建一份上传到资源库。这部分属于"扩展"和"规模化"的话题，详见[规模化运营](/nap/zh-cn/guides/7-operate-at-scale/)。
+如果你需要的 skill 还不存在，可以自己创建一份上传到资源库。这部分属于"扩展"和"规模化"的话题，详见[规模化运营](/zh-cn/guides/7-operate-at-scale/)。
 
 ## MCP：外部工具接入
 
 MCP 是另一种让 Agent 调用外部工具的方式——通过协议连接一个独立运行的服务，那个服务暴露的工具就成了 Agent 可调用的能力。
 
-设置里的 **MCP** 区域用来填 MCP 服务的连接信息（命令或 URL）。具体怎么部署和接入 MCP 服务，详见[扩展 Workspace](/nap/zh-cn/guides/4-extend-workspace/)。
+设置里的 **MCP** 区域用来填 MCP 服务的连接信息（命令或 URL）。具体怎么部署和接入 MCP 服务，详见[扩展 Workspace](/zh-cn/guides/4-extend-workspace/)。
 
 ## Memory：跨 Session 的记忆
 
 默认每个 Session 是独立的——上一次对话学到的东西，下次不会自动记得。Memory 解决这个问题。
 
-Neutree Agent Platform 用 **记忆库（Memory Store）** 来管理跨 Session 的记忆。它是一个独立的资源，可以挂给一个或多个 Workspace。完整设计见 [记忆库概念页](/nap/zh-cn/concepts/memory-store/)，这里只讲怎么用。
+Neutree Agent Platform 用 **记忆库（Memory Store）** 来管理跨 Session 的记忆。它是一个独立的资源，可以挂给一个或多个 Workspace。完整设计见 [记忆库概念页](/zh-cn/concepts/memory-store/)，这里只讲怎么用。
 
 ### 入口位置
 
@@ -143,7 +143,7 @@ Neutree Agent Platform 用 **记忆库（Memory Store）** 来管理跨 Session 
 ### 不适合放入记忆库的内容
 
 - **会变的状态**——今天的待办、当前的环境变量。这些应该写文件或动态查询
-- **机密**——API key、密码。请用[凭证](/nap/zh-cn/guides/4-extend-workspace/#credentialsagent-访问外部资源的钥匙)
+- **机密**——API key、密码。请用[凭证](/zh-cn/guides/4-extend-workspace/#credentialsagent-访问外部资源的钥匙)
 - **巨长的内容**——完整的代码库说明、几十页的规范文档。索引会进入每次对话的 context，太长会浪费 token；正文长内容应该放到子文件，让 Agent 按需读
 
 ### Agent 的读写方式
@@ -183,7 +183,7 @@ Agent 会自己拆分、归类、维护 `MEMORY.md` 索引。整理完再用就�
 
 ## 开启 Builder Mode
 
-[Builder Mode](/nap/zh-cn/concepts/builder-mode/) 让你在对话里直接说"把 prompt 改清楚一点"、"加个每天 9 点的 schedule"，Agent 自己改、你点批准，不用回 UI 表单填字段。需要时把它打开。
+[Builder Mode](/zh-cn/concepts/builder-mode/) 让你在对话里直接说"把 prompt 改清楚一点"、"加个每天 9 点的 schedule"，Agent 自己改、你点批准，不用回 UI 表单填字段。需要时把它打开。
 
 **入口**：设置 → **MCP** → **Platform** 卡片 → **Builder 模式** 多选框。
 
@@ -207,9 +207,9 @@ Agent 会自己拆分、归类、维护 `MEMORY.md` 索引。整理完再用就�
 
 > "看看最近 5 个聊天，分析我的 system prompt 哪里让你卡住，提议改进。"
 
-Agent 会把改动以卡片形式发到对话里，你看完点 *批准* 或 *拒绝*。具体能做什么、怎么用，回 [Builder Mode 概念页](/nap/zh-cn/concepts/builder-mode/) 看完整说明。
+Agent 会把改动以卡片形式发到对话里，你看完点 *批准* 或 *拒绝*。具体能做什么、怎么用，回 [Builder Mode 概念页](/zh-cn/concepts/builder-mode/) 看完整说明。
 
 ## 接下来
 
-- 想给 Agent 接更多外部能力（MCP 服务、自定义 tab、自定义命令）→ [扩展 Workspace](/nap/zh-cn/guides/4-extend-workspace/)
-- 想让 Agent 不止靠人工对话触发 → [触发 Agent](/nap/zh-cn/guides/5-trigger-agents/)
+- 想给 Agent 接更多外部能力（MCP 服务、自定义 tab、自定义命令）→ [扩展 Workspace](/zh-cn/guides/4-extend-workspace/)
+- 想让 Agent 不止靠人工对话触发 → [触发 Agent](/zh-cn/guides/5-trigger-agents/)

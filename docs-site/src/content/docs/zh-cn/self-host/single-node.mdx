@@ -9,7 +9,7 @@ import AirgapBlock from '../../../../components/self-host/AirgapBlock.tsx'
 
 同一条流程覆盖两类节点。**联网**时，所有镜像都从公共 registry（`ghcr.io` / `docker.io` / `registry.k8s.io`）拉取。若节点**完全无法访问互联网**，额外步骤以可折叠的 **隔离网络** 块内嵌在流程中 —— 展开一个即全部保持展开；该路径通过集群内仓库从镜像包安装，全程不从互联网拉取任何镜像。
 
-推荐配置：**8 vCPU / 32 GB / 200 GB 磁盘**，约可支撑 **10 个并发 workspace**。需要 HA 或横向扩展时，走[生产部署](/nap/zh-cn/self-host/)，其中也覆盖[安装进已有 Kubernetes 集群](/nap/zh-cn/self-host/#install)。
+推荐配置：**8 vCPU / 32 GB / 200 GB 磁盘**，约可支撑 **10 个并发 workspace**。需要 HA 或横向扩展时，走[生产部署](/zh-cn/self-host/)，其中也覆盖[安装进已有 Kubernetes 集群](/zh-cn/self-host/#install)。
 
 ## 一行命令安装（联网）
 
@@ -131,7 +131,7 @@ admin / <ADMIN_PASSWORD>
 
 ## 与标准部署的关键差异
 
-下表仅列出与[部署指南](/nap/zh-cn/self-host/)默认值不同的配置；其余沿用标准默认：
+下表仅列出与[部署指南](/zh-cn/self-host/)默认值不同的配置；其余沿用标准默认：
 
 | 字段 | 标准默认 | 单节点 |
 | --- | --- | --- |
@@ -179,7 +179,7 @@ lsmod | grep -E 'nfs|nfsd'   # confirm loaded
 
 你现在是一个全新空平台的 admin。两篇短指南带你走到第一个能干活的 Agent：
 
-1. **[配置 API 供应商](/nap/zh-cn/guides/1-setup/)** —— 接入大模型 API，让 Agent 能「思考」。全新安装的供应商列表是空的，创建第一个只需一分钟。
-2. **[第一个 Agent](/nap/zh-cn/guides/2-first-agent/)** —— 创建 Workspace 并完成第一次对话，5 分钟以内。
+1. **[配置 API 供应商](/zh-cn/guides/1-setup/)** —— 接入大模型 API，让 Agent 能「思考」。全新安装的供应商列表是空的，创建第一个只需一分钟。
+2. **[第一个 Agent](/zh-cn/guides/2-first-agent/)** —— 创建 Workspace 并完成第一次对话，5 分钟以内。
 
-之后可以读[概念](/nap/zh-cn/concepts/overview/)理解各个组成部分，其余指南覆盖触发、多 Agent 协作和规模化运营。
+之后可以读[概念](/zh-cn/concepts/overview/)理解各个组成部分，其余指南覆盖触发、多 Agent 协作和规模化运营。

@@ -23,9 +23,9 @@ Neutree Agent Platform（NAP）就是它的下一站。core、prompt、skills �
 
 在 NAP 上经营一个 Agent，会反复走这三段，文档也按这条主线组织：
 
-- **构建** — 一个中立、可替换的 core，用 prompt、skills 和 MCP 塑形，底下是平台跑好的中间件，Agent 自己不用带。从[第一个 Agent](/nap/zh-cn/guides/2-first-agent/) 开始。
-- **分发** — 一个 Workspace，五个入口都进得来，按负载选服务形态。用的人那边什么都不用管：不装、不配、也不用自己的 key。见[触发 Agent](/nap/zh-cn/guides/5-trigger-agents/)。
-- **优化** — Agent 读自己的会话历史，提出改自己 prompt 和 skills 的方案。你不批准就不生效。见[优化](/nap/zh-cn/concepts/optimize/)。
+- **构建** — 一个中立、可替换的 core，用 prompt、skills 和 MCP 塑形，底下是平台跑好的中间件，Agent 自己不用带。从[第一个 Agent](/zh-cn/guides/2-first-agent/) 开始。
+- **分发** — 一个 Workspace，五个入口都进得来，按负载选服务形态。用的人那边什么都不用管：不装、不配、也不用自己的 key。见[触发 Agent](/zh-cn/guides/5-trigger-agents/)。
+- **优化** — Agent 读自己的会话历史，提出改自己 prompt 和 skills 的方案。你不批准就不生效。见[优化](/zh-cn/concepts/optimize/)。
 
 ## 贯穿全站的四组词
 
@@ -33,7 +33,7 @@ Neutree Agent Platform（NAP）就是它的下一站。core、prompt、skills �
 
 - **Workspace / Agent / Session** — Workspace 是 Agent 的"工位"，里面有它的配置、文件、对话记录。Agent 是这份配置跑起来之后的实例。Session 是一次具体的对话或任务。
 - **Model / Prompt / Skills / MCP / Memory** — 五件套，分别决定 Agent 的"脑子、身份、肌肉记忆、外部工具、长期记忆"。你能调的就是这五件。
-- **中间件（Middleware）** — 平台在每个 Workspace 底下跑好的能力，Agent 不用自己带：[code sandbox](/nap/zh-cn/self-host/sandbox-browser/)、remote browser、Agent 之间互相调用、[跨 Agent 文件系统](/nap/zh-cn/concepts/afs/)、[memory store](/nap/zh-cn/concepts/memory-store/)、MCP 连接。打开开关就有，不用自己做一遍。
+- **中间件（Middleware）** — 平台在每个 Workspace 底下跑好的能力，Agent 不用自己带：[code sandbox](/zh-cn/self-host/sandbox-browser/)、remote browser、Agent 之间互相调用、[跨 Agent 文件系统](/zh-cn/concepts/afs/)、[memory store](/zh-cn/concepts/memory-store/)、MCP 连接。打开开关就有，不用自己做一遍。
 - **Provider / Connector / Route / Schedule** — 决定 Agent 从哪里接到任务。Provider 给它接大模型 API，Connector 加 Route 把外部事件送进来，Schedule 让它按时自己启动。
 
 ## 设计思路：每层各管一段
@@ -42,5 +42,5 @@ Neutree Agent Platform（NAP）就是它的下一站。core、prompt、skills �
 
 ## 接下来读什么
 
-- 想先建立完整心智模型 → 顺序读完[概念](/nap/zh-cn/concepts/agent-and-workspace/)章节，约 10 分钟
-- 想立刻动手 → 跳到[准备工作](/nap/zh-cn/guides/1-setup/)，跑通第一个 Agent
+- 想先建立完整心智模型 → 顺序读完[概念](/zh-cn/concepts/agent-and-workspace/)章节，约 10 分钟
+- 想立刻动手 → 跳到[准备工作](/zh-cn/guides/1-setup/)，跑通第一个 Agent

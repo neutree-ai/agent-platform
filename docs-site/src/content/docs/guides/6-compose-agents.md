@@ -43,7 +43,7 @@ The calling agent handles the crossing itself: it passes the context over, waits
 
 There's also **background mode** — send it off without waiting, let the callee work at its own pace and report back with a notification or a file. That's the one for long jobs.
 
-When there's **real material** to hand over, or an artifact to return, don't put it in the prompt. Use [AFS](/nap/concepts/afs/): write the file into a shared directory, grant the collaborator access, and they read it at the same path in their own container.
+When there's **real material** to hand over, or an artifact to return, don't put it in the prompt. Use [AFS](/concepts/afs/): write the file into a shared directory, grant the collaborator access, and they read it at the same path in their own container.
 
 ## Three patterns that recur
 
@@ -101,7 +101,7 @@ The task's detail page has a **collaboration timeline**: one track per member se
 - Standing collaboration → slug plus visibility, as in the first half of this chapter
 - **One-off work, a private agent borrowed for a task, files to share** → Teamwork
 
-The design and the reasoning are on the [Teamwork](/nap/concepts/teamwork/) page.
+The design and the reasoning are on the [Teamwork](/concepts/teamwork/) page.
 
 ## Things worth knowing
 
@@ -115,4 +115,4 @@ The design and the reasoning are on the [Teamwork](/nap/concepts/teamwork/) page
 
 ## Next
 
-Capability and collaboration are both covered. The last chapter is about making all of it **reusable, shared, and organized** → [Operating at Scale](/nap/guides/7-operate-at-scale/).
+Capability and collaboration are both covered. The last chapter is about making all of it **reusable, shared, and organized** → [Operating at Scale](/guides/7-operate-at-scale/).

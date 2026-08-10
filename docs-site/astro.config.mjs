@@ -3,6 +3,15 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import preact from '@astrojs/preact'
+import { rehypeBaseLinks } from './src/plugins/rehype-base-links.mjs'
+
+// Where this build will be served. Upstream publishes the docs as one product's
+// section of the docs domain, beside the MaaS docs at its root; a downstream
+// distribution serving them at another host — or at that host's root — sets
+// these at build time. Everything else derives from them: Astro rewrites its
+// own links and assets, and rehypeBaseLinks rewrites the ones in the content.
+const site = process.env.DOCS_SITE || 'https://docs.neutree.ai'
+const base = process.env.DOCS_BASE || '/nap'
 
 // "Use Cases" is an extension point: this repo ships none. A downstream
 // distribution adds deployment-specific scenarios by dropping .md/.mdx files
@@ -14,11 +23,9 @@ const hasUseCases =
   existsSync(useCasesDir) && readdirSync(useCasesDir).some((f) => /\.mdx?$/.test(f))
 
 export default defineConfig({
-  site: 'https://docs.neutree.ai',
-  // The docs are one product's section of the docs domain, beside the MaaS
-  // docs at its root. Astro rewrites its own links and assets from this;
-  // links written by hand in the content carry the prefix themselves.
-  base: '/nap',
+  site,
+  base,
+  markdown: { rehypePlugins: [[rehypeBaseLinks, { base }]] },
   integrations: [
     preact(),
     starlight({

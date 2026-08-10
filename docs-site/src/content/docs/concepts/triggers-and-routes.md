@@ -72,13 +72,13 @@ You could let the agent decide whether an event is worth handling — but openin
 
 The three above are things you configure. The fourth is something you write against: a **Service Token** authenticates a request, and a workspace takes it as a turn. That's how a CI pipeline, a cron job on your own machine, or an internal tool starts an agent — no Connector to set up, because the caller is code you control.
 
-Turns can stream back, or the API can hand the whole turn off and return when it's done. See [Triggering Agents](/nap/guides/5-trigger-agents/) for the token and the endpoints.
+Turns can stream back, or the API can hand the whole turn off and return when it's done. See [Triggering Agents](/guides/5-trigger-agents/) for the token and the endpoints.
 
 ## Where Provider fits
 
 A Provider isn't a way in. It's what the agent thinks with once it's running. The way in decides *when the agent works*; the Provider decides *what it works with*. Two independent things.
 
-Each workspace picks one Provider. They're managed in the **API Providers** app (`⌘K` → **API Providers**); see [Getting Ready](/nap/guides/1-setup/).
+Each workspace picks one Provider. They're managed in the **API Providers** app (`⌘K` → **API Providers**); see [Getting Ready](/guides/1-setup/).
 
 ## How they relate
 
@@ -98,4 +98,4 @@ flowchart TD
   S --> A
 </pre>
 
-Next: [Triggering Agents](/nap/guides/5-trigger-agents/) has the setup steps for each.
+Next: [Triggering Agents](/guides/5-trigger-agents/) has the setup steps for each.

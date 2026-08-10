@@ -3,7 +3,7 @@ title: 4. Extending the Workspace
 description: Custom commands, credentials, sandboxes, MCP services and custom UI tabs
 ---
 
-[The last chapter](/nap/guides/3-agent-behavior/) shaped a single agent with what's already there. This one reaches further out — **widening what the agent can touch** by connecting it to capability it didn't start with.
+[The last chapter](/guides/3-agent-behavior/) shaped a single agent with what's already there. This one reaches further out — **widening what the agent can touch** by connecting it to capability it didn't start with.
 
 Five things, shallow to deep:
 
@@ -93,7 +93,7 @@ Each sandbox needs a Docker image. Two are pre-warmed for sub-second starts:
 
 ## MCP services
 
-MCP (Model Context Protocol) is a standard for calling tools provided by a **service that runs on its own**. How it differs from skills is in [Anatomy of an Agent](/nap/concepts/agent-anatomy/): a skill is files in the container that the agent reads and runs itself; MCP is a call across the wire, for capability that lives outside, holds its own state, and is somebody else's to run.
+MCP (Model Context Protocol) is a standard for calling tools provided by a **service that runs on its own**. How it differs from skills is in [Anatomy of an Agent](/concepts/agent-anatomy/): a skill is files in the container that the agent reads and runs itself; MCP is a call across the wire, for capability that lives outside, holds its own state, and is somebody else's to run.
 
 ### Connecting a service that already exists
 
@@ -148,4 +148,4 @@ If your scenario needs integration this deep, come and talk it through in [Disco
 
 ## Next
 
-The agent's surface now has a full set of ways to extend it. Next: getting it started by something other than you typing — [Triggering Agents](/nap/guides/5-trigger-agents/).
+The agent's surface now has a full set of ways to extend it. Next: getting it started by something other than you typing — [Triggering Agents](/guides/5-trigger-agents/).

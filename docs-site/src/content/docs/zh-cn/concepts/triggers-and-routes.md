@@ -72,13 +72,13 @@ Filter 在 Route 层过滤，**在 Session 开出来之前就做完**。不匹�
 
 前三种是配出来的，第四种是写代码对接的：用 **Service Token** 认证一次请求，Workspace 就把它当成一轮对话。CI 流水线、你本机的 cron、内部小工具都走这条——不需要建 Connector，因为调用方本来就是你自己的代码。
 
-一轮对话可以流式返回，也可以整轮交出去、跑完再回来。Token 和端点见[触发 Agent](/nap/zh-cn/guides/5-trigger-agents/)。
+一轮对话可以流式返回，也可以整轮交出去、跑完再回来。Token 和端点见[触发 Agent](/zh-cn/guides/5-trigger-agents/)。
 
 ## Provider 在哪里
 
 Provider 不是一种触发方式——它是 Agent 跑起来时调用大模型 API 的底座。可以这样理解：触发方式决定"什么时候叫 Agent 工作"，Provider 决定"Agent 工作时拿什么去想"。这是两件独立的事。
 
-每个 Workspace 选一个 Provider。Provider 在 **API 供应商** app（`⌘K` → **API 供应商**）里集中管理，详见[准备工作](/nap/zh-cn/guides/1-setup/)。
+每个 Workspace 选一个 Provider。Provider 在 **API 供应商** app（`⌘K` → **API 供应商**）里集中管理，详见[准备工作](/zh-cn/guides/1-setup/)。
 
 ## 它们之间的全景
 
@@ -98,4 +98,4 @@ flowchart TD
   S --> A
 </pre>
 
-下一步可以去[触发 Agent](/nap/zh-cn/guides/5-trigger-agents/)看每种触发方式的具体配置步骤。
+下一步可以去[触发 Agent](/zh-cn/guides/5-trigger-agents/)看每种触发方式的具体配置步骤。

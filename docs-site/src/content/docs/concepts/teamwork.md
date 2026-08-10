@@ -5,7 +5,7 @@ description: Task-scoped collaboration, with visibility, the shared directory an
 
 > Teamwork is in preview. The mechanics are stable; the final shape may still move. Tell us how it goes.
 
-NAP has always supported several agents working together: call another one with `@agent/slug` from any workspace, and hand files over through an [AFS](/nap/concepts/afs/) shared directory. But both of those are **workspace-level** settings — an agent is either visible to others or it isn't, a directory is either mounted or it isn't.
+NAP has always supported several agents working together: call another one with `@agent/slug` from any workspace, and hand files over through an [AFS](/concepts/afs/) shared directory. But both of those are **workspace-level** settings — an agent is either visible to others or it isn't, a directory is either mounted or it isn't.
 
 Plenty of collaboration is **task-shaped** instead:
 
@@ -55,7 +55,7 @@ The main agent calls another through two built-in tools:
 
 A conversation carries text. It doesn't carry a slide deck, a PDF or a few hundred lines of CSV. And two agents' file systems are isolated by default, so what a sub-agent writes in its own container the main agent can't read.
 
-[AFS](/nap/concepts/afs/) is the answer: create a shared directory, mount it for several agents, set read-only or read-write, revoke whenever. Agents can set this up themselves through MCP tools.
+[AFS](/concepts/afs/) is the answer: create a shared directory, mount it for several agents, set read-only or read-write, revoke whenever. Agents can set this up themselves through MCP tools.
 
 Teamwork sits on the same layer. It just automates create, mount and reclaim.
 
@@ -65,7 +65,7 @@ Teamwork doesn't replace either of those. It puts a layer of **task** semantics 
 
 ### 1. Visibility scoped to the task
 
-Normally a workspace's [Visibility](/nap/guides/6-compose-agents/#visibility) has three tiers — Private, User, Public — and it's a standing setting: an agent is reachable by collaborators or it isn't.
+Normally a workspace's [Visibility](/guides/6-compose-agents/#visibility) has three tiers — Private, User, Public — and it's a standing setting: an agent is reachable by collaborators or it isn't.
 
 For "just this once, let my private agent help, then go back to invisible", a standing setting is the wrong tool. You'd be flipping it back and forth.
 
@@ -127,5 +127,5 @@ A code-review agent, say, opening three sessions on the same diff: one on naming
 
 ## Next
 
-- How agents call each other, and how Visibility is configured → [Composing Agents](/nap/guides/6-compose-agents/)
-- What's underneath cross-agent file sharing → [AFS: Cross-Agent file sharing](/nap/concepts/afs/)
+- How agents call each other, and how Visibility is configured → [Composing Agents](/guides/6-compose-agents/)
+- What's underneath cross-agent file sharing → [AFS: Cross-Agent file sharing](/concepts/afs/)

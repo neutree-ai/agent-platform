@@ -3,7 +3,7 @@ title: 3. Defining Agent Behavior
 description: Shaping an agent with its prompt, its skills and its memory
 ---
 
-You should have a working agent by now (if not, start with [your first agent](/nap/guides/2-first-agent/)). This chapter is about shaping it: giving it a role, a way of working, the right tools, and a memory of what matters.
+You should have a working agent by now (if not, start with [your first agent](/guides/2-first-agent/)). This chapter is about shaping it: giving it a role, a way of working, the right tools, and a memory of what matters.
 
 ## Where the configuration lives
 
@@ -97,19 +97,19 @@ The **Skills** area lists what's available. Tick what you want, save, and it tak
 - It's **only needed in some agents** — a translation agent wants terminology lookup; a code-review agent has no use for it, so there's no reason to load it everywhere
 - **Someone already packaged it** — take it rather than teaching the agent from scratch again
 
-If what you need doesn't exist, you can build one and put it in the library. That's a scaling topic — see [Operating at Scale](/nap/guides/7-operate-at-scale/).
+If what you need doesn't exist, you can build one and put it in the library. That's a scaling topic — see [Operating at Scale](/guides/7-operate-at-scale/).
 
 ## MCP: connecting external tools
 
 MCP is the other route to external tools: connect to a service that runs on its own, and everything it exposes becomes callable.
 
-The **MCP** area takes the connection details (a command or a URL). For deploying and connecting a service, see [Extending the Workspace](/nap/guides/4-extend-workspace/).
+The **MCP** area takes the connection details (a command or a URL). For deploying and connecting a service, see [Extending the Workspace](/guides/4-extend-workspace/).
 
 ## Memory: recall across sessions
 
 Sessions are independent by default — what came out of the last one isn't there in the next. Memory closes that gap.
 
-NAP handles it with a **memory store**: a resource of its own that attaches to one workspace or several. The [Memory Store](/nap/concepts/memory-store/) page has the full design; this section is about using it.
+NAP handles it with a **memory store**: a resource of its own that attaches to one workspace or several. The [Memory Store](/concepts/memory-store/) page has the full design; this section is about using it.
 
 ### Where to find it
 
@@ -143,7 +143,7 @@ Every record is **versioned**, so it's traceable and reversible.
 ### What doesn't belong in a memory store
 
 - **Anything that changes** — today's to-dos, current environment variables. Write those to files or look them up
-- **Secrets** — API keys and passwords go in [credentials](/nap/guides/4-extend-workspace/#credentials-keys-to-external-resources)
+- **Secrets** — API keys and passwords go in [credentials](/guides/4-extend-workspace/#credentials-keys-to-external-resources)
 - **Very long content** — a whole codebase description, a forty-page spec. The index enters every conversation's context, so length costs you on every turn; long bodies belong in subfiles the agent reads on demand
 
 ### How the agent reads and writes it
@@ -183,7 +183,7 @@ Resist stacking skills and MCP early. A prompt that's right is worth more than t
 
 ## Enabling builder mode
 
-[Builder mode](/nap/concepts/builder-mode/) is what lets you say "make the prompt clearer" or "add a 9am schedule" in conversation and have the agent make the change while you approve it, instead of going back to fill in forms. Turn it on when you want it.
+[Builder mode](/concepts/builder-mode/) is what lets you say "make the prompt clearer" or "add a 9am schedule" in conversation and have the agent make the change while you approve it, instead of going back to fill in forms. Turn it on when you want it.
 
 **Where**: Settings → **MCP** → the **Platform** card → the **Builder Mode** multi-select.
 
@@ -207,9 +207,9 @@ Save, and from your next message the agent can see the tools. There are no comma
 
 > "Read the last 5 chats, work out where my system prompt is tripping you up, and propose fixes."
 
-Changes come back as cards in the conversation; you read them and click Approve or Reject. The [Builder Mode](/nap/concepts/builder-mode/) page has the full picture.
+Changes come back as cards in the conversation; you read them and click Approve or Reject. The [Builder Mode](/concepts/builder-mode/) page has the full picture.
 
 ## Next
 
-- Connecting the agent to more external capability — MCP services, custom tabs, custom commands → [Extending the Workspace](/nap/guides/4-extend-workspace/)
-- Having it triggered by something other than you typing → [Triggering Agents](/nap/guides/5-trigger-agents/)
+- Connecting the agent to more external capability — MCP services, custom tabs, custom commands → [Extending the Workspace](/guides/4-extend-workspace/)
+- Having it triggered by something other than you typing → [Triggering Agents](/guides/5-trigger-agents/)

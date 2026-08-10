@@ -64,4 +64,4 @@ Where things are when they aren't where you'd look first:
 
 ## Next
 
-Rather than reading operation lists yourself, hand them to an agent: the [nap-api skill](/nap/api/skills/) is generated from this same spec, and it's what lets a local agent drive NAP.
+Rather than reading operation lists yourself, hand them to an agent: the [nap-api skill](/api/skills/) is generated from this same spec, and it's what lets a local agent drive NAP.

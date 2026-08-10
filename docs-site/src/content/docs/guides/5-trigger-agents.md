@@ -5,7 +5,7 @@ description: Getting an agent to start on its own — on a schedule, on an exter
 
 Your agent works when you talk to it. This chapter is about getting it to **start without you** — on time, on an event, on a call from code.
 
-The concepts behind the three, and why they're split this way, are in [Where an Agent receives tasks](/nap/concepts/triggers-and-routes/). This is the hands-on version, easiest first:
+The concepts behind the three, and why they're split this way, are in [Where an Agent receives tasks](/concepts/triggers-and-routes/). This is the hands-on version, easiest first:
 
 1. **Schedules** — nothing external to depend on, the simplest there is
 2. **External events** — Slack, Webhook and WeCom bringing other systems in
@@ -32,7 +32,7 @@ The time zone follows your browser unless you set it.
 
 ### Worth knowing
 
-- **Each firing is its own session** and shares no context. To carry something forward, have the agent write it to a file or into [memory](/nap/guides/3-agent-behavior/#memory-recall-across-sessions)
+- **Each firing is its own session** and shares no context. To carry something forward, have the agent write it to a file or into [memory](/guides/3-agent-behavior/#memory-recall-across-sessions)
 - **Five minutes is a sensible floor.** The scheduler buffers, so intervals much shorter than that don't mean what they look like
 - **Disabling keeps the configuration** — no need to delete a schedule to pause it
 
@@ -45,7 +45,7 @@ When an outside system (GitLab, GitHub, Jira, Slack, WeCom) wants to put an agen
 - **Connector** — the door events arrive at. One Connector per external system's ingress
 - **Route** — a rule under that Connector, deciding which events reach which workspace and how they become a prompt
 
-> Why it's split this way is on the [concepts page](/nap/concepts/triggers-and-routes/#connector--route-external-systems-push-events). Here we go straight to configuring it.
+> Why it's split this way is on the [concepts page](/concepts/triggers-and-routes/#connector--route-external-systems-push-events). Here we go straight to configuring it.
 
 ### Webhook: works with almost anything
 
@@ -138,7 +138,7 @@ After that it goes in the `Authorization` header:
 Authorization: Bearer <token>
 ```
 
-The full endpoint list lives on your own instance: `⌘K` → **API Docs**, served at `/api/docs`. [REST API](/nap/api/rest/) covers the conventions, and the [nap-api skill](/nap/api/skills/) hands the whole surface to a local agent.
+The full endpoint list lives on your own instance: `⌘K` → **API Docs**, served at `/api/docs`. [REST API](/api/rest/) covers the conventions, and the [nap-api skill](/api/skills/) hands the whole surface to a local agent.
 
 ## Quick reference
 
@@ -152,4 +152,4 @@ The full endpoint list lives on your own instance: `⌘K` → **API Docs**, serv
 
 ## Next
 
-Getting agents to work with each other → [Composing Agents](/nap/guides/6-compose-agents/).
+Getting agents to work with each other → [Composing Agents](/guides/6-compose-agents/).

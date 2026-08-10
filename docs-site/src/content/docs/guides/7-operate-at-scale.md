@@ -33,7 +33,7 @@ If exactly one workspace uses it, leave it where it is. Extract it when a second
 
 ### Skills
 
-Skills live in the Library too, on the same mechanism. [Defining Agent Behavior](/nap/guides/3-agent-behavior/#skills-reusable-capability-packages) covered **enabling** one; this is **creating** one.
+Skills live in the Library too, on the same mechanism. [Defining Agent Behavior](/guides/3-agent-behavior/#skills-reusable-capability-packages) covered **enabling** one; this is **creating** one.
 
 In the **Library** app, switch to **Skills** and create. Two ways in:
 
@@ -102,7 +102,7 @@ The link is **public**. Don't share sessions with anything sensitive in them.
 
 ## Visibility and team scope
 
-[Composing Agents](/nap/guides/6-compose-agents/#visibility) covered how a workspace's visibility decides **who can call it**. The same field decides **whose list it appears in**:
+[Composing Agents](/guides/6-compose-agents/#visibility) covered how a workspace's visibility decides **who can call it**. The same field decides **whose list it appears in**:
 
 - **Private** — yours alone
 - **User** — yours across your own agents, and in nobody else's list
@@ -123,4 +123,4 @@ That's the path from one person's afternoon to something the team runs on.
 
 You've come the whole way, from a first agent to a team-level capability.
 
-To go deeper on any one piece, the [Concepts](/nap/concepts/overview/) chapter lays out how the parts fit together.
+To go deeper on any one piece, the [Concepts](/concepts/overview/) chapter lays out how the parts fit together.

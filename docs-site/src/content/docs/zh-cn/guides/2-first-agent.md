@@ -3,7 +3,7 @@ title: 2. 第一个 Agent
 description: 从零创建一个 Workspace 并完成第一次对话
 ---
 
-[准备工作](/nap/zh-cn/guides/1-setup/)里的 API 供应商就绪后，可以创建你的第一个 Agent 了。整个过程不超过 5 分钟。
+[准备工作](/zh-cn/guides/1-setup/)里的 API 供应商就绪后，可以创建你的第一个 Agent 了。整个过程不超过 5 分钟。
 
 ## 创建 Workspace
 
@@ -14,7 +14,7 @@ description: 从零创建一个 Workspace 并完成第一次对话
    - **从模板创建** —— 从实例里已共享的模板创建。模板包含完整的 Agent 配置（供应商、模型、Prompt，可能还有 skills）；有合适的直接选，这一步就完成了
    - **空白** —— 从零配置。全新安装还没有模板时走这条路 —— 其实只有几个字段：
      - **Agent Type** —— Claude Code、Codex 或 Goose
-     - **API 供应商** —— 列表只显示与所选 agent type 兼容的供应商（对应关系见[准备工作](/nap/zh-cn/guides/1-setup/)）
+     - **API 供应商** —— 列表只显示与所选 agent type 兼容的供应商（对应关系见[准备工作](/zh-cn/guides/1-setup/)）
      - **模型** —— 选一个该供应商实际提供的模型
      - **Prompt** —— 可以先留空，进入 Workspace 后再写
 
@@ -62,4 +62,4 @@ Agent 会在自己的环境里执行命令，并把结果回复给你。
 
 ## 接下来
 
-到这里你有了一个能跑、能对话的 Agent。下一步是让它做你真正想让它做的事 —— 写 prompt 让它有「人格」和做事方式、加 skills 让它具备特长、配 MCP 让它接外部系统、用 memory 让它越用越懂你。这些都在[定义 Agent 行为](/nap/zh-cn/guides/3-agent-behavior/)。
+到这里你有了一个能跑、能对话的 Agent。下一步是让它做你真正想让它做的事 —— 写 prompt 让它有「人格」和做事方式、加 skills 让它具备特长、配 MCP 让它接外部系统、用 memory 让它越用越懂你。这些都在[定义 Agent 行为](/zh-cn/guides/3-agent-behavior/)。

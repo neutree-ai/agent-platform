@@ -4,14 +4,14 @@ description: Connect a model API provider — the one thing to set up before you
 ---
 
 :::note[Don't have a running platform yet?]
-These guides assume a Neutree Agent Platform instance you can sign in to. Don't have one? [Install it in one line](/nap/self-host/single-node/).
+These guides assume a Neutree Agent Platform instance you can sign in to. Don't have one? [Install it in one line](/self-host/single-node/).
 :::
 
 One thing has to exist before your first agent: a working **API provider**, the model API its calls go through. Each workspace picks one provider and one model on it, and every session's model calls take that route.
 
 ## Create an API provider
 
-Press `⌘K` (`Ctrl+K` on Windows / Linux), find **API Providers**, and click **New API Provider**. (On a team instance an administrator may have shared **Public** providers already — if one fits, take it and go straight to [your first agent](/nap/guides/2-first-agent/).)
+Press `⌘K` (`Ctrl+K` on Windows / Linux), find **API Providers**, and click **New API Provider**. (On a team instance an administrator may have shared **Public** providers already — if one fits, take it and go straight to [your first agent](/guides/2-first-agent/).)
 
 The provider type has to match both the core you plan to run and the API you actually have:
 
@@ -33,4 +33,4 @@ Like every shareable resource here, a provider is **Private** (just you), **Team
 
 ## Ready to go
 
-One usable provider in the **API Providers** list is all you need. Go [create your first agent](/nap/guides/2-first-agent/).
+One usable provider in the **API Providers** list is all you need. Go [create your first agent](/guides/2-first-agent/).

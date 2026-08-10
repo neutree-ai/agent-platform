@@ -5,7 +5,7 @@ description: 任务级的多 Agent 协作场景，自动管理可见性、共享
 
 > Teamwork 当前是预览版（preview）。基本机制已稳定，最终形态可能调整，欢迎在使用中给我们反馈。
 
-Neutree Agent Platform（NAP）上的多 Agent 协作能力一直都有：在任意 Workspace 里 `@agent/slug` 就能调另一个 Agent；要传文件就用 [AFS](/nap/zh-cn/concepts/afs/) 建一个共享目录。但这两件事都是 **Workspace 级** 的配置——一个 Agent 要么对别人可见、要么不可见，共享目录要么挂着、要么不挂。
+Neutree Agent Platform（NAP）上的多 Agent 协作能力一直都有：在任意 Workspace 里 `@agent/slug` 就能调另一个 Agent；要传文件就用 [AFS](/zh-cn/concepts/afs/) 建一个共享目录。但这两件事都是 **Workspace 级** 的配置——一个 Agent 要么对别人可见、要么不可见，共享目录要么挂着、要么不挂。
 
 而很多协作其实是**任务级**的：
 
@@ -55,7 +55,7 @@ Teamwork 不是从零起的。它建立在两个已有的能力之上：
 
 对话能传文本，但传不了 PPT 二进制、PDF、几百行 CSV 这类东西。两个 Agent 默认的文件系统是隔离的——sub-agent 在自己容器里写好的文件，主 Agent 是读不到的。
 
-[AFS](/nap/zh-cn/concepts/afs/) 解决了这个问题：可以创建一个共享目录，挂载给多个 Agent；权限是只读还是读写都能控制，随时可以撤回。Agent 自己也能通过 MCP 工具发起共享。
+[AFS](/zh-cn/concepts/afs/) 解决了这个问题：可以创建一个共享目录，挂载给多个 Agent；权限是只读还是读写都能控制，随时可以撤回。Agent 自己也能通过 MCP 工具发起共享。
 
 Teamwork 用到的就是这套底层，只是把"建目录、挂载、回收"这件事自动化了。
 
@@ -65,7 +65,7 @@ Teamwork 不是替代上面这两个能力，而是在它们之上加一层"**�
 
 ### 1. 任务级的 Agent 可见性
 
-平时 Workspace 的 [Visibility](/nap/zh-cn/guides/6-compose-agents/#visibility) 是三档：Private / User / Public。这是个 Workspace 级别的常态配置——一个 Agent 要么对协作方可见、要么不可见。
+平时 Workspace 的 [Visibility](/zh-cn/guides/6-compose-agents/#visibility) 是三档：Private / User / Public。这是个 Workspace 级别的常态配置——一个 Agent 要么对协作方可见、要么不可见。
 
 但如果你想要的是"这一次任务让某个私有 Agent 帮我做事，做完它继续不可见"——常态配置就太重了，得反复调来调去。
 
@@ -127,5 +127,5 @@ team task 里不一定要有多种 Agent。**同一个 Agent** 也可以开多�
 
 ## 接下来
 
-- 想知道 Agent 之间到底怎么互调、Visibility 怎么配 → [多 Agent 协作](/nap/zh-cn/guides/6-compose-agents/)
-- 想懂跨 Agent 文件共享底层 → [AFS：跨 Agent 文件共享](/nap/zh-cn/concepts/afs/)
+- 想知道 Agent 之间到底怎么互调、Visibility 怎么配 → [多 Agent 协作](/zh-cn/guides/6-compose-agents/)
+- 想懂跨 Agent 文件共享底层 → [AFS：跨 Agent 文件共享](/zh-cn/concepts/afs/)

@@ -39,7 +39,7 @@
         "src/content/**/*.{md,mdx}",
         "src/components/**/*.{astro,ts,tsx}"
       ],
-      "project": ["src/**/*.{ts,tsx,astro}"]
+      "project": ["src/**/*.{ts,tsx,astro,mjs}"]
     }
   },
   "ignore": [

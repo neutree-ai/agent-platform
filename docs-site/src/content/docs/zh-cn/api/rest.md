@@ -64,4 +64,4 @@ SID=$(curl -s -X POST "$BASE/api/workspaces/$NAP_WS/chat" \
 
 ## 接下来
 
-与其自己读操作列表，不如把它交给 agent：[nap-api skill](/nap/zh-cn/api/skills/) 就是从同一份 spec 生成的，本地 agent 靠它来驱动 NAP。
+与其自己读操作列表，不如把它交给 agent：[nap-api skill](/zh-cn/api/skills/) 就是从同一份 spec 生成的，本地 agent 靠它来驱动 NAP。

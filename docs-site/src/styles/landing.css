@@ -1,5 +1,5 @@
 /* ==========================================================================
- * Docs entry page (/nap/ and /nap/zh-cn/).
+ * Docs entry page (the site root and its zh-cn/ counterpart).
  * It is an ordinary docs page — the install command is a normal code block,
  * so it picks up the site's own code styling and copy button. All that is
  * left here is the pair of path cards that route readers onward.

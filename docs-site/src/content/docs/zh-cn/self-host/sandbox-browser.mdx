@@ -12,7 +12,7 @@ Code Sandbox（sandbox-service）和 Agent Browser（browser-service）是两个
 | Code Sandbox | 让 agent 运行代码并提供临时 web 预览 | 第三方 OpenSandbox（你自行安装；平台通过 `OPENSANDBOX_URL` 指向它） |
 | Agent Browser | 让 agent 驱动真实浏览器，用户通过 WebRTC 实时观看 | 内置的 TURN relay（coturn），随 `BROWSER_ENABLED` 一起启用 |
 
-在[配置生成器](/nap/zh-cn/self-host/#configure)中切换对应模块即可生成带这些段落的 `values.env`，或手动把 `SANDBOX_ENABLED` / `BROWSER_ENABLED` 设为 `true`。
+在[配置生成器](/zh-cn/self-host/#configure)中切换对应模块即可生成带这些段落的 `values.env`，或手动把 `SANDBOX_ENABLED` / `BROWSER_ENABLED` 设为 `true`。
 
 ## 启用
 
@@ -33,7 +33,7 @@ TURN_HOST=               # public / LAN IP browsers can reach, required
 TURN_AUTH_SECRET=        # openssl rand -hex 32
 ```
 
-`SANDBOX_JWT_SECRET` / `BROWSER_JWT_SECRET` 分别是各自服务的会话签名密钥；`SANDBOX_SERVICE_KEY` 是 browser 调用 sandbox 时使用的共享密钥（两个模块都开时由 browser 复用）。关于 `TURN_HOST` 及其排障，见 [Ingress 接入](/nap/zh-cn/self-host/ingress/)和下文"排障"。
+`SANDBOX_JWT_SECRET` / `BROWSER_JWT_SECRET` 分别是各自服务的会话签名密钥；`SANDBOX_SERVICE_KEY` 是 browser 调用 sandbox 时使用的共享密钥（两个模块都开时由 browser 复用）。关于 `TURN_HOST` 及其排障，见 [Ingress 接入](/zh-cn/self-host/ingress/)和下文"排障"。
 
 ## 安装 OpenSandbox
 
@@ -66,7 +66,7 @@ seed 完 admin 后，`install.sh` 运行一个 `nap-seed-oauth-clients` Job，�
 
 ## 可选：公网 URL 覆盖
 
-服务地址默认从 NodePort 派生。当你通过自己的 ingress / 自定义域名暴露服务时（通常是 `INGRESS_MODE=external`，见 [Ingress 接入](/nap/zh-cn/self-host/ingress/)），NodePort 形式的地址既不是对外正确的地址，也与 OAuth 回调不匹配。用 `*_PUBLIC_URL` 覆盖它：
+服务地址默认从 NodePort 派生。当你通过自己的 ingress / 自定义域名暴露服务时（通常是 `INGRESS_MODE=external`，见 [Ingress 接入](/zh-cn/self-host/ingress/)），NodePort 形式的地址既不是对外正确的地址，也与 OAuth 回调不匹配。用 `*_PUBLIC_URL` 覆盖它：
 
 ```bash
 SANDBOX_PUBLIC_URL=https://sandbox.example.com

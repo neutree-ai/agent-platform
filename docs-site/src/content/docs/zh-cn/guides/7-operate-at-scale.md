@@ -33,7 +33,7 @@ description: 资源库、标签、共享会话、团队协作——让一个人�
 
 ### Skills
 
-Skill 也存在资源库里，机制类似。[定义 Agent 行为](/nap/zh-cn/guides/3-agent-behavior/#skills可复用的能力封装)里讲过怎么在 Workspace 里**启用**一个 skill。这里讲怎么**创建**一个：
+Skill 也存在资源库里，机制类似。[定义 Agent 行为](/zh-cn/guides/3-agent-behavior/#skills可复用的能力封装)里讲过怎么在 Workspace 里**启用**一个 skill。这里讲怎么**创建**一个：
 
 在 **资源库** app 里切到 **Skills**，新建一个。可以选两种方式：
 
@@ -102,7 +102,7 @@ Workspace 攒到几十个之后，找一个就开始难。**标签** 是 NAP 提
 
 ## Workspace 可见性与团队协作
 
-[多 Agent 协作](/nap/zh-cn/guides/6-compose-agents/#visibility)讲过 Workspace 的 Visibility 影响**谁能调用它**。同样的字段也影响**谁能在自己的列表里看到它**：
+[多 Agent 协作](/zh-cn/guides/6-compose-agents/#visibility)讲过 Workspace 的 Visibility 影响**谁能调用它**。同样的字段也影响**谁能在自己的列表里看到它**：
 
 - **Private** ——只有你自己能看
 - **User** ——你自己看得到（不出现在他人列表）
@@ -123,4 +123,4 @@ Workspace 攒到几十个之后，找一个就开始难。**标签** 是 NAP 提
 
 到这里你已经走完了从"创建第一个 Agent"到"把它做成团队级能力"的完整路径。
 
-如果你想深入某一个具体的话题，回到[概念](/nap/zh-cn/concepts/overview/)章节，里面是 NAP 几组核心概念的全景说明。
+如果你想深入某一个具体的话题，回到[概念](/zh-cn/concepts/overview/)章节，里面是 NAP 几组核心概念的全景说明。

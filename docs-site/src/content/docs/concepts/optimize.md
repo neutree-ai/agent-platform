@@ -11,7 +11,7 @@ Two numbers anchor it: **cost per task** and **task success rate**, a task being
 
 The agent finds the waste in its own history and refines its prompts and skills: clarifying a system prompt that reads ambiguously, pulling capabilities that are never needed at the same time out into on-demand skills, turning frequent or flaky steps into scripts. The longer it runs, the sharper and more token-efficient it gets.
 
-For how a change actually lands and gets approved, see [Builder Mode](/nap/concepts/builder-mode/): the agent lists the relevant sessions itself, downloads and reads them on demand, and proposes changes — each one taking effect only after you approve it.
+For how a change actually lands and gets approved, see [Builder Mode](/concepts/builder-mode/): the agent lists the relevant sessions itself, downloads and reads them on demand, and proposes changes — each one taking effect only after you approve it.
 
 ## Model replacement (planned)
 

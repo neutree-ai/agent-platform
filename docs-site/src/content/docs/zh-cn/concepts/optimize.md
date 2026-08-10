@@ -11,7 +11,7 @@ description: 复盘真实会话历史自我打磨——自主调优与模型替�
 
 Agent 从会话历史中发现低效，持续打磨自己的提示词和 skill——澄清模糊的系统提示词、把不必同时激活的能力抽成按需加载的 skill、把高频或不稳的步骤脚本化。越跑越准，越省 token。
 
-落地机制和审批模型见 [Builder Mode](/nap/zh-cn/concepts/builder-mode/)：Agent 自己列出相关 session、按需下载分析、提出改动，每一笔都经你审批才生效。
+落地机制和审批模型见 [Builder Mode](/zh-cn/concepts/builder-mode/)：Agent 自己列出相关 session、按需下载分析、提出改动，每一笔都经你审批才生效。
 
 ## 模型替换（规划中）
 

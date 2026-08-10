@@ -49,7 +49,7 @@ Agent 不直接看 web 界面，它通过平台内置的 MCP 工具来管理共�
 1. parent 调用 `share_folder("task-2026-05")`——拿到挂载点 `/mnt/afs/task-2026-05/`
 2. parent 把要交接的文件写进这个目录（用平时用的文件工具，路径就是普通文件）
 3. parent 调用 `grant_access("task-2026-05", "child-agent", readonly=true)`——child 的 Workspace 立即在同名路径下看到这些文件
-4. parent 调用 child agent（参见 [多 Agent 协作](/nap/zh-cn/guides/6-compose-agents/)），prompt 里只需引用路径：`"请处理 /mnt/afs/task-2026-05/ 下的文件"`
+4. parent 调用 child agent（参见 [多 Agent 协作](/zh-cn/guides/6-compose-agents/)），prompt 里只需引用路径：`"请处理 /mnt/afs/task-2026-05/ 下的文件"`
 5. child 在自己的容器里直接读路径，完成任务，可以把产物写回（如果授权是 read_write）或写到自己 Workspace 的本地
 
 ## 工作原理（科普）

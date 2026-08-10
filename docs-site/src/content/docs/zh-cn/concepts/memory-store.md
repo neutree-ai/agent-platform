@@ -140,9 +140,9 @@ echo "新的偏好" >> /mnt/memory/user-prefs/notes.md
 
 **分层挂载**——账号级偏好（语言、风格）放一个独立的"用户记忆库"，挂给所有 Workspace；项目知识放 Workspace 专属库。别把所有东西塞一个库里。
 
-**敏感信息不要进记忆库**——API key、密码请用 [凭证](/nap/zh-cn/guides/4-extend-workspace/#credentialsagent-访问外部资源的钥匙)。记忆库本质是 Agent 上下文，会进对话，不适合放秘密。
+**敏感信息不要进记忆库**——API key、密码请用 [凭证](/zh-cn/guides/4-extend-workspace/#credentialsagent-访问外部资源的钥匙)。记忆库本质是 Agent 上下文，会进对话，不适合放秘密。
 
 ## 接下来
 
-- 实操：挂记忆库、写第一条记忆 → [定义 Agent 行为](/nap/zh-cn/guides/3-agent-behavior/#memory跨-session-的记忆)
-- 这套机制和 Agent 五件套的关系 → [Agent 的组成](/nap/zh-cn/concepts/agent-anatomy/#memory跨-session-的长期记忆)
+- 实操：挂记忆库、写第一条记忆 → [定义 Agent 行为](/zh-cn/guides/3-agent-behavior/#memory跨-session-的记忆)
+- 这套机制和 Agent 五件套的关系 → [Agent 的组成](/zh-cn/concepts/agent-anatomy/#memory跨-session-的长期记忆)

@@ -4,14 +4,14 @@ description: 接入大模型 API 供应商 —— 创建第一个 Agent 前唯�
 ---
 
 :::note[还没有可登录的平台实例？]
-指南默认你已经有一个可以登录的 Neutree Agent Platform 实例。如果还没有，[一行命令装一个](/nap/zh-cn/self-host/single-node/)。
+指南默认你已经有一个可以登录的 Neutree Agent Platform 实例。如果还没有，[一行命令装一个](/zh-cn/self-host/single-node/)。
 :::
 
 创建第一个 Agent 之前，你只需要准备一样东西：一个可用的 **API 供应商** —— Agent 调用大模型走的通道。每个 Workspace 选一个供应商加一个具体模型，所有 Session 的模型调用都走这条通道。
 
 ## 创建 API 供应商
 
-按 `⌘K`（Windows / Linux 为 `Ctrl+K`）搜索 **API 供应商** 打开，点击 **新建 API 供应商**。（团队实例里管理员可能已经共享了 **Public** 供应商 —— 有合适的直接选用，然后去[创建你的第一个 Agent](/nap/zh-cn/guides/2-first-agent/)。）
+按 `⌘K`（Windows / Linux 为 `Ctrl+K`）搜索 **API 供应商** 打开，点击 **新建 API 供应商**。（团队实例里管理员可能已经共享了 **Public** 供应商 —— 有合适的直接选用，然后去[创建你的第一个 Agent](/zh-cn/guides/2-first-agent/)。）
 
 Provider Type 必须和你要跑的 agent、手里的 API 对得上：
 
@@ -33,4 +33,4 @@ Provider Type 必须和你要跑的 agent、手里的 API 对得上：
 
 ## 可以开始了
 
-只要 **API 供应商** 列表里有一个可用的供应商，就绪 —— 去[创建你的第一个 Agent](/nap/zh-cn/guides/2-first-agent/)。
+只要 **API 供应商** 列表里有一个可用的供应商，就绪 —— 去[创建你的第一个 Agent](/zh-cn/guides/2-first-agent/)。

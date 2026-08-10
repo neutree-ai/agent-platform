@@ -9,7 +9,7 @@ Five things shape how an agent behaves. They don't sit at the same level, and so
 
 The model sets how sharp the agent is, how it writes, and what it costs. Same prompt, same skills, different model — the difference in the result can be large.
 
-NAP is not tied to a vendor. You bring a model API in through a **Provider**: the endpoint your team already procured, your own Anthropic / OpenAI key, OpenRouter, Azure OpenAI, or anything else compatible. The [provider type has to match the core](/nap/guides/1-setup/), so check the mapping there. An agent picks one Provider and one model on it.
+NAP is not tied to a vendor. You bring a model API in through a **Provider**: the endpoint your team already procured, your own Anthropic / OpenAI key, OpenRouter, Azure OpenAI, or anything else compatible. The [provider type has to match the core](/guides/1-setup/), so check the mapping there. An agent picks one Provider and one model on it.
 
 Beyond that, an agent can also carry a **Small Model** for cheap internal work like file search and code indexing. The agent decides for itself when the big brain is needed and when the small one will do.
 
@@ -19,7 +19,7 @@ The system prompt is the agent's most consequential setting. It says **who it is
 
 You can write the prompt into the workspace directly, or point it at a shared one in the **Prompt Library**. Point at one and every update follows through to each agent referencing it — that reference is what makes running many agents tractable.
 
-Writing one well is a topic of its own; [Defining Agent Behavior](/nap/guides/3-agent-behavior/) covers it.
+Writing one well is a topic of its own; [Defining Agent Behavior](/guides/3-agent-behavior/) covers it.
 
 ## Skills: reusable sub-procedures
 
@@ -48,7 +48,7 @@ Memory in NAP takes the shape of a **memory store** — a resource of its own th
 
 "This user writes in Chinese", "this project's code style is X", "the thing that bit us last time" — all worth keeping, none worth the user repeating. The agent can write to the store itself through a built-in platform tool.
 
-For the whole concept and how it works underneath, see [Memory Store](/nap/concepts/memory-store/).
+For the whole concept and how it works underneath, see [Memory Store](/concepts/memory-store/).
 
 ## How the five fit together
 

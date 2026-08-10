@@ -29,7 +29,7 @@ Workspace 的配置 —— system prompt、启用的 skills、定时任务、模
 
 ## 不适用场景
 
-- **跨 Workspace 编辑**——为安全起见，默认的 **本 workspace** 能力只能改当前 Workspace 自己的配置；账号级资源需要单独开启 **账号范围** 能力（见[开启 Builder Mode](/nap/zh-cn/guides/3-agent-behavior/#开启-builder-mode)）
+- **跨 Workspace 编辑**——为安全起见，默认的 **本 workspace** 能力只能改当前 Workspace 自己的配置；账号级资源需要单独开启 **账号范围** 能力（见[开启 Builder Mode](/zh-cn/guides/3-agent-behavior/#开启-builder-mode)）
 - **细颗粒度的字段微调**——比如 prompt 里改一个字，UI 编辑器也许更顺手
 
 ## 审批模型的安全保证
@@ -64,8 +64,8 @@ Builder Mode 一个很有用的场景是让 Agent "看几个最近的对话，�
 
 > 老用户提示：原本的 **提示词优化器** 实验功能已经下架。Builder Mode 是它的更好版本——不需要离开熟悉的对话入口，session 选择、主题声明、改动落地都在同一个对话里完成。
 
-让 Agent 复盘历史 session、改进自己的配置，这件事本身属于[优化](/nap/zh-cn/concepts/optimize/)——Builder Mode 是它落地和审批的入口；优化的全貌（自主调优、后续的模型替换）在那一章展开。
+让 Agent 复盘历史 session、改进自己的配置，这件事本身属于[优化](/zh-cn/concepts/optimize/)——Builder Mode 是它落地和审批的入口；优化的全貌（自主调优、后续的模型替换）在那一章展开。
 
 ---
 
-具体开启方法和能力清单见[开启 Builder Mode](/nap/zh-cn/guides/3-agent-behavior/#开启-builder-mode)。
+具体开启方法和能力清单见[开启 Builder Mode](/zh-cn/guides/3-agent-behavior/#开启-builder-mode)。

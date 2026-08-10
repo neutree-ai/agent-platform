@@ -29,7 +29,7 @@ A workspace's configuration — system prompt, enabled skills, schedules, model 
 
 ## When not to
 
-- **Editing across workspaces** — the default **This workspace** capability only changes the workspace you're in. Account-wide resources need the separate **Account-wide** capability turned on (see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode))
+- **Editing across workspaces** — the default **This workspace** capability only changes the workspace you're in. Account-wide resources need the separate **Account-wide** capability turned on (see [Enabling Builder Mode](/guides/3-agent-behavior/#enabling-builder-mode))
 - **Small precise edits** — changing one word in the prompt is faster in the editor
 
 ## What the approval model actually guarantees
@@ -64,8 +64,8 @@ This is why builder mode beats the standalone prompt optimizer that came before 
 
 > For existing users: the **prompt optimizer** experiment has been retired. Builder mode is the better version of it — no separate screen to go to; picking sessions, saying what you're after, and landing the change all happen in the conversation you were already in.
 
-Having the agent review its own history and improve its own configuration is one half of [Optimization](/nap/concepts/optimize/) — builder mode is where those changes land and get approved. The full picture, including model replacement, is in that chapter.
+Having the agent review its own history and improve its own configuration is one half of [Optimization](/concepts/optimize/) — builder mode is where those changes land and get approved. The full picture, including model replacement, is in that chapter.
 
 ---
 
-For the setup steps and the capability list, see [Enabling Builder Mode](/nap/guides/3-agent-behavior/#enabling-builder-mode).
+For the setup steps and the capability list, see [Enabling Builder Mode](/guides/3-agent-behavior/#enabling-builder-mode).

@@ -9,7 +9,7 @@ Install Neutree Agent Platform on a single-node k3s cluster — the quickest way
 
 The same flow serves two kinds of nodes. **Connected**, every image is pulled from the public registry (`ghcr.io` / `docker.io` / `registry.k8s.io`). For a node with **no internet access**, the extra steps sit inline in collapsible **Air-gapped** blocks — expand one and they all stay open; that path installs from an image bundle via an in-cluster registry, so nothing is pulled from the internet.
 
-Recommended spec: **8 vCPU / 32 GB / 200 GB disk** — comfortable for roughly **10 concurrent workspaces**. When you need HA or horizontal scale, use the [production deployment](/nap/self-host/), which also covers [installing into an existing Kubernetes cluster](/nap/self-host/#install).
+Recommended spec: **8 vCPU / 32 GB / 200 GB disk** — comfortable for roughly **10 concurrent workspaces**. When you need HA or horizontal scale, use the [production deployment](/self-host/), which also covers [installing into an existing Kubernetes cluster](/self-host/#install).
 
 ## One-line install (connected)
 
@@ -131,7 +131,7 @@ admin / <ADMIN_PASSWORD>
 
 ## Key differences from the standard deploy
 
-Only the values that differ from the [deployment guide](/nap/self-host/) defaults are listed; everything else carries over:
+Only the values that differ from the [deployment guide](/self-host/) defaults are listed; everything else carries over:
 
 | Field | Standard default | Single-node |
 | --- | --- | --- |
@@ -179,7 +179,7 @@ On the connected host, rebuild the image bundle from the new release (`./offline
 
 You're logged in as the admin of a fresh, empty platform. Two short guides take you from here to a working agent:
 
-1. **[Set up an API provider](/nap/guides/1-setup/)** — connect a large-model API so agents can think. On a fresh install the provider list is empty; creating the first one takes a minute.
-2. **[Your first agent](/nap/guides/2-first-agent/)** — create a workspace and finish your first conversation, in under 5 minutes.
+1. **[Set up an API provider](/guides/1-setup/)** — connect a large-model API so agents can think. On a fresh install the provider list is empty; creating the first one takes a minute.
+2. **[Your first agent](/guides/2-first-agent/)** — create a workspace and finish your first conversation, in under 5 minutes.
 
-From there, [concepts](/nap/concepts/overview/) explains the moving parts, and the remaining guides cover triggers, multi-agent collaboration, and operating at scale.
+From there, [concepts](/concepts/overview/) explains the moving parts, and the remaining guides cover triggers, multi-agent collaboration, and operating at scale.
