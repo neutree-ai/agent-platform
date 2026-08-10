@@ -50,6 +50,12 @@ function toUsageRow(r: UsageRecord): UsageRow {
  * Append usage records to the ledger. workspace_id/user_id are the attribution
  * snapshot (the pod is the workspace). Returns the number of rows actually
  * inserted (duplicates are silently skipped via ON CONFLICT).
+ *
+ * provider_id is read from the workspace's config as it stands at ingest, which
+ * is where the tokens were actually spent for all but the workspaces whose
+ * provider changed inside the sweep interval. It records which credentials paid
+ * for a turn — a user's own key is not the platform's cost — and pulling it here
+ * rather than joining later is what keeps the answer once the config is gone.
  */
 export async function insertUsageRecords(
   workspaceId: string,
@@ -63,12 +69,13 @@ export async function insertUsageRecords(
        workspace_id, user_id, session_id, source, model,
        input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
        cache_creation_5m_tokens, cache_creation_1h_tokens, reasoning_output_tokens,
-       web_search_requests, speed, fields_incomplete, ts, dedup_key
+       web_search_requests, speed, fields_incomplete, ts, dedup_key, provider_id
      )
      SELECT $1, $2, x.session_id, x.source, x.model,
             x.input_tokens, x.output_tokens, x.cache_read_tokens, x.cache_creation_tokens,
             x.cache_creation_5m_tokens, x.cache_creation_1h_tokens, x.reasoning_output_tokens,
-            x.web_search_requests, x.speed, x.fields_incomplete, x.ts, x.dedup_key
+            x.web_search_requests, x.speed, x.fields_incomplete, x.ts, x.dedup_key,
+            (SELECT provider_id FROM workspace_config WHERE workspace_id = $1)
      FROM jsonb_to_recordset($3::jsonb) AS x(
        session_id TEXT, source TEXT, model TEXT,
        input_tokens BIGINT, output_tokens BIGINT, cache_read_tokens BIGINT, cache_creation_tokens BIGINT,

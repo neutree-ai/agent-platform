@@ -33,6 +33,9 @@ const COVERAGE_GAP_SEC = Number(process.env.RUNTIME_METER_GAP_SEC) || 60
  * bumpWorkspaceSpec. `runtime_mode` is fixed when the workspace is created and
  * cannot change at all — it is logged so a rated row needs no join to a
  * placement that will be deleted with the workspace, not because it can move.
+ * `is_builtin` follows environment_id, which is compared: a workspace can be
+ * re-placed onto another environment, and that has to split the interval
+ * because where it ran decides who is billed for it.
  *
  * A workspace with no rows at all always counts as changed: the log needs an
  * opening anchor for it.
@@ -40,6 +43,7 @@ const COVERAGE_GAP_SEC = Number(process.env.RUNTIME_METER_GAP_SEC) || 60
 export function stateChanged(row: RuntimeMeterRow): boolean {
   return (
     row.last_phase === null ||
+    row.environment_id !== row.last_environment_id ||
     row.phase !== row.last_phase ||
     row.ready_replicas !== row.last_ready_replicas ||
     row.desired_replicas !== row.last_desired_replicas ||
@@ -52,6 +56,7 @@ export function stateChanged(row: RuntimeMeterRow): boolean {
 /** Drop the comparison columns, leaving exactly the row to append. */
 function toEvent(row: RuntimeMeterRow): RuntimeEventRow {
   const {
+    last_environment_id,
     last_phase,
     last_ready_replicas,
     last_desired_replicas,

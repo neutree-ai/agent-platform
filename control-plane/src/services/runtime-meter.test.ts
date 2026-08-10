@@ -16,6 +16,8 @@ function steady(over: Partial<RuntimeMeterRow> = {}): RuntimeMeterRow {
   return {
     workspace_id: 'ws1',
     user_id: 'u1',
+    environment_id: 'builtin',
+    is_builtin: true,
     phase: 'running',
     ready_replicas: 1,
     desired_replicas: 1,
@@ -24,6 +26,7 @@ function steady(over: Partial<RuntimeMeterRow> = {}): RuntimeMeterRow {
     spec_version: 3,
     observed_template_version: 3,
     env_offline: false,
+    last_environment_id: 'builtin',
     last_phase: 'running',
     last_ready_replicas: 1,
     last_desired_replicas: 1,
@@ -45,6 +48,7 @@ describe('stateChanged', () => {
     expect(
       stateChanged(
         steady({
+          last_environment_id: null,
           last_phase: null,
           last_ready_replicas: null,
           last_desired_replicas: null,
@@ -74,6 +78,10 @@ describe('stateChanged', () => {
     expect(stateChanged(steady({ env_offline: true }))).toBe(true)
   })
 
+  it('is true when the workspace moved to another environment — it changes who is billed', () => {
+    expect(stateChanged(steady({ environment_id: 'byoi-1', is_builtin: false }))).toBe(true)
+  })
+
   it('distinguishes "no ready set reported" from "an empty ready set"', () => {
     expect(stateChanged(steady({ ready_replicas: null, last_ready_replicas: 0 }))).toBe(true)
   })
@@ -101,6 +109,8 @@ describe('runRuntimeMeter', () => {
       {
         workspace_id: 'ws2',
         user_id: 'u1',
+        environment_id: 'builtin',
+        is_builtin: true,
         phase: 'stopped',
         ready_replicas: 0,
         desired_replicas: 1,

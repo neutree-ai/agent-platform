@@ -22,6 +22,12 @@ type MeterPhase = ObservedPhase | 'deleted'
 export interface RuntimeEventRow {
   workspace_id: string
   user_id: string
+  /**
+   * Where the workspace ran. A workspace can be re-placed onto a different
+   * environment, so this moves with it and is part of the change comparison.
+   */
+  environment_id: string
+  is_builtin: boolean
   phase: MeterPhase
   ready_replicas: number | null
   desired_replicas: number
@@ -34,6 +40,7 @@ export interface RuntimeEventRow {
 
 /** One workspace's current observation, next to the last one already logged. */
 export interface RuntimeMeterRow extends RuntimeEventRow {
+  last_environment_id: string | null
   last_phase: MeterPhase | null
   last_ready_replicas: number | null
   last_desired_replicas: number | null
@@ -42,8 +49,9 @@ export interface RuntimeMeterRow extends RuntimeEventRow {
   last_env_offline: boolean | null
 }
 
-const INSERT_COLUMNS = `workspace_id, user_id, ts, phase, ready_replicas, desired_replicas,
-       runtime_mode, resources, spec_version, observed_template_version, env_offline`
+const INSERT_COLUMNS = `workspace_id, user_id, environment_id, is_builtin, ts, phase,
+       ready_replicas, desired_replicas, runtime_mode, resources, spec_version,
+       observed_template_version, env_offline`
 
 /**
  * Every placed workspace's current observation joined to its newest logged row,
@@ -67,6 +75,8 @@ export async function listRuntimeMeterRows(thresholdSec: number): Promise<Runtim
   const { rows } = await pool.query(
     `SELECT p.workspace_id,
             w.user_id,
+            p.environment_id,
+            e.is_builtin,
             COALESCE(p.observed_phase, 'unknown') AS phase,
             CASE WHEN jsonb_typeof(p.endpoint->'readyReplicaIds') = 'array'
                  THEN jsonb_array_length(p.endpoint->'readyReplicaIds') END AS ready_replicas,
@@ -76,6 +86,7 @@ export async function listRuntimeMeterRows(thresholdSec: number): Promise<Runtim
             p.spec_version,
             p.observed_template_version,
             ${ENV_OFFLINE_SQL} AS env_offline,
+            last.environment_id AS last_environment_id,
             last.phase AS last_phase,
             last.ready_replicas AS last_ready_replicas,
             last.desired_replicas AS last_desired_replicas,
@@ -86,7 +97,7 @@ export async function listRuntimeMeterRows(thresholdSec: number): Promise<Runtim
        JOIN environments e ON e.id = p.environment_id
        JOIN workspaces w ON w.id = p.workspace_id
        LEFT JOIN LATERAL (
-         SELECT r.phase, r.ready_replicas, r.desired_replicas,
+         SELECT r.environment_id, r.phase, r.ready_replicas, r.desired_replicas,
                 r.spec_version, r.observed_template_version, r.env_offline
            FROM workspace_runtime_events r
           WHERE r.workspace_id = p.workspace_id
@@ -112,10 +123,11 @@ export async function insertRuntimeEvents(rows: RuntimeEventRow[]): Promise<numb
   if (rows.length === 0) return 0
   const { rowCount } = await pool.query(
     `INSERT INTO workspace_runtime_events (${INSERT_COLUMNS})
-     SELECT x.workspace_id, x.user_id, now(), x.phase, x.ready_replicas, x.desired_replicas,
-            x.runtime_mode, x.resources, x.spec_version, x.observed_template_version, x.env_offline
+     SELECT x.workspace_id, x.user_id, x.environment_id, x.is_builtin, now(), x.phase,
+            x.ready_replicas, x.desired_replicas, x.runtime_mode, x.resources,
+            x.spec_version, x.observed_template_version, x.env_offline
        FROM jsonb_to_recordset($1::jsonb) AS x(
-         workspace_id TEXT, user_id TEXT, phase TEXT,
+         workspace_id TEXT, user_id TEXT, environment_id TEXT, is_builtin BOOLEAN, phase TEXT,
          ready_replicas INT, desired_replicas INT, runtime_mode TEXT, resources JSONB,
          spec_version INT, observed_template_version INT, env_offline BOOLEAN
        )`,
@@ -183,8 +195,8 @@ export async function closeDeletedWorkspaceIntervals(): Promise<string[]> {
        SELECT last.*
          FROM ids
          CROSS JOIN LATERAL (
-           SELECT r.workspace_id, r.user_id, r.phase, r.runtime_mode, r.resources,
-                  r.spec_version, r.observed_template_version
+           SELECT r.workspace_id, r.user_id, r.environment_id, r.is_builtin, r.phase,
+                  r.runtime_mode, r.resources, r.spec_version, r.observed_template_version
              FROM workspace_runtime_events r
             WHERE r.workspace_id = ids.workspace_id
             ORDER BY r.ts DESC, r.id DESC
@@ -193,7 +205,7 @@ export async function closeDeletedWorkspaceIntervals(): Promise<string[]> {
         WHERE ids.workspace_id IS NOT NULL
      )
      INSERT INTO workspace_runtime_events (${INSERT_COLUMNS})
-     SELECT o.workspace_id, o.user_id, now(), 'deleted', 0, 0,
+     SELECT o.workspace_id, o.user_id, o.environment_id, o.is_builtin, now(), 'deleted', 0, 0,
             o.runtime_mode, o.resources, o.spec_version, o.observed_template_version, false
        FROM open o
       WHERE o.phase <> 'deleted'
