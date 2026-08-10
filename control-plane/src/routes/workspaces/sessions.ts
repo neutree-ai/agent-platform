@@ -11,7 +11,9 @@ import {
   setPendingMessage,
   setSessionStarred,
 } from '../../services/db/sessions'
+import { getSessionUsage, getSessionUsageOwner } from '../../services/db/workspace-usage'
 import { getWorkspace } from '../../services/db/workspaces'
+import { MAX_WAIT_SEC, settleSessionUsage } from '../../services/usage/settle'
 import { canManage, interruptAgentSession } from './_shared'
 
 const sessions = new OpenAPIHono<AppEnv>()
@@ -332,6 +334,110 @@ sessions.openapi(deletePendingRoute, async (c) => {
 
   await clearPendingMessage(sessionId)
   return c.json({ success: true }, 200)
+})
+
+// ── GET /:id/sessions/:sessionId/usage ─────────────────────────────────────
+const UsageTotalsSchema = z.object({
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cache_read_tokens: z.number(),
+  cache_creation_tokens: z.number(),
+  cache_creation_5m_tokens: z.number(),
+  cache_creation_1h_tokens: z.number(),
+  reasoning_output_tokens: z.number(),
+  web_search_requests: z.number(),
+  record_count: z.number(),
+})
+
+const SessionUsageSchema = z.object({
+  session_id: z.string(),
+  totals: UsageTotalsSchema,
+  by_model: z.array(UsageTotalsSchema.extend({ source: z.string(), model: z.string() })),
+  first_ts: z.string().nullable(),
+  last_ts: z.string().nullable(),
+  settlement: z.object({
+    complete: z.boolean(),
+    drained_through: z.string().nullable(),
+    activity_at: z.string().nullable(),
+    reason: z
+      .enum(['turn_in_progress', 'pending_settle', 'agent_unreachable', 'workspace_gone'])
+      .nullable(),
+  }),
+})
+
+const getSessionUsageRoute = createRoute({
+  method: 'get',
+  path: '/{id}/sessions/{sessionId}/usage',
+  tags: ['workspaces'],
+  summary: 'Get token usage for one session',
+  description: [
+    'Sums the usage ledger for a single session, split by the model that spent',
+    'it. Cache tiers stay in their own columns — cache reads routinely dwarf',
+    'input volume at a fraction of the price, so a combined number misranks cost.',
+    '',
+    '`settlement` says whether the ledger already holds everything the session',
+    'spent. Usage arrives by pulling the agent transcripts and the pull fired at',
+    'the end of a turn is detached, so a read taken immediately can be short.',
+    'Pass `wait` (seconds, max 60) to pull and block until the account settles;',
+    'a timeout returns the real verdict rather than a false success.',
+  ].join('\n'),
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: SessionScopedParam,
+    query: z.object({
+      wait: z.coerce
+        .number()
+        .min(0)
+        .max(MAX_WAIT_SEC)
+        .optional()
+        .openapi({ param: { name: 'wait', in: 'query' } }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Session usage',
+      content: { 'application/json': { schema: SessionUsageSchema } },
+    },
+    404: {
+      description: 'Workspace or session not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+sessions.openapi(getSessionUsageRoute, async (c) => {
+  const currentUser = c.get('user')
+  const { id, sessionId } = c.req.valid('param')
+  const { wait } = c.req.valid('query')
+
+  // The ledger has no foreign key and outlives both the session and the
+  // workspace, on purpose: a harness that recycles a workspace after a run must
+  // still be able to read what the run cost. So the workspace row is the
+  // preferred authorisation anchor, and when it is gone the owner stamped on
+  // the ledger rows stands in — narrower, since it admits only that user.
+  const workspace = await getWorkspace(id)
+  const ledgerOwner = await getSessionUsageOwner(id, sessionId)
+  if (workspace) {
+    if (!canManage(workspace, currentUser)) return c.json({ error: 'Workspace not found' }, 404)
+  } else if (!ledgerOwner || ledgerOwner !== currentUser.sub) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  // A session cp has never heard of must not read back as a clean zero-cost
+  // account — for a caller comparing runs, a mistyped id would look like a free
+  // one. Ledger rows or a live session row; either is enough to answer for.
+  if (!ledgerOwner) {
+    const session = await getSession(sessionId)
+    if (!session || session.workspace_id !== id) {
+      return c.json({ error: 'Session not found' }, 404)
+    }
+  }
+
+  // Settle first: with `wait` this is what pulls the outstanding records, so
+  // reading the totals before it would return the account it just completed.
+  const settlement = await settleSessionUsage(id, sessionId, wait ?? 0)
+  const usage = await getSessionUsage(id, sessionId)
+  return c.json({ session_id: sessionId, ...usage, settlement }, 200)
 })
 
 export default sessions

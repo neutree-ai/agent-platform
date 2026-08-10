@@ -71,6 +71,18 @@ export interface FileFingerprint {
 /** Cursor = fingerprint per transcript path; control-plane owns and persists it. */
 export type SweepCursors = Record<string, FileFingerprint>
 
+/**
+ * How long a transcript must sit untouched before its trailing entry counts as
+ * settled and gets emitted.
+ *
+ * Shared rather than local to the sweep because it is half of the answer to
+ * "does the ledger hold everything this session spent?": a pull that drained
+ * the agent covers only what was written this long before it ran. The consumer
+ * deciding whether an account is complete has to subtract the same grace the
+ * parser applied, so both sides read it from here.
+ */
+export const DEFAULT_SETTLE_GRACE_MS = 10_000
+
 /** Wire shape of the agent's `POST /usage` response. */
 export interface UsageSweepResponse {
   records: UsageRecord[]

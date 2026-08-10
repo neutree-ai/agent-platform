@@ -21,6 +21,7 @@ import {
   type UsageRecord,
   type UsageSweepResponse,
   type WarnFn,
+  DEFAULT_SETTLE_GRACE_MS,
   parseAcpUsageLog,
   parseClaudeTranscript,
   parseCodexRollout,
@@ -113,7 +114,7 @@ function listCodexRollouts(sessionsDir: string): string[] {
 export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
   const warn = opts.onWarn
   const now = opts.now ?? Date.now()
-  const settleGraceMs = opts.settleGraceMs ?? 10_000
+  const settleGraceMs = opts.settleGraceMs ?? DEFAULT_SETTLE_GRACE_MS
   const prev = opts.cursors ?? {}
   const cursors: SweepCursors = {}
   const records: UsageRecord[] = []
