@@ -100,6 +100,11 @@ COPY internal/k8s-provider /internal/k8s-provider
 # /app/src/routes/admin/system-settings.ts (used to validate admin config and
 # list available providers; the periodic sweep itself runs in the scheduler).
 COPY internal/titlegen /internal/titlegen
+# agent-usage is imported via ../../../../internal/agent-usage/src/index from
+# /app/src/services/{usage,db}/*.ts. Long type-only (erased before the bundler
+# saw it), now also for the settle grace the parser and the completeness verdict
+# have to share, so the module has to be present to resolve.
+COPY internal/agent-usage /internal/agent-usage
 
 RUN npm run build
 
