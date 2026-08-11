@@ -74,6 +74,25 @@ describe('evaluateSettlement', () => {
     })
   })
 
+  it('settles a deleted workspace whose final drain outlived it', () => {
+    // Deleting collects first, and the watermark is kept for exactly this: the
+    // account is closed and provably whole, so it must not read as lost.
+    const deleted = facts({ workspace_status: null, chat_status: null })
+    expect(evaluateSettlement(deleted)).toMatchObject({ complete: true, reason: null })
+  })
+
+  it('still refuses a deleted workspace that was force-deleted undrained', () => {
+    const forced = facts({
+      workspace_status: null,
+      chat_status: null,
+      drained_through: drainedAfter(-60_000),
+    })
+    expect(evaluateSettlement(forced)).toMatchObject({
+      complete: false,
+      reason: 'workspace_gone',
+    })
+  })
+
   it('does not settle an empty session before any drain', () => {
     expect(evaluateSettlement(facts({ activity_at: null, drained_through: null })).complete).toBe(
       false,

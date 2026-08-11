@@ -264,8 +264,20 @@ export async function deleteWorkspace(id: string): Promise<boolean> {
     await client.query('DELETE FROM workspace_config WHERE workspace_id = $1', [id])
     await client.query('DELETE FROM workspace_skills WHERE workspace_id = $1', [id])
     await client.query('DELETE FROM workspace_tag_assignments WHERE workspace_id = $1', [id])
-    // Pure pull-optimization state; the usage *ledger* is immutable and intentionally kept.
-    await client.query('DELETE FROM workspace_usage_cursor WHERE workspace_id = $1', [id])
+    // The per-file fingerprints are pull-optimization state and go; the drain
+    // watermark stays, because it is the only evidence left that the ledger
+    // holds everything this workspace spent. Deleting it would leave a
+    // correctly-collected account indistinguishable from a lost one — for a
+    // caller that recycles workspaces, every finished run would read as
+    // unaccounted-for. A row with nothing to say is dropped outright.
+    await client.query(
+      'DELETE FROM workspace_usage_cursor WHERE workspace_id = $1 AND drained_through IS NULL',
+      [id],
+    )
+    await client.query(
+      `UPDATE workspace_usage_cursor SET cursor = '{}'::jsonb WHERE workspace_id = $1`,
+      [id],
+    )
     await client.query('DELETE FROM shares WHERE workspace_id = $1', [id])
     const result = await client.query('DELETE FROM workspaces WHERE id = $1', [id])
     await client.query('COMMIT')
