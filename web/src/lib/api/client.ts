@@ -159,6 +159,19 @@ export class ApiClientError extends Error {
   }
 }
 
+/**
+ * Skill packages upload as either tar.gz or zip. The server dispatches on the
+ * archive's magic bytes, so deriving the header from the same bytes keeps the
+ * two from ever disagreeing — a filename or a browser-supplied `File.type`
+ * can.
+ */
+function archiveContentType(file: ArrayBuffer): string {
+  const head = new Uint8Array(file, 0, Math.min(4, file.byteLength))
+  const isZip =
+    head.length >= 4 && head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04
+  return isZip ? 'application/zip' : 'application/gzip'
+}
+
 class ApiClient {
   private baseUrl = '/api'
 
@@ -770,9 +783,9 @@ class ApiClient {
   }
 
   /**
-   * One-shot tarball upload. The cp endpoint creates an implicit native
-   * source + skill + initial version in one call. For native source
-   * authoring (where you want a draft cycle) use `createNativeSource` +
+   * One-shot package upload (tar.gz or zip). The cp endpoint creates an
+   * implicit native source + skill + initial version in one call. For native
+   * source authoring (where you want a draft cycle) use `createNativeSource` +
    * `saveSkillDraft` + `publishSkill` instead.
    */
   async uploadSkill(
@@ -785,7 +798,7 @@ class ApiClient {
     return this.request<ApiSkill>(`/skills?${params}`, {
       method: 'POST',
       body: file,
-      headers: { 'Content-Type': 'application/gzip' },
+      headers: { 'Content-Type': archiveContentType(file) },
     })
   }
 
@@ -930,7 +943,7 @@ class ApiClient {
     return this.request('/skills/scan-tarball', {
       method: 'POST',
       body: file,
-      headers: { 'Content-Type': 'application/gzip' },
+      headers: { 'Content-Type': archiveContentType(file) },
     })
   }
 

@@ -351,7 +351,7 @@ const scanTarballRoute = createRoute({
   method: 'post',
   path: '/scan-tarball',
   tags: ['skills'],
-  summary: 'List skill candidates inside an uploaded tarball without persisting',
+  summary: 'List skill candidates inside an uploaded archive (tar.gz or zip) without persisting',
   security: [{ bearerAuth: [] }],
   responses: {
     200: {
@@ -361,7 +361,7 @@ const scanTarballRoute = createRoute({
       },
     },
     400: {
-      description: 'Empty body or invalid tarball',
+      description: 'Empty body or unreadable archive',
       content: { 'application/json': { schema: ErrorSchema } },
     },
     413: {
@@ -416,7 +416,7 @@ const uploadRoute = createRoute({
   method: 'post',
   path: '/',
   tags: ['skills'],
-  summary: 'Upload a skill package (tar.gz). Metadata goes in query params.',
+  summary: 'Upload a skill package (tar.gz or zip). Metadata goes in query params.',
   security: [{ bearerAuth: [] }],
   request: { query: uploadQuery },
   responses: {

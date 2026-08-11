@@ -816,8 +816,8 @@
           "nameOptional": "Name (optional)",
           "description": "Description",
           "descriptionOptional": "Description (optional)",
-          "package": "Package (.tar.gz)",
-          "packageKeepCurrent": "Package (.tar.gz) (leave empty to keep current)",
+          "package": "Package (.tar.gz / .zip)",
+          "packageKeepCurrent": "Package (.tar.gz / .zip) (leave empty to keep current)",
           "publicVisible": "Public (visible to all users)",
           "visibility": "Visibility",
           "teams": "Teams",
@@ -854,7 +854,7 @@
         "help": {
           "repositoryUrl": "Supports GitHub, GitLab, and self-hosted. Append /tree/branch/subpath to import a subdirectory.",
           "category": "Used as a filter chip in the library. Optional.",
-          "dropHint": "or drop a .tar.gz here",
+          "dropHint": "or drop a .tar.gz / .zip here",
           "dropActive": "Release to use this file"
         },
         "tokenSources": {
@@ -957,7 +957,7 @@
           "deleteFailed": "Failed to delete",
           "scanFailed": "Failed to scan repo",
           "multipleCandidatesPickOne": "Multiple skills found in this repo — pick one below.",
-          "invalidFileType": "Only .tar.gz / .tgz files are accepted."
+          "invalidFileType": "Only .tar.gz / .tgz / .zip files are accepted."
         },
         "switchHint": "Switching this native skill to a Git source keeps the skill and all its mounts, but its version history will be deleted — only the version fetched from Git remains.",
         "switchDialog": {
@@ -2169,7 +2169,7 @@
         "nameOptional": "Name (optional)",
         "description": "Description",
         "descriptionOptional": "Description (optional)",
-        "package": "Package (.tar.gz)",
+        "package": "Package (.tar.gz / .zip)",
         "public": "Public (visible to all users)",
         "gitType": "Provider Type"
       },

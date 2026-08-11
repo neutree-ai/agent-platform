@@ -1,4 +1,4 @@
-Upload a packaged Skill directory (`.tar.gz`).
+Upload a packaged Skill directory (`.tar.gz` or `.zip`).
 
 ## Packaging
 
@@ -11,6 +11,10 @@ linux: |
 windows: |
   tar -czf skill.tar.gz -C C:\path\to\skill-dir .
 </platform-cmd>
+
+Zipping the folder works too — right-click it and choose Compress (macOS) or
+Send to → Compressed folder (Windows). The wrapping folder the archive picks up
+is unwrapped on upload, and macOS resource-fork files are discarded.
 
 The directory must contain a `SKILL.md` file as the Skill entry description.
 

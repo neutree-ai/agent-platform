@@ -200,12 +200,18 @@ export function SkillFormFields({
   }, [form.gitUrl, form.gitType, setForm])
 
   // Drag-and-drop state for upload mode. We accept the first dropped file
-  // matching .tar.gz / .tgz, drop everything else with a quiet error so the
-  // dropzone stays unobtrusive (the user can still try again).
+  // matching .tar.gz / .tgz / .zip, drop everything else with a quiet error so
+  // the dropzone stays unobtrusive (the user can still try again).
   const [isDraggingFile, setIsDraggingFile] = useState(false)
-  function isAcceptableTarball(file: File): boolean {
+  function isAcceptablePackage(file: File): boolean {
     const n = file.name.toLowerCase()
-    return n.endsWith('.tar.gz') || n.endsWith('.tgz') || file.type === 'application/gzip'
+    return (
+      n.endsWith('.tar.gz') ||
+      n.endsWith('.tgz') ||
+      n.endsWith('.zip') ||
+      file.type === 'application/gzip' ||
+      file.type === 'application/zip'
+    )
   }
   function applyChosenFile(file: File | null) {
     // Selecting a new file invalidates any prior scan output.
@@ -217,7 +223,7 @@ export function SkillFormFields({
     setIsDraggingFile(false)
     const file = e.dataTransfer.files?.[0]
     if (!file) return
-    if (!isAcceptableTarball(file)) {
+    if (!isAcceptablePackage(file)) {
       setScanError(t('components.library.skills.errors.invalidFileType'))
       return
     }
@@ -614,7 +620,7 @@ export function SkillFormFields({
           >
             {/*
              * Dropzone wraps the click-to-pick controls so the whole row
-             * accepts a dragged .tar.gz file. Dashed-border highlight is
+             * accepts a dragged package file. Dashed-border highlight is
              * only visible while a file is actively being dragged over —
              * empty-state copy gets a subtle hint underneath.
              */}
@@ -700,7 +706,7 @@ export function SkillFormFields({
               <input
                 id={`${idPrefix}-file`}
                 type="file"
-                accept=".tar.gz,.tgz,application/gzip"
+                accept=".tar.gz,.tgz,.zip,application/gzip,application/zip"
                 className="hidden"
                 onChange={(e) => applyChosenFile(e.target.files?.[0] ?? null)}
               />

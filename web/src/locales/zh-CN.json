@@ -846,8 +846,8 @@
           "nameOptional": "名称（选填）",
           "description": "描述",
           "descriptionOptional": "描述（选填）",
-          "package": "安装包（.tar.gz）",
-          "packageKeepCurrent": "安装包（.tar.gz）（留空则保留当前文件）",
+          "package": "安装包（.tar.gz / .zip）",
+          "packageKeepCurrent": "安装包（.tar.gz / .zip）（留空则保留当前文件）",
           "publicVisible": "公开（所有用户可见）",
           "visibility": "可见性",
           "teams": "团队",
@@ -884,7 +884,7 @@
         "help": {
           "repositoryUrl": "支持 GitHub、GitLab 和自托管仓库。可在末尾追加 /tree/branch/subpath 以导入子目录。",
           "category": "用于资源库的筛选 chip。选填。",
-          "dropHint": "或将 .tar.gz 拖到这里",
+          "dropHint": "或将 .tar.gz / .zip 拖到这里",
           "dropActive": "松开以使用此文件"
         },
         "tokenSources": {
@@ -987,7 +987,7 @@
           "deleteFailed": "删除失败",
           "scanFailed": "扫描仓库失败",
           "multipleCandidatesPickOne": "该仓库内有多个 skill，请在下方选择一个。",
-          "invalidFileType": "仅支持 .tar.gz / .tgz 文件。"
+          "invalidFileType": "仅支持 .tar.gz / .tgz / .zip 文件。"
         },
         "switchHint": "把这个本地编写的 skill 切换到 Git 来源后，skill 本身和它的所有挂载都会保留，但版本历史会被删除——只留下从 Git 拉取的版本。",
         "switchDialog": {
@@ -2194,7 +2194,7 @@
         "nameOptional": "名称（可选）",
         "description": "描述",
         "descriptionOptional": "描述（可选）",
-        "package": "安装包（.tar.gz）",
+        "package": "安装包（.tar.gz / .zip）",
         "public": "公开（对所有用户可见）",
         "gitType": "服务类型"
       },

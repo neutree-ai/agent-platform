@@ -1,5 +1,5 @@
 /**
- * Pure tarball operations for skill packages.
+ * Pure archive operations for skill packages.
  *
  * Pipeline (composed by the service):
  *   bytes
@@ -8,11 +8,16 @@
  *     → filterSubpath  → entries scoped to a subpath (optional)
  *     → repack         → clean tar.gz buffer
  *
+ * Uploads arrive as either tar.gz or zip; `extractEntries` normalizes both to
+ * the same entry list, so everything downstream — and the stored package,
+ * which `repack` always writes as tar.gz — is archive-format agnostic.
+ *
  * I/O lives outside (the GitSourceClient fetches the bytes; the service
  * orchestrates these steps). Tar/gzip streams are still asynchronous via
  * Node streams, but no network or filesystem touch happens here.
  */
 import { createGunzip, createGzip } from 'node:zlib'
+import { unzipSync } from 'fflate'
 import { type Headers, extract, pack } from 'tar-stream'
 
 export interface TarEntry {
@@ -20,8 +25,24 @@ export interface TarEntry {
   data: Buffer
 }
 
+/** Local file header signature — the first bytes of any non-empty zip. */
+const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04]
+
+function isZip(bytes: Buffer): boolean {
+  return bytes.length >= 4 && ZIP_MAGIC.every((b, i) => bytes[i] === b)
+}
+
+/**
+ * Parse a tar.gz or zip buffer into entries, dispatching on the magic bytes
+ * rather than on a filename or a client-supplied content type — neither is
+ * trustworthy, and both are absent on the git-import path.
+ */
+export function extractEntries(archiveBytes: Buffer): Promise<TarEntry[]> {
+  return isZip(archiveBytes) ? extractZipEntries(archiveBytes) : extractTarGzEntries(archiveBytes)
+}
+
 /** Parse a tar.gz buffer into entries. Streams gunzip + tar-extract in-memory. */
-export function extractEntries(tarballBytes: Buffer): Promise<TarEntry[]> {
+function extractTarGzEntries(tarballBytes: Buffer): Promise<TarEntry[]> {
   return new Promise<TarEntry[]>((resolve, reject) => {
     const entries: TarEntry[] = []
     const ex = extract()
@@ -43,6 +64,86 @@ export function extractEntries(tarballBytes: Buffer): Promise<TarEntry[]> {
     gunzip.pipe(ex)
     gunzip.end(tarballBytes)
   })
+}
+
+/**
+ * Names a zip carries that are archiver bookkeeping, not skill content.
+ * macOS Finder's "Compress" writes an `__MACOSX/` tree of `._name` resource
+ * forks alongside every file; keeping them would put junk in the skill and let
+ * `__MACOSX/._SKILL.md` masquerade as a skill entry point.
+ */
+function isArchiverNoise(name: string): boolean {
+  const parts = name.split('/')
+  return parts.some((p) => p === '__MACOSX' || p === '.DS_Store' || p.startsWith('._'))
+}
+
+/**
+ * Parse a zip buffer into the same shape `extractTarGzEntries` produces.
+ *
+ * Zip carries no unix mode we can rely on across the writers users actually
+ * use (Finder, Explorer, `zip`), so entries take the same defaults `repack`
+ * would apply anyway. Directory entries are recognized by the trailing slash
+ * that the format mandates for them.
+ */
+function extractZipEntries(zipBytes: Buffer): Promise<TarEntry[]> {
+  return new Promise<TarEntry[]>((resolve, reject) => {
+    let files: Record<string, Uint8Array>
+    try {
+      files = unzipSync(zipBytes)
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)))
+      return
+    }
+    const entries: TarEntry[] = []
+    for (const [name, data] of Object.entries(files)) {
+      if (!name || isArchiverNoise(name)) continue
+      if (name.endsWith('/')) {
+        entries.push({
+          header: { name, type: 'directory', mode: 0o755 },
+          data: Buffer.alloc(0),
+        })
+      } else {
+        const buf = Buffer.from(data)
+        entries.push({
+          header: { name, type: 'file', size: buf.length, mode: 0o644 },
+          data: buf,
+        })
+      }
+    }
+    resolve(entries)
+  })
+}
+
+/**
+ * Convert an uploaded package to the tar.gz that everything downstream
+ * assumes: the stored `skill_versions.package` bytes are served verbatim to
+ * agents and gunzipped by the draft cache, so a zip has to be rewritten before
+ * it is persisted, not merely readable.
+ *
+ * tar.gz input is returned untouched — byte-identical, no repack — so the
+ * existing upload path keeps behaving exactly as before.
+ *
+ * Zip input additionally loses a single wrapping directory when the archive
+ * has one and no SKILL.md at its root. Compressing a skill folder in Finder or
+ * Explorer always produces `skill-name/SKILL.md`, whereas the documented tar
+ * invocation (`tar -czf … -C skill-dir .`) produces a root-level SKILL.md;
+ * stripping reconciles the two so the obvious way to make a zip works.
+ */
+export async function normalizeUploadToTarGz(bytes: Buffer): Promise<Buffer> {
+  if (!isZip(bytes)) return bytes
+  const entries = await extractZipEntries(bytes)
+  return repack(hasSingleWrappingDir(entries) ? stripPrefix(entries) : entries)
+}
+
+/** True when every entry sits under one shared top-level dir and no root SKILL.md exists. */
+function hasSingleWrappingDir(entries: TarEntry[]): boolean {
+  if (entries.length === 0) return false
+  if (findSkillMd(entries)) return false
+  const first = entries[0].header.name
+  const slashIdx = first.indexOf('/')
+  if (slashIdx <= 0) return false
+  const prefix = first.slice(0, slashIdx + 1)
+  return entries.every((e) => e.header.name.startsWith(prefix))
 }
 
 /**

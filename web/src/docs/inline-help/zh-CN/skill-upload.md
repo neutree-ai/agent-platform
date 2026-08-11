@@ -1,4 +1,4 @@
-上传一个打包好的 skill 目录（`.tar.gz`）。
+上传一个打包好的 skill 目录（`.tar.gz` 或 `.zip`）。
 
 ## 打包方式
 
@@ -11,6 +11,8 @@ linux: |
 windows: |
   tar -czf skill.tar.gz -C C:\path\to\skill-dir .
 </platform-cmd>
+
+也可以直接压缩成 zip：macOS 上右键「压缩」，Windows 上右键「发送到 → 压缩文件夹」。压缩包外层多出的那层目录会在上传时自动去掉，macOS 附带的资源分叉文件也会被丢弃。
 
 目录内需要包含 `SKILL.md` 文件作为 skill 的入口描述。
 

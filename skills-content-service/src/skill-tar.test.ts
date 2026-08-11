@@ -4,10 +4,12 @@ import {
   filterSubpath,
   findSkillMd,
   listNestedSkillDirs,
+  normalizeUploadToTarGz,
   repack,
   stripPrefix,
 } from './skill-tar'
 import { buildTarGz } from './tar-fixtures'
+import { buildZip } from './zip-fixtures'
 
 describe('extractEntries', () => {
   it('round-trips a multi-entry tarball', async () => {
@@ -23,6 +25,65 @@ describe('extractEntries', () => {
 
   it('rejects on malformed bytes', async () => {
     await expect(extractEntries(Buffer.from('not a tarball'))).rejects.toBeTruthy()
+  })
+
+  it('round-trips a multi-entry zip', async () => {
+    const entries = await extractEntries(
+      buildZip([
+        { name: 'a.txt', content: 'A' },
+        { name: 'sub/b.txt', content: 'BB' },
+      ]),
+    )
+    expect(entries.map((e) => e.header.name).sort()).toEqual(['a.txt', 'sub/b.txt'])
+    const byName = new Map(entries.map((e) => [e.header.name, e]))
+    expect(byName.get('a.txt')?.data.toString()).toBe('A')
+    expect(byName.get('sub/b.txt')?.data.toString()).toBe('BB')
+    expect(byName.get('a.txt')?.header.type).toBe('file')
+  })
+
+  it('keeps zip directory entries as directories', async () => {
+    const entries = await extractEntries(
+      buildZip([
+        { name: 'empty-dir', type: 'directory' },
+        { name: 'SKILL.md', content: 'hi' },
+      ]),
+    )
+    const dir = entries.find((e) => e.header.name === 'empty-dir/')
+    expect(dir?.header.type).toBe('directory')
+    expect(dir?.data.length).toBe(0)
+  })
+
+  it('drops macOS archiver noise from a zip', async () => {
+    const entries = await extractEntries(
+      buildZip([
+        { name: 'SKILL.md', content: 'hi' },
+        { name: '__MACOSX/._SKILL.md', content: 'resource fork' },
+        { name: '.DS_Store', content: 'junk' },
+        { name: 'sub/._x.txt', content: 'resource fork' },
+      ]),
+    )
+    expect(entries.map((e) => e.header.name)).toEqual(['SKILL.md'])
+  })
+
+  it('rejects a truncated zip', async () => {
+    const zip = buildZip([{ name: 'a.txt', content: 'A' }])
+    await expect(extractEntries(zip.subarray(0, zip.length - 8))).rejects.toBeTruthy()
+  })
+
+  it('feeds the same pipeline from either format', async () => {
+    const fromZip = await extractEntries(
+      buildZip([
+        { name: 'pkg/SKILL.md', content: 'hi' },
+        { name: 'pkg/sub/x.txt', content: 'x' },
+      ]),
+    )
+    const stripped = stripPrefix(fromZip).sort((a, b) => a.header.name.localeCompare(b.header.name))
+    expect(stripped.map((e) => e.header.name)).toEqual(['SKILL.md', 'sub/x.txt'])
+    expect(findSkillMd(stripped)?.data.toString()).toBe('hi')
+    // Whatever came in, what gets stored is a tar.gz.
+    const repacked = await repack(stripped)
+    const roundTripped = await extractEntries(repacked)
+    expect(roundTripped.map((e) => e.header.name).sort()).toEqual(['SKILL.md', 'sub/x.txt'])
   })
 })
 
@@ -182,5 +243,69 @@ describe('repack', () => {
     const out = await repack(entries)
     const reparsed = await extractEntries(out)
     expect(reparsed.map((e) => e.header.name)).toEqual(['real.txt'])
+  })
+})
+
+describe('normalizeUploadToTarGz', () => {
+  it('passes tar.gz through byte-for-byte', async () => {
+    const bytes = await buildTarGz([{ name: 'SKILL.md', content: 'hi' }])
+    const out = await normalizeUploadToTarGz(bytes)
+    expect(out).toBe(bytes)
+  })
+
+  it('converts a zip into a tar.gz the rest of the pipeline can read', async () => {
+    const out = await normalizeUploadToTarGz(
+      buildZip([
+        { name: 'SKILL.md', content: '---\nname: r\n---\n' },
+        { name: 'sub/x.txt', content: 'x' },
+      ]),
+    )
+    const entries = await extractEntries(out)
+    expect(entries.map((e) => e.header.name).sort()).toEqual(['SKILL.md', 'sub/x.txt'])
+    expect(findSkillMd(entries)?.data.toString()).toBe('---\nname: r\n---\n')
+  })
+
+  it('strips the wrapping dir a folder-compressed zip carries', async () => {
+    const out = await normalizeUploadToTarGz(
+      buildZip([
+        { name: 'my-skill/SKILL.md', content: 'hi' },
+        { name: 'my-skill/refs/a.md', content: 'a' },
+      ]),
+    )
+    const entries = await extractEntries(out)
+    expect(entries.map((e) => e.header.name).sort()).toEqual(['SKILL.md', 'refs/a.md'])
+  })
+
+  it('keeps a root SKILL.md even when a sibling dir exists', async () => {
+    const out = await normalizeUploadToTarGz(
+      buildZip([
+        { name: 'SKILL.md', content: 'hi' },
+        { name: 'refs/a.md', content: 'a' },
+      ]),
+    )
+    const entries = await extractEntries(out)
+    expect(entries.map((e) => e.header.name).sort()).toEqual(['SKILL.md', 'refs/a.md'])
+  })
+
+  it('leaves multiple top-level dirs alone', async () => {
+    const out = await normalizeUploadToTarGz(
+      buildZip([
+        { name: 'a/SKILL.md', content: 'a' },
+        { name: 'b/SKILL.md', content: 'b' },
+      ]),
+    )
+    const entries = await extractEntries(out)
+    expect(entries.map((e) => e.header.name).sort()).toEqual(['a/SKILL.md', 'b/SKILL.md'])
+  })
+
+  it('rejects a zip it cannot read', async () => {
+    const zip = buildZip([{ name: 'SKILL.md', content: 'hi' }])
+    await expect(normalizeUploadToTarGz(zip.subarray(0, zip.length - 8))).rejects.toBeTruthy()
+  })
+
+  it('leaves non-zip bytes to the existing tar.gz path', async () => {
+    // Validation of tarball bytes has always happened downstream, not here.
+    const junk = Buffer.from('PK nope')
+    expect(await normalizeUploadToTarGz(junk)).toBe(junk)
   })
 })

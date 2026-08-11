@@ -50,6 +50,7 @@ import { DUFS_ORIGIN, startDufs } from './dufs'
 import { importFromGit, scanGit, scanTarballBytes, switchSourceToGit, syncSource } from './from-git'
 import { startLruSweep } from './lru'
 import { packageStream } from './package-stream'
+import { normalizeUploadToTarGz } from './skill-tar'
 
 const MAX_SKILL_PACKAGE_BYTES = Number(process.env.MAX_SKILL_PACKAGE_BYTES || 50 * 1024 * 1024)
 
@@ -212,8 +213,15 @@ const scanTarballRoute = createRoute({
   method: 'post',
   path: '/scan-tarball',
   tags: ['scan'],
-  summary: 'Scan an uploaded tarball for skill candidates',
-  request: { body: { content: { 'application/gzip': { schema: BinarySchema } } } },
+  summary: 'Scan an uploaded archive (tar.gz or zip) for skill candidates',
+  request: {
+    body: {
+      content: {
+        'application/gzip': { schema: BinarySchema },
+        'application/zip': { schema: BinarySchema },
+      },
+    },
+  },
   responses: {
     200: {
       description: 'Scan result',
@@ -856,10 +864,15 @@ const uploadRoute = createRoute({
   method: 'post',
   path: '/skills/upload',
   tags: ['skills'],
-  summary: 'Upload a packaged skill (creates native source + skill + version)',
+  summary: 'Upload a packaged skill, tar.gz or zip (creates native source + skill + version)',
   request: {
     query: UploadQuery,
-    body: { content: { 'application/gzip': { schema: BinarySchema } } },
+    body: {
+      content: {
+        'application/gzip': { schema: BinarySchema },
+        'application/zip': { schema: BinarySchema },
+      },
+    },
   },
   responses: {
     200: {
@@ -890,10 +903,20 @@ app.openapi(uploadRoute, async (c) => {
   if (declared > MAX_SKILL_PACKAGE_BYTES) {
     return c.json({ error: `Package exceeds limit (${declared} bytes)` }, 413)
   }
-  const body = await readBoundedBody(c.req.raw)
-  if ('error' in body) {
-    if (body.error === 'empty') return c.json({ error: 'Empty body' }, 400)
+  const raw = await readBoundedBody(c.req.raw)
+  if ('error' in raw) {
+    if (raw.error === 'empty') return c.json({ error: 'Empty body' }, 400)
     return c.json({ error: 'Package exceeds size limit' }, 413)
+  }
+
+  // A zip is rewritten as tar.gz here rather than downstream: these bytes are
+  // stored verbatim and later served to agents / gunzipped by the draft cache,
+  // both of which only speak tar.gz.
+  let body: Buffer
+  try {
+    body = await normalizeUploadToTarGz(raw)
+  } catch {
+    return c.json({ error: 'Unreadable package: expected a .tar.gz or .zip archive' }, 400)
   }
 
   // p3: upload is upsert on (user_id, name). Re-uploading an existing skill
