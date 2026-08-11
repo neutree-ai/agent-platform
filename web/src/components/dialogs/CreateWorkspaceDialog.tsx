@@ -34,7 +34,7 @@ import { api } from '@/lib/api/client'
 import type { ApiTemplate } from '@/lib/api/types'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronsUpDown, Globe, Lock, Users } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
@@ -190,7 +190,13 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
   const navigate = useNavigate()
   const { user } = useAuth()
   const createMutation = useCreateWorkspace()
-  const { templates } = useTemplates()
+  const { templates: allTemplates } = useTemplates()
+  // A template without a published version carries no config to seed from, so
+  // creating off it yields a workspace with an empty model, prompt and MCP set.
+  const templates = useMemo(
+    () => allTemplates?.filter((tpl) => tpl.latest_version > 0),
+    [allTemplates],
+  )
   const { data: environments = [] } = useEnvironments()
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [visibleSections, setVisibleSections] = useState<AgentConfigSection[]>(['model'])

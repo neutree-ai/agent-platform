@@ -306,10 +306,14 @@ export async function getWorkspaceConfig(workspaceId: string): Promise<Workspace
             ELSE wc.small_model END AS small_model,
        CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wc.system_prompt, ''), tv.system_prompt)
             ELSE wc.system_prompt END AS system_prompt,
-       CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wc.mcp_config, '{}'), tv.mcp_config::text)
-            ELSE wc.mcp_config END AS mcp_config,
-       CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wc.agent_settings, '{}'), tv.agent_settings::text)
-            ELSE wc.agent_settings END AS agent_settings,
+       -- The outer COALESCE guards a template_id that resolves to no
+       -- template_versions row: the inner NULLIF turns an empty '{}' into NULL,
+       -- and tv.* is NULL from the LEFT JOIN, so both arms would be NULL and
+       -- the string-typed field would reach clients as null.
+       COALESCE(CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wc.mcp_config, '{}'), tv.mcp_config::text)
+            ELSE wc.mcp_config END, '{}') AS mcp_config,
+       COALESCE(CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wc.agent_settings, '{}'), tv.agent_settings::text)
+            ELSE wc.agent_settings END, '{}') AS agent_settings,
        CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(wc.compute_resources, tv.compute_resources)
             ELSE wc.compute_resources END AS compute_resources,
        wc.auto_start,

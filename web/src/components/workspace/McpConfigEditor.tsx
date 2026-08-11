@@ -167,7 +167,10 @@ function emptyDraft(): StructuredDraft {
 
 function parseMcp(raw: string): McpConfig {
   try {
-    return JSON.parse(raw)
+    // `JSON.parse` succeeds on `null` and on scalars, so a bare try/catch is
+    // not enough — only an object shape can be read for `mcpServers`.
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     return {}
   }
