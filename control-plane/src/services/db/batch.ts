@@ -97,6 +97,20 @@ export async function listBatchTasks(batchRunId: string): Promise<BatchTask[]> {
   return rows
 }
 
+/**
+ * Task counts plus what the run's sessions spent.
+ *
+ * The tokens come from the usage ledger. They used to come from
+ * `sessions.last_turn_stats`, which held one turn's snapshot — summing those
+ * across tasks counted only each session's final turn, and once token
+ * accounting moved to the ledger the fields stopped being written at all, so
+ * the totals were a constant zero. The ledger has every turn, and keeps them
+ * after the session is deleted.
+ *
+ * No money: there is no pricing layer yet, and cache-read tokens (often tens of
+ * times the input volume, at a fraction of the price) make raw token counts a
+ * poor stand-in for one. They stay in their own column for whoever prices them.
+ */
 export async function getBatchRunStats(batchRunId: string): Promise<{
   total: number
   queued: number
@@ -104,9 +118,13 @@ export async function getBatchRunStats(batchRunId: string): Promise<{
   completed: number
   failed: number
   cancelled: number
-  total_cost_usd: number
-  total_duration_ms: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_cache_read_tokens: number
+  total_cache_creation_tokens: number
 }> {
+  // LATERAL, not a join to the ledger: a task with 300 usage rows would
+  // otherwise appear 300 times and multiply every status count with it.
   const { rows } = await pool.query(
     `SELECT
        COUNT(*)::int AS total,
@@ -115,12 +133,34 @@ export async function getBatchRunStats(batchRunId: string): Promise<{
        COUNT(*) FILTER (WHERE bt.status = 'completed')::int AS completed,
        COUNT(*) FILTER (WHERE bt.status = 'failed')::int AS failed,
        COUNT(*) FILTER (WHERE bt.status = 'cancelled')::int AS cancelled,
-       COALESCE(SUM((s.last_turn_stats->>'costUsd')::numeric), 0)::float AS total_cost_usd,
-       COALESCE(SUM((s.last_turn_stats->>'durationMs')::numeric), 0)::float AS total_duration_ms
+       COALESCE(SUM(u.input_tokens), 0)::bigint          AS total_input_tokens,
+       COALESCE(SUM(u.output_tokens), 0)::bigint         AS total_output_tokens,
+       COALESCE(SUM(u.cache_read_tokens), 0)::bigint     AS total_cache_read_tokens,
+       COALESCE(SUM(u.cache_creation_tokens), 0)::bigint AS total_cache_creation_tokens
      FROM batch_tasks bt
-     LEFT JOIN sessions s ON s.id = bt.session_id
+     LEFT JOIN LATERAL (
+       SELECT SUM(e.input_tokens)          AS input_tokens,
+              SUM(e.output_tokens)         AS output_tokens,
+              SUM(e.cache_read_tokens)     AS cache_read_tokens,
+              SUM(e.cache_creation_tokens) AS cache_creation_tokens
+         FROM workspace_usage_events e
+        WHERE e.session_id = bt.session_id
+     ) u ON TRUE
      WHERE bt.batch_run_id = $1`,
     [batchRunId],
   )
-  return rows[0]
+  const r = rows[0]
+  return {
+    total: r.total,
+    queued: r.queued,
+    running: r.running,
+    completed: r.completed,
+    failed: r.failed,
+    cancelled: r.cancelled,
+    // pg returns bigint as string; the counts above are already int.
+    total_input_tokens: Number(r.total_input_tokens),
+    total_output_tokens: Number(r.total_output_tokens),
+    total_cache_read_tokens: Number(r.total_cache_read_tokens),
+    total_cache_creation_tokens: Number(r.total_cache_creation_tokens),
+  }
 }

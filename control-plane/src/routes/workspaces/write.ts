@@ -20,6 +20,7 @@ import { chooseEnvironment } from '../../services/placement-decision'
 import { skillRepo } from '../../services/skills-composition'
 import { materializeTemplateLayout } from '../../services/template-layout'
 import { materializeTemplateSchedules } from '../../services/template-schedules'
+import { UsageNotDrained } from '../../services/usage/teardown'
 import { applyWorkspaceConfigUpdate } from '../../services/workspace-config'
 import { destroyWorkspace } from '../../services/workspace-lifecycle'
 import { canManage, toApiWorkspace } from './_shared'
@@ -310,12 +311,34 @@ const deleteRouteDef = createRoute({
   path: '/{id}',
   tags: ['workspaces'],
   summary: 'Delete a workspace and its underlying instance',
+  description: [
+    "Collects the workspace's outstanding token usage into the ledger before",
+    'tearing it down — the volume goes with the workspace, so records left on',
+    'it cannot be recovered. This waits out the transcript settle grace, so the',
+    'call takes a few seconds longer than the teardown itself.',
+    '',
+    'A running workspace that cannot be read answers 409: that is usually',
+    'transient and worth retrying. `force=true` deletes regardless, for an agent',
+    'wedged badly enough that waiting would never help.',
+  ].join('\n'),
   security: [{ bearerAuth: [] }],
-  request: { params: WorkspaceIdParam },
+  request: {
+    params: WorkspaceIdParam,
+    query: z.object({
+      force: z
+        .enum(['true', 'false'])
+        .optional()
+        .openapi({ param: { name: 'force', in: 'query' } }),
+    }),
+  },
   responses: {
     200: { description: 'Deleted', content: { 'application/json': { schema: SuccessSchema } } },
     404: {
       description: 'Workspace not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    409: {
+      description: 'Usage could not be collected before deleting',
       content: { 'application/json': { schema: ErrorSchema } },
     },
   },
@@ -324,12 +347,18 @@ const deleteRouteDef = createRoute({
 write.openapi(deleteRouteDef, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
+  const { force } = c.req.valid('query')
   const workspace = await getWorkspace(id)
   if (!workspace || !canManage(workspace, currentUser)) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
-  await destroyWorkspace(workspace)
+  try {
+    await destroyWorkspace(workspace, force === 'true')
+  } catch (e) {
+    if (e instanceof UsageNotDrained) return c.json({ error: e.message }, 409)
+    throw e
+  }
   return c.json({ success: true }, 200)
 })
 

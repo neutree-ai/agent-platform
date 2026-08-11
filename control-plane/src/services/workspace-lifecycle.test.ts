@@ -16,12 +16,17 @@ vi.mock('./db/sessions', () => ({ resetAllSessionsIdle: vi.fn() }))
 vi.mock('./db/workspaces', () => ({ deleteWorkspace: vi.fn(), updateWorkspace: vi.fn() }))
 vi.mock('./placement', () => ({ setDesiredPhase: vi.fn() }))
 vi.mock('./k8s', () => ({ destroy: vi.fn() }))
+vi.mock('./usage/teardown', () => ({
+  drainAfterStop: vi.fn(),
+  drainBeforeDelete: vi.fn(),
+}))
 
 import { getWorkspacePlacementEnv } from './db/environments'
 import { deleteWorkspace, updateWorkspace } from './db/workspaces'
 import * as k8s from './k8s'
 import { setDesiredPhase } from './placement'
-import { destroyWorkspace } from './workspace-lifecycle'
+import { drainAfterStop, drainBeforeDelete } from './usage/teardown'
+import { destroyWorkspace, stopWorkspace } from './workspace-lifecycle'
 
 const ws = { id: 'ws1' } as Workspace
 
@@ -56,5 +61,44 @@ describe('destroyWorkspace', () => {
     expect(updateWorkspace).toHaveBeenCalledWith('ws1', { status: 'deleting' })
     expect(k8s.destroy).not.toHaveBeenCalled()
     expect(deleteWorkspace).not.toHaveBeenCalled()
+  })
+
+  // Both teardown paths put the transcripts out of reach — the built-in one
+  // destroys the volume, the remote one hands the workspace to a runner that
+  // will. Collecting has to happen before either, not inside one of them.
+  it.each([true, false])('collects usage before tearing down (builtin=%s)', async (isBuiltin) => {
+    vi.mocked(getWorkspacePlacementEnv).mockResolvedValue({ isBuiltin } as never)
+    const order: string[] = []
+    vi.mocked(drainBeforeDelete).mockImplementation(async () => {
+      order.push('drain')
+    })
+    vi.mocked(k8s.destroy).mockImplementation(async () => {
+      order.push('teardown')
+    })
+    vi.mocked(setDesiredPhase).mockImplementation(async () => {
+      order.push('teardown')
+    })
+
+    await destroyWorkspace(ws)
+    expect(order).toEqual(['drain', 'teardown'])
+  })
+
+  it('passes force through, and lets a refusal stop the delete', async () => {
+    vi.mocked(getWorkspacePlacementEnv).mockResolvedValue({ isBuiltin: true } as never)
+    vi.mocked(drainBeforeDelete).mockRejectedValue(new Error('undrained'))
+
+    await expect(destroyWorkspace(ws, true)).rejects.toThrow('undrained')
+    expect(drainBeforeDelete).toHaveBeenCalledWith(ws, expect.any(Number), true)
+    expect(k8s.destroy).not.toHaveBeenCalled()
+    expect(deleteWorkspace).not.toHaveBeenCalled()
+  })
+})
+
+describe('stopWorkspace', () => {
+  it('collects usage on the way out, without waiting for it', async () => {
+    await stopWorkspace(ws)
+
+    expect(setDesiredPhase).toHaveBeenCalledWith('ws1', 'stopped')
+    expect(drainAfterStop).toHaveBeenCalledWith('ws1', ws.user_id, expect.any(Number))
   })
 })

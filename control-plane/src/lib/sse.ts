@@ -972,14 +972,23 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
 
           // Fresh-data token-usage pull for this workspace. Detached (not on the
           // serial queue) so the 30s-timeout fetch never delays message
-          // persistence; the periodic sweep is the completeness backstop, so a
-          // failure here is harmless.
-          void pullWorkspaceUsage(workspaceId).catch((e) =>
-            console.warn(
-              `[usage] session.ended pull ws=${workspaceId}:`,
-              e instanceof Error ? e.message : e,
-            ),
-          )
+          // persistence; nothing is lost when it fails — the transcripts keep
+          // the records and a later pull collects them — but a pull that keeps
+          // failing leaves accounts open, so say which ones did not land.
+          void pullWorkspaceUsage(workspaceId)
+            .then((o) => {
+              if (!o.drained) {
+                console.warn(
+                  `[usage] session.ended pull ws=${workspaceId} did not drain (${o.stop})`,
+                )
+              }
+            })
+            .catch((e) =>
+              console.warn(
+                `[usage] session.ended pull ws=${workspaceId}:`,
+                e instanceof Error ? e.message : e,
+              ),
+            )
 
           const reason = (evt as UniversalEvent).reason
           state.endReason = reason ?? null

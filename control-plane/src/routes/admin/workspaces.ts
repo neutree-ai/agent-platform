@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../../lib/types'
 import { pool } from '../../services/db/pool'
 import { getWorkspace } from '../../services/db/workspaces'
+import { UsageNotDrained } from '../../services/usage/teardown'
 import { destroyWorkspace, stopWorkspace } from '../../services/workspace-lifecycle'
 
 const workspaces = new Hono<AppEnv>()
@@ -133,11 +134,16 @@ workspaces.delete('/:id', async (c) => {
   if (!workspace) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
+  // `force=true` skips the refusal when the workspace's usage cannot be
+  // collected first — same escape hatch as the owner route, since an operator
+  // clearing out a wedged workspace needs it more, not less.
+  const force = c.req.query('force') === 'true'
   try {
-    console.log(`[Admin] Delete workspace=${id}`)
-    await destroyWorkspace(workspace)
+    console.log(`[Admin] Delete workspace=${id}${force ? ' (force)' : ''}`)
+    await destroyWorkspace(workspace, force)
     return c.json({ success: true })
   } catch (e) {
+    if (e instanceof UsageNotDrained) return c.json({ error: e.message }, 409)
     return c.json({ error: e instanceof Error ? e.message : 'Failed to delete workspace' }, 500)
   }
 })

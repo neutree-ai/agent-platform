@@ -8,6 +8,7 @@ import type { Workspace } from './db/types'
 import { deleteWorkspace, updateWorkspace } from './db/workspaces'
 import * as k8s from './k8s'
 import { setDesiredPhase } from './placement'
+import { drainAfterStop, drainBeforeDelete } from './usage/teardown'
 
 /**
  * Stop a workspace: interrupt active sessions, record desired=stopped (the
@@ -19,9 +20,13 @@ import { setDesiredPhase } from './placement'
  */
 export async function stopWorkspace(workspace: Workspace): Promise<void> {
   await interruptAllSessions(workspace, 'Stop')
+  // Interrupting is the last thing that can add to the transcripts, so the wait
+  // for them to settle starts here. Detached — see drainAfterStop.
+  const settleFrom = Date.now()
   await setDesiredPhase(workspace.id, 'stopped')
   await resetAllSessionsIdle(workspace.id)
   await updateWorkspace(workspace.id, { status: 'stopped' })
+  drainAfterStop(workspace.id, workspace.user_id, settleFrom)
 }
 
 /**
@@ -37,16 +42,24 @@ export async function stopWorkspace(workspace: Workspace): Promise<void> {
  * projection. Built-in environments delete the k8s instance and the row
  * synchronously.
  *
+ * Its usage is collected first, because both exits below put the transcripts
+ * out of reach — see drainBeforeDelete, which is also what `force` overrides.
+ *
  * Shared by the owner delete route and the admin fleet view.
  */
-export async function destroyWorkspace(workspace: Workspace): Promise<void> {
+export async function destroyWorkspace(workspace: Workspace, force = false): Promise<void> {
   await interruptAllSessions(workspace, 'Delete')
+  const settleFrom = Date.now()
 
   for (const s of await listSchedulesByWorkspace(workspace.id)) {
     await jobs.cancelScheduleTimer(s).catch(() => {})
   }
 
   await fireDeleteHooks(workspace.id)
+
+  // Before either teardown path, and after the work above — which the settle
+  // wait absorbs rather than adds to.
+  await drainBeforeDelete(workspace, settleFrom, force)
 
   const placementEnv = await getWorkspacePlacementEnv(workspace.id)
   if (placementEnv && !placementEnv.isBuiltin) {

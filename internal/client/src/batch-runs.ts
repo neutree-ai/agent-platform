@@ -36,8 +36,12 @@ export interface BatchRunStats {
   completed: number
   failed: number
   cancelled: number
-  total_cost_usd: number
-  total_duration_ms: number
+  /** Summed from the usage ledger over the run's sessions. Cache tiers stay
+   *  separate — a cache read costs a fraction of an input token. */
+  total_input_tokens: number
+  total_output_tokens: number
+  total_cache_read_tokens: number
+  total_cache_creation_tokens: number
 }
 
 export interface BatchRunDetail extends BatchRun {
