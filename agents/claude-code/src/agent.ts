@@ -66,8 +66,20 @@ process.env.MCP_CONNECTION_NONBLOCKING ??= '0'
 
 export type { AskUserRequest, TurnStats }
 
-// Active abort controllers for interruption support
-const activeControllers = new Map<string, AbortController>()
+// Active turns, keyed by session (or a temporary key before the SDK hands us a
+// session id). `done` settles when the turn's consumer loop has fully unwound,
+// so a superseding turn can wait for the previous CLI process to exit before
+// starting one with the same `resume` id — two processes writing one transcript
+// corrupts it.
+interface ActiveTurn {
+  controller: AbortController
+  done: Promise<void>
+}
+const activeControllers = new Map<string, ActiveTurn>()
+
+// How long a superseding turn waits for the previous one to unwind before
+// starting anyway. A wedged consumer must not block new user messages forever.
+const SUPERSEDE_TIMEOUT_MS = 10_000
 
 // Pending canUseTool responses for AskUserQuestion (keyed by requestId)
 const pendingResponses = new Map<
@@ -125,9 +137,9 @@ export function interruptSession(sessionId: string): boolean {
   console.log(
     `[agent] interruptSession called session=${sessionId} active=${activeControllers.has(sessionId)}`,
   )
-  const controller = activeControllers.get(sessionId)
-  if (controller) {
-    controller.abort()
+  const turn = activeControllers.get(sessionId)
+  if (turn) {
+    turn.controller.abort()
     activeControllers.delete(sessionId)
     console.log(`[agent] interruptSession succeeded session=${sessionId}`)
     return true
@@ -159,9 +171,35 @@ export async function chat(
   let resultSessionId = sessionId || ''
   const abortController = new AbortController()
 
+  // A turn now outlives its first `result` (see the consumer loop below), so a
+  // background sub-agent can still be running when the next user message lands.
+  // Tear the previous turn down and wait for it before resuming the same
+  // session — two CLI processes sharing one transcript corrupt it.
+  if (sessionId) {
+    const prev = activeControllers.get(sessionId)
+    if (prev) {
+      console.log(`[chat] Superseding still-running turn session=${sessionId}`)
+      prev.controller.abort()
+      await Promise.race([prev.done, new Promise<void>((r) => setTimeout(r, SUPERSEDE_TIMEOUT_MS))])
+      if (activeControllers.get(sessionId) === prev) {
+        console.warn(
+          `[chat] Previous turn did not unwind within ${SUPERSEDE_TIMEOUT_MS}ms session=${sessionId}, proceeding`,
+        )
+        activeControllers.delete(sessionId)
+      }
+    }
+  }
+
   // Register for interruption (use existing sessionId or a unique temporary key)
   const queryKey = sessionId || `pending-${crypto.randomUUID()}`
-  activeControllers.set(queryKey, abortController)
+  let doneResolve!: () => void
+  const activeTurn: ActiveTurn = {
+    controller: abortController,
+    done: new Promise<void>((r) => {
+      doneResolve = r
+    }),
+  }
+  activeControllers.set(queryKey, activeTurn)
 
   // Build prompt: plain string if no images, SDKUserMessage async generator if images
   let prompt: string | AsyncIterable<SDKUserMessage>
@@ -304,6 +342,7 @@ export async function chat(
     let lastContextTokens = 0
 
     let messageCount = 0
+    let resultCount = 0
     let firstMessageAt: number | null = null
     let firstAssistantAt: number | null = null
     for await (const message of messageStream) {
@@ -328,7 +367,7 @@ export async function chat(
         // Update the controller key for interruption
         if (queryKey !== resultSessionId) {
           activeControllers.delete(queryKey)
-          activeControllers.set(resultSessionId, abortController)
+          activeControllers.set(resultSessionId, activeTurn)
         }
       }
 
@@ -361,14 +400,27 @@ export async function chat(
         }
       }
 
+      // A compaction turn reports no usage of its own, so the context size would
+      // otherwise fall back to 0 and blank the UI gauge until the next turn.
+      // The boundary message carries the post-compaction size — use it.
+      if (message.type === 'system' && (message as any).subtype === 'compact_boundary') {
+        const postTokens = (message as any).compact_metadata?.post_tokens
+        if (typeof postTokens === 'number' && postTokens > 0) {
+          lastContextTokens = postTokens
+        }
+      }
+
       // Track first assistant output
       if (!firstAssistantAt && message.type === 'assistant') {
         firstAssistantAt = Date.now()
         console.log(`[chat] First assistant output, ttfa=${firstAssistantAt - chatStartedAt}ms`)
       }
 
-      // Extract stats from result message
+      // Extract stats from the result message. A turn can produce more than one
+      // (the main agent's, then one per background sub-agent completion); the
+      // last one wins because its cost and usage cover the whole run.
       if (message.type === 'result') {
+        resultCount++
         const r = message as SDKMessage & {
           subtype?: string
           total_cost_usd?: number
@@ -427,18 +479,23 @@ export async function chat(
           contextWindow,
         }
         console.log(
-          `[chat] Result: turns=${stats.numTurns} cost=$${stats.costUsd.toFixed(4)} duration=${stats.durationMs}ms context=${stats.contextTokens}/${contextWindow} terminal_reason=${r.terminal_reason ?? 'unknown'} stop_reason=${r.stop_reason ?? 'unknown'}`,
+          `[chat] Result #${resultCount}: turns=${stats.numTurns} cost=$${stats.costUsd.toFixed(4)} duration=${stats.durationMs}ms context=${stats.contextTokens}/${contextWindow} terminal_reason=${r.terminal_reason ?? 'unknown'} stop_reason=${r.stop_reason ?? 'unknown'}`,
         )
       }
 
       await callbacks.onMessage(message)
 
-      if (message.type === 'result') {
-        break
-      }
+      // Deliberately no `break` on `result`. A background sub-agent keeps
+      // running after the main agent ends its turn, and the CLI delivers its
+      // completion as a further turn on this same stream — breaking here
+      // returns the generator, which tears down the transport and kills that
+      // work mid-flight. Consume until the stream ends on its own; `stats` then
+      // reflects the last result, whose cost is cumulative over the whole run.
     }
 
-    console.log(`[chat] Query completed, total=${Date.now() - chatStartedAt}ms`)
+    console.log(
+      `[chat] Query completed, total=${Date.now() - chatStartedAt}ms results=${resultCount}`,
+    )
     await callbacks.onComplete(stats)
   } catch (error) {
     // A user interrupt (interruptSession → controller.abort()) can surface in
@@ -460,7 +517,12 @@ export async function chat(
       await callbacks.onError(error instanceof Error ? error : new Error(String(error)))
     }
   } finally {
-    activeControllers.delete(resultSessionId || queryKey)
+    const key = resultSessionId || queryKey
+    // Only drop our own entry — a superseding turn may already own this key.
+    if (activeControllers.get(key) === activeTurn) {
+      activeControllers.delete(key)
+    }
+    doneResolve()
   }
 
   return { sessionId: resultSessionId }
