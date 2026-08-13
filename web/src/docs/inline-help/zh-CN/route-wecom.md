@@ -3,7 +3,7 @@
 ## 字段说明
 
 - **Connector** — 选择已创建的企业微信 connector
-- **群聊 ID** — 企业微信群聊 ID（格式 `wrXXX...`），可从测试脚本日志的 `chatid` 字段获取
+- **群聊 ID** — 企业微信群聊 ID（格式 `wrXXX...`），可从测试脚本日志的 `chatid` 字段获取。填 `*` 就是给这个 connector 配兜底路由：凡是没单独建过路由的群聊都走这条。兜底会接管别人可能正在用的群聊，所以只有 connector 的创建者能配
 - **Workspace** — 事件触发后在哪个 workspace 执行任务
 
 ## Prompt 模板

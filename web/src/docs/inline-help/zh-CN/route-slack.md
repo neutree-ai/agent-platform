@@ -3,7 +3,7 @@
 ## 字段说明
 
 - **Connector** — 选择已创建的 Slack connector
-- **Channel** — 选择 bot 已加入的频道（仅列出 bot 所在频道）
+- **Channel** — 选择 bot 已加入的频道（仅列出 bot 所在频道）。选 **All channels** 就是给这个 connector 配兜底路由：凡是没单独建过路由的频道都走这条，新建频道不用再加规则。兜底会接管别人可能正在用的频道，所以只有 connector 的创建者能配；别人分享给你的 connector 上不出现这个选项
 - **Workspace** — 事件触发后在哪个 workspace 执行任务
 
 ## Prompt 模板

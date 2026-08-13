@@ -3,7 +3,7 @@ Route @mention events in a Slack Channel to a specified Workspace for execution.
 ## Field descriptions
 
 - **Connector** — Select a created Slack Connector
-- **Channel** — Select a Channel the bot has joined (only channels where the bot is present are listed)
+- **Channel** — Select a Channel the bot has joined (only channels where the bot is present are listed). Picking **All channels** turns the route into the connector's fallback: every channel without a route of its own is handled here, so a newly created channel works without adding anything. A fallback takes in channels other people may be using, so only the connector's owner can set one — on a connector shared with you, the option is not offered
 - **Workspace** — Which Workspace executes the task after the event is triggered
 
 ## Prompt template

@@ -3,7 +3,7 @@ Route @Bot messages in WeCom group chats to a specified Workspace for execution.
 ## Field descriptions
 
 - **Connector** — Select a created WeCom Connector
-- **Group chat ID** — WeCom group chat ID (format `wrXXX...`), available from the `chatid` field in test script logs
+- **Group chat ID** — WeCom group chat ID (format `wrXXX...`), available from the `chatid` field in test script logs. Entering `*` turns the route into the connector's fallback: every group chat without a route of its own is handled here. A fallback takes in group chats other people may be using, so only the connector's owner can set one
 - **Workspace** — Which Workspace executes the task after the event is triggered
 
 ## Prompt template
