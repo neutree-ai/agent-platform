@@ -23,6 +23,7 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { PromptField } from '@/components/workspace/PromptField'
+import { useAuth } from '@/contexts/AuthContext'
 import {
   type ConnectorType as PresetConnectorType,
   listPromptPresets,
@@ -546,10 +547,12 @@ export function RouteForm({
   onConnectorTypeChange?: (type: string) => void
 }) {
   const { t } = useTranslation()
+  const { user } = useAuth()
   const [connectorId, setConnectorId] = useState(initial?.connector_id ?? '')
-  const initConnectorType = connectors.find((c) => c.id === initial?.connector_id)?.type
+  const initConnector = connectors.find((c) => c.id === initial?.connector_id)
   const [externalId, setExternalId] = useState(
-    initial?.external_id ?? (initConnectorType === 'wecom' ? '*' : ''),
+    initial?.external_id ??
+      (initConnector?.type === 'wecom' && initConnector.user_id === user?.id ? '*' : ''),
   )
   const [workspaceId, setWorkspaceId] = useState(initial?.workspace_id ?? '')
   const [name, setName] = useState(initial?.name ?? '')
@@ -590,6 +593,13 @@ export function RouteForm({
   const isEdit = !!initial?.id
   const selectedConnector = connectors.find((c) => c.id === connectorId)
   const connectorType = selectedConnector?.type ?? ''
+  // The '*' catch-all takes every channel nobody routed explicitly, so it stays
+  // with the connector owner — a borrower on a public connector would otherwise
+  // pull their colleagues' channels into their own workspace. Rejected server-side
+  // too; kept visible here only when editing a route that already holds the slot.
+  const canUseCatchAll =
+    (!!selectedConnector && selectedConnector.user_id === user?.id) ||
+    (isEdit && initial?.external_id === '*')
 
   const selectedConnectorPresetType: PresetConnectorType | null =
     connectorType === 'slack' || connectorType === 'wecom'
@@ -625,7 +635,9 @@ export function RouteForm({
     retry: 1,
   })
   const slackChannelItems = [
-    { value: '*', label: t('components.integration.route.labels.allChannels') },
+    ...(canUseCatchAll
+      ? [{ value: '*', label: t('components.integration.route.labels.allChannels') }]
+      : []),
     ...(channels || []).map((ch) => ({ value: ch.id, label: `#${ch.name}` })),
   ]
   if (

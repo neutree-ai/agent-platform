@@ -133,9 +133,10 @@ export const cgApi = {
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(data),
-    }).then((r) => {
-      if (!r.ok) throw new Error(i18n.t('integration.errors.requestFailed'))
-      return r.json() as Promise<CgRoute>
+    }).then(async (r) => {
+      const body = await r.json()
+      if (!r.ok) throw new Error(body.error || i18n.t('integration.errors.requestFailed'))
+      return body as CgRoute
     }),
 
   updateRoute: (

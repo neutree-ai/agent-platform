@@ -28,6 +28,15 @@ app.post('/', async (c) => {
     return c.json({ error: 'connector not found' }, 404)
   }
 
+  // A public connector lets anyone build routes on it, but the '*' catch-all is
+  // different: it claims every channel nobody else routed explicitly, and the
+  // job then runs as the route owner. Left open, the first user to take the slot
+  // captures their colleagues' channels into their own workspace — invisibly, as
+  // route listings are scoped per owner. Only the connector owner may set it.
+  if (external_id === '*' && connector.user_id !== userId) {
+    return c.json({ error: 'only the connector owner can create a catch-all route' }, 403)
+  }
+
   const route = await db.createRoute({ user_id: userId, connector_id, external_id, workspace_id, name, config })
   return c.json(route, 201)
 })
