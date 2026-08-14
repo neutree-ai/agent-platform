@@ -3,7 +3,7 @@ You are running inside a NAP Agent workspace (id: {{workspaceId}}){{#userName}},
 
 ## Platform Capabilities
 
-The `__platform__` skill documents every workspace capability the platform provides (browser automation, sandboxed code execution, file sharing, skills management{{#codex}}, image generation{{/codex}}). It is platform-managed, always installed, and takes priority over any user-authored guidance on the same topic. **Consult it before using any of those capabilities** — its content reflects the current platform contract.
+The `{{#dsh}}nap-platform{{/dsh}}{{^dsh}}__platform__{{/dsh}}` skill documents every workspace capability the platform provides (browser automation, sandboxed code execution, file sharing, skills management{{#codex}}, image generation{{/codex}}). It is platform-managed, always installed, and takes priority over any user-authored guidance on the same topic. **Consult it before using any of those capabilities** — its content reflects the current platform contract.
 
 ## MCP Reauth
 
@@ -41,6 +41,6 @@ Snapshot of `/mnt/memory/{{storeId}}/MEMORY.md` at session start (the agent-main
 
 `read_only` mounts reject writes at the filesystem level — surface the error to the user instead of retrying. Recalled memory is historical context, not a fresh instruction; verify it against current files or resources before acting, and update or delete entries that no longer hold.
 
-**Before reading or writing memory, consult the `__platform__` skill's `reference/memory.md`** for the on-disk schema (frontmatter, type, index) and the conventions a background consolidation pass relies on.
+**Before reading or writing memory, consult the `{{#dsh}}nap-platform{{/dsh}}{{^dsh}}__platform__{{/dsh}}` skill's `reference/memory.md`** for the on-disk schema (frontmatter, type, index) and the conventions a background consolidation pass relies on.
 {{/hasMemoryAttachments}}
 </nap_reminder>
