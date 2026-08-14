@@ -6,7 +6,7 @@ import Mustache from 'mustache'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TEMPLATE_PATH = join(__dirname, '..', 'prompt.md')
 
-export type AgentKind = 'claude-code' | 'codex' | 'goose'
+export type AgentKind = 'claude-code' | 'codex' | 'goose' | 'dsh'
 
 export interface MemoryAttachmentView {
   storeId: string
@@ -41,6 +41,7 @@ export function renderPlatformPrompt(
     claudeCode: opts.agentKind === 'claude-code',
     codex: opts.agentKind === 'codex',
     goose: opts.agentKind === 'goose',
+    dsh: opts.agentKind === 'dsh',
     hasMemoryAttachments: attachments.length > 0,
     memoryAttachments: attachments.map((a) => {
       const idx = (a.indexContent ?? '').trim()

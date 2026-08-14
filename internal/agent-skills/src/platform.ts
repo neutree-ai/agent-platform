@@ -21,7 +21,7 @@ import Mustache from 'mustache'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PLATFORM_SKILL_DIR = join(__dirname, '..', 'platform', '__platform__')
 
-export type AgentKind = 'claude-code' | 'codex' | 'goose'
+export type AgentKind = 'claude-code' | 'codex' | 'goose' | 'dsh'
 
 export interface PlatformSkillView {
   workspaceId: string
@@ -51,6 +51,7 @@ export function renderPlatformSkillFiles(view: PlatformSkillView): Record<string
     claudeCode: view.agentKind === 'claude-code',
     codex: view.agentKind === 'codex',
     goose: view.agentKind === 'goose',
+    dsh: view.agentKind === 'dsh',
   }
   const files: Record<string, string> = {}
   for (const full of walkMarkdown(PLATFORM_SKILL_DIR)) {

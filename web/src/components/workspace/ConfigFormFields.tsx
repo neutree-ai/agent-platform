@@ -61,11 +61,25 @@ const AGENT_SETTINGS_DEFAULTS: Record<string, Record<string, any>> = {
   codex: {},
 }
 
+/**
+ * Whether a core has a place to put user settings at all. dsh builds its whole
+ * plugin tree from platform config with no merge point for a user document, so
+ * the field is hidden rather than shown and silently ignored.
+ */
+function supportsAgentSettings(agentType: string): boolean {
+  return agentType !== 'dsh'
+}
+
 function defaultAgentSettings(agentType: string): string {
   switch (agentType) {
     // Goose settings are YAML — an empty string means "no extra settings"
     // (a JSON `{}` would be skipped agent-side but reads as the wrong dialect).
     case 'goose':
+      return ''
+    // dsh builds its whole plugin tree from platform config; user settings have
+    // no merge point yet, so the honest default is nothing rather than a shape
+    // the agent would ignore.
+    case 'dsh':
       return ''
     default:
       return JSON.stringify(AGENT_SETTINGS_DEFAULTS[agentType] ?? {}, null, 2)
@@ -144,7 +158,9 @@ export function ConfigFormFields({
     const container = findScrollParent(wrapper)
     if (!container) return
 
-    const sections = compact ? SECTIONS.filter((s) => s !== 'mcp' && s !== 'settings') : SECTIONS
+    const sections = compact
+      ? SECTIONS.filter((s) => s !== 'mcp' && s !== 'settings')
+      : SECTIONS.filter((s) => s !== 'settings' || supportsAgentSettings(values.agent_type))
 
     let raf = 0
     function handleScroll() {
@@ -191,7 +207,9 @@ export function ConfigFormFields({
       container.removeEventListener('scroll', handleScroll)
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [onVisibleSections, compact])
+    // agent_type is a dependency because it decides whether the settings
+    // section exists at all, and the observer indexes sections by position.
+  }, [onVisibleSections, compact, values.agent_type])
 
   function update(patch: Partial<ConfigFormValues>) {
     onChange({ ...values, ...patch })
@@ -254,16 +272,18 @@ export function ConfigFormFields({
               onChange={(v) => update({ mcp_config: v })}
             />
           </div>
-          <div ref={sectionRef('settings')} className="space-y-1">
-            <Label className="text-xs">
-              {t('components.configFormFields.labels.agentSettings')}
-            </Label>
-            <AgentSettingsEditor
-              value={values.agent_settings}
-              onChange={(v) => update({ agent_settings: v })}
-              agentType={values.agent_type}
-            />
-          </div>
+          {supportsAgentSettings(values.agent_type) && (
+            <div ref={sectionRef('settings')} className="space-y-1">
+              <Label className="text-xs">
+                {t('components.configFormFields.labels.agentSettings')}
+              </Label>
+              <AgentSettingsEditor
+                value={values.agent_settings}
+                onChange={(v) => update({ agent_settings: v })}
+                agentType={values.agent_type}
+              />
+            </div>
+          )}
         </>
       )}
 

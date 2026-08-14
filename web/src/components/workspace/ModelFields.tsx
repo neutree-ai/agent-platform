@@ -23,6 +23,7 @@ const AGENT_TYPES = [
   { value: 'claude-code', label: 'Claude Code' },
   { value: 'codex', label: 'Codex' },
   { value: 'goose', label: 'Goose' },
+  { value: 'dsh', label: 'DeepSeek Harness' },
 ]
 
 /** Provider types each agent supports — omit to allow all. */
@@ -32,6 +33,8 @@ const AGENT_PROVIDER_TYPES: Record<string, string[] | null> = {
   codex: ['openai'],
   // Goose speaks the OpenAI Chat Completions API only.
   goose: ['openai-chat'],
+  // dsh routes through pi-ai, which implements all three wire protocols.
+  dsh: ['openai', 'openai-chat', 'anthropic'],
 }
 
 // Compose a one-line attribution for non-owned providers so the workspace
