@@ -4,6 +4,7 @@ import type { ToolRendererDef } from './types'
 
 // Claude Code built-in tools
 import { agentRenderer } from './claude/agent'
+import { dshJobRenderer } from './dsh/jobs'
 import { bashRenderer } from './claude/bash'
 import { fileEditRenderer } from './claude/file-edit'
 import { fileReadRenderer } from './claude/file-read'
@@ -53,7 +54,37 @@ import {
   gooseWriteRenderer,
 } from './goose/developer'
 
-// ── Tool-name registry (priority 1) ──
+// ── Agent-scoped tool-name registry (priority 1) ──
+
+/**
+ * Renderers that apply only to one core, consulted before the shared
+ * tool-name registry.
+ *
+ * Cores disagree about what a given tool name means: goose's `write` takes
+ * `{path, content}` while dsh's takes `{file_path, content}`, so a single
+ * global entry renders one of them with a blank filename. This layer keeps
+ * such names apart without inventing per-core aliases the model never used.
+ *
+ * dsh's tool schemas happen to match Claude Code's field for field — the same
+ * `file_path` / `old_string` / `new_string` / `todos` shapes — so most entries
+ * reuse those renderers rather than duplicating them.
+ */
+const agentToolRenderers: Record<string, Record<string, ToolRendererDef>> = {
+  dsh: {
+    bash: bashRenderer,
+    read: fileReadRenderer,
+    write: fileEditRenderer,
+    edit: fileEditRenderer,
+    todo_write: todoRenderer,
+    subagent: agentRenderer,
+    skill: gooseLoadSkillRenderer,
+    job_list: dshJobRenderer,
+    job_output: dshJobRenderer,
+    job_kill: dshJobRenderer,
+  },
+}
+
+// ── Tool-name registry (priority 2) ──
 
 const toolRenderers: Record<string, ToolRendererDef> = {
   // Claude Code
@@ -141,7 +172,7 @@ const toolRenderers: Record<string, ToolRendererDef> = {
   load_skill: gooseLoadSkillRenderer,
 }
 
-// ── Agent-type fallback registry (priority 2) ──
+// ── Agent-type fallback registry (priority 3) ──
 
 const agentFallbacks: Record<string, ToolRendererDef> = {
   'claude-code': claudeFallback,
@@ -191,10 +222,11 @@ export function unwrapExecuteDispatchName(name: string, input: unknown): string 
 
 /**
  * Resolve the best renderer for a tool call.
- * 1. Built-in exact tool-name match (after stripping prefixes)
- * 2. Plugin-registered renderer (window.tos.registerToolRenderer)
- * 3. Agent-type fallback
- * 4. null (caller uses DefaultInput/DefaultResult)
+ * 1. Agent-scoped exact tool-name match (cores that disagree about a name)
+ * 2. Built-in exact tool-name match (after stripping prefixes)
+ * 3. Plugin-registered renderer (window.tos.registerToolRenderer)
+ * 4. Agent-type fallback
+ * 5. null (caller uses DefaultInput/DefaultResult)
  */
 export function resolveRenderer(
   tool: { name: string; input?: unknown },
@@ -202,6 +234,7 @@ export function resolveRenderer(
 ): ToolRendererDef | null {
   const displayName = getToolDisplayName(unwrapExecuteDispatchName(tool.name, tool.input))
   return (
+    agentToolRenderers[agentType]?.[displayName] ??
     toolRenderers[displayName] ??
     getPluginToolRenderer(displayName) ??
     agentFallbacks[agentType] ??

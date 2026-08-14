@@ -201,6 +201,11 @@
             "ttl": "有效期：{{value}} 秒",
             "expires": "过期时间：{{value}}"
           }
+        },
+        "dshJobs": {
+          "labels": {
+            "waiting": "等待任务结束"
+          }
         }
       },
       "toolCallBlock": {

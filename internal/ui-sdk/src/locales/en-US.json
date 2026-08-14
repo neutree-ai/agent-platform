@@ -201,6 +201,11 @@
             "ttl": "ttl: {{value}}s",
             "expires": "expires: {{value}}"
           }
+        },
+        "dshJobs": {
+          "labels": {
+            "waiting": "Waiting for the job to finish"
+          }
         }
       },
       "toolCallBlock": {
