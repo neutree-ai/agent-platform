@@ -104,12 +104,16 @@ export class DshEventTranslator {
         if (callId === undefined) return []
         const name = str(event.data?.name) ?? 'tool'
         this.toolNames.set(callId, name)
+        // No `kind`: the pipeline reads it in preference to `title` when it
+        // picks the name a tool card is dispatched and labelled by, so
+        // claiming a kind here would relabel every dsh tool as that kind.
+        // The real tool name is what both the renderer registry and the user
+        // need.
         return [
           {
             sessionUpdate: 'tool_call',
             toolCallId: callId,
             title: name,
-            kind: 'other',
             status: 'in_progress',
             rawInput: parseArguments(event.data?.arguments),
           } as SessionUpdate,

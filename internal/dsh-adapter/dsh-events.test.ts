@@ -141,3 +141,32 @@ describe('DshEventTranslator', () => {
     expect((update as unknown as { rawInput: unknown }).rawInput).toBe('{"command": truncated…')
   })
 })
+
+describe('through the platform event pipeline', () => {
+  /**
+   * The translator's output is consumed by `AcpEventTranslator`, which picks
+   * the name a tool card is dispatched and labelled by. It prefers a tool
+   * call's `kind` over its `title`, so a translator that fills `kind` in with
+   * a constant silently relabels every tool — the unit tests above still pass
+   * because they read the SessionUpdate, not what the pipeline makes of it.
+   */
+  it('labels a tool card with the tool the model actually called', async () => {
+    const { AcpEventTranslator } = await import('../acp-adapter/universal-events.js')
+    const turn = createTurnAccumulator()
+    const translator = new DshEventTranslator(turn)
+    const pipeline = new AcpEventTranslator('session-1')
+
+    const events = translator.translate({
+      type: 'tool/call',
+      seq: 1,
+      time: 0,
+      data: { callId: 'c1', name: 'write', arguments: '{"file_path":"notes.txt"}' },
+    })
+    const universal = events.flatMap(u => pipeline.translateUpdate(u))
+    const started = universal.find(e => e.type === 'item.started')
+    const call = started?.item?.content?.[0]
+
+    expect(call?.name).toBe('write')
+    expect(call?.call_id).toBe('c1')
+  })
+})
