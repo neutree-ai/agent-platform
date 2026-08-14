@@ -33,8 +33,11 @@ const AGENT_PROVIDER_TYPES: Record<string, string[] | null> = {
   codex: ['openai'],
   // Goose speaks the OpenAI Chat Completions API only.
   goose: ['openai-chat'],
-  // dsh routes through pi-ai, which implements all three wire protocols.
-  dsh: ['openai', 'openai-chat', 'anthropic'],
+  // dsh reaches its provider through pi-ai, which implements the Responses
+  // and Anthropic protocols too — but only Chat Completions has been verified
+  // end to end on this core, so it is the only one offered while dsh upstream
+  // is a developer preview.
+  dsh: ['openai-chat'],
 }
 
 // Compose a one-line attribution for non-owned providers so the workspace

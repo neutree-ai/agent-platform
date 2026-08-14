@@ -331,17 +331,18 @@ export function loadRuntimeConfig(): RuntimeConfig | null {
  */
 function providerApi(providerType: string): string {
   switch (providerType) {
-    case 'anthropic':
-      return 'anthropic-messages'
-    // The platform's two OpenAI flavours are distinct wire protocols, not a
-    // default plus a variant: `openai` is the Responses API, `openai-chat` is
-    // Chat Completions. pi-ai implements both, so neither has to be coerced.
-    case 'openai':
-      return 'openai-responses'
     case 'openai-chat':
       return 'openai-completions'
+    // pi-ai also implements `openai-responses` (the platform's `openai`) and
+    // `anthropic-messages`, and mapping them is a one-line change — but
+    // neither has been exercised on this core, and a wrong dialect fails as
+    // malformed requests rather than as a configuration error. While dsh
+    // upstream is a developer preview, refuse the untested routes here and in
+    // the provider picker rather than shipping a guess.
     default:
-      throw new Error(`dsh agent cannot serve provider_type "${providerType}"`)
+      throw new Error(
+        `dsh agent has no verified wire protocol for provider_type "${providerType}" — use an openai-chat provider`,
+      )
   }
 }
 
