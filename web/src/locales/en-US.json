@@ -2949,12 +2949,6 @@
         "sessionsToday": "New sessions",
         "interactionsToday": "Interactions today",
         "cellTooltip": "{{date}} · {{count}}",
-        "rangeAria": "Time range",
-        "range": {
-          "7d": "7d",
-          "30d": "30d",
-          "90d": "90d"
-        },
         "punchLabel": "When you work",
         "punchTooltip": "{{day}} · {{hour}}:00 · {{count}}",
         "dow": {
@@ -2967,18 +2961,71 @@
           "6": "Sat"
         },
         "hourSuffix": "h",
-        "punchCaption": "Hour of day × weekday — darker means more active.",
-        "token": {
-          "usageLabel": "Token usage",
-          "cellTooltip": "{{date}} · {{value}}",
-          "compositionLabel": "Composition",
-          "byWorkspaceLabel": "Workspace token usage",
-          "input": "Input",
-          "output": "Output",
-          "cache": "Cached",
-          "cacheRead": "Cache read",
-          "cacheCreation": "Cache write"
-        }
+        "punchCaption": "Hour of day × weekday — darker means more active."
+      },
+      "tokenUsage": {
+        "usageLabel": "Token usage",
+        "cellTooltip": "{{date}} · {{value}}",
+        "compositionLabel": "Composition",
+        "byWorkspaceLabel": "Workspace token usage",
+        "input": "Input",
+        "output": "Output",
+        "cache": "Cached",
+        "cacheRead": "Cache read",
+        "cacheCreation": "Cache write"
+      },
+      "statsRange": {
+        "aria": "Time range",
+        "7d": "7d",
+        "30d": "30d",
+        "90d": "90d"
+      },
+      "resourcesApp": {
+        "computeLabel": "Compute used",
+        "coreHours": "core-hours",
+        "storageHeld": "{{value}} on disk",
+        "active": "Working",
+        "idle": "Idle",
+        "computeByWorkspaceLabel": "Compute by workspace",
+        "idleLabel": "Running but untouched",
+        "idleCount": "{{count}} idle",
+        "idleCaption": "Still holding CPU and memory. Stopping is reversible — a new message starts it back up.",
+        "idleDetail": "{{days}}d idle · {{cores}} core",
+        "stop": "Stop",
+        "confirm": "Confirm",
+        "stoppedStorageLabel": "Stopped, disk still held",
+        "stoppedStorageCaption": "Stopping frees compute; the volume is released only on delete.",
+        "stoppedDetail": "{{days}}d without activity",
+        "delete": "Delete",
+        "categoryAria": "Cost category",
+        "category": {
+          "infra": "Infrastructure",
+          "token": "Model",
+          "activity": "Activity"
+        },
+        "overview": "All",
+        "empty": "Nothing recorded in this window.",
+        "untitledSession": "Untitled session",
+        "timelineLabel": "Runtime",
+        "timelineCaption": "Segment width is its share of the window.",
+        "segmentTooltip": "{{phase}} · {{from}} → {{to}}",
+        "sessionsLabel": "Sessions by token",
+        "sessionShapeLabel": "Session shape",
+        "sessionDetail": "{{messages}} messages · {{tools}} tool calls · {{duration}}",
+        "messagesLabel": "Messages",
+        "toolCallsLabel": "Tool calls",
+        "durationLabel": "Duration",
+        "timeSplitLabel": "Where the time went",
+        "inTool": "In tools",
+        "waiting": "Model / waiting",
+        "toolTimelineLabel": "Tool activity",
+        "toolTimelineCaption": "Calls in order, coloured by tool — a run of one colour is the agent repeating itself.",
+        "byToolLabel": "By tool",
+        "callCount": "{{count}} calls",
+        "errorCount": "{{count}} errors",
+        "toolDetail": "{{calls}} calls · avg {{avg}}",
+        "toolBreakdown": "Tool breakdown",
+        "otherTools": "Other ({{count}} tools)"
       },
       "punchCard": {
         "aria": "hour-of-day activity"

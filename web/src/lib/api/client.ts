@@ -36,7 +36,12 @@ import type {
   ApiPromptVersion,
   ApiProviderGrant,
   ApiRecentSessionItem,
+  ApiResourceSummary,
+  ApiRuntimeTimeline,
   ApiServiceToken,
+  ApiSessionToolActivity,
+  ApiSessionUsage,
+  ApiSessionUsageList,
   ApiShare,
   ApiShareData,
   ApiSkill,
@@ -710,6 +715,31 @@ class ApiClient {
 
   async getUsageSummary(days = 30): Promise<ApiUsageSummary> {
     return this.request<ApiUsageSummary>(`/me/usage-summary?days=${days}`)
+  }
+
+  async getResourceSummary(days = 30): Promise<ApiResourceSummary> {
+    return this.request<ApiResourceSummary>(`/me/resource-summary?days=${days}`)
+  }
+
+  async getWorkspaceRuntimeTimeline(id: string, days = 30): Promise<ApiRuntimeTimeline> {
+    return this.request<ApiRuntimeTimeline>(`/workspaces/${id}/runtime-timeline?days=${days}`)
+  }
+
+  async getWorkspaceSessionUsage(id: string, days = 30): Promise<ApiSessionUsageList> {
+    return this.request<ApiSessionUsageList>(`/workspaces/${id}/session-usage?days=${days}`)
+  }
+
+  async getSessionUsage(workspaceId: string, sessionId: string): Promise<ApiSessionUsage> {
+    return this.request<ApiSessionUsage>(`/workspaces/${workspaceId}/sessions/${sessionId}/usage`)
+  }
+
+  async getSessionToolActivity(
+    workspaceId: string,
+    sessionId: string,
+  ): Promise<ApiSessionToolActivity> {
+    return this.request<ApiSessionToolActivity>(
+      `/workspaces/${workspaceId}/sessions/${sessionId}/tool-activity`,
+    )
   }
 
   // Workspace config

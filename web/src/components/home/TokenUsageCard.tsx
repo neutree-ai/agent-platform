@@ -23,7 +23,7 @@ export function TokenUsageCard({ total, sparkline, composition }: TokenUsageCard
     <div className="flex flex-col gap-4 rounded-lg border border-foreground/[0.06] bg-card/40 p-5">
       <div className="flex flex-col gap-3">
         <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-          {t('components.shell.activityApp.token.usageLabel')}
+          {t('components.shell.tokenUsage.usageLabel')}
         </div>
         <div className="flex items-end gap-4">
           <span className="text-4xl font-semibold tabular-nums leading-none text-foreground">
@@ -38,7 +38,7 @@ export function TokenUsageCard({ total, sparkline, composition }: TokenUsageCard
       </div>
       <div className="border-foreground/[0.06] border-t pt-4">
         <div className="mb-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-          {t('components.shell.activityApp.token.compositionLabel')}
+          {t('components.shell.tokenUsage.compositionLabel')}
         </div>
         <TokenCompositionBar composition={composition} />
       </div>

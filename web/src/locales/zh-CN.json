@@ -565,7 +565,7 @@
         "admin": "管理 后台",
         "workspaces": "工作空间",
         "tags": "标签",
-        "activity": "动态 活动",
+        "activity": "统计 活跃度 交互 会话 热力图 资源 成本 花费 闲置 磁盘 算力 token",
         "memory-stores": "记忆库",
         "teamwork": "协作"
       },
@@ -2973,12 +2973,6 @@
         "sessionsToday": "新会话",
         "interactionsToday": "今日交互",
         "cellTooltip": "{{date}} · {{count}}",
-        "rangeAria": "时间范围",
-        "range": {
-          "7d": "7 天",
-          "30d": "30 天",
-          "90d": "90 天"
-        },
         "punchLabel": "活跃时段",
         "punchTooltip": "周{{day}} · {{hour}}:00 · {{count}}",
         "dow": {
@@ -2991,18 +2985,71 @@
           "6": "六"
         },
         "hourSuffix": "时",
-        "punchCaption": "横轴时段 / 纵轴星期 —— 颜色越深越活跃",
-        "token": {
-          "usageLabel": "Token 用量",
-          "cellTooltip": "{{date}} · {{value}}",
-          "compositionLabel": "Token 构成",
-          "byWorkspaceLabel": "工作空间 Token 用量分布",
-          "input": "输入",
-          "output": "输出",
-          "cache": "缓存",
-          "cacheRead": "缓存读",
-          "cacheCreation": "缓存写"
-        }
+        "punchCaption": "横轴时段 / 纵轴星期 —— 颜色越深越活跃"
+      },
+      "tokenUsage": {
+        "usageLabel": "Token 用量",
+        "cellTooltip": "{{date}} · {{value}}",
+        "compositionLabel": "Token 构成",
+        "byWorkspaceLabel": "工作空间 Token 用量分布",
+        "input": "输入",
+        "output": "输出",
+        "cache": "缓存",
+        "cacheRead": "缓存读",
+        "cacheCreation": "缓存写"
+      },
+      "statsRange": {
+        "aria": "时间范围",
+        "7d": "7 天",
+        "30d": "30 天",
+        "90d": "90 天"
+      },
+      "resourcesApp": {
+        "computeLabel": "计算用量",
+        "coreHours": "核·时",
+        "storageHeld": "占用磁盘 {{value}}",
+        "active": "在工作",
+        "idle": "闲置",
+        "computeByWorkspaceLabel": "按 workspace",
+        "idleLabel": "运行中但无人使用",
+        "idleCount": "{{count}} 个",
+        "idleCaption": "仍占着 CPU 和内存。停止是可逆的，下次发消息会自动启动。",
+        "idleDetail": "闲置 {{days}} 天 · {{cores}} 核",
+        "stop": "停止",
+        "confirm": "确认",
+        "stoppedStorageLabel": "已停机，磁盘仍占用",
+        "stoppedStorageCaption": "停机只释放算力，卷要删除才释放。",
+        "stoppedDetail": "{{days}} 天无活动",
+        "delete": "删除",
+        "categoryAria": "成本类目",
+        "category": {
+          "infra": "基础设施",
+          "token": "模型",
+          "activity": "活动"
+        },
+        "overview": "全部",
+        "empty": "这段时间没有记录。",
+        "untitledSession": "未命名会话",
+        "timelineLabel": "运行时间",
+        "timelineCaption": "分段宽度是它在时间窗里的占比。",
+        "segmentTooltip": "{{phase}} · {{from}} → {{to}}",
+        "sessionsLabel": "会话 Token 排行",
+        "sessionShapeLabel": "会话形态",
+        "sessionDetail": "{{messages}} 条消息 · {{tools}} 次工具调用 · {{duration}}",
+        "messagesLabel": "消息数",
+        "toolCallsLabel": "工具调用",
+        "durationLabel": "耗时",
+        "timeSplitLabel": "时间去哪了",
+        "inTool": "工具",
+        "waiting": "模型 / 等待",
+        "toolTimelineLabel": "工具活动",
+        "toolTimelineCaption": "按调用顺序排列,颜色代表工具——一整段同色说明 agent 在重复自己。",
+        "byToolLabel": "按工具",
+        "callCount": "{{count}} 次调用",
+        "errorCount": "{{count}} 次报错",
+        "toolDetail": "{{calls}} 次 · 平均 {{avg}}",
+        "toolBreakdown": "工具明细",
+        "otherTools": "其他 {{count}} 个工具"
       },
       "punchCard": {
         "aria": "按小时活跃度"

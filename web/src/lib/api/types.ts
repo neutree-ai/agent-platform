@@ -406,7 +406,16 @@ export type { WorkspaceProfilePayload } from '@neutree-ai/types'
 
 export type { UserProfilePayload } from '@neutree-ai/types'
 
-export type { ApiRecentSessionItem, ApiActivitySummary, ApiUsageSummary } from '@neutree-ai/types'
+export type {
+  ApiRecentSessionItem,
+  ApiActivitySummary,
+  ApiUsageSummary,
+  ApiResourceSummary,
+  ApiRuntimeTimeline,
+  ApiSessionToolActivity,
+  ApiSessionUsage,
+  ApiSessionUsageList,
+} from '@neutree-ai/types'
 
 // ── AskUserQuestion types ──
 

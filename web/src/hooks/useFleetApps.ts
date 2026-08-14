@@ -1,5 +1,5 @@
-import { ActivityApp } from '@/components/home/ActivityApp'
 import { WorkspacesApp } from '@/components/home/WorkspacesApp'
+import { StatsApp } from '@/components/home/stats/StatsApp'
 import {
   AdminApp,
   ConnectorsApp,
@@ -49,7 +49,7 @@ export function useFleetApps(): AppDefinition[] {
     apps.push({
       id: 'activity',
       label: t('components.shell.activityApp.appLabel'),
-      Component: ActivityApp,
+      Component: StatsApp,
       group: 'agent',
     })
 

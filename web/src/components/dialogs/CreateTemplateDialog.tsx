@@ -2,8 +2,8 @@ import { Button } from '@/components/ui/button'
 import { DocumentedDialog } from '@/components/ui/documented-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { SaveButton } from '@/components/ui/save-button'
+import { Textarea } from '@/components/ui/textarea'
 import {
   ConfigFormFields,
   type ConfigFormValues,

@@ -1,5 +1,5 @@
-import type { ITheme } from '@xterm/xterm'
 import { useResolvedTheme } from '@neutree-ai/theme'
+import type { ITheme } from '@xterm/xterm'
 
 // One Dark (atom/VS Code) — standard palette
 const ONE_DARK_TERMINAL: ITheme = {

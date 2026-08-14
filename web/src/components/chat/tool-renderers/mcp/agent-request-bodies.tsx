@@ -1,7 +1,5 @@
 import { PromptSourceView } from '@/components/prompt/PromptSourceView'
 import type { ApiAgentRequest } from '@/lib/api/types'
-import type { ReactNode } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
   BUILDER_KIND_COMMAND_CREATE,
   BUILDER_KIND_COMMAND_DELETE,
@@ -30,6 +28,8 @@ import {
   SkillDisablePayloadSchema,
   SkillEnablePayloadSchema,
 } from '@neutree-ai/types'
+import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 /**
  * Per-kind body renderers for the Agent Request card. The generic
