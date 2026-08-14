@@ -88,6 +88,38 @@ export interface AcpSessionHandler {
   onPermissionRequest(params: RequestPermissionRequest): Promise<RequestPermissionResponse>
 }
 
+// ── Bridge contract ──
+
+/**
+ * What the server skeleton needs from a bridge, independent of the wire
+ * protocol underneath. `AcpBridge` speaks ACP to an ACP-native agent; other
+ * bridges reach agents that expose a different transport and translate their
+ * events into `SessionUpdate` on the way out, so one server skeleton serves
+ * every agent type.
+ *
+ * The server programs against this interface rather than the class because a
+ * class with private fields is only ever assignable from itself.
+ */
+export interface AgentBridge {
+  start(): Promise<void>
+  createSession(opts?: { cwd?: string; mcpServers?: McpServer[] }): Promise<string>
+  loadSession(
+    sessionId: string,
+    opts?: { cwd?: string; mcpServers?: McpServer[] },
+  ): Promise<string>
+  registerHandler(sessionId: string, handler: AcpSessionHandler): void
+  unregisterHandler(sessionId: string): void
+  waitForMcpReady(timeoutMs?: number): Promise<void>
+  prompt(
+    sessionId: string,
+    text: string,
+    images?: ChatImageAttachment[],
+  ): Promise<PromptResponse>
+  cancel(sessionId: string): Promise<void>
+  isAlive(): boolean
+  destroy(): void
+}
+
 // ── Bridge ──
 
 /**

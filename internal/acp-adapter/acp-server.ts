@@ -18,7 +18,7 @@ import { logger } from 'hono/logger'
 import { streamSSE } from 'hono/streaming'
 import WebSocket from 'ws'
 import type { AgentCapabilities } from '../types/events.js'
-import type { AcpBridge, AcpSessionHandler } from './acp-bridge.js'
+import type { AcpSessionHandler, AgentBridge } from './acp-bridge.js'
 import type { ChatRequest } from './types.js'
 import { AcpEventTranslator } from './universal-events.js'
 
@@ -74,8 +74,8 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   // dir, wired through env at spawn) can prepare it up front. Factories that
   // don't need it (codex, whose native ids are already platform UUIDs) just
   // ignore the argument.
-  let bridgeFactory: ((sessionId: string) => Promise<AcpBridge>) | null = null
-  const sessionBridges = new Map<string, AcpBridge>()
+  let bridgeFactory: ((sessionId: string) => Promise<AgentBridge>) | null = null
+  const sessionBridges = new Map<string, AgentBridge>()
   // Per-session count of turns currently in flight. A reference count, not a
   // flag — concurrent turns can share one session's bridge (e.g. a page
   // refresh starting a fresh turn while an older one is still draining), and
@@ -118,7 +118,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
     bridgeLastActive.set(sessionId, Date.now())
   }
 
-  function setBridgeFactory(factory: (sessionId: string) => Promise<AcpBridge>) {
+  function setBridgeFactory(factory: (sessionId: string) => Promise<AgentBridge>) {
     bridgeFactory = factory
   }
 
@@ -330,7 +330,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
 
       const translator = new AcpEventTranslator(sessionId)
       let currentSessionId: string | undefined
-      let currentBridge: AcpBridge | undefined
+      let currentBridge: AgentBridge | undefined
       // True when this turn ran on a bridge pulled from the cache rather than a
       // fresh spawn. Only reused bridges can be "process-alive but session-dead"
       // (see the prompt rebuild path below); a just-loaded/created bridge that
@@ -484,7 +484,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         })
 
         // Run one turn on `bridge`, keeping the busy-turn count balanced.
-        async function runTurn(bridge: AcpBridge) {
+        async function runTurn(bridge: AgentBridge) {
           enterTurn(currentSessionId!)
           try {
             return await bridge.prompt(currentSessionId!, message, images)
