@@ -37,7 +37,14 @@ app.post('/', async (c) => {
     return c.json({ error: 'only the connector owner can create a catch-all route' }, 403)
   }
 
-  const route = await db.createRoute({ user_id: userId, connector_id, external_id, workspace_id, name, config })
+  const route = await db.createRoute({
+    user_id: userId,
+    connector_id,
+    external_id,
+    workspace_id,
+    name,
+    config,
+  })
   return c.json(route, 201)
 })
 
