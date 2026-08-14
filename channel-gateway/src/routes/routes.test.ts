@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AppEnv, JwtPayload } from '../lib/types'
 import * as db from '../services/db'
 import routesApp from './routes'
 
@@ -15,9 +16,9 @@ vi.mock('../services/db', () => ({
 const mocked = vi.mocked(db)
 
 function appAs(userId: string) {
-  const app = new Hono()
+  const app = new Hono<AppEnv>()
   app.use('*', async (c, next) => {
-    c.set('user', { sub: userId })
+    c.set('user', { sub: userId } as JwtPayload)
     await next()
   })
   app.route('/routes', routesApp)
