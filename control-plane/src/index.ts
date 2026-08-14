@@ -34,6 +34,7 @@ import mcpOAuthRoutes from './routes/mcp-oauth'
 import meActivityRoutes from './routes/me/activity'
 import meProfileRoutes from './routes/me/profile'
 import meRecentSessionsRoutes from './routes/me/recent-sessions'
+import meResourcesRoutes from './routes/me/resources'
 import meUsageRoutes from './routes/me/usage'
 import { memoryStoresRoutes, workspaceMemoryAttachmentRoutes } from './routes/memory-stores'
 import notificationsRoutes from './routes/notifications'
@@ -325,6 +326,7 @@ app.route('/api/me', meProfileRoutes)
 app.route('/api/me', meRecentSessionsRoutes)
 app.route('/api/me', meActivityRoutes)
 app.route('/api/me', meUsageRoutes)
+app.route('/api/me', meResourcesRoutes)
 app.route('/api/workspaces', jobRoutes)
 app.route('/api/credentials', credentialsRoutes)
 app.route('/api/environments', environmentsRoutes)

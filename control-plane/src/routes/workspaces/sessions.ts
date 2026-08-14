@@ -1,8 +1,14 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
-import { ApiPendingMessageSchema, ApiSessionLiteSchema } from '../../../../internal/types/api'
+import {
+  ApiPendingMessageSchema,
+  ApiSessionLiteSchema,
+  ApiSessionToolActivitySchema,
+  ApiSessionUsageSchema,
+} from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
 import { resolveAgentAddress } from '../../lib/workspace-address'
 import { pool } from '../../services/db/pool'
+import { listSessionToolCalls } from '../../services/db/session-tool-calls'
 import {
   clearPendingMessage,
   deleteSession,
@@ -13,6 +19,7 @@ import {
 } from '../../services/db/sessions'
 import { getSessionUsage, getSessionUsageOwner } from '../../services/db/workspace-usage'
 import { getWorkspace } from '../../services/db/workspaces'
+import { summarizeToolActivity } from '../../services/session-tool-activity'
 import { settleSessionUsage } from '../../services/usage/settle'
 import { canManage, interruptAgentSession } from './_shared'
 
@@ -337,33 +344,6 @@ sessions.openapi(deletePendingRoute, async (c) => {
 })
 
 // ── GET /:id/sessions/:sessionId/usage ─────────────────────────────────────
-const UsageTotalsSchema = z.object({
-  input_tokens: z.number(),
-  output_tokens: z.number(),
-  cache_read_tokens: z.number(),
-  cache_creation_tokens: z.number(),
-  cache_creation_5m_tokens: z.number(),
-  cache_creation_1h_tokens: z.number(),
-  reasoning_output_tokens: z.number(),
-  web_search_requests: z.number(),
-  record_count: z.number(),
-})
-
-const SessionUsageSchema = z.object({
-  session_id: z.string(),
-  totals: UsageTotalsSchema,
-  by_model: z.array(UsageTotalsSchema.extend({ source: z.string(), model: z.string() })),
-  first_ts: z.string().nullable(),
-  last_ts: z.string().nullable(),
-  settlement: z.object({
-    complete: z.boolean(),
-    drained_through: z.string().nullable(),
-    activity_at: z.string().nullable(),
-    reason: z
-      .enum(['turn_in_progress', 'pending_settle', 'agent_unreachable', 'workspace_gone'])
-      .nullable(),
-  }),
-})
 
 const getSessionUsageRoute = createRoute({
   method: 'get',
@@ -387,7 +367,7 @@ const getSessionUsageRoute = createRoute({
   responses: {
     200: {
       description: 'Session usage',
-      content: { 'application/json': { schema: SessionUsageSchema } },
+      content: { 'application/json': { schema: ApiSessionUsageSchema } },
     },
     404: {
       description: 'Workspace or session not found',
@@ -426,6 +406,54 @@ sessions.openapi(getSessionUsageRoute, async (c) => {
   const settlement = await settleSessionUsage(id, sessionId)
   const usage = await getSessionUsage(id, sessionId)
   return c.json({ session_id: sessionId, ...usage, settlement }, 200)
+})
+
+// ── GET /:id/sessions/:sessionId/tool-activity ─────────────────────────────
+const getToolActivityRoute = createRoute({
+  method: 'get',
+  path: '/{id}/sessions/{sessionId}/tool-activity',
+  tags: ['workspaces'],
+  summary: "Get a session's tool calls, aggregated by tool and spread over time",
+  description: [
+    "Where a session's wall clock went: how much of it was spent inside a tool",
+    '(overlap counted once, since sub-agents run tools concurrently), which tools',
+    'spent it, and how that spending was distributed across the session.',
+    '',
+    'The distribution is the useful part. An agent repeating one tool without',
+    'making progress is indistinguishable from a busy one by any single total,',
+    'but shows up in the buckets as a long unbroken stretch of one tool.',
+  ].join('\n'),
+  security: [{ bearerAuth: [] }],
+  request: { params: SessionScopedParam },
+  responses: {
+    200: {
+      description: 'Session tool activity',
+      content: { 'application/json': { schema: ApiSessionToolActivitySchema } },
+    },
+    404: {
+      description: 'Workspace or session not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+sessions.openapi(getToolActivityRoute, async (c) => {
+  const currentUser = c.get('user')
+  const { id, sessionId } = c.req.valid('param')
+
+  // Tool events are deleted with their session, so unlike the usage ledger there
+  // is nothing here to read once the workspace is gone — the workspace row is
+  // the only authorisation anchor this needs.
+  const workspace = await getWorkspace(id)
+  if (!workspace || !canManage(workspace, currentUser)) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+  const session = await getSession(sessionId)
+  if (!session || session.workspace_id !== id) {
+    return c.json({ error: 'Session not found' }, 404)
+  }
+
+  return c.json(summarizeToolActivity(await listSessionToolCalls(sessionId)), 200)
 })
 
 export default sessions

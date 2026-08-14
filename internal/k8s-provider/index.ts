@@ -24,6 +24,7 @@ export type { WorkspaceWorkload } from './workload'
 export {
   AGENT_PORT,
   CURRENT_TEMPLATE_VERSION,
+  DEFAULT_WORKSPACE_RESOURCES,
   buildDeploymentSpec,
   buildHeadlessServiceSpec,
   buildStatefulSetSpec,

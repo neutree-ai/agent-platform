@@ -1,5 +1,6 @@
 import * as k8s from '@kubernetes/client-node'
 import { Hono } from 'hono'
+import { parseCpuMillis, parseMemMi } from '../../lib/k8s-quantity'
 import type { AppEnv } from '../../lib/types'
 import { listStreamingWorkspaceIds } from '../../services/db/sessions'
 import * as k8sService from '../../services/k8s'
@@ -7,21 +8,6 @@ import { bumpWorkspaceSpec } from '../../services/placement'
 import { computeWorkspaceDrift, reconcileWorkspacePod } from '../../services/workspace-reconcile'
 
 const cluster = new Hono<AppEnv>()
-
-function parseCpuMillis(val?: string): number {
-  if (!val) return 0
-  if (val.endsWith('m')) return Number.parseInt(val)
-  return Number.parseFloat(val) * 1000
-}
-function parseMemMi(val?: string): number {
-  if (!val) return 0
-  if (val.endsWith('Gi')) return Number.parseFloat(val) * 1024
-  if (val.endsWith('Mi')) return Number.parseFloat(val)
-  if (val.endsWith('Ki')) return Number.parseFloat(val) / 1024
-  if (val.endsWith('G')) return Number.parseFloat(val) * 953.674
-  if (val.endsWith('M')) return Number.parseFloat(val) * 0.953674
-  return 0
-}
 
 cluster.get('/', async (c) => {
   const kc = new k8s.KubeConfig()

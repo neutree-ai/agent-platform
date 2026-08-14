@@ -1325,6 +1325,150 @@ export const ApiUsageSummarySchema = z.object({
 })
 export type ApiUsageSummary = z.infer<typeof ApiUsageSummarySchema>
 
+const WorkspaceRefSchema = z.object({ workspaceId: z.string(), name: z.string() })
+
+/** Per-user resource footprint for the Resources app; see GET /me/resource-summary. */
+export const ApiResourceSummarySchema = z.object({
+  compute: z.object({
+    daily: z.array(z.object({ date: z.string(), coreHours: z.number() })),
+    byWorkspace: z.array(WorkspaceRefSchema.extend({ coreHours: z.number() })),
+    totalCoreHours: z.number(),
+    /** Share of the total spent by workspaces that are running but untouched. */
+    idleCoreHours: z.number(),
+  }),
+  idle: z.array(
+    WorkspaceRefSchema.extend({
+      idleDays: z.number(),
+      coreRequest: z.number(),
+      coreHours: z.number(),
+    }),
+  ),
+  storage: z.object({
+    totalGib: z.number(),
+    /** Stopped workspaces still holding their volume — stop frees compute, not disk. */
+    stopped: z.array(WorkspaceRefSchema.extend({ storageGib: z.number(), idleDays: z.number() })),
+  }),
+})
+export type ApiResourceSummary = z.infer<typeof ApiResourceSummarySchema>
+
+/**
+ * One workspace's state log as segments; see GET /workspaces/{id}/runtime-timeline.
+ * Infra time belongs to a stretch of wall clock rather than to any session, so
+ * this is deliberately not aggregated.
+ */
+export const ApiRuntimeTimelineSchema = z.object({
+  segments: z.array(
+    z.object({
+      startedAt: z.string(),
+      endedAt: z.string(),
+      phase: z.string(),
+      replicas: z.number().int(),
+      coreRequest: z.number(),
+      storageGib: z.number(),
+      specVersion: z.number().int().nullable(),
+    }),
+  ),
+})
+export type ApiRuntimeTimeline = z.infer<typeof ApiRuntimeTimelineSchema>
+
+/**
+ * A workspace's sessions ranked by token spend, with the two signals that
+ * explain it; see GET /workspaces/{id}/session-usage.
+ */
+export const ApiSessionUsageListSchema = z.object({
+  sessions: z.array(
+    z.object({
+      sessionId: z.string(),
+      name: z.string(),
+      tokens: z.number().int(),
+      messages: z.number().int(),
+      toolCalls: z.number().int(),
+      durationSec: z.number().int(),
+      lastActiveAt: z.string().nullable(),
+    }),
+  ),
+})
+export type ApiSessionUsageList = z.infer<typeof ApiSessionUsageListSchema>
+
+const UsageTotalsSchema = z.object({
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cache_read_tokens: z.number(),
+  cache_creation_tokens: z.number(),
+  cache_creation_5m_tokens: z.number(),
+  cache_creation_1h_tokens: z.number(),
+  reasoning_output_tokens: z.number(),
+  web_search_requests: z.number(),
+  record_count: z.number(),
+})
+
+/**
+ * One session's token spend split by the model that spent it, plus whether the
+ * ledger has caught up; see GET /workspaces/{id}/sessions/{sessionId}/usage.
+ */
+export const ApiSessionUsageSchema = z.object({
+  session_id: z.string(),
+  totals: UsageTotalsSchema,
+  by_model: z.array(UsageTotalsSchema.extend({ source: z.string(), model: z.string() })),
+  first_ts: z.string().nullable(),
+  last_ts: z.string().nullable(),
+  settlement: z.object({
+    complete: z.boolean(),
+    drained_through: z.string().nullable(),
+    activity_at: z.string().nullable(),
+    reason: z
+      .enum(['turn_in_progress', 'pending_settle', 'agent_unreachable', 'workspace_gone'])
+      .nullable(),
+  }),
+})
+export type ApiSessionUsage = z.infer<typeof ApiSessionUsageSchema>
+
+/**
+ * A session's tool calls: where its wall clock went, which tools spent it, and
+ * how that spending was spread over time; see
+ * GET /workspaces/{id}/sessions/{sessionId}/tool-activity.
+ */
+export const ApiSessionToolActivitySchema = z.object({
+  /** First tool call to last, in milliseconds. */
+  wallMs: z.number().int(),
+  /** Time inside a tool, overlap counted once — never more than `wallMs`. */
+  toolMs: z.number().int(),
+  /**
+   * Calls the agent core stamped with a start and end. Zero means this core
+   * reports no timings, so counts are all the card can show.
+   */
+  timedCalls: z.number().int(),
+  tools: z.array(
+    z.object({
+      name: z.string(),
+      calls: z.number().int(),
+      timedCalls: z.number().int(),
+      seconds: z.number().int(),
+      avgSeconds: z.number(),
+      errors: z.number().int(),
+    }),
+  ),
+  /** Tools charted in their own colour; the rest are folded into one series. */
+  chartedTools: z.array(z.string()),
+  /** How many distinct tools the folded row stands for. */
+  otherToolCount: z.number().int(),
+  /**
+   * The session's calls sliced into equal runs, in order — not in time. Tool
+   * time is a rounding error against the calendar span a session covers, so a
+   * time axis draws mostly idleness. Values are call counts; `startedAt` is
+   * null when the core stamped no timings.
+   */
+  buckets: z.array(
+    z.object({
+      startedAt: z.string().nullable(),
+      tools: z.record(z.string(), z.number().int()),
+    }),
+  ),
+  startedAt: z.string().nullable(),
+  endedAt: z.string().nullable(),
+})
+export type ApiSessionToolActivity = z.infer<typeof ApiSessionToolActivitySchema>
+
 export const ApiShareSchema = z.object({
   id: z.string(),
   url: z.string(),

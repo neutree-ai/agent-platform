@@ -56,6 +56,19 @@ export const TEMPLATE_VERSION_ANNOTATION = 'agent-platform/workspace-version'
 export const MEMORY_FUSE_CONTAINER_NAME = 'memory-fuse'
 
 /**
+ * What a workspace gets for any `compute_resources` field it leaves unset.
+ * The pod is built with these, so anything that reads a workspace's resource
+ * footprint back out has to resolve through the same values — a third of the
+ * fleet stores an empty `compute_resources` and runs entirely on them.
+ */
+export const DEFAULT_WORKSPACE_RESOURCES = {
+  cpu_request: '100m',
+  cpu_limit: '500m',
+  memory_request: '256Mi',
+  memory_limit: '1Gi',
+} as const
+
+/**
  * The workspace pod template: agent container + optional afs-fuse /
  * memory-fuse privileged sidecars + volumes. This is the single source of
  * truth for what runs inside a workspace pod — {@link buildDeploymentSpec}
@@ -120,12 +133,12 @@ export function buildWorkspacePodTemplate(
     ],
     resources: {
       requests: {
-        memory: resources?.memory_request || '256Mi',
-        cpu: resources?.cpu_request || '100m',
+        memory: resources?.memory_request || DEFAULT_WORKSPACE_RESOURCES.memory_request,
+        cpu: resources?.cpu_request || DEFAULT_WORKSPACE_RESOURCES.cpu_request,
       },
       limits: {
-        memory: resources?.memory_limit || '1Gi',
-        cpu: resources?.cpu_limit || '500m',
+        memory: resources?.memory_limit || DEFAULT_WORKSPACE_RESOURCES.memory_limit,
+        cpu: resources?.cpu_limit || DEFAULT_WORKSPACE_RESOURCES.cpu_limit,
       },
     },
     // Skills are downloaded/unzipped/symlinked synchronously during boot,

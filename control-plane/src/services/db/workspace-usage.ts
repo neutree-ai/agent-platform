@@ -395,3 +395,66 @@ export async function getUserUsageSummary(userId: string, days: number): Promise
     })),
   }
 }
+
+interface WorkspaceSessionUsage {
+  sessionId: string
+  name: string
+  tokens: number
+  /** Messages exchanged — the turn count a user would recognise. */
+  messages: number
+  /** Tool calls the agent made. Far larger than `messages` when a loop stalls. */
+  toolCalls: number
+  /** Wall-clock from the session's first to last activity, in seconds. */
+  durationSec: number
+  lastActiveAt: string | null
+}
+
+/**
+ * A workspace's sessions ranked by token spend, each with the two signals that
+ * explain the spend: how many turns it took and how long it ran. A session with
+ * few messages, hundreds of tool calls and hours on the clock is the shape of an
+ * agent stuck in a loop — visible here without anything having to judge it.
+ *
+ * Ranked and truncated before the per-session counts are taken: a busy
+ * workspace has thousands of sessions, and counting messages and events for all
+ * of them to then show ten is two orders of magnitude of wasted work.
+ */
+export async function listWorkspaceSessionUsage(
+  workspaceId: string,
+  days: number,
+  limit: number,
+): Promise<WorkspaceSessionUsage[]> {
+  const offset = Math.max(0, days - 1)
+  const { rows } = await pool.query(
+    `WITH tok AS (
+       SELECT session_id, SUM(${ALL_IN})::bigint AS tokens
+         FROM workspace_usage_events
+        WHERE workspace_id = $1 AND session_id IS NOT NULL
+          AND ts >= (current_date - ($2::int * interval '1 day'))::date
+        GROUP BY 1
+        ORDER BY 2 DESC
+        LIMIT $3
+     )
+     SELECT tok.session_id, tok.tokens, s.name, s.last_active_at,
+            EXTRACT(EPOCH FROM (s.last_active_at - s.created_at))::int AS duration_sec,
+            counts.messages, counts.tool_calls
+       FROM tok
+       JOIN sessions s ON s.id = tok.session_id
+       CROSS JOIN LATERAL (
+         SELECT (SELECT count(*) FROM messages m WHERE m.session_id = s.id)::int AS messages,
+                (SELECT count(*) FROM session_events e
+                  WHERE e.session_id = s.id AND e.kind = 'tool_call')::int AS tool_calls
+       ) counts
+      ORDER BY tok.tokens DESC`,
+    [workspaceId, offset, limit],
+  )
+  return rows.map((r: Record<string, unknown>) => ({
+    sessionId: r.session_id as string,
+    name: (r.name as string) || '',
+    tokens: Number(r.tokens),
+    messages: Number(r.messages),
+    toolCalls: Number(r.tool_calls),
+    durationSec: Math.max(0, Number(r.duration_sec ?? 0)),
+    lastActiveAt: r.last_active_at ? (r.last_active_at as Date).toISOString() : null,
+  }))
+}
