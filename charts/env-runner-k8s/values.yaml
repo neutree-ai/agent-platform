@@ -4,7 +4,7 @@
 # existingSecret), and the agent image settings for your cluster.
 
 image:
-  repository: ghcr.io/neutree-ai/env-runner-k8s
+  repository: ghcr.io/neutree-ai/agent-platform/nap-env-runner-k8s
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -32,10 +32,12 @@ envToken:
 # memoryFuseImage is set (memory tunnels back to the control plane).
 provider:
   namespace: default
-  agentImagePrefix: ghcr.io/neutree-ai/agent
+  # The provider builds each workspace image as <prefix>-<agentType>:<tag>, so
+  # the prefix ends at `nap-agent` — e.g. nap-agent-claude-code, nap-agent-codex.
+  agentImagePrefix: ghcr.io/neutree-ai/agent-platform/nap-agent
   agentImageTag: latest
   storageClass: ""
-  memoryFuseImage: ghcr.io/neutree-ai/memory-fuse:latest
+  memoryFuseImage: ghcr.io/neutree-ai/agent-platform/nap-memory-fuse:latest
   # "" → no nodeSelector; "k=v,k2=v2" → that selector (matches provider parsing).
   nodeSelector: ""
 
