@@ -14,6 +14,7 @@ import { nodeFetch, nodeFs, nodeShell } from '../../../internal/agent-skills/src
 import { renderPlatformSkillFiles } from '../../../internal/agent-skills/src/platform.js'
 import { writePlatformPrompt } from '../../../internal/platform-prompt/src/index.js'
 import { captureWorkspaceToken } from '../../../internal/types/workspace-token.js'
+import { applyModelProfile, userTables, userTopLevelKeys } from './codex-config.js'
 
 export const CP_URL = process.env.CP_URL
 export const WORKSPACE_ID = process.env.WORKSPACE_ID
@@ -175,26 +176,55 @@ export async function loadConfig(): Promise<boolean> {
   const agentSettings = (config.agent_settings || '').trim()
   const isTomlAgentSettings =
     agentSettings && agentSettings !== '{}' && !agentSettings.startsWith('{')
-  const userHasKey = (key: string) =>
-    isTomlAgentSettings && new RegExp(`^\\s*${key}\\s*=`, 'm').test(agentSettings)
+  const userKeys = isTomlAgentSettings ? userTopLevelKeys(agentSettings) : new Set<string>()
+  const userTableNames = isTomlAgentSettings ? userTables(agentSettings) : new Set<string>()
 
-  const tomlLines = [
-    `model_provider = "${providerName}"`,
-    `model = "${model}"`,
-    'disable_response_storage = true',
+  // The provider's declaration about the models it serves. Without it codex
+  // warns once per session that it has no metadata for the model and falls back
+  // to defaults that misstate the context window and reasoning levels.
+  const profile = applyModelProfile(codexDir, config.model_profile, model)
+
+  // Platform-owned top-level keys. A key the user set at the top level of
+  // agent_settings wins: their line is emitted verbatim below, and writing both
+  // would be a duplicate-key TOML error that stops codex from starting.
+  const topLevel: [string, string][] = [
+    ['model_provider', `"${providerName}"`],
+    ['model', `"${model}"`],
+    ['disable_response_storage', 'true'],
     // Workspace pod is isolated; grant full access up front so codex skips
     // the sandbox-then-escalate dance that surfaces a spurious first-call failure.
-    // Skipped if user overrode either key in agent_settings.
-    ...(userHasKey('sandbox_mode') ? [] : ['sandbox_mode = "danger-full-access"']),
-    ...(userHasKey('approval_policy') ? [] : ['approval_policy = "never"']),
-    ...(hasHttpMcp ? ['experimental_use_rmcp_client = true'] : []),
+    ['sandbox_mode', '"danger-full-access"'],
+    ['approval_policy', '"never"'],
+    ...(hasHttpMcp ? ([['experimental_use_rmcp_client', 'true']] as [string, string][]) : []),
+    // Must be a top-level key: written after a table header it parses as that
+    // table's field and codex silently keeps warning about missing metadata.
+    ...(profile.catalogPath
+      ? ([['model_catalog_json', JSON.stringify(profile.catalogPath)]] as [string, string][])
+      : []),
+    ...(profile.reasoningEffort
+      ? ([['model_reasoning_effort', `"${profile.reasoningEffort}"`]] as [string, string][])
+      : []),
   ]
-  if (config.base_url) {
+  const tomlLines = topLevel
+    .filter(([key]) => !userKeys.has(key))
+    .map(([key, value]) => `${key} = ${value}`)
+
+  // agent_settings goes here — after the platform's top-level keys and before
+  // any table. Appended at the end instead, a bare key in it would parse as a
+  // field of whatever table came last and never take effect.
+  if (isTomlAgentSettings) {
+    tomlLines.push('')
+    tomlLines.push('# agent_settings')
+    tomlLines.push(agentSettings)
+  }
+  // Same duplicate-table rule as [features] below: the user's own definition
+  // wins, because emitting both stops codex from starting at all.
+  if (config.base_url && !userTableNames.has('model_providers.custom')) {
     tomlLines.push('')
     tomlLines.push('[model_providers.custom]')
     tomlLines.push('name = "custom"')
     tomlLines.push(`base_url = "${config.base_url}"`)
-    tomlLines.push('wire_api = "responses"')
+    tomlLines.push(`wire_api = "${profile.wireApi ?? 'responses'}"`)
   }
   // MCP servers in config.toml format. HTTP entries skip this path: they are
   // wired through `loadAcpMcpServers` instead so per-session headers (notably
@@ -202,6 +232,12 @@ export async function loadConfig(): Promise<boolean> {
   // here — local processes don't go through cp proxy and don't need tokens.
   for (const [name, cfg] of Object.entries(mcpServers)) {
     if (cfg.url) continue
+    if (
+      userTableNames.has(`mcp_servers.${name}`) ||
+      userTableNames.has(`mcp_servers.${JSON.stringify(name)}`)
+    ) {
+      continue
+    }
     tomlLines.push('')
     tomlLines.push(`[mcp_servers.${JSON.stringify(name)}]`)
     if (cfg.command) {
@@ -217,17 +253,14 @@ export async function loadConfig(): Promise<boolean> {
       }
     }
   }
-  // Append user-provided agent_settings (TOML format) if present
-  // Skip JSON content (from claude-code settings) — not valid TOML
-  if (isTomlAgentSettings) {
+  // Platform-enforced: disable built-in memory (managed by platform memory).
+  // Skipped when the user declared their own [features]: a table defined twice
+  // is a TOML error, and codex would refuse to start over it.
+  if (!userTableNames.has('features')) {
     tomlLines.push('')
-    tomlLines.push('# agent_settings')
-    tomlLines.push(agentSettings)
+    tomlLines.push('[features]')
+    tomlLines.push('memories = false')
   }
-  // Platform-enforced: disable built-in memory (managed by platform memory)
-  tomlLines.push('')
-  tomlLines.push('[features]')
-  tomlLines.push('memories = false')
   writeFileSync(join(codexDir, 'config.toml'), `${tomlLines.join('\n')}\n`)
 
   // Write ~/.codex/auth.json
@@ -236,7 +269,7 @@ export async function loadConfig(): Promise<boolean> {
   }
 
   console.log(
-    `[agent] Config written: model=${config.model} provider=${config.provider_type} prompt=${prompt.length}chars`,
+    `[agent] Config written: model=${config.model} provider=${config.provider_type} prompt=${prompt.length}chars catalog=${profile.catalogPath ? 'yes' : 'no'}`,
   )
   return true
 }
