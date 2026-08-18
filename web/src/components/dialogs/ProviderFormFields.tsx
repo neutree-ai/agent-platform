@@ -12,10 +12,11 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api/client'
-import type { ApiTeam, ProviderVisibility } from '@/lib/api/types'
+import type { ApiModelProvider, ApiTeam, ModelProfile, ProviderVisibility } from '@/lib/api/types'
+import { catalogToText, parseCatalogText } from '@/lib/model-profile'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
-import { Eye, EyeOff, Lock, Users, X } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff, Lock, Upload, Users, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -28,6 +29,16 @@ export interface ProviderForm {
   visibility: ProviderVisibility
   /** Set of team_ids the provider is shared with. Permission is always 'viewer'. */
   team_ids: string[]
+  /**
+   * The stored profile, carried through untouched. The form edits two of its
+   * fields below and folds them back in on save, so keys this build knows
+   * nothing about are not dropped by someone editing an unrelated setting.
+   */
+  model_profile: ModelProfile | null
+  /** codex.model_catalog as editable JSON text; '' declares no catalog. */
+  catalog_text: string
+  /** codex.reasoning_effort; '' leaves it to codex. */
+  reasoning_effort: string
 }
 
 export type ProviderFormErrors = Partial<{
@@ -35,6 +46,7 @@ export type ProviderFormErrors = Partial<{
   baseUrl: string
   apiKey: string
   teams: string
+  catalog: string
 }>
 
 interface ProviderFormFieldsProps {
@@ -77,6 +89,10 @@ export function ProviderFormFields({ form, setForm, errors, isEditing }: Provide
   const { t } = useTranslation()
   const [showKey, setShowKey] = useState(false)
   const isOauthOnly = form.provider_type === 'claude-code-oauth'
+  // The profile only carries codex keys today, and codex only speaks to the
+  // OpenAI-shaped types — offering the section elsewhere would promise an
+  // effect the agent never applies.
+  const isCodexCapable = form.provider_type === 'openai' || form.provider_type === 'openai-chat'
 
   const { data: teams = [] } = useQuery<ApiTeam[]>({
     queryKey: ['teams'],
@@ -201,6 +217,10 @@ export function ProviderFormFields({ form, setForm, errors, isEditing }: Provide
         </div>
       </Field>
 
+      {isCodexCapable && (
+        <ModelDeclarationSection form={form} setForm={setForm} error={errors?.catalog} />
+      )}
+
       <div className="space-y-3 rounded-md border border-border/60 bg-muted/30 p-3">
         <div className="flex flex-col gap-1.5">
           <Label className="block text-xs">
@@ -295,6 +315,161 @@ export function ProviderFormFields({ form, setForm, errors, isEditing }: Provide
   )
 }
 
+const REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+
+/**
+ * The provider's declaration about the models it serves.
+ *
+ * Collapsed by default and worded as an escape hatch: most providers serve
+ * models codex already knows, and the catalog is a large document nobody
+ * writes by hand — it comes from the model vendor, which is why loading a file
+ * and copying another provider's are the two first-class ways in.
+ */
+function ModelDeclarationSection({
+  form,
+  setForm,
+  error,
+}: {
+  form: ProviderForm
+  setForm: (next: (prev: ProviderForm) => ProviderForm) => void
+  error?: string
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const parsed = parseCatalogText(form.catalog_text)
+
+  const { data: providers = [] } = useQuery<ApiModelProvider[]>({
+    queryKey: ['providers'],
+    queryFn: () => api.listProviders(),
+    enabled: open,
+  })
+  const donors = providers.filter((p) => p.model_profile?.codex?.model_catalog)
+
+  function loadFile(file: File | undefined) {
+    if (!file) return
+    file.text().then((text) => setForm((f) => ({ ...f, catalog_text: text.trim() })))
+  }
+
+  const summary = parsed.slugs.length
+    ? t('components.createProvider.modelDeclaration.covers', { models: parsed.slugs.join(', ') })
+    : t('components.createProvider.modelDeclaration.empty')
+
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/30">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+      >
+        <ChevronRight
+          className={cn(
+            'h-3.5 w-3.5 text-muted-foreground transition-transform',
+            open && 'rotate-90',
+          )}
+        />
+        <span className="text-xs font-medium">
+          {t('components.createProvider.modelDeclaration.title')}
+        </span>
+        <span className="ml-auto truncate text-tiny text-muted-foreground">{summary}</span>
+      </button>
+
+      {open && (
+        <div className="space-y-2.5 border-t border-border/60 p-3">
+          <p className="text-tiny text-muted-foreground">
+            {t('components.createProvider.modelDeclaration.help')}
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 text-tiny"
+              asChild
+            >
+              <label>
+                <Upload className="h-3 w-3" />
+                {t('components.createProvider.modelDeclaration.loadFile')}
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => loadFile(e.target.files?.[0])}
+                />
+              </label>
+            </Button>
+            {donors.length > 0 && (
+              <Combobox
+                placeholder={t('components.createProvider.modelDeclaration.copyFrom')}
+                value=""
+                onValueChange={(id) => {
+                  const donor = donors.find((p) => p.id === id)
+                  if (!donor) return
+                  setForm((f) => ({
+                    ...f,
+                    catalog_text: catalogToText(donor.model_profile),
+                    reasoning_effort:
+                      donor.model_profile?.codex?.reasoning_effort ?? f.reasoning_effort,
+                  }))
+                }}
+                options={donors.map((p) => ({ value: p.id, label: p.name }))}
+              />
+            )}
+            {form.catalog_text && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-tiny text-muted-foreground"
+                onClick={() => setForm((f) => ({ ...f, catalog_text: '' }))}
+              >
+                {t('components.createProvider.modelDeclaration.clear')}
+              </Button>
+            )}
+          </div>
+
+          <Textarea
+            className="min-h-[140px] font-mono text-tiny"
+            spellCheck={false}
+            placeholder={t('components.createProvider.modelDeclaration.placeholder')}
+            value={form.catalog_text}
+            onChange={(e) => setForm((f) => ({ ...f, catalog_text: e.target.value }))}
+          />
+          {(error || !parsed.ok) && (
+            <div className="text-xs text-destructive">{error ?? parsed.error}</div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label className="block text-tiny text-muted-foreground">
+              {t('components.createProvider.modelDeclaration.reasoningEffort')}
+            </Label>
+            <Select
+              value={form.reasoning_effort || 'default'}
+              onValueChange={(v) =>
+                setForm((f) => ({ ...f, reasoning_effort: v === 'default' ? '' : v }))
+              }
+            >
+              <SelectTrigger className="h-8 text-xs focus:ring-inset">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default" className="py-1.5">
+                  {t('components.createProvider.modelDeclaration.effortDefault')}
+                </SelectItem>
+                {REASONING_EFFORTS.map((level) => (
+                  <SelectItem key={level} value={level} className="py-1.5">
+                    {level}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Field({
   label,
   error,
@@ -332,6 +507,11 @@ export function validateProviderForm(
   }
   if (form.visibility === 'team' && form.team_ids.length === 0) {
     errors.teams = 'components.createProvider.errors.teamRequired'
+  }
+  // A catalog codex cannot read stops it from starting at all, so a broken one
+  // must not reach the store — the agent's fallback is a backstop, not a plan.
+  if (!parseCatalogText(form.catalog_text).ok) {
+    errors.catalog = 'components.createProvider.errors.catalogInvalid'
   }
   return errors
 }

@@ -76,10 +76,12 @@ import type {
   LayoutSkeleton,
   McpCatalogEntry,
   MemoryAccess,
+  ModelProfile,
   PendingMessage,
   PromptGrant,
   PromptVisibility,
   ProviderGrant,
+  ProviderTestResult,
   ProviderVisibility,
   SandboxInfo,
   SandboxListResponse,
@@ -1417,6 +1419,7 @@ class ApiClient {
     provider_type: string
     base_url: string
     api_key: string
+    model_profile?: ModelProfile | null
     visibility?: ProviderVisibility
     grants?: ProviderGrant[]
   }): Promise<ApiModelProvider> {
@@ -1434,6 +1437,7 @@ class ApiClient {
       provider_type: string
       base_url: string
       api_key: string
+      model_profile: ModelProfile | null
       visibility: ProviderVisibility
       grants: ProviderGrant[]
     }>,
@@ -1538,9 +1542,10 @@ class ApiClient {
       provider_type?: string
       base_url?: string
       api_key?: string
+      model_profile?: ModelProfile | null
     },
-  ): Promise<{ ok: boolean; detail?: string }> {
-    return this.request<{ ok: boolean; detail?: string }>(`/providers/${id}/test`, {
+  ): Promise<ProviderTestResult> {
+    return this.request<ProviderTestResult>(`/providers/${id}/test`, {
       method: 'POST',
       body: JSON.stringify(opts ?? {}),
     })

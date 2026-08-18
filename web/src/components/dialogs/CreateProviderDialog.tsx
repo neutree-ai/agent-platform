@@ -10,6 +10,7 @@ import { SaveButton } from '@/components/ui/save-button'
 import type { DialogProps } from '@/contexts/DialogStackContext'
 import { getProviderDoc, getProviderDocsHint } from '@/docs/inline-help/provider-docs'
 import { useCreateProvider } from '@/hooks/useProviders'
+import { buildModelProfile } from '@/lib/model-profile'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -22,6 +23,9 @@ const INITIAL_FORM: ProviderForm = {
   api_key: '',
   visibility: 'private',
   team_ids: [],
+  model_profile: null,
+  catalog_text: '',
+  reasoning_effort: '',
 }
 
 /**
@@ -52,9 +56,10 @@ export default function CreateProviderDialog({ open, onOpenChange }: DialogProps
     if (Object.keys(next).length > 0) return
     setGeneralError(null)
     try {
-      const { team_ids, visibility, ...rest } = form
+      const { team_ids, visibility, catalog_text, reasoning_effort, model_profile, ...rest } = form
       await createProvider.mutateAsync({
         ...rest,
+        model_profile: buildModelProfile(model_profile, catalog_text, reasoning_effort),
         visibility,
         grants:
           visibility === 'team'
@@ -76,6 +81,7 @@ export default function CreateProviderDialog({ open, onOpenChange }: DialogProps
     baseUrl: errors.baseUrl ? t(errors.baseUrl) : undefined,
     apiKey: errors.apiKey ? t(errors.apiKey) : undefined,
     teams: errors.teams ? t(errors.teams) : undefined,
+    catalog: errors.catalog ? t(errors.catalog) : undefined,
   }
 
   return (

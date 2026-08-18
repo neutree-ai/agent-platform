@@ -2107,7 +2107,20 @@
         "baseUrlRequired": "Base URL 不能为空",
         "apiKeyRequired": "API Key 不能为空",
         "teamRequired": "请至少选择一个团队，或更换可见性",
-        "createFailed": "创建 API 供应商失败"
+        "createFailed": "创建 API 供应商失败",
+        "catalogInvalid": "catalog 不是合法 JSON，或没有带 slug 的模型"
+      },
+      "modelDeclaration": {
+        "title": "模型声明（Codex）",
+        "help": "Codex 需要这个供应商所服务模型的元数据——上下文窗口、推理档位、工具形态。缺了它，每次会话都会告警并退回默认值。catalog 由模型厂商提供；在这里载入文件后，所有使用该供应商的人都会生效。",
+        "covers": "已覆盖 {{models}}",
+        "empty": "未声明",
+        "loadFile": "载入 JSON 文件",
+        "copyFrom": "从其他供应商复制…",
+        "clear": "清除",
+        "placeholder": "{ \"models\": [ { \"slug\": \"...\", ... } ] }",
+        "reasoningEffort": "默认推理档位",
+        "effortDefault": "交给 Codex 决定"
       }
     },
     "createRoute": {

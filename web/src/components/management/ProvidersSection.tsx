@@ -28,6 +28,7 @@ import { getProviderDoc, getProviderDocsHint } from '@/docs/inline-help/provider
 import { useDeleteProvider, useProviders, useUpdateProvider } from '@/hooks/useProviders'
 import { api } from '@/lib/api/client'
 import type { ApiModelProvider } from '@/lib/api/types'
+import { buildModelProfile, catalogToText, draftProfile } from '@/lib/model-profile'
 import { useInstancePersistentState } from '@/stores/instance-state-store'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -42,6 +43,9 @@ const INITIAL_FORM: ProviderForm = {
   api_key: '',
   visibility: 'private',
   team_ids: [],
+  model_profile: null,
+  catalog_text: '',
+  reasoning_effort: '',
 }
 
 export function ProvidersSection({ instanceId }: { instanceId: string }) {
@@ -118,6 +122,9 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
       api_key: '',
       visibility: p.visibility,
       team_ids: [],
+      model_profile: p.model_profile,
+      catalog_text: catalogToText(p.model_profile),
+      reasoning_effort: p.model_profile?.codex?.reasoning_effort ?? '',
     })
     setEditingId(p.id)
     setErrors({})
@@ -140,9 +147,14 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
         provider_type: form.provider_type,
         base_url: form.base_url,
         api_key: form.api_key,
+        model_profile: draftProfile(form),
       })
-      setTestState(res.ok ? 'ok' : 'fail')
-      setTestDetail(res.detail || '')
+      // A catalog that does not describe the model being tested is worth
+      // saying out loud even when the connection itself is fine: the request
+      // succeeds and codex still runs on fallback metadata.
+      const profileNote = res.profile_detail ? ` · ${res.profile_detail}` : ''
+      setTestState(res.ok && res.profile_ok !== false ? 'ok' : 'fail')
+      setTestDetail(`${res.detail || ''}${profileNote}`.trim())
     } catch (err) {
       setTestState('fail')
       setTestDetail(err instanceof Error ? err.message : t('common.errors.requestFailed'))
@@ -155,10 +167,11 @@ export function ProvidersSection({ instanceId }: { instanceId: string }) {
     if (Object.keys(next).length > 0) return
     if (!editingId) return
     setGeneralError(null)
-    const { team_ids, visibility, ...rest } = form
+    const { team_ids, visibility, catalog_text, reasoning_effort, model_profile, ...rest } = form
     const payload: Parameters<typeof updateProvider.mutateAsync>[0] = {
       id: editingId,
       ...rest,
+      model_profile: buildModelProfile(model_profile, catalog_text, reasoning_effort),
       visibility,
       grants:
         visibility === 'team'

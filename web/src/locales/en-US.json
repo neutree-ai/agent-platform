@@ -2082,7 +2082,20 @@
         "baseUrlRequired": "Base URL is required",
         "apiKeyRequired": "API Key is required",
         "teamRequired": "Pick at least one team or change visibility",
-        "createFailed": "Failed to create provider"
+        "createFailed": "Failed to create provider",
+        "catalogInvalid": "Catalog is not valid JSON, or has no models with a slug"
+      },
+      "modelDeclaration": {
+        "title": "Model declaration (Codex)",
+        "help": "Codex needs metadata for the models this provider serves — context window, reasoning levels, tool shapes. Without it, every session warns and falls back to defaults. The catalog comes from the model vendor; load the file here and everyone using this provider gets it.",
+        "covers": "Covers {{models}}",
+        "empty": "Not declared",
+        "loadFile": "Load JSON file",
+        "copyFrom": "Copy from provider…",
+        "clear": "Clear",
+        "placeholder": "{ \"models\": [ { \"slug\": \"...\", ... } ] }",
+        "reasoningEffort": "Default reasoning effort",
+        "effortDefault": "Leave to Codex"
       }
     },
     "createRoute": {
