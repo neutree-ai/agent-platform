@@ -428,9 +428,13 @@ export interface AcpUsageParseOpts {
  *
  * Values are PER-TURN sums (each LLM request bills its full input context, so
  * summing lines is the correct billing semantics — no cumulative/delta dance).
- * Cache/reasoning splits aren't available on this path (goose only reports
- * them via its gated custom MessageUsage notification), so records are
- * flagged `fieldsIncomplete`.
+ *
+ * Two agents write this format. dsh reports DISJOINT buckets — its
+ * `input_tokens` already excludes cached prompt tokens — and writes the
+ * cache-read count alongside, so both halves of a provider's hit/miss pricing
+ * survive. goose has no such split and omits the field; those records keep a
+ * zero cache-read and stay flagged `fieldsIncomplete`. Reasoning tokens are
+ * reported by neither.
  *
  * dedupKey uses the line index — stable across re-sweeps of the same
  * append-only file, so ledger re-inserts are idempotent.
@@ -482,6 +486,10 @@ export function parseAcpUsageLog(lines: string[], opts: AcpUsageParseOpts = {}):
     }
     if (input === 0 && output === 0) continue
 
+    // Absent (goose) is not the same as present-and-zero (dsh on a turn that
+    // missed the cache): only the former leaves the record incomplete.
+    const hasCacheSplit = obj.cache_read_tokens != null
+
     records.push({
       source: 'goose',
       sessionId,
@@ -489,15 +497,16 @@ export function parseAcpUsageLog(lines: string[], opts: AcpUsageParseOpts = {}):
       ts: typeof obj.ts === 'string' ? obj.ts : new Date(0).toISOString(),
       inputTokens: input,
       outputTokens: output,
-      cacheReadTokens: 0,
+      cacheReadTokens: num(obj.cache_read_tokens),
       cacheCreationTokens: 0,
       cacheCreation5mTokens: 0,
       cacheCreation1hTokens: 0,
       reasoningTokens: 0,
       webSearchRequests: 0,
       speed: null,
-      // cache/reasoning splits genuinely unavailable on this path
-      fieldsIncomplete: true,
+      // Reasoning is reported by neither agent on this path; cache-read is
+      // reported by dsh only.
+      fieldsIncomplete: !hasCacheSplit,
       dedupKey,
     })
   }

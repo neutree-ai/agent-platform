@@ -1,5 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
-import { type UsageRecord, parseClaudeTranscript, parseCodexRollout } from './index.ts'
+import {
+  type UsageRecord,
+  parseAcpUsageLog,
+  parseClaudeTranscript,
+  parseCodexRollout,
+} from './index.ts'
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -336,5 +341,63 @@ describe('parseCodexRollout', () => {
       codexTokenCount({ input: 5, total: 5 }),
     ])
     expect(recs[0].sessionId).toBe('019e796d-real-id')
+  })
+})
+
+describe('parseAcpUsageLog', () => {
+  const dshTurn = (over: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      ts: '2026-08-18T10:00:00.000Z',
+      model: 'deepseek-v4-pro',
+      input_tokens: 1000,
+      output_tokens: 200,
+      cache_read_tokens: 800,
+      total_tokens: 1200,
+      ...over,
+    })
+
+  test('keeps the cache split dsh reports', () => {
+    const [rec] = parseAcpUsageLog([dshTurn()], { sessionId: 's1' })
+    // dsh buckets are disjoint: input is already the uncached half, so the
+    // two are priced separately rather than one being derived from the other.
+    expect(rec.inputTokens).toBe(1000)
+    expect(rec.cacheReadTokens).toBe(800)
+    expect(rec.fieldsIncomplete).toBe(false)
+  })
+
+  test('a turn that missed the cache is complete, not unknown', () => {
+    const [rec] = parseAcpUsageLog([dshTurn({ cache_read_tokens: 0 })], { sessionId: 's1' })
+    expect(rec.cacheReadTokens).toBe(0)
+    expect(rec.fieldsIncomplete).toBe(false)
+  })
+
+  test('goose lines, which carry no split, stay flagged', () => {
+    const line = JSON.stringify({
+      ts: '2026-08-18T10:00:00.000Z',
+      input_tokens: 1000,
+      output_tokens: 200,
+    })
+    const [rec] = parseAcpUsageLog([line], { sessionId: 's1' })
+    expect(rec.cacheReadTokens).toBe(0)
+    expect(rec.fieldsIncomplete).toBe(true)
+  })
+
+  test('dedup keys are unchanged by the cache split', () => {
+    // The ledger keys on these strings. Re-shaping them would make every line
+    // of every existing log re-insert as a new record on the next sweep.
+    const direct = parseAcpUsageLog([dshTurn(), dshTurn()], { sessionId: 's1' })
+    expect(direct.map((r) => r.dedupKey)).toEqual(['goose:s1:0', 'goose:s1:1'])
+
+    const accumulated = parseAcpUsageLog(
+      [
+        JSON.stringify({
+          ts: '2026-08-18T10:00:00.000Z',
+          accumulated_input_tokens: 10,
+          accumulated_output_tokens: 5,
+        }),
+      ],
+      { sessionId: 's1' },
+    )
+    expect(accumulated[0].dedupKey).toBe('goose:s1:15')
   })
 })
