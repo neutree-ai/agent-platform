@@ -295,6 +295,7 @@ read.openapi(getConfigRoute, async (c) => {
       model: config.model,
       base_url: config.base_url,
       api_key: '',
+      model_profile: config.model_profile ?? null,
       small_model: config.small_model,
       system_prompt: config.system_prompt,
       mcp_config: config.mcp_config,

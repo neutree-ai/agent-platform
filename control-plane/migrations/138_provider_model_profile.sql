@@ -1,0 +1,14 @@
+-- A provider serves models the platform knows nothing about: there is no model
+-- table, and `workspace_config.model` is free text. Codex needs the metadata
+-- anyway (context window, reasoning levels, tool shapes, base instructions) and
+-- warns on every session without it, so the provider — the only row that knows
+-- which upstream is being talked to — is where the declaration belongs.
+--
+-- Shaped as a per-core object rather than one catalog column so a second core's
+-- keys don't collide with codex's:
+--   {"codex": {"model_catalog": {...}, "reasoning_effort": "high", ...}}
+--
+-- NULL means "declare nothing", which is the behaviour every existing provider
+-- has today. Not sensitive: readable by anyone who can read the provider, so a
+-- shared provider carries its profile to everyone using it.
+ALTER TABLE model_providers ADD COLUMN IF NOT EXISTS model_profile JSONB;

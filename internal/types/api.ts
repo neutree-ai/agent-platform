@@ -341,6 +341,53 @@ export const ApiConfigMemoryAttachmentSchema = z.object({
 
 export type ApiConfigMemoryAttachment = z.infer<typeof ApiConfigMemoryAttachmentSchema>
 
+/**
+ * What a provider declares about the models it serves, grouped by agent core.
+ *
+ * The platform has no model table — `workspace_config.model` is free text — so
+ * the provider row is the only place that knows which upstream is answering.
+ * Codex needs that metadata (context window, reasoning levels, tool shapes,
+ * base instructions) and warns on every session without it.
+ *
+ * Deliberately not validated field-by-field: the catalog's real schema belongs
+ * to a specific codex version, and copying it here would make cp fail whenever
+ * codex adds a field. cp checks the shape it acts on; the agent guards the rest
+ * by falling back to no catalog when the file it wrote does not load.
+ */
+export const CodexReasoningEffortSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max'])
+export type CodexReasoningEffort = z.infer<typeof CodexReasoningEffortSchema>
+
+export const CodexModelCatalogSchema = z
+  .object({
+    models: z
+      .array(z.object({ slug: z.string().min(1) }).passthrough())
+      .min(1, 'model_catalog.models must list at least one model'),
+  })
+  .passthrough()
+
+export const CodexModelProfileSchema = z
+  .object({
+    /** Contents of codex's `models.json`, written verbatim into the pod. */
+    model_catalog: CodexModelCatalogSchema.optional(),
+    /** Must be one of the levels the catalog declares for the model in use. */
+    reasoning_effort: CodexReasoningEffortSchema.optional(),
+    /** Overrides the wire protocol inferred from `provider_type`. */
+    wire_api: z.enum(['responses', 'chat']).optional(),
+    /** Codex version the catalog was accepted against, for upgrade triage. */
+    validated_with: z.string().optional(),
+  })
+  .passthrough()
+
+export type CodexModelProfile = z.infer<typeof CodexModelProfileSchema>
+
+// Unknown top-level keys pass through: a core added later must not be rejected
+// by an older control-plane sitting in front of a newer web.
+export const ModelProfileSchema = z
+  .object({ codex: CodexModelProfileSchema.optional() })
+  .passthrough()
+
+export type ModelProfile = z.infer<typeof ModelProfileSchema>
+
 export const ApiWorkspaceConfigSchema = z.object({
   agent_type: z.string(),
   provider_id: z.string().nullable(),
@@ -356,6 +403,8 @@ export const ApiWorkspaceConfigSchema = z.object({
   base_url: z.string(),
   /** Always returned as empty string; the real value is write-only. */
   api_key: z.string(),
+  /** The resolved provider's declaration about its models; null when it has none. */
+  model_profile: ModelProfileSchema.nullable(),
   small_model: z.string(),
   system_prompt: z.string(),
   mcp_config: z.string(),
@@ -794,6 +843,9 @@ export const ApiModelProviderSchema = z.object({
   provider_type: z.string(),
   base_url: z.string(),
   api_key: z.string(),
+  /** Not a secret: readable by anyone who can read the provider, so a shared
+   * provider carries its declaration to everyone using it. */
+  model_profile: ModelProfileSchema.nullable(),
   user_id: z.string(),
   owner_name: z.string(),
   is_owner: z.boolean(),
@@ -831,6 +883,7 @@ export const ModelProviderCreateBodySchema = z.object({
   provider_type: z.string().default(''),
   base_url: z.string().default(''),
   api_key: z.string().default(''),
+  model_profile: ModelProfileSchema.nullable().optional(),
   is_public: z.boolean().optional(),
   visibility: ProviderVisibilitySchema.optional(),
   grants: z.array(ProviderGrantSchema).optional(),
@@ -843,6 +896,7 @@ export const ModelProviderUpdateBodySchema = z
     provider_type: z.string(),
     base_url: z.string(),
     api_key: z.string(),
+    model_profile: ModelProfileSchema.nullable(),
     is_public: z.boolean(),
     visibility: ProviderVisibilitySchema,
     grants: z.array(ProviderGrantSchema),
@@ -858,6 +912,10 @@ export const ModelProviderTestBodySchema = z.object({
   provider_type: z.string().optional(),
   base_url: z.string().optional(),
   api_key: z.string().optional(),
+  // Unvalidated on the way in: the point of sending a draft profile is to hear
+  // back what is wrong with it, so a malformed one must reach the checker
+  // rather than bounce off the request schema.
+  model_profile: z.unknown().optional(),
 })
 
 export const ModelListSchema = z.object({
@@ -868,6 +926,10 @@ export const ModelListSchema = z.object({
 export const ModelProviderTestResultSchema = z.object({
   ok: z.boolean(),
   detail: z.string().optional(),
+  /** Absent when no profile was submitted; otherwise the profile's own verdict,
+   * reported separately so a good connection is not hidden by a bad catalog. */
+  profile_ok: z.boolean().optional(),
+  profile_detail: z.string().optional(),
 })
 
 export const ModelProviderUsageSchema = z.object({

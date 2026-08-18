@@ -1,3 +1,4 @@
+import type { ModelProfile } from '../../../../internal/types/api'
 import { generateId, pool } from './pool'
 import type { ModelProvider, ProviderVisibility, Workspace } from './types'
 
@@ -147,6 +148,7 @@ function decorateProvider(
     provider_type: row.provider_type,
     base_url: row.base_url,
     api_key: row.api_key,
+    model_profile: row.model_profile ?? null,
     is_public: row.is_public,
     visibility: row.visibility,
     created_at: row.created_at,
@@ -167,12 +169,13 @@ export async function createModelProvider(
     api_key: string
     user_id: string
     visibility: ProviderVisibility
+    model_profile?: ModelProfile | null
   },
 ): Promise<ModelProvider> {
   const id = generateId()
   await pool.query(
-    `INSERT INTO model_providers (id, name, description, provider_type, base_url, api_key, user_id, visibility, is_public)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO model_providers (id, name, description, provider_type, base_url, api_key, user_id, visibility, is_public, model_profile)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       id,
       name,
@@ -183,6 +186,7 @@ export async function createModelProvider(
       opts.user_id,
       opts.visibility,
       opts.visibility === 'public',
+      opts.model_profile ?? null,
     ],
   )
   return (await getModelProvider(id))!
@@ -193,7 +197,13 @@ export async function updateModelProvider(
   updates: Partial<
     Pick<
       ModelProvider,
-      'name' | 'description' | 'provider_type' | 'base_url' | 'api_key' | 'visibility'
+      | 'name'
+      | 'description'
+      | 'provider_type'
+      | 'base_url'
+      | 'api_key'
+      | 'visibility'
+      | 'model_profile'
     >
   >,
 ): Promise<ModelProvider | null> {
@@ -207,6 +217,13 @@ export async function updateModelProvider(
       sets.push(`${field} = $${paramIndex++}`)
       values.push(updates[field])
     }
+  }
+
+  // Explicit null clears the declaration, which is why this one is not folded
+  // into the loop above: `null` is a value here, not "leave it alone".
+  if (updates.model_profile !== undefined) {
+    sets.push(`model_profile = $${paramIndex++}`)
+    values.push(updates.model_profile)
   }
 
   if (updates.visibility !== undefined) {

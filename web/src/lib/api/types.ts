@@ -60,9 +60,18 @@ export type { ApiWorkspaceLayout, LayoutSkeleton } from '@neutree-ai/types'
 export type {
   ApiModelProvider,
   ApiProviderGrant,
+  ModelProfile,
   ProviderGrant,
   ProviderVisibility,
 } from '@neutree-ai/types'
+
+/** Provider probe outcome: connection and profile answered separately. */
+export interface ProviderTestResult {
+  ok: boolean
+  detail?: string
+  profile_ok?: boolean
+  profile_detail?: string
+}
 
 export type {
   ApiEnvironment,

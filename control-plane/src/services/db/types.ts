@@ -1,4 +1,4 @@
-import type { ComputeResources, LayoutSkeleton } from '../../../../internal/types/api'
+import type { ComputeResources, LayoutSkeleton, ModelProfile } from '../../../../internal/types/api'
 
 export interface User {
   id: string
@@ -124,6 +124,8 @@ export interface WorkspaceConfig {
   model: string
   base_url: string
   api_key: string
+  /** The resolved provider's model declaration; null when it has none. */
+  model_profile: ModelProfile | null
   small_model: string
   system_prompt: string
   mcp_config: string
@@ -357,6 +359,7 @@ export interface ModelProvider {
   provider_type: string
   base_url: string
   api_key: string
+  model_profile: ModelProfile | null
   user_id: string
   is_public: boolean
   visibility: ProviderVisibility

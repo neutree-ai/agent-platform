@@ -95,6 +95,7 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
     model: config.model,
     base_url: config.base_url,
     api_key: config.api_key,
+    model_profile: config.model_profile ?? null,
     small_model: config.small_model,
     system_prompt: config.system_prompt,
     mcp_config: mcpConfig,

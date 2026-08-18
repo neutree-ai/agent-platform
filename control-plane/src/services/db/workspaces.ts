@@ -312,6 +312,8 @@ export async function getWorkspaceConfig(workspaceId: string): Promise<Workspace
        CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wp.api_key, ''), tp.api_key, wc.api_key)
             WHEN wc.provider_id IS NOT NULL THEN COALESCE(NULLIF(wp.api_key, ''), wc.api_key)
             ELSE wc.api_key END AS api_key,
+       CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(wp.model_profile, tp.model_profile)
+            ELSE wp.model_profile END AS model_profile,
        CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wc.model, ''), tv.model)
             ELSE wc.model END AS model,
        CASE WHEN wc.template_id IS NOT NULL THEN COALESCE(NULLIF(wc.small_model, ''), tv.small_model)
@@ -370,6 +372,8 @@ export async function updateWorkspaceConfig(
       | 'prompt_content'
       | 'template_name'
       | 'template_latest_version'
+      // Read-only projection of the resolved provider's own column.
+      | 'model_profile'
     >
   >,
 ): Promise<void> {

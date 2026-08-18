@@ -4,6 +4,7 @@ import {
   ApiModelProviderSchema,
   ApiProviderGrantSchema,
   ModelListSchema,
+  type ModelProfile,
   ModelProviderCreateBodySchema,
   ModelProviderDeleteConflictSchema,
   ModelProviderTestBodySchema,
@@ -27,6 +28,7 @@ import {
   updateModelProvider,
 } from '../services/db/model-providers'
 import { getTeamMembership } from '../services/db/teams'
+import { catalogSlugs, checkModelProfile } from '../services/model-profile'
 
 const providers = new OpenAPIHono<AppEnv>()
 
@@ -45,6 +47,9 @@ function toApi(p: ProviderWithAccess): ApiModelProvider {
     provider_type: p.provider_type,
     base_url: p.base_url,
     api_key: '', // never expose api_key — owner edits via blank-keeps-existing pattern
+    // Unlike the key, the profile is readable by every viewer: a shared
+    // provider is only useful if the declaration travels with it.
+    model_profile: p.model_profile ?? null,
     user_id: p.user_id,
     owner_name: p.owner_name,
     is_owner: p.is_owner,
@@ -71,6 +76,31 @@ async function validateProviderGrants(
     if (!m) return { ok: false, error: `Team ${g.team_id} not accessible` }
   }
   return { ok: true }
+}
+
+/**
+ * Check a draft profile the way the store would, and say whether the model
+ * being tested is one the catalog actually covers — a catalog that parses but
+ * names other models leaves the tested model on codex's fallback metadata,
+ * which is the failure this whole field exists to prevent.
+ */
+function draftProfileVerdict(
+  raw: unknown,
+  model: string,
+): { profile_ok?: boolean; profile_detail?: string } {
+  if (raw === undefined) return {}
+  const check = checkModelProfile(raw)
+  if (!check.ok) return { profile_ok: false, profile_detail: check.error }
+
+  const slugs = catalogSlugs(check.profile)
+  if (slugs.length === 0) return { profile_ok: true }
+  if (model && !slugs.includes(model)) {
+    return {
+      profile_ok: false,
+      profile_detail: `Catalog covers ${slugs.join(', ')} — nothing for "${model}"`,
+    }
+  }
+  return { profile_ok: true, profile_detail: `Catalog covers ${slugs.join(', ')}` }
 }
 
 function resolveAnthropicUrl(provider: { provider_type: string; base_url: string }): string {
@@ -171,6 +201,9 @@ providers.openapi(createRouteDef, async (c) => {
   const grantCheck = await validateProviderGrants(user.sub, grants)
   if (!grantCheck.ok) return c.json({ error: grantCheck.error }, 400)
 
+  const profileCheck = checkModelProfile(body.model_profile)
+  if (!profileCheck.ok) return c.json({ error: profileCheck.error }, 400)
+
   try {
     const provider = await createModelProvider(body.name, {
       description: body.description,
@@ -179,6 +212,7 @@ providers.openapi(createRouteDef, async (c) => {
       api_key: body.api_key,
       user_id: user.sub,
       visibility,
+      model_profile: profileCheck.profile,
     })
     if (grants.length > 0) await setProviderGrants(provider.id, grants, user.sub)
     const decorated = await getProviderForUser(provider.id, user.sub)
@@ -253,6 +287,14 @@ providers.openapi(updateRouteDef, async (c) => {
     await setProviderGrants(id, [], user.sub)
   }
 
+  // Absent leaves the stored profile alone; an explicit null clears it.
+  let nextProfile: ModelProfile | null | undefined
+  if (body.model_profile !== undefined) {
+    const profileCheck = checkModelProfile(body.model_profile)
+    if (!profileCheck.ok) return c.json({ error: profileCheck.error }, 400)
+    nextProfile = profileCheck.profile
+  }
+
   const updated = await updateModelProvider(id, {
     name: body.name,
     description: body.description,
@@ -260,6 +302,7 @@ providers.openapi(updateRouteDef, async (c) => {
     base_url: body.base_url,
     api_key: body.api_key,
     visibility: nextVisibility,
+    model_profile: nextProfile,
   })
   if (!updated) return c.json({ error: 'Provider not found' }, 404)
 
@@ -382,10 +425,16 @@ providers.openapi(testRoute, async (c) => {
   const body = c.req.valid('json')
   const model = body.model?.trim() || ''
 
+  // The profile verdict rides along with the connection probe rather than
+  // living on its own route: the dialog asks one question ("is this provider
+  // configured right?") and a bad catalog is not a connection failure, so the
+  // two answers stay in separate fields.
+  const profile = draftProfileVerdict(body.model_profile, model)
+
   // A model is mandatory: the probe issues a real completion request, so there
   // is no safe provider-agnostic default to fall back to.
   if (!model) {
-    return c.json({ ok: false, detail: 'Select a model to test this provider.' }, 200)
+    return c.json({ ...profile, ok: false, detail: 'Select a model to test this provider.' }, 200)
   }
 
   // Merge optional draft config over the stored provider so the Edit Provider
@@ -463,19 +512,22 @@ providers.openapi(testRoute, async (c) => {
       }
     } else {
       return c.json(
-        { ok: false, detail: `Unsupported provider type: ${effective.provider_type}` },
+        { ...profile, ok: false, detail: `Unsupported provider type: ${effective.provider_type}` },
         200,
       )
     }
 
-    if (res.ok) return c.json({ ok: true }, 200)
+    if (res.ok) return c.json({ ...profile, ok: true }, 200)
     const text = await res.text().catch(() => '')
     return c.json(
-      { ok: false, detail: `${res.status} ${res.statusText}: ${text.slice(0, 200)}` },
+      { ...profile, ok: false, detail: `${res.status} ${res.statusText}: ${text.slice(0, 200)}` },
       200,
     )
   } catch (e) {
-    return c.json({ ok: false, detail: (e as Error).message || 'Connection failed' }, 200)
+    return c.json(
+      { ...profile, ok: false, detail: (e as Error).message || 'Connection failed' },
+      200,
+    )
   }
 })
 
