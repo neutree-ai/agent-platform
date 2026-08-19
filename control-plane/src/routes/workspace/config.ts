@@ -44,6 +44,12 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
     // teamwork task context. Keeping a static injection here would create
     // a duplicate definition that conflicts with the sidecar's dynamic one.
     if (parsed.mcpServers) {
+      // A server the user has switched off keeps its config in the workspace
+      // but never reaches the agent. This endpoint is the single place an
+      // agent obtains its MCP config, so filtering here covers every core.
+      for (const [name, server] of Object.entries(parsed.mcpServers) as [string, any][]) {
+        if (server?.disabled) delete parsed.mcpServers[name]
+      }
       for (const server of Object.values(parsed.mcpServers) as any[]) {
         // Inject workspace context for all MCP servers
         if (server.url) {

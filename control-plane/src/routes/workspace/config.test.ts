@@ -69,6 +69,26 @@ describe('GET /workspace/v1/workspaces/:id/config', () => {
     expect(config).not.toHaveBeenCalled()
   })
 
+  // A switched-off server stays in the workspace config so it can be switched
+  // back on, but it must never be handed to the agent.
+  it('withholds disabled MCP servers from the agent', async () => {
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
+    config.mockResolvedValue({
+      agent_type: 'claude-code',
+      mcp_config: JSON.stringify({
+        mcpServers: {
+          live: { type: 'http', url: 'https://example.com/mcp' },
+          paused: { type: 'http', url: 'https://paused.example.com/mcp', disabled: true },
+        },
+      }),
+    } as never)
+
+    const res = await get('/v1/workspaces/ws1/config', 'ws_good')
+
+    const served = JSON.parse((await res.json()).mcp_config)
+    expect(Object.keys(served.mcpServers)).toEqual(['live'])
+  })
+
   it('404s when the workspace has no config', async () => {
     verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
     config.mockResolvedValue(null as never)
