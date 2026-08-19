@@ -218,10 +218,14 @@ export function useWsApps(workspaceId: string | undefined): AppDefinition[] {
     // Extensions — user-installed plugin apps (MCP-driven)
     if (config?.mcp_config && catalog) {
       try {
-        const parsed = JSON.parse(config.mcp_config) as { mcpServers?: Record<string, unknown> }
+        const parsed = JSON.parse(config.mcp_config) as {
+          mcpServers?: Record<string, { disabled?: boolean }>
+        }
         const servers = parsed.mcpServers ?? {}
         for (const entry of catalog) {
-          if (!entry.ui_panel || !(entry.id in servers)) continue
+          // A disabled server keeps its entry but is withheld from the agent,
+          // so its panel goes away with it.
+          if (!entry.ui_panel || !(entry.id in servers) || servers[entry.id]?.disabled) continue
           // Three states for the panel:
           //  - registered (bundle loaded): use its label() — supports i18n
           //  - lazy descriptor only: use the static manifest label so the

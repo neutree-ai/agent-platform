@@ -10,6 +10,9 @@ export default defineConfig({
       // the UI SDK, so tests need its source alias (type-only @neutree-ai/*
       // imports are erased and don't).
       '@neutree-ai/ui-sdk': resolve(__dirname, '../internal/ui-sdk/src/index.ts'),
+      // Same reason: the MCP editor pulls the Builder cap catalog — a runtime
+      // value — out of @neutree-ai/types.
+      '@neutree-ai/types': resolve(__dirname, '../internal/types/index.ts'),
     },
   },
   test: {

@@ -2740,7 +2740,8 @@
         "environment": "Environment"
       },
       "labels": {
-        "json": "json"
+        "json": "json",
+        "disabled": "Disabled"
       },
       "placeholders": {
         "serverName": "Server name",
@@ -2764,7 +2765,8 @@
       "actions": {
         "addField": "+ {{label}}",
         "add": "Add",
-        "addServer": "Add MCP Server"
+        "addServer": "Add MCP Server",
+        "toggleServer": "Enable or disable this server"
       },
       "builder": {
         "title": "Builder Mode",

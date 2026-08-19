@@ -2764,7 +2764,8 @@
         "environment": "环境变量"
       },
       "labels": {
-        "json": "json"
+        "json": "json",
+        "disabled": "已禁用"
       },
       "placeholders": {
         "serverName": "服务名",
@@ -2788,7 +2789,8 @@
       "actions": {
         "addField": "+ {{label}}",
         "add": "添加",
-        "addServer": "添加 MCP 服务"
+        "addServer": "添加 MCP 服务",
+        "toggleServer": "启用 / 禁用该服务"
       },
       "builder": {
         "title": "Builder 模式",

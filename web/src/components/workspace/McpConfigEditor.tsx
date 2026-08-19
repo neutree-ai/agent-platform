@@ -66,6 +66,8 @@ function catalogToKnown(catalog: McpCatalogEntry[]): {
 type OAuthState = { connected: boolean; expires_at?: string } | null | 'loading' | 'error'
 
 interface McpServerConfig {
+  /** Switched off: the entry is kept here but cp withholds it from the agent. */
+  disabled?: boolean
   type?: string
   url?: string
   command?: string
@@ -82,6 +84,7 @@ interface McpConfig {
 interface StructuredDraft {
   mode: 'struct'
   name: string
+  disabled: boolean
   transport: 'http' | 'stdio'
   url: string
   command: string
@@ -93,6 +96,7 @@ interface StructuredDraft {
 interface RawDraft {
   mode: 'raw'
   name: string
+  disabled: boolean
   json: string
 }
 
@@ -102,7 +106,7 @@ type CustomDraft = StructuredDraft | RawDraft
 function canStructure(cfg: McpServerConfig): boolean {
   const isStdio = cfg.type === 'stdio' || cfg.type === 'command' || !!cfg.command
   const isHttp = !isStdio
-  const knownKeys = new Set(['type', 'url', 'headers', 'command', 'args', 'env'])
+  const knownKeys = new Set(['type', 'url', 'headers', 'command', 'args', 'env', 'disabled'])
   const hasUnknown = Object.keys(cfg).some((k) => !knownKeys.has(k))
   if (hasUnknown) return false
   if (isHttp && cfg.type && cfg.type !== 'http' && cfg.type !== 'streamable-http') return false
@@ -110,13 +114,18 @@ function canStructure(cfg: McpServerConfig): boolean {
 }
 
 function configToDraft(name: string, cfg: McpServerConfig): CustomDraft {
+  // The flag is draft state of its own, so it never shows up in the JSON the
+  // user edits by hand — it is re-applied on the way back out.
+  const disabled = !!cfg.disabled
   if (!canStructure(cfg)) {
-    return { mode: 'raw', name, json: JSON.stringify(cfg, null, 2) }
+    const { disabled: _, ...rest } = cfg
+    return { mode: 'raw', name, disabled, json: JSON.stringify(rest, null, 2) }
   }
   const isStdio = cfg.type === 'stdio' || cfg.type === 'command' || !!cfg.command
   return {
     mode: 'struct',
     name,
+    disabled,
     transport: isStdio ? 'stdio' : 'http',
     url: cfg.url || '',
     command: cfg.command || '',
@@ -127,11 +136,13 @@ function configToDraft(name: string, cfg: McpServerConfig): CustomDraft {
 }
 
 function draftToConfig(draft: CustomDraft): McpServerConfig {
+  const mark = (cfg: McpServerConfig): McpServerConfig =>
+    draft.disabled ? { ...cfg, disabled: true } : cfg
   if (draft.mode === 'raw') {
     try {
-      return JSON.parse(draft.json)
+      return mark(JSON.parse(draft.json))
     } catch {
-      return {}
+      return mark({})
     }
   }
   if (draft.transport === 'stdio') {
@@ -142,20 +153,21 @@ function draftToConfig(draft: CustomDraft): McpServerConfig {
       draft.env.filter((e) => e.key.trim()).map((e) => [e.key, e.value]),
     )
     if (Object.keys(env).length > 0) cfg.env = env
-    return cfg
+    return mark(cfg)
   }
   const cfg: McpServerConfig = { type: 'http', url: draft.url }
   const headers = Object.fromEntries(
     draft.headers.filter((h) => h.key.trim()).map((h) => [h.key, h.value]),
   )
   if (Object.keys(headers).length > 0) cfg.headers = headers
-  return cfg
+  return mark(cfg)
 }
 
 function emptyDraft(): StructuredDraft {
   return {
     mode: 'struct',
     name: '',
+    disabled: false,
     transport: 'http',
     url: '',
     command: '',
@@ -185,17 +197,21 @@ function prettyJson(raw: string): string {
 }
 
 /** Build the JSON string from structured state */
-function buildMcpJson(
+export function buildMcpJson(
   knownServers: Record<string, KnownServerDef>,
   enabled: Record<string, boolean>,
+  present: Record<string, boolean>,
   paramValues: Record<string, Record<string, string>>,
   customs: CustomDraft[],
 ): string {
   const mcpServers: Record<string, unknown> = {}
 
   for (const [key, def] of Object.entries(knownServers)) {
-    if (!enabled[key] && !def.required) continue
+    // Switching a server off keeps the entry — with its params — and marks it
+    // disabled. A server that was never added at all still stays out.
+    if (!enabled[key] && !def.required && !present[key]) continue
     const entry: McpServerConfig = { type: 'http', url: def.url }
+    if (!enabled[key] && !def.required) entry.disabled = true
     const headers: Record<string, string> = {}
     for (const p of def.params) {
       const val = paramValues[key]?.[p.header]
@@ -220,7 +236,7 @@ function buildMcpJson(
 }
 
 /** Parse current JSON into structured state */
-function parseStructuredState(
+export function parseStructuredState(
   raw: string,
   knownServers: Record<string, KnownServerDef>,
   knownKeys: string[],
@@ -229,10 +245,12 @@ function parseStructuredState(
   const servers = parsed.mcpServers ?? {}
 
   const enabled: Record<string, boolean> = {}
+  const present: Record<string, boolean> = {}
   const paramValues: Record<string, Record<string, string>> = {}
 
   for (const [key, def] of Object.entries(knownServers)) {
-    enabled[key] = def.required || key in servers
+    present[key] = key in servers
+    enabled[key] = def.required || (key in servers && !(servers[key] as McpServerConfig)?.disabled)
     paramValues[key] = {}
     const serverHeaders = (servers[key] as McpServerConfig)?.headers ?? {}
     for (const p of def.params) {
@@ -247,7 +265,7 @@ function parseStructuredState(
     .filter(([k]) => !knownKeys.includes(k))
     .map(([name, cfg]) => configToDraft(name, cfg as McpServerConfig))
 
-  return { enabled, paramValues, customs }
+  return { enabled, present, paramValues, customs }
 }
 
 // ─── Server fields form ───────────────────────────────────────────
@@ -417,6 +435,9 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
   const [rawDraft, setRawDraft] = useState('')
 
   const [enabled, setEnabled] = useState<Record<string, boolean>>({})
+  // Which catalog servers already have an entry in the config — switching one
+  // off keeps that entry, so presence and enablement are no longer the same.
+  const [present, setPresent] = useState<Record<string, boolean>>({})
   const [paramValues, setParamValues] = useState<Record<string, Record<string, string>>>({})
   const [customs, setCustoms] = useState<CustomDraft[]>([])
 
@@ -573,6 +594,7 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
   useEffect(() => {
     const state = parseStructuredState(value, catalog.servers, catalog.keys)
     setEnabled(state.enabled)
+    setPresent(state.present)
     setParamValues(state.paramValues)
     setCustoms(state.customs)
     // Auto-open groups that have enabled servers or required servers.
@@ -594,7 +616,7 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
     pv: Record<string, Record<string, string>>,
     cu: CustomDraft[],
   ) {
-    onChange(buildMcpJson(catalog.servers, en, pv, cu))
+    onChange(buildMcpJson(catalog.servers, en, present, pv, cu))
   }
 
   function toggleServer(key: string) {
@@ -618,6 +640,12 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
 
   function removeCustom(index: number) {
     const next = customs.filter((_, i) => i !== index)
+    setCustoms(next)
+    emitChange(enabled, paramValues, next)
+  }
+
+  function toggleCustom(index: number) {
+    const next = customs.map((c, i) => (i === index ? { ...c, disabled: !c.disabled } : c))
     setCustoms(next)
     emitChange(enabled, paramValues, next)
   }
@@ -801,14 +829,38 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
             return (
               <div
                 key={draft.name}
-                className="rounded border border-border bg-background/60 p-3 space-y-2"
+                className={cn(
+                  'rounded border p-3 space-y-2 transition-colors',
+                  draft.disabled
+                    ? 'border-border/50 bg-muted/30'
+                    : 'border-border bg-background/60',
+                )}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">{draft.name}</span>
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 rounded"
+                      checked={!draft.disabled}
+                      onChange={() => toggleCustom(i)}
+                      title={t('components.mcpConfigEditor.actions.toggleServer')}
+                    />
+                    <span
+                      className={cn(
+                        'font-medium',
+                        draft.disabled ? 'text-muted-foreground' : 'text-foreground',
+                      )}
+                    >
+                      {draft.name}
+                    </span>
                     <span className="rounded bg-muted px-1.5 py-0.5 text-mini text-muted-foreground">
                       {typeLabel}
                     </span>
+                    {draft.disabled && (
+                      <span className="rounded bg-muted-foreground/10 px-1.5 py-0.5 text-mini text-muted-foreground">
+                        {t('components.mcpConfigEditor.labels.disabled')}
+                      </span>
+                    )}
                     {renderOAuthBadge(serverOrigin, oauth)}
                   </div>
                   <Button
