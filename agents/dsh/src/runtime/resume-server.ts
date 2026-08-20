@@ -146,6 +146,10 @@ export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfi
 
   transport.onRequest(async (method, params) => {
     if (method === 'initialize') {
+      // The composition loads asynchronously, so a handshake can arrive before
+      // every plugin is up. Stock behaviour since rc.8; matters most here,
+      // where MCP servers are part of the tree.
+      await ctx.get('loader')?.await()
       const p = params as unknown as RouteFacts
       route = {
         provider: p.provider,

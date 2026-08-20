@@ -8,7 +8,7 @@
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.14.1",
-    "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-sdk-client": "0.1.0-rc.8",
     "@types/node": "^22.0.0",
     "vitest": "^2.1.0"
   },
