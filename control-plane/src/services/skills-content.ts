@@ -49,19 +49,15 @@ export async function skillsContentFetch(
   signal?: AbortSignal,
   extraHeaders?: Record<string, string>,
 ): Promise<{ ok: true; response: Response } | { ok: false; error: string }> {
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept-Encoding': 'identity', ...(extraHeaders ?? {}) },
-      signal,
-    })
-    return { ok: true, response }
-  } catch (e: unknown) {
-    if (signal?.aborted) return { ok: false, error: 'Client disconnected' }
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[skills-content] fetch failed ${url}:`, msg)
-    return { ok: false, error: 'skills-content-service unavailable' }
-  }
+  const attempt = await fetchWithRetry(
+    'GET',
+    url,
+    { headers: { 'Accept-Encoding': 'identity', ...(extraHeaders ?? {}) } },
+    signal,
+  )
+  if (attempt.ok) return { ok: true, response: attempt.response }
+  if (attempt.aborted) return { ok: false, error: 'Client disconnected' }
+  return { ok: false, error: unavailable(attempt.code) }
 }
 
 // ── scan (pure parse, no side effects) ─────────────────────────────────────
@@ -421,18 +417,108 @@ export async function scsDeleteSkill(
 }
 
 // ── transport helpers ──────────────────────────────────────────────────────
+//
+// Retry policy. A throw from `fetch` means no response arrived: the request
+// either never left cp (DNS, connect refused) or the connection died in
+// flight — typically a pooled keep-alive socket scs had already closed. scs
+// runs as a single in-cluster replica, so these are transient and an attempt
+// a moment later succeeds; without a retry the user sees a bare 502 on an
+// otherwise healthy system.
+//
+// What is retried is bounded by what a duplicate request would cost:
+//   - idempotent methods (GET/PUT/DELETE): any transport error
+//   - POST/PATCH: only errors raised before a byte could be written, where
+//     the request provably never reached scs. One that died in flight may
+//     already have created a version, so it stays failed.
+// Streamed bodies are excluded — see `doStreamPost`.
+
+const MAX_ATTEMPTS = 3
+const RETRY_DELAYS_MS = [100, 300]
+
+/** Raised while resolving or opening the connection: nothing was sent. */
+const CONNECT_PHASE_CODES = new Set([
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+])
+
+const IDEMPOTENT_METHODS = new Set(['GET', 'PUT', 'DELETE'])
+
+/** Node buries the real cause under `TypeError: fetch failed`, sometimes twice. */
+function errorCode(e: unknown): string | undefined {
+  let cur: unknown = e
+  for (let depth = 0; cur instanceof Error && depth < 4; depth++) {
+    const code = (cur as { code?: unknown }).code
+    if (typeof code === 'string') return code
+    cur = cur.cause
+  }
+  return undefined
+}
+
+function isRetryable(method: string, e: unknown): boolean {
+  if (IDEMPOTENT_METHODS.has(method)) return true
+  const code = errorCode(e)
+  return code !== undefined && CONNECT_PHASE_CODES.has(code)
+}
+
+/** Carries the errno so a user-reported 502 names its own cause. */
+function unavailable(code: string | undefined): string {
+  const base = 'skills-content-service unavailable'
+  return code ? `${base} (${code})` : base
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+type FetchAttempt =
+  | { ok: true; response: Response }
+  | { ok: false; aborted: true }
+  | { ok: false; aborted: false; code: string | undefined }
+
+/**
+ * `fetch` under the retry policy above. Resolves to the transport failure
+ * rather than throwing, so callers keep their `{ok:false}` shape. Caller
+ * aborts are surfaced as-is and never retried.
+ */
+async function fetchWithRetry(
+  method: string,
+  url: string,
+  init: RequestInit,
+  signal: AbortSignal | undefined,
+): Promise<FetchAttempt> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return { ok: true, response: await fetch(url, { ...init, method, signal }) }
+    } catch (e: unknown) {
+      if (signal?.aborted) return { ok: false, aborted: true }
+      const code = errorCode(e)
+      const detail = code ?? (e instanceof Error ? e.message : String(e))
+      if (attempt >= MAX_ATTEMPTS || !isRetryable(method, e)) {
+        console.error(`[skills-content] ${method} ${url} failed (${detail})`)
+        return { ok: false, aborted: false, code }
+      }
+      console.warn(
+        `[skills-content] ${method} ${url} failed (${detail}), retrying ${attempt}/${MAX_ATTEMPTS - 1}`,
+      )
+      await sleep(RETRY_DELAYS_MS[attempt - 1])
+    }
+  }
+}
+
+/** Map a transport failure onto the `ScsResult` shape shared by all callers. */
+function transportError<T>(attempt: { aborted: boolean; code?: string }): ScsResult<T> {
+  if (attempt.aborted) return { ok: false, status: 499, error: 'Client disconnected' }
+  return { ok: false, status: 502, error: unavailable(attempt.code) }
+}
 
 async function doJsonGet<T>(url: string, signal: AbortSignal | undefined): Promise<ScsResult<T>> {
-  let response: Response
-  try {
-    response = await fetch(url, { method: 'GET', signal })
-  } catch (e: unknown) {
-    if (signal?.aborted) return { ok: false, status: 499, error: 'Client disconnected' }
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[skills-content] GET ${url} failed:`, msg)
-    return { ok: false, status: 502, error: 'skills-content-service unavailable' }
-  }
-  return decodeResponse<T>(response)
+  const attempt = await fetchWithRetry('GET', url, {}, signal)
+  if (!attempt.ok) return transportError<T>(attempt)
+  return decodeResponse<T>(attempt.response)
 }
 
 async function doJsonPost<T>(
@@ -465,21 +551,14 @@ async function doJson<T>(
   body: unknown,
   signal: AbortSignal | undefined,
 ): Promise<ScsResult<T>> {
-  let response: Response
-  try {
-    response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal,
-    })
-  } catch (e: unknown) {
-    if (signal?.aborted) return { ok: false, status: 499, error: 'Client disconnected' }
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[skills-content] ${method} ${url} failed:`, msg)
-    return { ok: false, status: 502, error: 'skills-content-service unavailable' }
-  }
-  return decodeResponse<T>(response)
+  const attempt = await fetchWithRetry(
+    method,
+    url,
+    { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+    signal,
+  )
+  if (!attempt.ok) return transportError<T>(attempt)
+  return decodeResponse<T>(attempt.response)
 }
 
 async function doMethodNoBody<T>(
@@ -487,18 +566,16 @@ async function doMethodNoBody<T>(
   url: string,
   signal: AbortSignal | undefined,
 ): Promise<ScsResult<T>> {
-  let response: Response
-  try {
-    response = await fetch(url, { method, signal })
-  } catch (e: unknown) {
-    if (signal?.aborted) return { ok: false, status: 499, error: 'Client disconnected' }
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[skills-content] ${method} ${url} failed:`, msg)
-    return { ok: false, status: 502, error: 'skills-content-service unavailable' }
-  }
-  return decodeResponse<T>(response)
+  const attempt = await fetchWithRetry(method, url, {}, signal)
+  if (!attempt.ok) return transportError<T>(attempt)
+  return decodeResponse<T>(attempt.response)
 }
 
+/**
+ * Streamed upload. Deliberately outside the retry policy: the body is a
+ * one-shot `ReadableStream`, already partly consumed by the time the socket
+ * fails, so a second attempt would send a truncated payload.
+ */
 async function doStreamPost<T>(
   method: 'POST' | 'PUT',
   url: string,
@@ -522,9 +599,10 @@ async function doStreamPost<T>(
     })
   } catch (e: unknown) {
     if (signal?.aborted) return { ok: false, status: 499, error: 'Client disconnected' }
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[skills-content] ${method} ${url} failed:`, msg)
-    return { ok: false, status: 502, error: 'skills-content-service unavailable' }
+    const code = errorCode(e)
+    const detail = code ?? (e instanceof Error ? e.message : String(e))
+    console.error(`[skills-content] ${method} ${url} failed (${detail})`)
+    return { ok: false, status: 502, error: unavailable(code) }
   }
   return decodeResponse<T>(response)
 }
