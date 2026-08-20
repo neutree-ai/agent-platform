@@ -52,6 +52,7 @@ jobs:
           - { image: nap-agent-claude-code, dockerfile: agents/claude-code/Dockerfile, context: . }
           - { image: nap-agent-codex, dockerfile: agents/codex/Dockerfile, context: . }
           - { image: nap-agent-goose, dockerfile: agents/goose/Dockerfile, context: . }
+          - { image: nap-agent-dsh, dockerfile: agents/dsh/Dockerfile, context: . }
     steps:
       - uses: actions/checkout@v4
 

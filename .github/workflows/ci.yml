@@ -44,6 +44,7 @@ jobs:
           - { ws: agents/claude-code }
           - { ws: agents/codex }
           - { ws: agents/goose }
+          - { ws: agents/dsh }
     steps:
       - uses: actions/checkout@v4
         with:
