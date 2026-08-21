@@ -215,6 +215,20 @@ spec:
             limits:
               memory: "4Gi"
               cpu: "1000m"
+          # cp runs every pending schema migration in initDb() before it opens
+          # the port, so an upgrade that lands a long migration (129 REINDEXes
+          # the whole sessions table) has no listener for the duration. Without
+          # a startupProbe, liveness kills the pod ~100s in and the restart
+          # re-runs the same migration — a crash loop that never converges. A
+          # self-host site upgrading across several releases at once takes the
+          # whole backlog in one boot, so the grace has to cover the sum.
+          # 120 x 5s = 10 minutes; liveness takes over after.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            periodSeconds: 5
+            failureThreshold: 120
           livenessProbe:
             httpGet:
               path: /healthz
