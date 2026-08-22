@@ -75,7 +75,7 @@ describeIfSandbox('sandboxes through the workspace API', () => {
 
   test('list is scoped to the workspace', async () => {
     const result = await workspaceSandboxes(runToken, wsId).list()
-    const ids = (result.sandboxes ?? []).map((s) => (s as { id: string }).id)
+    const ids = (result.items ?? []).map((s) => (s as { id: string }).id)
     expect(ids).toContain(sandboxId)
   })
 
@@ -88,7 +88,7 @@ describeIfSandbox('sandboxes through the workspace API', () => {
     await workspaceSandboxes(runToken, wsId).delete(sandboxId as string)
     const gone = await until('the sandbox to leave the workspace listing', async () => {
       const result = await workspaceSandboxes(runToken, wsId).list()
-      const ids = (result.sandboxes ?? []).map((s) => (s as { id: string }).id)
+      const ids = (result.items ?? []).map((s) => (s as { id: string }).id)
       return !ids.includes(sandboxId as string)
     })
     expect(gone).toBe(true)

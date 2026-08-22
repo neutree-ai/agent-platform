@@ -93,7 +93,7 @@ export function workspaceSandboxes(token: string, workspaceId: string) {
       resource?: Record<string, string>
       timeout_seconds?: number
     }) => cp<{ id: string }>('POST', `/api/workspaces/${workspaceId}/sandboxes`, body),
-    list: () => cp<{ sandboxes?: unknown[] }>('GET', `/api/workspaces/${workspaceId}/sandboxes`),
+    list: () => cp<{ items?: unknown[] }>('GET', `/api/workspaces/${workspaceId}/sandboxes`),
     endpoint: (sandboxId: string, port: number) =>
       cp<{ url: string }>(
         'GET',
