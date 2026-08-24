@@ -28,6 +28,7 @@ import {
   updateEnvironment,
 } from '../services/db/environments'
 import { getTeamMembership } from '../services/db/teams'
+import { supportsFor } from '../services/placement-decision'
 
 const environments = new OpenAPIHono<AppEnv>()
 
@@ -56,7 +57,9 @@ function toApi(e: EnvironmentWithAccess): ApiEnvironment {
     visibility: e.visibility,
     kind: e.kind,
     status: e.status,
-    capabilities: e.capabilities,
+    // Resolved rather than passed through: what the built-in environment
+    // supports lives in cp's own provider config, not in its row.
+    capabilities: { ...e.capabilities, ...supportsFor(e) },
     is_builtin: e.is_builtin,
     last_heartbeat_at: e.last_heartbeat_at,
     owner_name: e.owner_name,

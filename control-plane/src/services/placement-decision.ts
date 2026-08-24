@@ -43,7 +43,14 @@ function envSupports(env: EnvironmentWithAccess, feature: keyof Supports): boole
   return env.capabilities?.[feature] === true
 }
 
-function supportsFor(env: EnvironmentWithAccess): Supports {
+/**
+ * What an environment can actually provide. Exported because the environments
+ * route reports the same answer to clients: the built-in row carries no
+ * capabilities of its own (only remote runners fill that column in via their
+ * heartbeat), so a client reading the row directly would see auto-scaling as
+ * unavailable on the very environment that most often supports it.
+ */
+export function supportsFor(env: EnvironmentWithAccess): Supports {
   return {
     sharedFs: envSupports(env, 'sharedFs'),
     persistentMemory: envSupports(env, 'persistentMemory'),
