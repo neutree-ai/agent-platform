@@ -1207,6 +1207,11 @@
       "environment": {
         "builtin": "内置环境",
         "offline": "离线"
+      },
+      "autoScaling": {
+        "label": "自动伸缩",
+        "description": "按负载在多个副本之间分配会话，忙时扩容、闲时缩回。创建后不能改回单副本。",
+        "unavailable": "所选环境跑不了多副本（需要支持 ReadWriteMany 的存储）。"
       }
     },
     "modelFields": {
@@ -3738,6 +3743,16 @@
       "saveAsTemplate": {
         "action": "另存为模板",
         "description": "将工作空间当前配置保存为可复用的模板。"
+      },
+      "scaling": {
+        "label": "并发与伸缩",
+        "replicasReady": "副本 {{ready}}/{{desired}} 就绪",
+        "staticNote": "这个工作空间固定单副本。自动伸缩要换一套工作负载和存储卷，只能在创建时选。",
+        "concurrency": {
+          "label": "单副本并发",
+          "hintAutoScaling": "一个副本同时接几个 turn。自动伸缩也按它算：排队的 turn 超过一个副本接得下的量就扩容。",
+          "hintStatic": "同时接几个 turn，超出的排队等待。"
+        }
       }
     },
     "automationDropdown": {
@@ -3755,6 +3770,21 @@
         "memoryRequest": "Memory Request",
         "memoryLimit": "Memory Limit",
         "storage": "存储"
+      }
+    },
+    "scalingFields": {
+      "labels": {
+        "minReplicas": "最少副本",
+        "maxReplicas": "最多副本",
+        "idleSeconds": "空闲多久后停止（秒）"
+      },
+      "hints": {
+        "minReplicas": "闲下来也保持运行的副本数",
+        "maxReplicas": "忙起来最多扩到几个副本"
+      },
+      "scaleToZero": {
+        "label": "空闲后停止",
+        "description": "空闲超过设定时长就停掉整个工作空间，下次对话自动拉起，文件都在共享卷上不会丢。"
       }
     },
     "configCommands": {

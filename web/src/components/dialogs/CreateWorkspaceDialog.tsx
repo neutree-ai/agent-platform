@@ -14,11 +14,17 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SaveButton } from '@/components/ui/save-button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Switch } from '@/components/ui/switch'
 import {
   ConfigFormFields,
   type ConfigFormValues,
   INITIAL_CONFIG_VALUES,
 } from '@/components/workspace/ConfigFormFields'
+import {
+  AUTO_SCALING_DEFAULTS,
+  ScalingFields,
+  scalingIsValid,
+} from '@/components/workspace/ScalingFields'
 import {
   type ConsentSchedule,
   ScheduleConsentList,
@@ -31,7 +37,7 @@ import { useEnvironments } from '@/hooks/useEnvironments'
 import { useTemplates } from '@/hooks/useTemplates'
 import { useCreateWorkspace } from '@/hooks/useWorkspaces'
 import { api } from '@/lib/api/client'
-import type { ApiTemplate } from '@/lib/api/types'
+import type { ApiTemplate, AutoScaling } from '@/lib/api/types'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronsUpDown, Globe, Lock, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -167,6 +173,13 @@ interface FormState {
   isSystem: boolean
   /** Target environment id; 'builtin' = the built-in environment (default). */
   environmentId: string
+  /**
+   * Replica bounds, or null for a static single-replica workspace. Only
+   * creation gets to choose: the two shapes are different workloads on
+   * different volume modes, so the settings panel can retune the numbers but
+   * never remove or add the block.
+   */
+  autoScaling: AutoScaling | null
   config: ConfigFormValues
 }
 
@@ -176,6 +189,7 @@ const INITIAL_FORM: FormState = {
   selectedTemplate: '',
   isSystem: false,
   environmentId: 'builtin',
+  autoScaling: null,
   config: { ...INITIAL_CONFIG_VALUES },
 }
 
@@ -228,10 +242,17 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
 
   const isAdmin = user?.role === 'admin'
   const hasTemplates = templates && templates.length > 0
+  // Auto-scaling needs a ReadWriteMany volume, which is a property of where the
+  // workspace runs. The built-in environment reports what cp was deployed with,
+  // so an unchecked box here means the cluster genuinely cannot do it.
+  const targetEnvironment = environments.find((e) =>
+    form.isSystem ? e.is_builtin : e.id === form.environmentId,
+  )
+  const canAutoScale = targetEnvironment?.capabilities?.multiReplica === true
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const { name, mode, selectedTemplate, isSystem, environmentId, config } = form
+    const { name, mode, selectedTemplate, isSystem, environmentId, autoScaling, config } = form
     // 'builtin' is the implicit default — omit it so the backend picks built-in.
     const environment_id = environmentId && environmentId !== 'builtin' ? environmentId : undefined
     try {
@@ -242,6 +263,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
               template_id: selectedTemplate || undefined,
               is_system: isSystem || undefined,
               environment_id,
+              auto_scaling: autoScaling ?? undefined,
               schedule_overrides:
                 consentSchedules.length > 0
                   ? resolveScheduleOverrides(consentSchedules, scheduleOverrides)
@@ -251,6 +273,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
               name,
               is_system: isSystem || undefined,
               environment_id,
+              auto_scaling: autoScaling ?? undefined,
               agent_type: config.agent_type,
               compute_resources: config.compute_resources,
               provider_id: config.provider_id || undefined,
@@ -290,7 +313,10 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
             form="create-workspace"
             size="sm"
             isSaving={createMutation.isPending}
-            disabled={form.mode === 'template' && !form.selectedTemplate}
+            disabled={
+              (form.mode === 'template' && !form.selectedTemplate) ||
+              (!!form.autoScaling && !scalingIsValid(form.autoScaling))
+            }
             label={t('common.create')}
           />
         </>
@@ -338,7 +364,15 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
             <Combobox
               value={form.environmentId}
               onValueChange={(environmentId) =>
-                setForm((f) => ({ ...f, environmentId: environmentId || 'builtin' }))
+                setForm((f) => ({
+                  ...f,
+                  environmentId: environmentId || 'builtin',
+                  // The new environment may not be able to run replicas.
+                  autoScaling: environments.find((e) => e.id === environmentId)?.capabilities
+                    ?.multiReplica
+                    ? f.autoScaling
+                    : null,
+                }))
               }
               options={environments.map((e) => ({
                 value: e.id,
@@ -349,6 +383,34 @@ export default function CreateWorkspaceDialog({ open, onOpenChange }: DialogProp
                     : undefined,
                 disabled: !e.is_builtin && e.status !== 'online',
               }))}
+            />
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Label className="text-xs">{t('components.createWorkspace.autoScaling.label')}</Label>
+              <p className="mt-1 text-mini text-muted-foreground">
+                {canAutoScale
+                  ? t('components.createWorkspace.autoScaling.description')
+                  : t('components.createWorkspace.autoScaling.unavailable')}
+              </p>
+            </div>
+            <Switch
+              checked={!!form.autoScaling}
+              disabled={!canAutoScale || createMutation.isPending}
+              className="mt-0.5 shrink-0"
+              onCheckedChange={(on) =>
+                setForm((f) => ({ ...f, autoScaling: on ? { ...AUTO_SCALING_DEFAULTS } : null }))
+              }
+            />
+          </div>
+          {form.autoScaling && (
+            <ScalingFields
+              value={form.autoScaling}
+              onChange={(autoScaling) => setForm((f) => ({ ...f, autoScaling }))}
+              disabled={createMutation.isPending}
             />
           )}
         </div>

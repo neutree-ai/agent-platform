@@ -43,7 +43,7 @@ export interface PendingMessage {
   images: ChatImageAttachment[]
 }
 
-export type { ComputeResources, ApiWorkspaceConfig } from '@neutree-ai/types'
+export type { ComputeResources, ApiWorkspaceConfig, AutoScaling } from '@neutree-ai/types'
 
 export type {
   ApiTemplate,

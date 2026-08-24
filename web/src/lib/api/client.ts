@@ -65,6 +65,7 @@ import type {
   ApiWorkspaceLayout,
   ApiWorkspaceMemoryAttachment,
   AskUserRequest,
+  AutoScaling,
   BrowserListResponse,
   BrowserSession,
   CallableAgent,
@@ -302,6 +303,11 @@ class ApiClient {
     schedule_overrides?: Record<string, boolean>
     /** Target environment (BYOI). Omit / 'builtin' = the built-in environment. */
     environment_id?: string
+    /**
+     * Replica bounds. Passing this makes the workspace auto-scaling, which only
+     * creation can decide — the environment must advertise `multiReplica`.
+     */
+    auto_scaling?: AutoScaling
   }): Promise<Workspace> {
     return this.request<Workspace>('/workspaces', {
       method: 'POST',

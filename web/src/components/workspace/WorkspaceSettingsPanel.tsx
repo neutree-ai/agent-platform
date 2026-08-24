@@ -53,6 +53,7 @@ import { api } from '@/lib/api/client'
 import type {
   ApiTemplateVersion,
   ApiWorkspaceConfig,
+  AutoScaling,
   ComputeResources,
   Workspace,
 } from '@/lib/api/types'
@@ -105,6 +106,9 @@ interface ConfigDraft {
   mcpConfig: string
   agentSettings: string
   computeResources: Required<ComputeResources>
+  /** Replica bounds; null for a static workspace, which the panel cannot change. */
+  autoScaling: AutoScaling | null
+  maxConcurrency: number
   autoStart: boolean
   muted: boolean
   enabledSkills: Set<string>
@@ -476,6 +480,8 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       mcpConfig: config.mcp_config,
       agentSettings: config.agent_settings,
       computeResources: withDefaults(config.compute_resources),
+      autoScaling: config.auto_scaling,
+      maxConcurrency: config.max_concurrency,
       autoStart: config.auto_start ?? true,
       muted: config.muted ?? false,
     }))
@@ -517,11 +523,14 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
   const lifecyclePending =
     startMutation.isPending || stopMutation.isPending || restartMutation.isPending
 
-  // Poll K8s status only while the workspace is mid-transition. Surfaces
-  // FailedScheduling / image pull / OOM reasons that otherwise leave the
-  // workspace stuck in 'starting' with no visible explanation.
+  // Poll K8s status while the workspace is mid-transition — this surfaces
+  // FailedScheduling / image pull / OOM reasons that otherwise leave it stuck
+  // in 'starting' with no visible explanation — and while an auto-scaling one
+  // is up, where the same payload carries the live replica counts.
   const { data: k8sStatus } = useWorkspaceStatus(workspaceId, {
-    enabled: workspace?.status === 'starting',
+    enabled:
+      workspace?.status === 'starting' ||
+      (!!config?.auto_scaling && workspace?.status === 'running'),
   })
   const startupWarnings = k8sStatus?.warnings ?? []
   const startupFailedConditions = (k8sStatus?.conditions ?? []).filter(
@@ -566,6 +575,8 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
     mcpConfig: '{}',
     agentSettings: '{}',
     computeResources: { ...DEFAULTS },
+    autoScaling: null,
+    maxConcurrency: 10,
     autoStart: true,
     muted: false,
     enabledSkills: new Set(),
@@ -611,6 +622,8 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       mcpConfig: config.mcp_config,
       agentSettings: config.agent_settings,
       computeResources: withDefaults(config.compute_resources),
+      autoScaling: config.auto_scaling,
+      maxConcurrency: config.max_concurrency,
       autoStart: config.auto_start ?? true,
       muted: config.muted ?? false,
       enabledSkills: new Set(),
@@ -745,6 +758,8 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       JSON.stringify(withDefaults(config.compute_resources))
     )
       return true
+    if (JSON.stringify(draft.autoScaling) !== JSON.stringify(config.auto_scaling)) return true
+    if (draft.maxConcurrency !== config.max_concurrency) return true
     if (draft.autoStart !== (config.auto_start ?? true)) return true
     if (draft.muted !== (config.muted ?? false)) return true
     const orig = originalSkills
@@ -805,6 +820,16 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
         )
           patch.compute_resources = draft.computeResources
 
+        // Only the numbers travel: a null draft means the workspace is static,
+        // and sending that back would read as a request to change its shape,
+        // which the server rejects.
+        if (
+          draft.autoScaling &&
+          JSON.stringify(draft.autoScaling) !== JSON.stringify(config.auto_scaling)
+        )
+          patch.auto_scaling = draft.autoScaling
+        if (draft.maxConcurrency !== config.max_concurrency)
+          patch.max_concurrency = draft.maxConcurrency
         if (draft.autoStart !== (config.auto_start ?? true)) patch.auto_start = draft.autoStart
         if (draft.muted !== (config.muted ?? false)) patch.muted = draft.muted
 
@@ -1030,6 +1055,11 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
             }}
             autoStart={draft.autoStart}
             onAutoStartChange={(v) => patchDraft({ autoStart: v })}
+            autoScaling={draft.autoScaling}
+            onAutoScalingChange={(v) => patchDraft({ autoScaling: v })}
+            maxConcurrency={draft.maxConcurrency}
+            onMaxConcurrencyChange={(v) => patchDraft({ maxConcurrency: v })}
+            replicas={k8sStatus?.replicas}
             templateConfig={tplResources}
           />
         )

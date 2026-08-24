@@ -1182,6 +1182,11 @@
       "environment": {
         "builtin": "Built-in",
         "offline": "Offline"
+      },
+      "autoScaling": {
+        "label": "Auto-scaling",
+        "description": "Spread sessions across replicas, adding them under load and giving them back when idle. A workspace cannot go back to a single replica later.",
+        "unavailable": "The selected environment cannot run replicas (it needs ReadWriteMany storage)."
       }
     },
     "modelFields": {
@@ -3714,6 +3719,16 @@
       "saveAsTemplate": {
         "action": "Save as template",
         "description": "Save this workspace's current config as a reusable template."
+      },
+      "scaling": {
+        "label": "Concurrency & scaling",
+        "replicasReady": "{{ready}}/{{desired}} replicas ready",
+        "staticNote": "This workspace runs a single fixed replica. Auto-scaling means a different workload on a different volume mode, so it can only be chosen at creation.",
+        "concurrency": {
+          "label": "Per-replica concurrency",
+          "hintAutoScaling": "Turns one replica takes at once. Auto-scaling divides by it: queued turns beyond what one replica can take add another.",
+          "hintStatic": "Turns the workspace takes at once; the rest queue."
+        }
       }
     },
     "automationDropdown": {
@@ -3731,6 +3746,21 @@
         "memoryRequest": "Memory Request",
         "memoryLimit": "Memory Limit",
         "storage": "Storage"
+      }
+    },
+    "scalingFields": {
+      "labels": {
+        "minReplicas": "Min replicas",
+        "maxReplicas": "Max replicas",
+        "idleSeconds": "Stop after idle (seconds)"
+      },
+      "hints": {
+        "minReplicas": "Replicas kept running while idle",
+        "maxReplicas": "Ceiling the workspace may scale up to"
+      },
+      "scaleToZero": {
+        "label": "Stop when idle",
+        "description": "Stop the whole workspace once it has been idle this long. The next turn starts it again — files live on the shared volume, so nothing is lost."
       }
     },
     "configCommands": {
