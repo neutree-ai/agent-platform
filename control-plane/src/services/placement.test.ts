@@ -6,8 +6,9 @@ vi.mock('./db/pool', () => ({ pool: { query: vi.fn() } }))
 vi.mock('./db/workspaces', () => ({ getWorkspaceConfig: vi.fn() }))
 vi.mock('./db/workspace-tokens', () => ({ revokeAllWorkspaceTokens: vi.fn() }))
 
+import { pool } from './db/pool'
 import { revokeAllWorkspaceTokens } from './db/workspace-tokens'
-import { buildWorkspaceSpec, setDesiredPhase } from './placement'
+import { buildWorkspaceSpec, ensureReplicaFloor, setDesiredPhase } from './placement'
 
 describe('buildWorkspaceSpec', () => {
   it('projects agent_type and compute_resources from the config row', () => {
@@ -86,5 +87,23 @@ describe('setDesiredPhase', () => {
     await setDesiredPhase('ws1', 'running')
 
     expect(revoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('ensureReplicaFloor', () => {
+  // The floor is expressed in the WHERE clause rather than read-then-write, so
+  // what the test can assert is that the statement only ever raises a count
+  // that is both present and below 1 — never a static spec, never a live count
+  // the autoscaler is holding above the floor.
+  it('only touches an auto-scaling spec sitting below one replica', async () => {
+    vi.mocked(pool.query).mockClear()
+
+    await ensureReplicaFloor('ws1')
+
+    const [sql, params] = vi.mocked(pool.query).mock.calls[0] as [string, unknown[]]
+    expect(sql).toContain("spec ? 'replicas'")
+    expect(sql).toContain("COALESCE((spec->>'replicas')::int, 0) < 1")
+    expect(sql).toContain('spec_version = spec_version + 1')
+    expect(params).toEqual(['ws1'])
   })
 })

@@ -1,7 +1,7 @@
 import type { ComputeResources } from '../../../internal/types/api'
 import { getWorkspaceConfig, updateWorkspace } from './db/workspaces'
 import * as k8s from './k8s'
-import { bumpWorkspaceSpec, setDesiredPhase } from './placement'
+import { bumpWorkspaceSpec, ensureReplicaFloor, setDesiredPhase } from './placement'
 
 interface DesiredSpec {
   agentType: string
@@ -111,6 +111,7 @@ export async function startWorkspaceInstance(
   if (reconciled.rebuilt) {
     console.log(`[start ${workspaceId}] rebuilt: ${reconciled.reason}`)
   }
+  await ensureReplicaFloor(workspaceId)
   await setDesiredPhase(workspaceId, 'running')
   await updateWorkspace(workspaceId, { status: 'starting' })
   return reconciled

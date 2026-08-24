@@ -126,6 +126,35 @@ export async function setDesiredReplicas(workspaceId: string, replicas: number):
 }
 
 /**
+ * Guarantee a workspace that is being started has a replica to start with.
+ *
+ * An auto-scaling workspace whose floor is 0 sits at 0 replicas whenever demand
+ * is 0 — that is the autoscaler doing its job. But a start only flips the phase;
+ * nothing else raises the count, and the autoscaler reads demand, which is still
+ * 0 while the turn that triggered the start is waiting for the workspace to come
+ * up. Without this floor that workspace would come up with nothing to serve it
+ * and the turn would time out, every time. Raising it to 1 is what the
+ * autoscaler does on its next pass anyway, once the turn registers.
+ *
+ * No-op for a static workspace (its spec carries no replica count) and for any
+ * count already at 1 or more — including a live count the autoscaler is holding
+ * above the floor.
+ */
+export async function ensureReplicaFloor(workspaceId: string): Promise<void> {
+  await pool.query(
+    `UPDATE workspace_placements
+        SET spec_version = spec_version + 1,
+            spec = jsonb_set(
+              jsonb_set(spec, '{replicas}', to_jsonb(1)),
+              '{version}', to_jsonb(spec_version + 1))
+      WHERE workspace_id = $1
+        AND spec ? 'replicas'
+        AND COALESCE((spec->>'replicas')::int, 0) < 1`,
+    [workspaceId],
+  )
+}
+
+/**
  * Set the desired phase (running | stopped | deleted).
  *
  * Leaving 'running' also revokes the workspace's tokens. A workspace that is
