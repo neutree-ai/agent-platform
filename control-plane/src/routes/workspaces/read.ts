@@ -301,6 +301,8 @@ read.openapi(getConfigRoute, async (c) => {
       mcp_config: config.mcp_config,
       agent_settings: config.agent_settings,
       compute_resources: config.compute_resources ?? {},
+      auto_scaling: config.auto_scaling ?? null,
+      max_concurrency: config.max_concurrency,
       auto_start: config.auto_start ?? true,
       muted: config.muted ?? false,
       user_display_name: currentUser.display_name || currentUser.username || null,

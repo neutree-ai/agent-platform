@@ -63,6 +63,25 @@ describeIfK8s('workspace lifecycle', () => {
     expect(config.system_prompt).toBe('You are a test assistant')
   })
 
+  test('config exposes runtime sizing', async () => {
+    const config = await client.workspaces.getConfig(wsId)
+    // A workspace created without an auto_scaling block is static.
+    expect(config.auto_scaling).toBeNull()
+    expect(config.max_concurrency).toBeGreaterThan(0)
+
+    await client.workspaces.updateConfig(wsId, { max_concurrency: 4 })
+    expect((await client.workspaces.getConfig(wsId)).max_concurrency).toBe(4)
+  })
+
+  test('config update cannot switch a workspace to auto-scaling', async () => {
+    await expect(
+      client.workspaces.updateConfig(wsId, {
+        auto_scaling: { min_replicas: 1, max_replicas: 3 },
+      }),
+    ).rejects.toThrow()
+    expect((await client.workspaces.getConfig(wsId)).auto_scaling).toBeNull()
+  })
+
   test('create tag and set workspace tags', async () => {
     const tag = await client.tags.create({ name: 'e2e-tag', color: 'rose' })
     expect(tag.id).toBeDefined()

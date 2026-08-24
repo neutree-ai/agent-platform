@@ -143,11 +143,18 @@ export interface WorkspaceConfig {
    * Auto-scaling parameters, or null for a static (single fixed replica)
    * workspace. This is the creation-time *input*: buildWorkspaceSpec reads its
    * presence to decide the workspace's runtimeMode, which the placement spec
-   * then carries and everything downstream branches on. Fixed at creation,
-   * immutable after. Per-replica turn capacity reuses max_concurrency, so it is
-   * not part of this object.
+   * then carries and everything downstream branches on. Whether the block is
+   * present is fixed at creation; the bounds inside it are not — raising them
+   * just gives the autoscaler a wider clamp on its next pass.
    */
   auto_scaling: AutoScalingConfig | null
+  /**
+   * How many turns one replica admits at once. The turn gate multiplies it by
+   * the ready replica count, so it means the same thing in both shapes: a
+   * static workspace's whole capacity, an auto-scaling one's per-replica
+   * capacity (and hence the divisor the autoscaler sizes replicas by).
+   */
+  max_concurrency: number
   updated_at: string
 }
 

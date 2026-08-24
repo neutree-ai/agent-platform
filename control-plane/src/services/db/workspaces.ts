@@ -333,6 +333,7 @@ export async function getWorkspaceConfig(workspaceId: string): Promise<Workspace
        wc.auto_start,
        wc.muted,
        wc.auto_scaling,
+       wc.max_concurrency,
        wc.updated_at,
        CASE WHEN wc.template_id IS NOT NULL
             THEN CASE WHEN wc.prompt_id IS NOT NULL THEN wc.prompt_id
@@ -397,6 +398,7 @@ export async function updateWorkspaceConfig(
     'auto_start',
     'muted',
     'auto_scaling',
+    'max_concurrency',
     'template_id',
     'template_version',
   ] as const

@@ -11,6 +11,7 @@ import { getTemplateForUser, getTemplateVersion } from '../../services/db/templa
 import {
   createWorkspace,
   getWorkspace,
+  getWorkspaceConfig,
   updateWorkspace,
   updateWorkspaceConfig,
 } from '../../services/db/workspaces'
@@ -222,13 +223,7 @@ write.openapi(createRouteDef, async (c) => {
     // so the first spec the runner sees already carries runtimeMode + replicas.
     // Static workspaces skip this and stay a plain single-replica Deployment.
     if (body.auto_scaling) {
-      await updateWorkspaceConfig(workspace.id, {
-        auto_scaling: {
-          min_replicas: body.auto_scaling.min_replicas,
-          max_replicas: body.auto_scaling.max_replicas,
-          scale_to_zero_idle_seconds: body.auto_scaling.scale_to_zero_idle_seconds ?? null,
-        },
-      })
+      await updateWorkspaceConfig(workspace.id, { auto_scaling: body.auto_scaling })
     }
 
     // Control inversion (P1): record desired state; the env-runner creates the
@@ -375,7 +370,7 @@ const putConfigRoute = createRoute({
   tags: ['workspaces'],
   summary: 'Update workspace agent configuration',
   description:
-    'Empty `api_key` is treated as "do not change". Changing `agent_type` while running rebuilds the container.',
+    'Empty `api_key` is treated as "do not change". Changing `agent_type` while running rebuilds the container. `auto_scaling` accepts new replica bounds but cannot switch a workspace between static and auto-scaling.',
   security: [{ bearerAuth: [] }],
   request: {
     params: WorkspaceIdParam,
@@ -387,6 +382,10 @@ const putConfigRoute = createRoute({
     200: {
       description: 'Config applied',
       content: { 'application/json': { schema: PutConfigResponseSchema } },
+    },
+    400: {
+      description: 'Rejected update (e.g. a runtime-shape change)',
+      content: { 'application/json': { schema: ErrorSchema } },
     },
     404: {
       description: 'Workspace not found',
@@ -403,6 +402,25 @@ write.openapi(putConfigRoute, async (c) => {
   const workspace = await getWorkspace(id)
   if (!workspace || !canManage(workspace, currentUser)) {
     return c.json({ error: 'Workspace not found' }, 404)
+  }
+
+  // Replica bounds are quantities and may be re-tuned; the presence of the
+  // block is the workspace's runtime shape and may not. Flipping it would mean
+  // swapping a Deployment on a ReadWriteOnce volume for a StatefulSet on a
+  // ReadWriteMany one, which is a migration, not a config write.
+  if (body.auto_scaling !== undefined) {
+    const config = await getWorkspaceConfig(id)
+    const wasAutoScaling = !!config?.auto_scaling
+    if (wasAutoScaling !== !!body.auto_scaling) {
+      return c.json(
+        {
+          error: wasAutoScaling
+            ? 'Cannot turn off auto-scaling on an existing workspace'
+            : 'Cannot turn on auto-scaling on an existing workspace',
+        },
+        400,
+      )
+    }
   }
 
   if (body.api_key !== undefined && !body.api_key) {

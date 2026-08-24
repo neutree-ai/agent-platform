@@ -107,6 +107,8 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
     mcp_config: mcpConfig,
     agent_settings: config.agent_settings,
     compute_resources: config.compute_resources ?? {},
+    auto_scaling: config.auto_scaling ?? null,
+    max_concurrency: config.max_concurrency,
     auto_start: config.auto_start ?? true,
     muted: config.muted ?? false,
     user_display_name: user?.display_name || user?.username || null,

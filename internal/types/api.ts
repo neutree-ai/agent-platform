@@ -51,6 +51,27 @@ export const SlugSchema = z
   )
 
 /**
+ * Replica bounds for an auto-scaling workspace. Whether this block is present
+ * decides the workspace's runtime shape (present → auto-scaling, absent →
+ * static), so only creation may introduce or remove it; the numbers inside are
+ * quantities and stay adjustable afterwards. Per-replica turn capacity is
+ * `max_concurrency`, not part of this object.
+ */
+export const AutoScalingSchema = z
+  .object({
+    min_replicas: z.number().int().min(0),
+    max_replicas: z.number().int().min(1),
+    // Optional on the wire, always stored: omitting it and sending null both
+    // mean "never scale to zero", and the autoscaler should see one form.
+    scale_to_zero_idle_seconds: z.number().int().positive().nullable().default(null),
+  })
+  .refine((v) => v.min_replicas <= v.max_replicas, {
+    message: 'min_replicas must be <= max_replicas',
+  })
+
+export type AutoScaling = z.infer<typeof AutoScalingSchema>
+
+/**
  * Body for `POST /api/workspaces`. Two modes:
  *  - Template mode: pass `template_id`; agent_type / config fields / skill_names are taken from the template's latest version (others ignored).
  *  - Blank mode: pass agent_type and any config fields directly.
@@ -83,19 +104,9 @@ export const WorkspaceCreateBodySchema = z.object({
   // entries fall back to the template's enabled_default. Both UI and API set this.
   schedule_overrides: z.record(z.string(), z.boolean()).optional(),
   // Opt into auto-scaling (0..max replicas sharing one RWX volume). Omitted →
-  // a static single-replica workspace. Set only at creation — the runtime shape
-  // is immutable, so this field is deliberately absent from the config-update
-  // schema. Per-replica turn capacity reuses max_concurrency.
-  auto_scaling: z
-    .object({
-      min_replicas: z.number().int().min(0),
-      max_replicas: z.number().int().min(1),
-      scale_to_zero_idle_seconds: z.number().int().positive().nullable().optional(),
-    })
-    .refine((v) => v.min_replicas <= v.max_replicas, {
-      message: 'min_replicas must be <= max_replicas',
-    })
-    .optional(),
+  // a static single-replica workspace. Only creation decides which of the two a
+  // workspace is; the config update accepts new bounds but not a shape flip.
+  auto_scaling: AutoScalingSchema.optional(),
 })
 
 export type WorkspaceCreateBody = z.infer<typeof WorkspaceCreateBodySchema>
@@ -410,6 +421,14 @@ export const ApiWorkspaceConfigSchema = z.object({
   mcp_config: z.string(),
   agent_settings: z.string(),
   compute_resources: ComputeResourcesSchema,
+  /**
+   * Replica bounds when the workspace is auto-scaling; null when it is static.
+   * Updatable as bounds, but null↔object is a shape change and is rejected —
+   * the two shapes are different k8s workloads on different volume modes.
+   */
+  auto_scaling: AutoScalingSchema.nullable(),
+  /** Turns one replica admits at once; the autoscaler's per-replica capacity. */
+  max_concurrency: z.number().int().min(1),
   /** When false, a stopped workspace is not auto-started on incoming chat. */
   auto_start: z.boolean(),
   /**
