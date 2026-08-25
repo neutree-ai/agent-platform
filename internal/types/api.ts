@@ -160,7 +160,15 @@ export const ApiContentPartSchema = z.discriminatedUnion('type', [
     is_error: z.boolean().optional(),
     parent_tool_use_id: z.string().nullable().optional(),
   }),
-  z.object({ type: z.literal('image'), data: z.string(), media_type: z.string() }),
+  // `data` (inline base64) is what the live stream sends; stored history
+  // instead carries `url`, a fetchable endpoint for the same bytes, so a long
+  // session's message payload stays small. Exactly one of the two is set.
+  z.object({
+    type: z.literal('image'),
+    media_type: z.string(),
+    data: z.string().optional(),
+    url: z.string().optional(),
+  }),
 ])
 
 export type ApiContentPart = z.infer<typeof ApiContentPartSchema>

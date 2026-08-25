@@ -22,7 +22,12 @@ export function toChatMessage(message: ApiMessage): ChatMessage {
     if (part.type === 'text') {
       blocks.push({ type: 'text', text: part.text })
     } else if (part.type === 'image') {
-      blocks.push({ type: 'image', data: (part as any).data, media_type: (part as any).media_type })
+      blocks.push({
+        type: 'image',
+        media_type: (part as any).media_type,
+        data: (part as any).data,
+        url: (part as any).url,
+      })
     } else if (part.type === 'tool_call') {
       const result = resultMap.get(part.call_id)
       let input: Record<string, unknown> = {}

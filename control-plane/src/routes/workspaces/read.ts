@@ -10,12 +10,13 @@ import {
 import type { AppEnv } from '../../lib/types'
 import { getWorkspaceReplicaStatus } from '../../services/db/env-placements'
 import { listAttachmentsForWorkspace } from '../../services/db/memory'
-import { getMessagesWithBlocks } from '../../services/db/messages'
+import { getMessageBlock, getMessagesWithBlocks } from '../../services/db/messages'
 import { getSessionFacets, listSessions } from '../../services/db/sessions'
 import { getTagAssignmentsForUser } from '../../services/db/tags'
 import type { SessionWithPreview } from '../../services/db/types'
 import { getWorkspace, getWorkspaceConfig, listWorkspaces } from '../../services/db/workspaces'
 import * as k8s from '../../services/k8s'
+import { withImageUrls } from './_image-blocks'
 import { canManage, toApiWorkspace } from './_shared'
 
 function toApiSession(s: SessionWithPreview) {
@@ -157,6 +158,31 @@ const listSessionsRoute = createRoute({
   },
 })
 
+const messageBlockImageRoute = createRoute({
+  method: 'get',
+  path: '/{id}/messages/{messageId}/blocks/{ordinal}/image',
+  tags: ['workspaces'],
+  summary: 'Fetch the image bytes of one stored message block',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: WorkspaceIdParam.extend({
+      messageId: z.string().openapi({ param: { name: 'messageId', in: 'path' } }),
+      ordinal: z.coerce
+        .number()
+        .int()
+        .min(0)
+        .openapi({ param: { name: 'ordinal', in: 'path' } }),
+    }),
+  },
+  responses: {
+    200: { description: 'Image bytes', content: { 'image/*': { schema: z.any() } } },
+    404: {
+      description: 'Workspace, message block, or image not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
 const listMessagesRoute = createRoute({
   method: 'get',
   path: '/{id}/messages',
@@ -193,7 +219,7 @@ read.openapi(listMessagesRoute, async (c) => {
       id: String(m.id),
       role: m.role as 'user' | 'assistant',
       content: m.content,
-      blocks: m.blocks as any,
+      blocks: withImageUrls(id, String(m.id), m.blocks) as any,
       created_at: m.created_at,
       started_at: m.started_at,
       ended_at: m.ended_at,
@@ -355,6 +381,26 @@ read.openapi(getStatusRoute, async (c) => {
     console.error('Failed to get K8s status:', e)
     return c.json({ error: 'Failed to get status' }, 500)
   }
+})
+
+read.openapi(messageBlockImageRoute, async (c) => {
+  const currentUser = c.get('user')
+  const { id, messageId, ordinal } = c.req.valid('param')
+  const workspace = await getWorkspace(id)
+  if (!workspace || !canManage(workspace, currentUser)) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+  const block = await getMessageBlock(id, messageId, ordinal)
+  if (block?.type !== 'image' || typeof block.data !== 'string') {
+    return c.json({ error: 'Image not found' }, 404)
+  }
+  const mediaType =
+    typeof block.media_type === 'string' ? block.media_type : 'application/octet-stream'
+  // A stored block never changes, so the bytes are safe to cache indefinitely.
+  return c.body(Buffer.from(block.data, 'base64'), 200, {
+    'Content-Type': mediaType,
+    'Cache-Control': 'private, max-age=31536000, immutable',
+  })
 })
 
 export default read

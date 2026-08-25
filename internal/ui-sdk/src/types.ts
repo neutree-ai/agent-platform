@@ -23,7 +23,9 @@ export type ApiContentPart =
       is_error?: boolean
       parent_tool_use_id?: string | null
     }
-  | { type: 'image'; data: string; media_type: string }
+  // Either `data` (inline base64, live stream) or `url` (fetchable endpoint,
+  // stored history) — never both.
+  | { type: 'image'; media_type: string; data?: string; url?: string }
 
 export interface ApiMessage {
   id: string
@@ -54,7 +56,7 @@ export type ContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool'; tool: ToolCall }
   | { type: 'status'; label: string; detail?: string; isError?: boolean }
-  | { type: 'image'; data: string; media_type: string }
+  | { type: 'image'; media_type: string; data?: string; url?: string }
 
 export interface ChatMessage {
   id: string

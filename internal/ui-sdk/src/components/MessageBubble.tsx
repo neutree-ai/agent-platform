@@ -7,6 +7,15 @@ import { memo, useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ToolCallBlock } from './ToolCallBlock'
 
+/**
+ * An image block carries either inline base64 (`data`, live stream) or a
+ * fetchable endpoint (`url`, stored history — keeps long sessions' payloads
+ * small). Resolve whichever is present.
+ */
+function imageSrc(block: { media_type: string; data?: string; url?: string }): string {
+  return block.url ?? `data:${block.media_type};base64,${block.data}`
+}
+
 function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   return (
     <div
@@ -102,10 +111,11 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
               block.type === 'image' ? (
                 <img
                   key={idx}
-                  src={`data:${block.media_type};base64,${block.data}`}
+                  src={imageSrc(block)}
+                  loading="lazy"
                   alt={t('components.chat.messageBubble.alts.attachment')}
                   className="mt-2 max-w-full max-h-48 cursor-zoom-in rounded-md border border-primary-foreground/20"
-                  onClick={() => setZoomedSrc(`data:${block.media_type};base64,${block.data}`)}
+                  onClick={() => setZoomedSrc(imageSrc(block))}
                 />
               ) : null,
             )}
@@ -154,10 +164,11 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
             ) : block.type === 'image' ? (
               <img
                 key={idx}
-                src={`data:${block.media_type};base64,${block.data}`}
+                src={imageSrc(block)}
+                loading="lazy"
                 alt={t('components.chat.messageBubble.alts.content')}
                 className="my-2 max-w-full max-h-96 cursor-zoom-in rounded-md border border-foreground/[0.08]"
-                onClick={() => setZoomedSrc(`data:${block.media_type};base64,${block.data}`)}
+                onClick={() => setZoomedSrc(imageSrc(block))}
               />
             ) : null,
           )}

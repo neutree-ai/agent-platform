@@ -240,6 +240,26 @@ function withTiming(m: Message, ev: MessageEvents | undefined): MessageWithBlock
 }
 
 /** Convenience: fetch messages + attach their blocks in one batched query. */
+/**
+ * One stored block, addressed by its position within the message. Event ids are
+ * `<message_id>-<ordinal>` (see `eventId`), so the position maps straight onto
+ * the primary key. Scoped by workspace, so a workspace check is all the caller
+ * needs to authorize the read.
+ */
+export async function getMessageBlock(
+  workspaceId: string,
+  messageId: string,
+  ordinal: number,
+): Promise<Record<string, unknown> | null> {
+  const { rows } = await pool.query<{ payload: Record<string, unknown> }>(
+    `SELECT e.payload FROM session_events e
+     JOIN messages m ON m.id = e.message_id
+     WHERE e.id = $1 AND m.workspace_id = $2`,
+    [eventId(messageId, ordinal), workspaceId],
+  )
+  return rows[0]?.payload ?? null
+}
+
 export async function getMessagesWithBlocks(
   workspaceId: string,
   sessionId: string,
