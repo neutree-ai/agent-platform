@@ -3401,6 +3401,22 @@
     "markdown": {
       "systemMessage": "System message"
     },
+    "mermaid": {
+      "download": "Download diagram",
+      "downloadPng": "PNG",
+      "downloadSvg": "SVG",
+      "downloadMmd": "Mermaid source",
+      "copySource": "Copy source",
+      "fullscreen": "View fullscreen",
+      "exitFullscreen": "Exit fullscreen",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetView": "Reset view",
+      "renderFailed": "Failed to render diagram",
+      "exportFailed": "Failed to export diagram",
+      "notRenderedYet": "The diagram has not finished rendering yet",
+      "showSource": "Show source"
+    },
     "management": {
       "providers": {
         "actions": {

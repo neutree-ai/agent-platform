@@ -1,4 +1,4 @@
-import { Markdown } from '@/components/ui/markdown'
+import { Markdown, markdownRehypePlugins } from '@/components/ui/markdown'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useMarkdownPreferencesStore } from '@/stores/markdown-preferences-store'
@@ -6,17 +6,17 @@ import { ChevronDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import rehypeSlug from 'rehype-slug'
-import { defaultRehypePlugins } from 'streamdown'
 import type { PluggableList } from 'unified'
 
 // Streamdown's `rehypePlugins` prop replaces its whole pipeline rather than
 // extending it. Passing just `[rehypeSlug]` would drop rehype-raw (inline
 // HTML), sanitize and harden — so `<table>` and other embedded HTML silently
-// vanish from the preview. Layer slug on top of the defaults instead; sanitize
-// stays in place, so this is still XSS-safe.
+// vanish from the preview. Layer slug on top of the app's own stack instead;
+// sanitize stays in place, so this is still XSS-safe, and mermaid fences keep
+// rendering through our block.
 // Hoisted so the memoized Markdown sees a stable reference; otherwise a new
 // array every render busts the memo.
-const REHYPE_PLUGINS: PluggableList = [...Object.values(defaultRehypePlugins), rehypeSlug]
+const REHYPE_PLUGINS: PluggableList = [...markdownRehypePlugins, rehypeSlug]
 
 interface TocItem {
   id: string

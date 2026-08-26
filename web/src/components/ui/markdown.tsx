@@ -1,8 +1,10 @@
+import { MermaidDiagram } from "@/components/ui/mermaid-diagram";
 import { PlatformCmd } from "@/components/ui/platform-cmd";
 import { useSkillsBasePath } from "@/hooks/useSkillsBasePath";
 import { useWorkspaceFileLink } from "@/hooks/useWorkspaceFileLink";
 import { type DriveKind, fileUrl } from "@/lib/api/agent-files";
 import { cn } from "@/lib/utils";
+import { rehypeMermaid } from "@/lib/rehype-mermaid";
 import { canonicalizeAgentPath, isSkillTmpPath } from "@/lib/workspace-file-link";
 import { ChevronDown, ExternalLink, Sparkles } from "lucide-react";
 import { type ComponentPropsWithoutRef, type ReactNode, memo, useMemo, useState } from "react";
@@ -122,7 +124,7 @@ const sysSanitizeSchema = {
 // schema to whitelist `<agent-sys>`; the rest stays in lockstep with
 // Streamdown so katex / raw HTML / link hardening keep working. Revisit on
 // Streamdown upgrades.
-const defaultRehypePlugins: PluggableList = [
+export const markdownRehypePlugins: PluggableList = [
   rehypeRaw,
   [rehypeKatex, { errorColor: "var(--color-muted-foreground)" }],
   [rehypeSanitize, sysSanitizeSchema],
@@ -136,6 +138,8 @@ const defaultRehypePlugins: PluggableList = [
       allowDataImages: true,
     },
   ],
+  // Last: the custom tag it emits must not be seen by rehype-sanitize.
+  rehypeMermaid,
 ];
 
 function AgentSysBlock({ children }: { children?: ReactNode }) {
@@ -177,6 +181,7 @@ export const Markdown = memo(function Markdown({
     () => ({
       "agent-sys": AgentSysBlock,
       "platform-cmd": PlatformCmd,
+      "mermaid-diagram": MermaidDiagram,
       ...(linkifyWorkspaceFiles ? { a: WorkspaceFileLink, img: WorkspaceFileImg } : {}),
     }),
     [linkifyWorkspaceFiles],
@@ -187,7 +192,7 @@ export const Markdown = memo(function Markdown({
       className={cn("prose prose-sm dark:prose-invert max-w-none text-[1em]", className)}
       shikiTheme={["github-light", "github-dark"]}
       components={components}
-      rehypePlugins={rehypePlugins ?? defaultRehypePlugins}
+      rehypePlugins={rehypePlugins ?? markdownRehypePlugins}
     >
       {children}
     </Streamdown>

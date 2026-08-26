@@ -3425,6 +3425,22 @@
     "markdown": {
       "systemMessage": "系统消息"
     },
+    "mermaid": {
+      "download": "下载图表",
+      "downloadPng": "PNG",
+      "downloadSvg": "SVG",
+      "downloadMmd": "Mermaid 源码",
+      "copySource": "复制源码",
+      "fullscreen": "全屏查看",
+      "exitFullscreen": "退出全屏",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "resetView": "重置视图",
+      "renderFailed": "图表渲染失败",
+      "exportFailed": "图表导出失败",
+      "notRenderedYet": "图表尚未渲染完成",
+      "showSource": "查看源码"
+    },
     "management": {
       "providers": {
         "actions": {
