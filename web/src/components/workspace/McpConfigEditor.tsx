@@ -7,7 +7,7 @@ import type { McpCatalogEntry } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, ChevronRight, Link, Loader2, Plus, Trash2, Unlink } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BuilderCapsEditor } from './BuilderCapsEditor'
 
@@ -589,6 +589,9 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
   }, [])
 
   const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({})
+  // Groups the user collapsed by hand. Auto-open skips these, so a collapse
+  // survives the config edits that re-run the sync effect below.
+  const collapsedByUser = useRef<Set<string>>(new Set())
 
   // Sync from value prop
   useEffect(() => {
@@ -603,6 +606,7 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
     setGroupOpen((prev) => {
       const openState: Record<string, boolean> = { ...prev }
       for (const { group, servers } of catalog.groups) {
+        if (collapsedByUser.current.has(group)) continue
         const hasRequired = servers.some(([, d]) => d.required)
         const hasEnabled = servers.some(([k]) => state.enabled[k])
         openState[group] = (prev[group] ?? false) || hasRequired || hasEnabled
@@ -610,6 +614,12 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
       return openState
     })
   }, [value, catalog])
+
+  function setGroupOpenByUser(group: string, open: boolean) {
+    if (open) collapsedByUser.current.delete(group)
+    else collapsedByUser.current.add(group)
+    setGroupOpen((prev) => ({ ...prev, [group]: open }))
+  }
 
   function emitChange(
     en: Record<string, boolean>,
@@ -718,7 +728,7 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
               <Collapsible
                 key={group}
                 open={groupOpen[group] ?? false}
-                onOpenChange={(open) => setGroupOpen((prev) => ({ ...prev, [group]: open }))}
+                onOpenChange={(open) => setGroupOpenByUser(group, open)}
               >
                 <CollapsibleTrigger className="flex items-center gap-1.5 w-full py-0.5 group">
                   <ChevronRight className="h-3 w-3 text-muted-foreground/50 transition-transform group-data-[state=open]:rotate-90" />
