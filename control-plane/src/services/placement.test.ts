@@ -100,7 +100,9 @@ describe('ensureReplicaFloor', () => {
 
     await ensureReplicaFloor('ws1')
 
-    const [sql, params] = vi.mocked(pool.query).mock.calls[0] as [string, unknown[]]
+    // Double cast: pg's overloads type a recorded call as a 3-tuple ending in
+    // a callback, which does not overlap the pair this reads it as.
+    const [sql, params] = vi.mocked(pool.query).mock.calls[0] as unknown as [string, unknown[]]
     expect(sql).toContain("spec ? 'replicas'")
     expect(sql).toContain("COALESCE((spec->>'replicas')::int, 0) < 1")
     expect(sql).toContain('spec_version = spec_version + 1')
