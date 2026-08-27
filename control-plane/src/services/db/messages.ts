@@ -37,11 +37,23 @@ async function getMessage(id: string): Promise<Message | null> {
   return (rows[0] as Message) ?? null
 }
 
-export async function getMessages(workspaceId: string, sessionId: string): Promise<Message[]> {
-  const { rows } = await pool.query(
-    'SELECT * FROM messages WHERE workspace_id = $1 AND session_id = $2 ORDER BY created_at ASC',
-    [workspaceId, sessionId],
-  )
+export async function getMessages(
+  workspaceId: string,
+  sessionId: string,
+  pagination?: { limit?: number; offset?: number },
+): Promise<Message[]> {
+  const params: unknown[] = [workspaceId, sessionId]
+  let query =
+    'SELECT * FROM messages WHERE workspace_id = $1 AND session_id = $2 ORDER BY created_at ASC'
+  if (pagination?.limit !== undefined) {
+    params.push(pagination.limit)
+    query += ` LIMIT $${params.length}`
+  }
+  if (pagination?.offset !== undefined) {
+    params.push(pagination.offset)
+    query += ` OFFSET $${params.length}`
+  }
+  const { rows } = await pool.query(query, params)
   return rows as Message[]
 }
 
@@ -263,8 +275,9 @@ export async function getMessageBlock(
 export async function getMessagesWithBlocks(
   workspaceId: string,
   sessionId: string,
+  pagination?: { limit?: number; offset?: number },
 ): Promise<MessageWithBlocks[]> {
-  const messages = await getMessages(workspaceId, sessionId)
+  const messages = await getMessages(workspaceId, sessionId, pagination)
   if (messages.length === 0) return []
   const events = await getEventsByMessageIds(messages.map((m) => m.id))
   return messages.map((m) => withTiming(m, events.get(m.id)))

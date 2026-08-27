@@ -191,7 +191,11 @@ const listMessagesRoute = createRoute({
   security: [{ bearerAuth: [] }],
   request: {
     params: WorkspaceIdParam,
-    query: z.object({ session_id: z.string() }),
+    query: z.object({
+      session_id: z.string(),
+      limit: z.coerce.number().int().min(1).max(500).optional(),
+      offset: z.coerce.number().int().min(0).optional(),
+    }),
   },
   responses: {
     200: {
@@ -208,12 +212,12 @@ const listMessagesRoute = createRoute({
 read.openapi(listMessagesRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
-  const { session_id } = c.req.valid('query')
+  const { session_id, limit, offset } = c.req.valid('query')
   const workspace = await getWorkspace(id)
   if (!workspace || !canManage(workspace, currentUser)) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
-  const messages = await getMessagesWithBlocks(id, session_id)
+  const messages = await getMessagesWithBlocks(id, session_id, { limit, offset })
   return c.json(
     messages.map((m) => ({
       id: String(m.id),
