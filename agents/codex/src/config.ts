@@ -459,7 +459,10 @@ export function loadRuntimeConfig(): RuntimeConfig | null {
  * ACP-session servers (config.toml supports 30s). In-cluster servers like
  * cp and rd answer within 1s, well under the ceiling.
  */
-export function loadAcpMcpServers(sessionToken?: string): McpServer[] {
+export function loadAcpMcpServers(
+  sessionToken?: string,
+  slackContext?: { channel_id?: string; thread_ts?: string; user_id?: string },
+): McpServer[] {
   if (!CP_URL || !WORKSPACE_ID) return []
 
   const servers: McpServer[] = []
@@ -477,6 +480,12 @@ export function loadAcpMcpServers(sessionToken?: string): McpServer[] {
   platformHeaders.set('X-Workspace-ID', WORKSPACE_ID)
   platformHeaders.set('X-Agent-ID', WORKSPACE_ID)
   if (sessionToken) platformHeaders.set('X-Session-Token', sessionToken)
+  // Slack envelope for a connector-triggered turn — lets a skill (e.g. a
+  // Jira reporter) read who triggered the session and where to reply,
+  // instead of inferring it from `<thread_context>` text.
+  if (slackContext?.channel_id) platformHeaders.set('X-Slack-Channel-Id', slackContext.channel_id)
+  if (slackContext?.thread_ts) platformHeaders.set('X-Slack-Thread-Ts', slackContext.thread_ts)
+  if (slackContext?.user_id) platformHeaders.set('X-Slack-User-Id', slackContext.user_id)
   servers.push({
     type: 'http',
     name: 'tos-platform',

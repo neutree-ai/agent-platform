@@ -1718,6 +1718,19 @@ export const ChatImageSchema = z.object({
 })
 
 /**
+ * Slack envelope for a connector-triggered turn: where the reply should go
+ * and who triggered it. Threaded through to the agent's MCP headers so a
+ * skill (e.g. a Jira reporter) can read it instead of inferring it from
+ * `<thread_context>` text, which carries no marker at all for bot/job turns.
+ */
+export const SlackContextSchema = z.object({
+  channel_id: z.string().optional(),
+  thread_ts: z.string().optional(),
+  user_id: z.string().optional(),
+})
+export type SlackContext = z.infer<typeof SlackContextSchema>
+
+/**
  * Response delivery mode for a chat turn:
  *   - `stream` — SSE (`text/event-stream`) of UniversalEvent frames. The most
  *     flexible mode and the default.
@@ -1741,6 +1754,8 @@ export const ChatBodySchema = z.object({
   images: z.array(ChatImageSchema).optional(),
   /** Origin of the turn. Defaults to `api` for direct API callers. */
   source: z.enum(CHAT_SOURCES).optional().default('api'),
+  /** Set by scheduler for Slack-triggered turns; absent for other sources. */
+  slack_context: SlackContextSchema.optional(),
   /**
    * Response delivery mode. When set, takes precedence over `stream` and the
    * `Accept` header. Defaults to `stream`.

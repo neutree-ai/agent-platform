@@ -1,4 +1,4 @@
-import type { ChatBody, ChatMode } from '../../../../internal/types/api'
+import type { ChatBody, ChatMode, SlackContext } from '../../../../internal/types/api'
 
 // Pure request-shaping helpers for chat dispatch, extracted from
 // executeChat/dispatchChatTurn so the wire contracts (agent /chat body,
@@ -21,6 +21,7 @@ export function buildAgentChatBody(opts: {
   images: ChatImage[] | null
   source: string
   sessionToken: string
+  slackContext?: SlackContext | null
 }): Record<string, unknown> {
   return {
     message: opts.message,
@@ -28,6 +29,7 @@ export function buildAgentChatBody(opts: {
     ...(opts.images?.length ? { images: opts.images } : {}),
     source: opts.source,
     session_token: opts.sessionToken,
+    ...(opts.slackContext ? { slack_context: opts.slackContext } : {}),
   }
 }
 

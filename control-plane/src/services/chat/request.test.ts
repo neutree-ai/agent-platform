@@ -53,6 +53,31 @@ describe('buildAgentChatBody', () => {
     })
     expect('images' in emptyImages).toBe(false)
   })
+
+  it('includes slack_context only when set', () => {
+    const withContext = buildAgentChatBody({
+      message: 'hi',
+      sessionId: 's1',
+      images: null,
+      source: 'slack',
+      sessionToken: 'tok',
+      slackContext: { channel_id: 'C1', thread_ts: '123.456', user_id: 'U1' },
+    })
+    expect(withContext.slack_context).toEqual({
+      channel_id: 'C1',
+      thread_ts: '123.456',
+      user_id: 'U1',
+    })
+
+    const withoutContext = buildAgentChatBody({
+      message: 'hi',
+      sessionId: 's1',
+      images: null,
+      source: 'web',
+      sessionToken: 'tok',
+    })
+    expect('slack_context' in withoutContext).toBe(false)
+  })
 })
 
 describe('buildUserMessageBlocks', () => {

@@ -12,4 +12,13 @@ export interface ChatRequest {
    * recover the session identity. Blind passthrough on the agent side.
    */
   session_token?: string
+  /**
+   * Slack envelope (channel/thread/triggering user) for a connector-triggered
+   * turn. Blind passthrough into MCP headers, same lifecycle as session_token.
+   */
+  slack_context?: {
+    channel_id?: string
+    thread_ts?: string
+    user_id?: string
+  }
 }
