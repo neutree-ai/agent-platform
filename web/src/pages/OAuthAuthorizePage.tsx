@@ -2,12 +2,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
+import { useBrand } from '@/contexts/BrandContext'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
 export function OAuthAuthorizePage() {
   const { t } = useTranslation()
+  const { shortName } = useBrand()
   const [searchParams] = useSearchParams()
   const [clientName, setClientName] = useState<string | null>(null)
   const [scope, setScope] = useState('profile')
@@ -107,7 +109,7 @@ export function OAuthAuthorizePage() {
           {clientName && (
             <CardDescription>
               <span className="font-medium text-foreground">{clientName}</span>{' '}
-              {t('pages.oauthAuthorize.subtitle')}
+              {t('pages.oauthAuthorize.subtitle', { brand: shortName })}
             </CardDescription>
           )}
         </CardHeader>

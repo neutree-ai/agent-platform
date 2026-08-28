@@ -11,7 +11,7 @@ Route external HTTP requests to a specified Workspace for execution.
 
 Secret is configured independently for each Route and supports two modes:
 
-- **Plain** — The external system sends the secret string directly in the request header, and NAP allows the request if the values are equal. Suitable for internal networks or simple scenarios. The default header is `X-Webhook-Secret` and can be customized.
+- **Plain** — The external system sends the secret string directly in the request header, and {{BRAND}} allows the request if the values are equal. Suitable for internal networks or simple scenarios. The default header is `X-Webhook-Secret` and can be customized.
 - **HMAC-SHA256** — The external system computes an HMAC-SHA256 over the request body with the secret, and puts the result in the request header as `sha256=<hex>`. Compatible with the GitHub signature format. The default header is `X-Hub-Signature-256` and can be customized.
 
 Leaving it empty means no verification; any request is allowed through (recommended only for internal-network debugging). Click "Generate" to quickly generate a random secret. After the Route is created, you can click the secret pill on the Route card to view and copy the stored value.

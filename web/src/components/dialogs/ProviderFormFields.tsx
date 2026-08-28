@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useBrand } from '@/contexts/BrandContext'
 import { api } from '@/lib/api/client'
 import type { ApiModelProvider, ApiTeam, ModelProfile, ProviderVisibility } from '@/lib/api/types'
 import { catalogToText, parseCatalogText } from '@/lib/model-profile'
@@ -87,6 +88,7 @@ const PROVIDER_TYPES: Array<{ value: string; labelKey: string; descKey: string }
 
 export function ProviderFormFields({ form, setForm, errors, isEditing }: ProviderFormFieldsProps) {
   const { t } = useTranslation()
+  const { shortName } = useBrand()
   const [showKey, setShowKey] = useState(false)
   const isOauthOnly = form.provider_type === 'claude-code-oauth'
   // The profile only carries codex keys today, and codex only speaks to the
@@ -249,7 +251,7 @@ export function ProviderFormFields({ form, setForm, errors, isEditing }: Provide
             ]}
           />
           <div className="text-tiny text-muted-foreground">
-            {t(`components.createProvider.visibilityDesc.${form.visibility}`)}
+            {t(`components.createProvider.visibilityDesc.${form.visibility}`, { brand: shortName })}
           </div>
         </div>
 

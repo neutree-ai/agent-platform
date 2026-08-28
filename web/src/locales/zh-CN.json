@@ -129,7 +129,8 @@
         "users": "用户",
         "workspaces": "工作空间",
         "infrastructure": "基础设施",
-        "system": "系统"
+        "system": "系统",
+        "branding": "品牌"
       }
     },
     "integration": {
@@ -188,7 +189,7 @@
     },
     "oauthAuthorize": {
       "title": "授权应用",
-      "subtitle": "正在申请访问您的 NAP 账户",
+      "subtitle": "正在申请访问您的 {{brand}} 账户",
       "permissionNotice": "该应用将可访问您的基础资料信息（用户名、显示名、邮箱）。",
       "actions": {
         "deny": "拒绝",
@@ -281,7 +282,7 @@
   },
   "components": {
     "updateAvailable": {
-      "message": "NAP 已更新到新版本",
+      "message": "{{brand}} 已更新到新版本",
       "reload": "刷新"
     },
     "resource": {
@@ -592,7 +593,7 @@
       },
       "autoEvolution": {
         "title": "自动演进",
-        "description": "NAP 会分析您的 agent 会话，并自动建议 Prompt、工具和执行流程的优化。"
+        "description": "{{brand}} 会分析您的 agent 会话，并自动建议 Prompt、工具和执行流程的优化。"
       },
       "theme": {
         "label": "主题",
@@ -861,7 +862,7 @@
         "visibilityDesc": {
           "private": "仅自己可使用。",
           "team": "所选团队的成员可使用；编辑者还可改名、改描述、重新导入安装包。",
-          "public": "本 NAP 实例所有用户都可使用。"
+          "public": "本 {{brand}} 实例所有用户都可使用。"
         },
         "permission": {
           "viewer": "查看者",
@@ -1991,7 +1992,7 @@
       "visibilityDesc": {
         "private": "仅自己可使用。",
         "team": "所选团队的成员可使用；编辑者还可改名、改描述、重新导入安装包。",
-        "public": "本 NAP 实例所有用户都可使用。"
+        "public": "本 {{brand}} 实例所有用户都可使用。"
       },
       "permission": {
         "viewer": "查看者",
@@ -2021,7 +2022,7 @@
       "visibilityDesc": {
         "private": "仅自己可使用。",
         "team": "所选团队的成员可使用；编辑者还可改名、新增版本。",
-        "public": "本 NAP 实例所有用户都可使用。"
+        "public": "本 {{brand}} 实例所有用户都可使用。"
       },
       "permission": {
         "viewer": "查看者",
@@ -2065,7 +2066,7 @@
       "visibilityDesc": {
         "private": "仅自己可使用。",
         "team": "所选团队的成员可使用，但看不到 API Key，也不能编辑。",
-        "public": "本 NAP 实例的所有用户都可使用，但看不到 API Key，也不能编辑。"
+        "public": "本 {{brand}} 实例的所有用户都可使用，但看不到 API Key，也不能编辑。"
       },
       "teamsEmpty": "你还不属于任何团队。",
       "noTeamsShared": "在下方选择要分享的团队。",
@@ -3181,7 +3182,7 @@
             "runningPods": "{{count}} 个 Pod 运行中"
           },
           "workspaces": {
-            "title": "NAP 工作空间"
+            "title": "{{brand}} 工作空间"
           },
           "sandboxes": {
             "title": "沙箱数"
@@ -3248,6 +3249,26 @@
         },
         "errors": {
           "loadFailed": "加载系统设置失败"
+        }
+      },
+      "brandingSection": {
+        "description": "自定义整个应用（包括登录页）展示的产品名和 logo。全局配置，仅管理员可改；留空则使用默认值。",
+        "shortName": "品牌短名",
+        "fullName": "品牌全名",
+        "logo": "Logo",
+        "uploadLogo": "上传 Logo",
+        "clearLogo": "清除",
+        "logoHint": "支持 SVG、PNG、JPEG 或 ICO，最大 256KB。",
+        "actions": {
+          "save": "保存",
+          "saving": "保存中…",
+          "reset": "重置"
+        },
+        "errors": {
+          "loadFailed": "加载品牌设置失败",
+          "saveFailed": "保存品牌设置失败",
+          "logoTooLarge": "Logo 文件过大（最大 256KB）",
+          "logoReadFailed": "读取所选文件失败"
         }
       },
       "usersSection": {

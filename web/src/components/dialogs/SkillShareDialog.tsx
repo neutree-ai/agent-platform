@@ -3,6 +3,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { useBrand } from '@/contexts/BrandContext'
 import { useSkillDependents } from '@/hooks/useSkills'
 import { api } from '@/lib/api/client'
 import type {
@@ -34,6 +35,7 @@ interface SkillShareDialogProps {
  */
 export function SkillShareDialog({ skill, open, onOpenChange }: SkillShareDialogProps) {
   const { t } = useTranslation()
+  const { shortName } = useBrand()
   const queryClient = useQueryClient()
 
   const [visibility, setVisibility] = useState<SkillVisibility>('private')
@@ -145,7 +147,7 @@ export function SkillShareDialog({ skill, open, onOpenChange }: SkillShareDialog
               ]}
             />
             <div className="text-tiny text-muted-foreground">
-              {t(`components.skillShare.visibilityDesc.${visibility}`)}
+              {t(`components.skillShare.visibilityDesc.${visibility}`, { brand: shortName })}
             </div>
           </div>
 

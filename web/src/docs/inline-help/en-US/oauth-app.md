@@ -1,4 +1,4 @@
-OAuth applications let third-party services sign users in to NAP and act
+OAuth applications let third-party services sign users in to {{BRAND}} and act
 on their behalf via the OAuth 2.0 authorization-code flow.
 
 ## Anatomy

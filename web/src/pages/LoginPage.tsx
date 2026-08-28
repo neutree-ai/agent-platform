@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { api } from '@/lib/api/client'
 import { MessageSquare } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -27,6 +28,7 @@ function getOAuthErrorMessage(t: (key: string) => string, code: string) {
 
 export function LoginPage() {
   const { t } = useTranslation()
+  const { fullName } = useBrand()
   const { user, isLoading: authLoading, login } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -98,7 +100,7 @@ export function LoginPage() {
         <CardHeader className="flex flex-col items-center space-y-3 text-center">
           <Logo className="h-12 w-auto" />
           <div className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Neutree Agent Platform</CardTitle>
+            <CardTitle className="text-2xl font-bold">{fullName}</CardTitle>
             <CardDescription>{t('pages.login.subtitle')}</CardDescription>
           </div>
         </CardHeader>

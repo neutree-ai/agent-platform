@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import { BrandingSection } from './BrandingSection'
 import { DashboardSection } from './DashboardSection'
 import { InfraSection } from './InfraSection'
 import { SystemSettingsSection } from './SystemSettingsSection'
@@ -49,6 +50,11 @@ export const ADMIN_SECTIONS: AdminSectionDef[] = [
     id: 'system',
     labelKey: 'pages.admin.navigation.system',
     Component: SystemSettingsSection,
+  },
+  {
+    id: 'branding',
+    labelKey: 'pages.admin.navigation.branding',
+    Component: BrandingSection,
   },
 ]
 

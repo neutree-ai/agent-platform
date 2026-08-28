@@ -61,7 +61,20 @@ const docs = import.meta.glob('./*/*.md', {
 
 const FALLBACK = 'en-US'
 
+// Doc source files use a `{{BRAND}}` token for the product name instead of a
+// literal string, so they read correctly under a custom brand (Admin >
+// Branding) without per-doc plumbing. `loadDoc` isn't a hook (it's called
+// from plain module-level getters throughout web/src/docs/inline-help/*),
+// so BrandContext pushes the resolved name here once its fetch completes,
+// rather than every doc getter threading it through as a parameter.
+let brandShortName = 'NAP'
+
+export function setInlineHelpBrand(name: string): void {
+  brandShortName = name
+}
+
 export function loadDoc(name: InlineDocName): string {
   const lang = i18n.language || FALLBACK
-  return docs[`./${lang}/${name}.md`] ?? docs[`./${FALLBACK}/${name}.md`] ?? ''
+  const raw = docs[`./${lang}/${name}.md`] ?? docs[`./${FALLBACK}/${name}.md`] ?? ''
+  return raw.replace(/\{\{BRAND\}\}/g, brandShortName)
 }

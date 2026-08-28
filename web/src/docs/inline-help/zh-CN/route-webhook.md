@@ -11,7 +11,7 @@
 
 Secret 是每个 route 独立配置的，支持两种模式：
 
-- **明文（Plain）** — 外部系统在请求头中直接带上 secret 字符串，NAP 比对相等即放行。适用于内网或简单场景。默认 header 为 `X-Webhook-Secret`，可自定义。
+- **明文（Plain）** — 外部系统在请求头中直接带上 secret 字符串，{{BRAND}} 比对相等即放行。适用于内网或简单场景。默认 header 为 `X-Webhook-Secret`，可自定义。
 - **HMAC-SHA256** — 外部系统用 secret 对 request body 做 HMAC-SHA256，结果以 `sha256=<hex>` 形式放在请求头中。兼容 GitHub 签名格式，默认 header 为 `X-Hub-Signature-256`，可自定义。
 
 留空表示不校验，任何请求都会被放行（仅建议在内网调试时使用）。点击「生成」可快速生成一个随机 secret。Route 创建后，可在 route 卡片上点击 secret pill 查看并复制已存的值。

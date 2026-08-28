@@ -1,6 +1,6 @@
 ## Appearance
 
-Customize NAP appearance and notification sound.
+Customize {{BRAND}} appearance and notification sound.
 
 ### Theme
 

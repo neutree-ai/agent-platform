@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { api } from '@/lib/api/client'
 import type { ApiTeam, EnvironmentVisibility } from '@/lib/api/types'
 import { useQuery } from '@tanstack/react-query'
@@ -31,6 +32,7 @@ interface EnvironmentFormFieldsProps {
 
 export function EnvironmentFormFields({ form, setForm, errors }: EnvironmentFormFieldsProps) {
   const { t } = useTranslation()
+  const { shortName } = useBrand()
   const { user } = useAuth()
   // A public environment shares infrastructure instance-wide, so creating one is
   // an operator decision — admin-only (enforced server-side; hidden here so
@@ -98,7 +100,9 @@ export function EnvironmentFormFields({ form, setForm, errors }: EnvironmentForm
             ]}
           />
           <div className="text-tiny text-muted-foreground">
-            {t(`components.environmentForm.visibilityDesc.${form.visibility}`)}
+            {t(`components.environmentForm.visibilityDesc.${form.visibility}`, {
+              brand: shortName,
+            })}
           </div>
         </div>
 

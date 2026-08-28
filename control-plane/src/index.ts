@@ -22,6 +22,7 @@ import applicationsRoutes from './routes/applications'
 import asrRoutes from './routes/asr'
 import authRoutes from './routes/auth'
 import batchRunRoutes from './routes/batch-runs'
+import brandingRoutes from './routes/branding'
 import cgProxy from './routes/cg-proxy'
 import credentialsRoutes from './routes/credentials'
 import envProtocolRoutes from './routes/env'
@@ -77,6 +78,7 @@ import workspacesWriteRoutes from './routes/workspaces/write'
 import { renewToken, shouldRenewToken, verifyToken } from './services/auth'
 import { initDb } from './services/db/pool'
 import { getServiceTokenByHash } from './services/db/shares'
+import { getSettings } from './services/db/system-settings'
 import { initNotificationQueue } from './services/notifications/queue'
 
 // Initialize database
@@ -159,6 +161,8 @@ app.use('/*', async (c, next) => {
     path === '/login' ||
     path === '/api/auth/login' ||
     path === '/api/auth/wecom/enabled' ||
+    path === '/api/branding' ||
+    path === '/api/branding/logo' ||
     path === '/api/auth/wecom/authorize' ||
     path === '/api/auth/wecom/callback' ||
     path.startsWith('/api/shares/public/') ||
@@ -307,6 +311,7 @@ app.get('/api/version', (c) =>
 // Mount routes
 app.route('/api/auth', authRoutes)
 app.route('/api/auth/wecom', wecomAuthRoutes)
+app.route('/api/branding', brandingRoutes)
 app.route('/api/workspaces', workspacesReadRoutes)
 app.route('/api/workspaces', workspacesWriteRoutes)
 app.route('/api/workspaces', workspacesLifecycleRoutes)
@@ -459,6 +464,19 @@ app.use(
     },
   }),
 )
+// Serves the admin-configured logo in place of the default favicon file when
+// one is set (see routes/branding.ts) — same source as the in-app logo, so
+// the two stay in sync without a separate "favicon" upload.
+app.get('/favicon.svg', async (c, next) => {
+  const settings = await getSettings()
+  if (settings.branding_logo_data && settings.branding_logo_mime) {
+    c.header('Cache-Control', 'no-cache')
+    return c.body(Buffer.from(settings.branding_logo_data, 'base64'), 200, {
+      'Content-Type': settings.branding_logo_mime,
+    })
+  }
+  return next()
+})
 app.use(
   '/favicon.svg',
   serveStatic({

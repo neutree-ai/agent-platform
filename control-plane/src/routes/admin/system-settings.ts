@@ -16,6 +16,17 @@ type ProviderRegistry = Record<string, { configSchema: ConfigSchemaLike }>
 
 const settings = new Hono<AppEnv>()
 
+const BRANDING_NAME_MAX_LENGTH = 100
+// Decoded byte cap — system_settings is a single-row table, so this bounds
+// how much a logo can bloat every read of it.
+const BRANDING_LOGO_MAX_BYTES = 256 * 1024
+const BRANDING_LOGO_MIME_TYPES = new Set([
+  'image/svg+xml',
+  'image/png',
+  'image/jpeg',
+  'image/x-icon',
+])
+
 // Secret fields are stripped from GET responses. On PUT, any missing secret
 // field on a provider's config is preserved from the existing stored value, so
 // the UI can round-trip the scrubbed payload without wiping credentials.
@@ -149,6 +160,63 @@ settings.put('/', async (c) => {
     )
     if ('error' in res) return c.json({ error: res.error.message, issues: res.error.issues }, 400)
     patch.titlegen_providers = res.value
+  }
+
+  if ('branding_short_name' in body) {
+    const v = body.branding_short_name
+    if (v !== null && (typeof v !== 'string' || !v.trim() || v.length > BRANDING_NAME_MAX_LENGTH)) {
+      return c.json(
+        { error: `branding_short_name must be 1-${BRANDING_NAME_MAX_LENGTH} characters` },
+        400,
+      )
+    }
+    patch.branding_short_name = v
+  }
+
+  if ('branding_full_name' in body) {
+    const v = body.branding_full_name
+    if (v !== null && (typeof v !== 'string' || !v.trim() || v.length > BRANDING_NAME_MAX_LENGTH)) {
+      return c.json(
+        { error: `branding_full_name must be 1-${BRANDING_NAME_MAX_LENGTH} characters` },
+        400,
+      )
+    }
+    patch.branding_full_name = v
+  }
+
+  if ('branding_logo_data' in body || 'branding_logo_mime' in body) {
+    const data = body.branding_logo_data
+    const mime = body.branding_logo_mime
+    if (data === null && mime === null) {
+      patch.branding_logo_data = null
+      patch.branding_logo_mime = null
+    } else {
+      if (typeof mime !== 'string' || !BRANDING_LOGO_MIME_TYPES.has(mime)) {
+        return c.json(
+          {
+            error: `branding_logo_mime must be one of: ${[...BRANDING_LOGO_MIME_TYPES].join(', ')}`,
+          },
+          400,
+        )
+      }
+      if (typeof data !== 'string') {
+        return c.json({ error: 'branding_logo_data must be a base64 string' }, 400)
+      }
+      let decodedLength: number
+      try {
+        decodedLength = Buffer.from(data, 'base64').length
+      } catch {
+        return c.json({ error: 'branding_logo_data is not valid base64' }, 400)
+      }
+      if (decodedLength === 0 || decodedLength > BRANDING_LOGO_MAX_BYTES) {
+        return c.json(
+          { error: `branding_logo_data must decode to 1-${BRANDING_LOGO_MAX_BYTES} bytes` },
+          400,
+        )
+      }
+      patch.branding_logo_data = data
+      patch.branding_logo_mime = mime
+    }
   }
 
   const userId = c.get('user').sub

@@ -1,10 +1,10 @@
 ## Auto evolution
 
-When enabled, NAP analyzes completed agent sessions and automatically suggests optimizations for prompts, tools, and execution workflows.
+When enabled, {{BRAND}} analyzes completed agent sessions and automatically suggests optimizations for prompts, tools, and execution workflows.
 
 ### How it works
 
-1. After each session ends, NAP reviews the conversation content
+1. After each session ends, {{BRAND}} reviews the conversation content
 2. If it finds areas for optimization, it generates suggestions
 3. You can view them in the Workspace panel and decide whether to adopt them
 

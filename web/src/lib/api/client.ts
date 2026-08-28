@@ -2101,6 +2101,11 @@ class ApiClient {
     return this.request('/auth/wecom/enabled')
   }
 
+  // Branding (public — no auth required, consumed by the login page too)
+  async getBranding(): Promise<{ shortName: string; fullName: string; hasCustomLogo: boolean }> {
+    return this.request('/branding')
+  }
+
   async getWeComAuthorizeUrl(mode: 'login' | 'bind'): Promise<{ url: string }> {
     return this.request(`/auth/wecom/authorize?mode=${mode}`)
   }
@@ -2186,6 +2191,10 @@ class ApiClient {
     titlegen_active_provider: string | null
     titlegen_providers: Record<string, unknown>
     titlegen_available_providers: string[]
+    branding_short_name: string | null
+    branding_full_name: string | null
+    branding_logo_data: string | null
+    branding_logo_mime: string | null
   }> {
     return this.request('/admin/system-settings')
   }
@@ -2195,11 +2204,19 @@ class ApiClient {
     asr_providers?: Record<string, unknown>
     titlegen_active_provider?: string | null
     titlegen_providers?: Record<string, unknown>
+    branding_short_name?: string | null
+    branding_full_name?: string | null
+    branding_logo_data?: string | null
+    branding_logo_mime?: string | null
   }): Promise<{
     asr_active_provider: string | null
     asr_providers: Record<string, unknown>
     titlegen_active_provider: string | null
     titlegen_providers: Record<string, unknown>
+    branding_short_name: string | null
+    branding_full_name: string | null
+    branding_logo_data: string | null
+    branding_logo_mime: string | null
   }> {
     return this.request('/admin/system-settings', {
       method: 'PUT',

@@ -1,6 +1,7 @@
 import { Logo } from '@/components/Logo'
 import { PreferencesDialog } from '@/components/PreferencesDialog'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBrand } from '@/contexts/BrandContext'
 import { cn } from '@/lib/utils'
 import { Search } from 'lucide-react'
 import { useState } from 'react'
@@ -16,6 +17,7 @@ interface MenubarProps {
 }
 
 export function Menubar({ scope, workspaceId, onOpenCommandPalette }: MenubarProps) {
+  const { shortName } = useBrand()
   return (
     <header
       className={cn(
@@ -27,7 +29,7 @@ export function Menubar({ scope, workspaceId, onOpenCommandPalette }: MenubarPro
       <div className="flex items-center gap-2">
         <Link
           to="/"
-          aria-label="NAP"
+          aria-label={shortName}
           className="flex items-center text-foreground transition-opacity hover:opacity-80"
         >
           <Logo className="h-4 w-auto" />

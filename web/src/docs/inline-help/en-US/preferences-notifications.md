@@ -1,6 +1,6 @@
 ## Notification channels
 
-Configure the channels for receiving NAP notifications. Each channel can be toggled independently.
+Configure the channels for receiving {{BRAND}} notifications. Each channel can be toggled independently.
 
 ### Available channels
 

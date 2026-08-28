@@ -1,3 +1,4 @@
+import { useBrand } from '@/contexts/BrandContext'
 import { api } from '@/lib/api/client'
 import { APP_VERSION } from '@/lib/version'
 import { useEffect, useRef } from 'react'
@@ -11,6 +12,7 @@ const POLL_INTERVAL_MS = 5 * 60 * 1000
 // bundle is an unstamped dev build — version mismatch would fire constantly.
 export function useUpdateChecker() {
   const { t } = useTranslation()
+  const { shortName } = useBrand()
   const notifiedRef = useRef(false)
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export function useUpdateChecker() {
         if (cancelled || notifiedRef.current) return
         if (commit && commit !== 'dev' && commit !== APP_VERSION) {
           notifiedRef.current = true
-          toast.info(t('components.updateAvailable.message'), {
+          toast.info(t('components.updateAvailable.message', { brand: shortName }), {
             duration: Number.POSITIVE_INFINITY,
             action: {
               label: t('components.updateAvailable.reload'),
@@ -43,5 +45,5 @@ export function useUpdateChecker() {
       cancelled = true
       window.clearInterval(id)
     }
-  }, [t])
+  }, [t, shortName])
 }

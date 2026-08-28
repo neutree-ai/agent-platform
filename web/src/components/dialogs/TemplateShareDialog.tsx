@@ -4,6 +4,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { useBrand } from '@/contexts/BrandContext'
 import { ApiClientError, api } from '@/lib/api/client'
 import type {
   ApiTeam,
@@ -32,6 +33,7 @@ interface TemplateShareDialogProps {
  */
 export function TemplateShareDialog({ template, open, onOpenChange }: TemplateShareDialogProps) {
   const { t } = useTranslation()
+  const { shortName } = useBrand()
   const queryClient = useQueryClient()
 
   const [visibility, setVisibility] = useState<TemplateVisibility>('private')
@@ -156,7 +158,7 @@ export function TemplateShareDialog({ template, open, onOpenChange }: TemplateSh
               ]}
             />
             <div className="text-tiny text-muted-foreground">
-              {t(`components.templateShare.visibilityDesc.${visibility}`)}
+              {t(`components.templateShare.visibilityDesc.${visibility}`, { brand: shortName })}
             </div>
           </div>
 

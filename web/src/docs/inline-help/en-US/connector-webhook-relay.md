@@ -1,10 +1,10 @@
-Receive Webhooks from external services such as GitHub and Google Workspace. Events are relayed to the internal NAP through a public Relay endpoint.
+Receive Webhooks from external services such as GitHub and Google Workspace. Events are relayed to the internal {{BRAND}} through a public Relay endpoint.
 
 ## How it works
 
 1. The external service sends the Webhook to the **public Relay URL**
 2. Relay enqueues the event (SQS)
-3. NAP polls the queue and processes the event locally
+3. {{BRAND}} polls the queue and processes the event locally
 
 ## Credentials
 

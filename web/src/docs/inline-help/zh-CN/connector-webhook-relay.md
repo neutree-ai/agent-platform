@@ -1,10 +1,10 @@
-接收来自外部服务（GitHub、Google Workspace 等）的 Webhook。事件通过公网 Relay 端点中转至内网 NAP。
+接收来自外部服务（GitHub、Google Workspace 等）的 Webhook。事件通过公网 Relay 端点中转至内网 {{BRAND}}。
 
 ## 工作原理
 
 1. 外部服务将 Webhook 发送到 **公网 Relay URL**
 2. Relay 将事件入队（SQS）
-3. NAP 轮询队列并在本地处理事件
+3. {{BRAND}} 轮询队列并在本地处理事件
 
 ## 凭据
 

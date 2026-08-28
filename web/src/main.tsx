@@ -8,6 +8,7 @@ import { ThemeProvider } from './components/ThemeProvider'
 import { Toaster } from './components/ui/sonner'
 import { TooltipProvider } from './components/ui/tooltip'
 import { AuthProvider } from './contexts/AuthContext'
+import { BrandProvider } from './contexts/BrandContext'
 import './lib/i18n'
 import './components/dialogs/registry'
 import './index.css'
@@ -35,14 +36,16 @@ async function boot() {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme="dark">
-          <BrowserRouter>
-            <AuthProvider>
-              <TooltipProvider>
-                <App />
-                <Toaster />
-              </TooltipProvider>
-            </AuthProvider>
-          </BrowserRouter>
+          <BrandProvider>
+            <BrowserRouter>
+              <AuthProvider>
+                <TooltipProvider>
+                  <App />
+                  <Toaster />
+                </TooltipProvider>
+              </AuthProvider>
+            </BrowserRouter>
+          </BrandProvider>
         </ThemeProvider>
       </QueryClientProvider>
     </StrictMode>,

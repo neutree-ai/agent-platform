@@ -1,6 +1,6 @@
 ## Appearance
 
-自定义 NAP 的外观和提示音。
+自定义 {{BRAND}} 的外观和提示音。
 
 ### Theme
 

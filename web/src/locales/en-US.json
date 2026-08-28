@@ -129,7 +129,8 @@
         "users": "Users",
         "workspaces": "Workspaces",
         "infrastructure": "Infrastructure",
-        "system": "System"
+        "system": "System",
+        "branding": "Branding"
       }
     },
     "integration": {
@@ -188,7 +189,7 @@
     },
     "oauthAuthorize": {
       "title": "Authorize Application",
-      "subtitle": "is requesting access to your NAP account",
+      "subtitle": "is requesting access to your {{brand}} account",
       "permissionNotice": "This application will be able to access your basic profile information (username, display name, email).",
       "actions": {
         "deny": "Deny",
@@ -281,7 +282,7 @@
   },
   "components": {
     "updateAvailable": {
-      "message": "A new version of NAP is available",
+      "message": "A new version of {{brand}} is available",
       "reload": "Reload"
     },
     "resource": {
@@ -562,7 +563,7 @@
       },
       "autoEvolution": {
         "title": "Auto Evolution",
-        "description": "NAP will analyze your agent sessions and suggest prompt, tool, and workflow improvements automatically."
+        "description": "{{brand}} will analyze your agent sessions and suggest prompt, tool, and workflow improvements automatically."
       },
       "theme": {
         "label": "Theme",
@@ -831,7 +832,7 @@
         "visibilityDesc": {
           "private": "Only you can use this skill.",
           "team": "Members of selected teams can use this skill; editors can also rename, edit description, and re-import the package.",
-          "public": "Everyone on this NAP instance can use this skill."
+          "public": "Everyone on this {{brand}} instance can use this skill."
         },
         "permission": {
           "viewer": "Viewer",
@@ -1966,7 +1967,7 @@
       "visibilityDesc": {
         "private": "Only you can use this skill.",
         "team": "Members of selected teams can use this skill; editors can also rename, edit description, and re-import the package.",
-        "public": "Everyone on this NAP instance can use this skill."
+        "public": "Everyone on this {{brand}} instance can use this skill."
       },
       "permission": {
         "viewer": "Viewer",
@@ -1996,7 +1997,7 @@
       "visibilityDesc": {
         "private": "Only you can use this template.",
         "team": "Members of selected teams can use this template; editors can also rename it and add new versions.",
-        "public": "Everyone on this NAP instance can use this template."
+        "public": "Everyone on this {{brand}} instance can use this template."
       },
       "permission": {
         "viewer": "Viewer",
@@ -2040,7 +2041,7 @@
       "visibilityDesc": {
         "private": "Only you can use this provider.",
         "team": "Members of selected teams can use this provider but cannot see the API key or edit it.",
-        "public": "Everyone on this NAP instance can use this provider but cannot see the API key or edit it."
+        "public": "Everyone on this {{brand}} instance can use this provider but cannot see the API key or edit it."
       },
       "teamsEmpty": "You aren't a member of any team yet.",
       "noTeamsShared": "Pick a team below to share with.",
@@ -3157,7 +3158,7 @@
             "runningPods": "{{count}} pods running"
           },
           "workspaces": {
-            "title": "NAP Workspaces"
+            "title": "{{brand}} Workspaces"
           },
           "sandboxes": {
             "title": "Sandboxes"
@@ -3224,6 +3225,26 @@
         },
         "errors": {
           "loadFailed": "Failed to load system settings"
+        }
+      },
+      "brandingSection": {
+        "description": "Customize the product name and logo shown throughout the app, including the login page. Global and admin-only; leave blank to use the defaults.",
+        "shortName": "Short name",
+        "fullName": "Full name",
+        "logo": "Logo",
+        "uploadLogo": "Upload logo",
+        "clearLogo": "Clear",
+        "logoHint": "SVG, PNG, JPEG, or ICO, up to 256KB.",
+        "actions": {
+          "save": "Save",
+          "saving": "Saving…",
+          "reset": "Reset"
+        },
+        "errors": {
+          "loadFailed": "Failed to load branding settings",
+          "saveFailed": "Failed to save branding settings",
+          "logoTooLarge": "Logo file is too large (max 256KB)",
+          "logoReadFailed": "Failed to read the selected file"
         }
       },
       "usersSection": {

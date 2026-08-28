@@ -1,23 +1,32 @@
+import { useBrand } from '@/contexts/BrandContext'
 import { cn } from '@/lib/utils'
 
 /**
- * Neutree Agent Platform brand mark.
+ * Brand mark. Renders the admin-configured logo (Admin > Branding) when one
+ * is set; otherwise falls back to the built-in Neutree node-network glyph.
  *
- * Shares the Neutree node-network glyph (the inference platform's logo) so NAP
- * reads as the same brand family; the single highlighted top node — the
- * orchestrator root — is NAP's variant marker. The mark body inherits
- * `currentColor` (brand navy on light, light on dark via the wrapper's text
- * color); the top node stays the fixed NAP accent. Brand colors live outside
- * the design-token system on purpose.
+ * The fallback shares the Neutree node-network glyph (the inference
+ * platform's logo) so NAP reads as the same brand family; the single
+ * highlighted top node — the orchestrator root — is NAP's variant marker.
+ * The mark body inherits `currentColor` (brand navy on light, light on dark
+ * via the wrapper's text color); the top node stays the fixed NAP accent.
+ * Brand colors live outside the design-token system on purpose. A custom
+ * logo, being an arbitrary uploaded image, does not get this treatment.
  */
 export function Logo({ className }: { className?: string }) {
+  const { logoUrl, fullName } = useBrand()
+
+  if (logoUrl) {
+    return <img src={logoUrl} alt={fullName} className={cn('object-contain', className)} />
+  }
+
   return (
     <svg
       viewBox="0 0 35 40"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Neutree Agent Platform"
+      aria-label={fullName}
       className={cn('text-[#0C2849] dark:text-slate-100', className)}
     >
       <path

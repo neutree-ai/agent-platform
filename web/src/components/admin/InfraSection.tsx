@@ -1,4 +1,5 @@
 import { Spinner } from '@/components/ui/spinner'
+import { useBrand } from '@/contexts/BrandContext'
 import { api } from '@/lib/api/client'
 import type { AdminCluster, AdminClusterNodeGroup } from '@/lib/api/types'
 import i18n from '@/lib/i18n'
@@ -45,6 +46,7 @@ function UsageBar({ used, total, label }: { used: number; total: number; label: 
 }
 
 function OverviewCards({ data }: { data: AdminCluster }) {
+  const { shortName: brandShortName } = useBrand()
   const workerGroups = data.node_groups.filter((g) => g.group !== 'controlplane')
   const totalCpu = workerGroups.reduce((s, g) => s + g.totals.cpu_capacity, 0)
   const totalMem = workerGroups.reduce((s, g) => s + g.totals.mem_capacity_mi, 0)
@@ -68,7 +70,9 @@ function OverviewCards({ data }: { data: AdminCluster }) {
       </Card>
       <Card className="!bg-card !ring-border !p-4">
         <p className="text-xs text-muted-foreground">
-          {i18n.t('components.admin.infraSection.overview.workspaces.title')}
+          {i18n.t('components.admin.infraSection.overview.workspaces.title', {
+            brand: brandShortName,
+          })}
         </p>
         <p className="mt-1 text-2xl font-semibold text-foreground">{data.total_workspaces}</p>
         <div className="mt-2 flex gap-2 text-xs text-muted-foreground">
@@ -125,6 +129,7 @@ function OverviewCards({ data }: { data: AdminCluster }) {
 }
 
 function NodeGroupTable({ group }: { group: AdminClusterNodeGroup }) {
+  const { shortName: brandShortName } = useBrand()
   const shortName = (name: string) => {
     const parts = name.split('-')
     return parts.slice(-1)[0] || name
@@ -169,7 +174,9 @@ function NodeGroupTable({ group }: { group: AdminClusterNodeGroup }) {
               <th className="pb-2 pr-4 font-medium">
                 {i18n.t('components.admin.infraSection.table.pods')}
               </th>
-              <th className="pb-2 font-medium">{group.group === 'sandbox' ? 'SBX' : 'NAP'}</th>
+              <th className="pb-2 font-medium">
+                {group.group === 'sandbox' ? 'SBX' : brandShortName}
+              </th>
             </tr>
           </thead>
           <tbody>

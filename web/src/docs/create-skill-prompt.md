@@ -3,7 +3,7 @@ Create a skill named "{{SKILL_NAME}}".
 Requirements:
 {{DESCRIPTION}}
 
-## NAP Platform Workflow
+## Platform Workflow
 
 This workspace has skill management MCP tools. Use them for the lifecycle:
 
