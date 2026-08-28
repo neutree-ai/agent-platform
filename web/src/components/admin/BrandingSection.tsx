@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
+import { useBrand } from '@/contexts/BrandContext'
 import { api } from '@/lib/api/client'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card } from '@tremor/react'
@@ -24,6 +25,7 @@ function readFileAsDataUri(file: File): Promise<string> {
 // instanceId reserved for future per-instance UI state — currently unused.
 export function BrandingSection(_: { instanceId: string }) {
   const { t } = useTranslation()
+  const { logoUrl: currentLogoUrl, refresh: refreshBrand } = useBrand()
   const qc = useQueryClient()
   const fieldId = useId()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -65,8 +67,13 @@ export function BrandingSection(_: { instanceId: string }) {
       }
       return api.updateSystemSettings(patch)
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'system-settings'] })
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['admin', 'system-settings'] })
+      // Re-fetch the public branding endpoint too — it's a separate, unversioned
+      // (well, content-hash-versioned) fetch from BrandContext, so without this
+      // the preview below and the rest of the app (Menubar, login page on next
+      // load) would keep serving the previous logo until a hard refresh.
+      await refreshBrand()
     },
   })
 
@@ -104,17 +111,16 @@ export function BrandingSection(_: { instanceId: string }) {
     )
   }
 
-  const currentHasLogo = !!settings.data.branding_logo_data
   // What the logo preview shows: a freshly-picked file, "cleared" (no
-  // preview), or whatever's currently saved (if any).
+  // preview), or whatever's currently saved (if any) — reusing BrandContext's
+  // already-versioned URL so a save's refresh() is reflected here too, not
+  // just a hardcoded '/api/branding/logo' the browser might still have cached.
   const previewSrc =
     pendingLogo === null
       ? null
       : pendingLogo
         ? `data:${pendingLogo.mime};base64,${pendingLogo.data}`
-        : currentHasLogo
-          ? '/api/branding/logo'
-          : null
+        : currentLogoUrl
 
   return (
     <div className="space-y-3 p-1">

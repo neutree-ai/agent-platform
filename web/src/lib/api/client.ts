@@ -2102,7 +2102,12 @@ class ApiClient {
   }
 
   // Branding (public — no auth required, consumed by the login page too)
-  async getBranding(): Promise<{ shortName: string; fullName: string; hasCustomLogo: boolean }> {
+  async getBranding(): Promise<{
+    shortName: string
+    fullName: string
+    hasCustomLogo: boolean
+    logoVersion: string | null
+  }> {
     return this.request('/branding')
   }
 
