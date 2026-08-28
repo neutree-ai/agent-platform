@@ -57,8 +57,14 @@ function applyTemplate(
  */
 interface FilterRule {
   field: string
-  op: 'eq' | 'neq' | 'in' | 'contains' | 'exists'
+  op: 'eq' | 'neq' | 'in' | 'contains' | 'exists' | 'array_contains'
   value?: unknown
+  /**
+   * array_contains only: dot-path within each array element to compare against
+   * `value` (e.g. 'title' for GitLab MR `labels[].title`). Omit to compare
+   * elements directly, for arrays of primitives.
+   */
+  itemField?: string
 }
 
 /** Resolve a filter field from the request context. */
@@ -82,7 +88,10 @@ function resolveField(
 }
 
 /** Check if all filter rules match (AND logic). Empty filters = pass. */
-function matchFilters(filters: FilterRule[], ctx: Parameters<typeof resolveField>[1]): boolean {
+export function matchFilters(
+  filters: FilterRule[],
+  ctx: Parameters<typeof resolveField>[1],
+): boolean {
   for (const rule of filters) {
     const actual = resolveField(rule.field, ctx)
     switch (rule.op) {
@@ -98,6 +107,16 @@ function matchFilters(filters: FilterRule[], ctx: Parameters<typeof resolveField
         break
       case 'contains':
         if (!String(actual).includes(String(rule.value))) return false
+        break
+      case 'array_contains':
+        if (!Array.isArray(actual)) return false
+        if (
+          !actual.some((item) => {
+            const itemValue = rule.itemField ? resolve(item, rule.itemField) : item
+            return String(itemValue) === String(rule.value)
+          })
+        )
+          return false
         break
       case 'exists':
         if ((actual !== undefined && actual !== null) !== (rule.value !== false)) return false
