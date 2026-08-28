@@ -1,4 +1,3 @@
-import type { SlackContext } from '../../../../internal/types/api'
 import { ensureTokenForSession, mintToken } from '../../lib/session-token'
 import { createInterceptedSSEResponse } from '../../lib/sse'
 import { resolveAgentAddress } from '../../lib/workspace-address'
@@ -26,8 +25,6 @@ interface ExecuteChatOpts {
   source: string
   /** Who initiated the turn (used for session audit on new-session creation). */
   callerUserId?: string
-  /** Slack envelope for a connector-triggered turn; blind passthrough to the agent's MCP headers. */
-  slackContext?: SlackContext | null
   /**
    * Optional teamwork task context. When set, the new (or resumed) session
    * is registered as the coordinator session for this task, and the MCP
@@ -62,7 +59,7 @@ interface ExecuteChatOpts {
  * if the agent fetch fails outright.
  */
 export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
-  const { workspace, images, source, callerUserId, slackContext } = opts
+  const { workspace, images, source, callerUserId } = opts
   const { id: workspaceId } = workspace
   const sessionId = opts.sessionId
   let userMessageText: string | null = opts.message
@@ -143,7 +140,6 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
         images,
         source,
         sessionToken,
-        slackContext,
       }),
     )
 

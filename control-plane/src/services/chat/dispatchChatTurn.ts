@@ -48,7 +48,6 @@ export async function dispatchChatTurn(opts: DispatchChatTurnOpts): Promise<Resp
     source: body.source,
     callerUserId,
     taskId: taskId ?? null,
-    slackContext: body.slack_context ?? null,
   })
 
   const ct = sseResponse.headers.get('Content-Type') ?? ''

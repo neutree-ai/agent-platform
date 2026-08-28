@@ -189,19 +189,6 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
     // Build stream sink for connectors with reply_context.streaming === true (e.g. wecom)
     const streamSink = buildStreamSink(trigger)
 
-    // Slack envelope for a connector-triggered turn — lets the agent's
-    // platform-MCP headers carry who triggered it and where to reply,
-    // instead of only the `<thread_context>` text (which has no marker at
-    // all when the triggering Slack message itself came from a bot).
-    const slackContext =
-      trigger.type === 'slack'
-        ? {
-            channel_id: (replyContext?.channel_id as string | undefined) ?? undefined,
-            thread_ts: (replyContext?.thread_ts as string | undefined) ?? threadId,
-            user_id: triggerPayload?.user as string | undefined,
-          }
-        : undefined
-
     const source = trigger.type === 'cron' ? 'schedule' : trigger.type
     console.log(
       `[Scheduler] ${existingSessionId ? 'Continuing' : 'Starting new'} session job=${job.id}${streamSink ? ' (streaming)' : ''}`,
@@ -235,7 +222,6 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
       images,
       streamSink,
       bindThreadSession,
-      slackContext,
     )
 
     // If resuming failed, fallback to a fresh session
@@ -252,7 +238,6 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
         images,
         streamSink,
         bindThreadSession,
-        slackContext,
       )
     }
 
@@ -517,14 +502,12 @@ async function startAndConsumeSession(
   images?: Array<{ data: string; media_type: string }>,
   streamSink?: StreamSink | null,
   onSessionStarted?: (sessionId: string) => void,
-  slackContext?: { channel_id?: string; thread_ts?: string; user_id?: string } | null,
 ): Promise<JobResult | null> {
   const body = JSON.stringify({
     message: prompt,
     ...(sessionId ? { session_id: sessionId } : {}),
     ...(source ? { source } : {}),
     ...(images?.length ? { images } : {}),
-    ...(slackContext ? { slack_context: slackContext } : {}),
   })
   console.log(
     `[Scheduler] POST /chat workspace=${workspaceId} session=${sessionId ?? '(new)'} source=${source ?? '-'} images=${images?.length ?? 0} body_bytes=${body.length}`,

@@ -31,10 +31,7 @@ export interface AcpAgentServerConfig {
   workspaceDir: string
   cpUrl?: string
   workspaceId?: string
-  loadMcpServers: (
-    sessionToken?: string,
-    slackContext?: ChatRequest['slack_context'],
-  ) => McpServer[]
+  loadMcpServers: (sessionToken?: string) => McpServer[]
   /** Whether MCP servers are configured in config.toml (requires waiting for startup) */
   hasMcpServers?: () => boolean
   loadConfig: () => Promise<boolean>
@@ -282,13 +279,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   // Chat - SSE streaming endpoint
   app.post('/chat', async (c) => {
     const body = await c.req.json<ChatRequest>()
-    const {
-      message,
-      session_id: sessionId,
-      images,
-      session_token: sessionToken,
-      slack_context: slackContext,
-    } = body
+    const { message, session_id: sessionId, images, session_token: sessionToken } = body
     // session_token: CP-minted opaque proxy id for this session. ACP
     // binds MCP servers at createSession/loadSession (we can't rewire per
     // turn), so the token is carried into headers there and stays for the
@@ -383,7 +374,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           )
           try {
             const loadStart = Date.now()
-            const mcpServers = config.loadMcpServers(sessionToken, slackContext)
+            const mcpServers = config.loadMcpServers(sessionToken)
             // Don't register handler before loadSession — the ACP protocol
             // replays the full conversation history via notifications during
             // loadSession, and we don't want those replayed events in the SSE
@@ -436,7 +427,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
             `[agent] Bridge spawned (new session) bridge_spawn=${Date.now() - bridgeStart}ms`,
           )
           const createStart = Date.now()
-          const mcpServers = config.loadMcpServers(sessionToken, slackContext)
+          const mcpServers = config.loadMcpServers(sessionToken)
           currentSessionId = await newBridge.createSession({ mcpServers })
           console.log(
             `[agent] Session created session=${currentSessionId} session_create=${Date.now() - createStart}ms`,
@@ -527,7 +518,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           destroyBridge(currentSessionId)
           const rebuilt = await bridgeFactory!(currentSessionId)
           await rebuilt.loadSession(currentSessionId, {
-            mcpServers: config.loadMcpServers(sessionToken, slackContext),
+            mcpServers: config.loadMcpServers(sessionToken),
           })
           currentBridge = rebuilt
           reusedBridge = false
