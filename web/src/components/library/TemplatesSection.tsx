@@ -90,7 +90,12 @@ function getMcpServerNames(mcpConfigStr: string): string[] {
     const parsed = JSON.parse(mcpConfigStr)
     const servers = parsed?.mcpServers ?? parsed
     if (!servers || typeof servers !== 'object') return []
-    return Object.keys(servers).sort()
+    // A switched-off server keeps its entry so its params survive a re-enable.
+    // The diff compares what the agent actually gets, so leave those out.
+    return Object.entries(servers)
+      .filter(([, cfg]) => (cfg as { disabled?: boolean } | null)?.disabled !== true)
+      .map(([name]) => name)
+      .sort()
   } catch {
     return []
   }

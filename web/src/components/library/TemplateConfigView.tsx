@@ -37,7 +37,7 @@ interface TemplateConfigViewProps {
   promptId?: string
   promptName?: string
   promptContent?: string
-  mcpServers?: Record<string, { type?: string; command?: string; url?: string }>
+  mcpServers?: Record<string, { type?: string; command?: string; url?: string; disabled?: boolean }>
   agentSettings?: Record<string, unknown>
   skillNames?: string[]
   resources?: {
@@ -262,7 +262,7 @@ function McpServerRow({
   catalogEntry,
 }: {
   name: string
-  cfg: { type?: string; command?: string; url?: string }
+  cfg: { type?: string; command?: string; url?: string; disabled?: boolean }
   catalogEntry?: McpCatalogEntry
 }) {
   const { t } = useTranslation()
@@ -270,23 +270,35 @@ function McpServerRow({
   const target = cfg.url || cfg.command || ''
   const label = catalogEntry?.label ?? name
   const description = catalogEntry?.description
+  // A server switched off keeps its config (and params) in the template but is
+  // stripped before the agent ever sees it, so it reads as off, not absent.
+  const off = cfg.disabled === true
 
   return (
     <SectionRow>
-      <div className="flex items-baseline gap-2">
+      <div className={cn('flex items-baseline gap-2', off && 'opacity-50')}>
         <span className="truncate text-sm font-medium text-foreground">{label}</span>
         {catalogEntry && (
           <span className="font-mono text-tiny text-muted-foreground/60">{catalogEntry.id}</span>
+        )}
+        {off && (
+          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-tiny text-muted-foreground">
+            {t('components.library.templateConfigView.labels.disabled')}
+          </span>
         )}
         <span className="ml-auto shrink-0 rounded bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-tiny text-muted-foreground">
           {transport}
         </span>
       </div>
       {description && (
-        <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{description}</div>
+        <div
+          className={cn('mt-0.5 line-clamp-2 text-xs text-muted-foreground', off && 'opacity-50')}
+        >
+          {description}
+        </div>
       )}
       {target && (
-        <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+        <div className={cn('mt-1.5 flex min-w-0 items-center gap-1.5', off && 'opacity-50')}>
           <span
             className="min-w-0 flex-1 truncate font-mono text-tiny text-muted-foreground/80"
             title={target}

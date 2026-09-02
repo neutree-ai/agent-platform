@@ -1105,6 +1105,7 @@
         "appsCount": "{{count}} 个应用",
         "labels": {
           "custom": "自定义",
+          "disabled": "已关闭",
           "resourcesSummary": "CPU：{{cpuRequest}} / {{cpuLimit}} · 内存：{{memoryRequest}} / {{memoryLimit}} · 存储：{{storage}}",
           "preset": "预设",
           "cpu": "CPU",

@@ -1080,6 +1080,7 @@
         "appsCount": "{{count}} apps",
         "labels": {
           "custom": "Custom",
+          "disabled": "Off",
           "resourcesSummary": "CPU: {{cpuRequest}} / {{cpuLimit}} · Memory: {{memoryRequest}} / {{memoryLimit}} · Storage: {{storage}}",
           "preset": "Preset",
           "cpu": "CPU",
