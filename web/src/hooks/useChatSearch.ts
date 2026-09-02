@@ -78,18 +78,37 @@ export function useChatSearch(
     }
   }, [searchQuery, messages, scrollContainerRef])
 
-  // Reset index when query or matches change
+  // Jump to the first match when the query changes. Deliberately keyed on the
+  // query alone: message updates (streaming, reconnects) also rebuild the
+  // ranges, and scrolling on those would yank the viewport back to match 1
+  // every time the conversation grows.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: query-change only
   useEffect(() => {
     setSearchIndex(0)
-    if (rangesRef.current.length > 0 && supportsHighlightAPI) {
+    const first = rangesRef.current[0]
+    if (!first) return
+    if (supportsHighlightAPI) {
       CSS.highlights.delete(HIGHLIGHT_ACTIVE)
-      CSS.highlights.set(HIGHLIGHT_ACTIVE, new Highlight(rangesRef.current[0]))
-      rangesRef.current[0].startContainer.parentElement?.scrollIntoView({
-        block: 'center',
-        behavior: 'smooth',
-      })
+      CSS.highlights.set(HIGHLIGHT_ACTIVE, new Highlight(first))
     }
-  }, [searchQuery, messages])
+    first.startContainer.parentElement?.scrollIntoView({
+      block: 'center',
+      behavior: 'smooth',
+    })
+  }, [searchQuery])
+
+  // The ranges are rebuilt on every message update, so the active highlight
+  // has to be re-pointed at the current index — without moving the viewport.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `messages` is the signal that rangesRef was rebuilt
+  useEffect(() => {
+    if (!supportsHighlightAPI) return
+    CSS.highlights.delete(HIGHLIGHT_ACTIVE)
+    const ranges = rangesRef.current
+    if (ranges.length === 0) return
+    const idx = Math.min(searchIndex, ranges.length - 1)
+    if (idx !== searchIndex) setSearchIndex(idx)
+    CSS.highlights.set(HIGHLIGHT_ACTIVE, new Highlight(ranges[idx]))
+  }, [messages, searchIndex])
 
   const navigateSearch = useCallback((direction: 'prev' | 'next') => {
     const ranges = rangesRef.current

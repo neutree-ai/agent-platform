@@ -23,11 +23,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  *    whenever a long block rendered.
  *  - Returning to the bottom (by any means) re-arms `auto`, so a single
  *    detour up doesn't permanently break follow.
+ *  - `setPaused` suspends every scroll this hook performs while something else
+ *    owns the viewport (chat search jumping between matches). Programmatic
+ *    scrolls don't disarm `auto`, so without this the two fight: search scrolls
+ *    to a match, the next message update snaps back to the bottom.
  */
 export function useAutoScroll(deps: unknown[], resetKey?: unknown) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const pendingRef = useRef(false)
   const autoRef = useRef(true)
+  const pausedRef = useRef(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   const isAtBottom = useCallback(() => {
@@ -37,8 +42,13 @@ export function useAutoScroll(deps: unknown[], resetKey?: unknown) {
   }, [])
 
   const scrollToBottom = useCallback(() => {
+    if (pausedRef.current) return
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
+  }, [])
+
+  const setPaused = useCallback((paused: boolean) => {
+    pausedRef.current = paused
   }, [])
 
   // Scroll listener: only updates button visibility. It must NOT touch
@@ -129,10 +139,12 @@ export function useAutoScroll(deps: unknown[], resetKey?: unknown) {
     pendingRef.current = true
   }, [])
 
+  // Explicit user intent: honoured even while paused.
   const handleScrollBtnClick = useCallback(() => {
     autoRef.current = true
-    scrollToBottom()
-  }, [scrollToBottom])
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [])
 
   return {
     scrollRef,
@@ -140,5 +152,6 @@ export function useAutoScroll(deps: unknown[], resetKey?: unknown) {
     scrollToBottom,
     markPendingScroll,
     handleScrollBtnClick,
+    setPaused,
   }
 }

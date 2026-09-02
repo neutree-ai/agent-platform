@@ -408,10 +408,13 @@ export function WorkspaceChatPanel({
   }, [])
 
   // ── Scroll ──
-  const { scrollRef, showScrollBtn, markPendingScroll, handleScrollBtnClick } = useAutoScroll(
-    [messages],
-    activeSessionId,
-  )
+  const {
+    scrollRef,
+    showScrollBtn,
+    markPendingScroll,
+    handleScrollBtnClick,
+    setPaused: setAutoScrollPaused,
+  } = useAutoScroll([messages], activeSessionId)
 
   // Search — `panelRef` scopes the cmd+F shortcut to the chat panel root so
   // other panels (files, terminal) in adjacent slots keep browser-native Find.
@@ -426,6 +429,13 @@ export function WorkspaceChatPanel({
     searchInputRef,
     navigateSearch,
   } = useChatSearch(scrollRef, panelRef, messages)
+
+  // While the search bar is open it owns the viewport: follow-the-tail would
+  // otherwise snap back to the bottom on the next message and fight the jump
+  // to the highlighted match.
+  useEffect(() => {
+    setAutoScrollPaused(searchOpen)
+  }, [searchOpen, setAutoScrollPaused])
 
   // ── Virtualization ──
   // When search is open, fall back to flat rendering so the CSS Highlight API
