@@ -1,6 +1,6 @@
 import { verify as argon2Verify } from '@node-rs/argon2'
 import { sign, verify } from 'hono/jwt'
-import { Client } from 'ldapts'
+import { Client, InvalidCredentialsError, ResultCodeError } from 'ldapts'
 import { getUserByUsername } from './db/users'
 
 // LDAP Configuration
@@ -40,6 +40,17 @@ export interface JwtPayload {
 }
 
 /**
+ * Describe an LDAP failure for logs. A ResultCodeError carries the server's own
+ * result code and diagnostic message (Active Directory encodes the reason as a
+ * `data <hex>` suffix); anything else is a transport-level failure.
+ */
+function describeLdapError(e: unknown): string {
+  if (e instanceof ResultCodeError) return `${e.name} code=${e.code}: ${e.message}`
+  if (e instanceof Error) return `${e.name}: ${e.message}`
+  return String(e)
+}
+
+/**
  * Authenticate user against LDAP
  */
 export async function authenticateLdap(
@@ -68,6 +79,12 @@ export async function authenticateLdap(
       return null
     }
 
+    if (searchEntries.length > 1) {
+      console.warn(
+        `LDAP: search for ${username} matched ${searchEntries.length} entries, binding as the first: ${searchEntries.map((entry) => entry.dn).join(', ')}`,
+      )
+    }
+
     const userEntry = searchEntries[0]
     const userDN = userEntry.dn
 
@@ -78,8 +95,16 @@ export async function authenticateLdap(
     try {
       await userClient.bind(userDN, password)
       await userClient.unbind()
-    } catch (_e) {
-      console.log(`LDAP: Invalid password for user: ${username}`)
+    } catch (e) {
+      if (e instanceof InvalidCredentialsError) {
+        console.log(`LDAP: Invalid password for user: ${username} (${describeLdapError(e)})`)
+      } else {
+        // Not a rejected password: the bind never got a credential verdict, so
+        // reporting this as a wrong password hides an outage behind a 401.
+        console.error(
+          `LDAP: bind failed for user ${username} as ${userDN}: ${describeLdapError(e)}`,
+        )
+      }
       return null
     }
 
@@ -96,8 +121,8 @@ export async function authenticateLdap(
       username: getValue(userEntry[LDAP_CONFIG.attributes.username]),
       email: getValue(userEntry[LDAP_CONFIG.attributes.email]) || undefined,
     }
-  } catch (e: any) {
-    console.error('LDAP authentication error:', e.message)
+  } catch (e) {
+    console.error(`LDAP authentication error for user ${username}: ${describeLdapError(e)}`)
     return null
   } finally {
     try {
