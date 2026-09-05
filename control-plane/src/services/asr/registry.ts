@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import funasr from './providers/funasr'
 import openai from './providers/openai'
 import type { AsrProvider } from './types'
 
@@ -15,4 +16,5 @@ export interface AsrProviderModule<C = unknown> {
  */
 export const REGISTRY: Record<string, AsrProviderModule> = {
   [openai.name]: openai,
+  [funasr.name]: funasr,
 }
