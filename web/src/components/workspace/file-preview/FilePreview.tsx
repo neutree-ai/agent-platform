@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
+import type { DriveKind } from '@/lib/api/agent-files'
 import { useMarkdownPreferencesStore } from '@/stores/markdown-preferences-store'
 import { Code, Eye, FileText, Table, WrapText } from 'lucide-react'
 import { Suspense, lazy, useState } from 'react'
@@ -83,6 +84,13 @@ function PreviewFallback() {
 interface FilePreviewProps {
   filename: string
   content: string
+  /**
+   * Where the file lives, when it lives on a workspace drive. Lets the
+   * markdown preview resolve document-relative links against the file's own
+   * directory; omitted (skill editor) they stay unresolved.
+   */
+  filePath?: string
+  drive?: DriveKind
   /** URL to fetch the raw file (used for binary previews like images). */
   fileUrl?: string
   /** URL that returns a rendered PDF for Office documents. */
@@ -102,6 +110,8 @@ interface FilePreviewProps {
 export function FilePreview({
   filename,
   content,
+  filePath,
+  drive,
   fileUrl,
   previewUrl,
   isEditing,
@@ -221,7 +231,7 @@ export function FilePreview({
       )}
       <Suspense fallback={<PreviewFallback />}>
         {useRendered && previewType === 'markdown' ? (
-          <MarkdownPreview content={content} />
+          <MarkdownPreview content={content} filePath={filePath} drive={drive} />
         ) : useRendered && previewType === 'image' && fileUrl ? (
           <ImagePreview
             src={fileUrl}

@@ -124,23 +124,36 @@ const sysSanitizeSchema = {
 // schema to whitelist `<agent-sys>`; the rest stays in lockstep with
 // Streamdown so katex / raw HTML / link hardening keep working. Revisit on
 // Streamdown upgrades.
-export const markdownRehypePlugins: PluggableList = [
-  rehypeRaw,
-  [rehypeKatex, { errorColor: "var(--color-muted-foreground)" }],
-  [rehypeSanitize, sysSanitizeSchema],
-  [
-    harden,
-    {
-      allowedImagePrefixes: ["*"],
-      allowedLinkPrefixes: ["*"],
-      allowedProtocols: ["*"],
-      defaultOrigin: undefined,
-      allowDataImages: true,
-    },
-  ],
-  // Last: the custom tag it emits must not be seen by rehype-sanitize.
-  rehypeMermaid,
-];
+//
+// `beforeHarden` is for plugins that rewrite hrefs/srcs — harden judges what
+// they produce, so they have to run first (see `lib/rehype-relative-paths.ts`);
+// `afterHarden` is for everything layered on the rendered tree.
+export function markdownRehypePluginsWith(
+  beforeHarden: PluggableList = [],
+  afterHarden: PluggableList = [],
+): PluggableList {
+  return [
+    rehypeRaw,
+    [rehypeKatex, { errorColor: "var(--color-muted-foreground)" }],
+    [rehypeSanitize, sysSanitizeSchema],
+    ...beforeHarden,
+    [
+      harden,
+      {
+        allowedImagePrefixes: ["*"],
+        allowedLinkPrefixes: ["*"],
+        allowedProtocols: ["*"],
+        defaultOrigin: undefined,
+        allowDataImages: true,
+      },
+    ],
+    // After harden: the custom tag it emits must not be seen by rehype-sanitize.
+    rehypeMermaid,
+    ...afterHarden,
+  ];
+}
+
+export const markdownRehypePlugins: PluggableList = markdownRehypePluginsWith();
 
 function AgentSysBlock({ children }: { children?: ReactNode }) {
   const { t } = useTranslation();

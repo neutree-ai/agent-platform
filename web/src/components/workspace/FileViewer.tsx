@@ -380,6 +380,8 @@ export function FileViewer({
       ) : (
         <FilePreview
           filename={filePath}
+          filePath={filePath}
+          drive={drive}
           fileUrl={fetchUrl}
           previewUrl={fetchPreviewUrl}
           content={isEditing ? editedContent : fileContent}

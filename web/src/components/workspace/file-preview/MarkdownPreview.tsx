@@ -1,12 +1,13 @@
-import { Markdown, markdownRehypePlugins } from '@/components/ui/markdown'
+import { Markdown, markdownRehypePluginsWith } from '@/components/ui/markdown'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import type { DriveKind } from '@/lib/api/agent-files'
+import { rehypeRelativePaths } from '@/lib/rehype-relative-paths'
 import { cn } from '@/lib/utils'
 import { useMarkdownPreferencesStore } from '@/stores/markdown-preferences-store'
 import { ChevronDown } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import rehypeSlug from 'rehype-slug'
-import type { PluggableList } from 'unified'
 
 // Streamdown's `rehypePlugins` prop replaces its whole pipeline rather than
 // extending it. Passing just `[rehypeSlug]` would drop rehype-raw (inline
@@ -14,9 +15,12 @@ import type { PluggableList } from 'unified'
 // vanish from the preview. Layer slug on top of the app's own stack instead;
 // sanitize stays in place, so this is still XSS-safe, and mermaid fences keep
 // rendering through our block.
-// Hoisted so the memoized Markdown sees a stable reference; otherwise a new
-// array every render busts the memo.
-const REHYPE_PLUGINS: PluggableList = [...markdownRehypePlugins, rehypeSlug]
+
+/** Drive-relative directory holding `filePath`, e.g. `/document/ctcli`. */
+function dirOf(filePath: string): string {
+  const idx = filePath.lastIndexOf('/')
+  return idx <= 0 ? '/' : filePath.slice(0, idx)
+}
 
 interface TocItem {
   id: string
@@ -41,13 +45,36 @@ function readTocFromDom(root: HTMLElement): TocItem[] {
   return out
 }
 
-export function MarkdownPreview({ content }: { content: string }) {
+interface MarkdownPreviewProps {
+  content: string
+  /** Path of the previewed file within `drive`, used to resolve relative links. */
+  filePath?: string
+  drive?: DriveKind
+}
+
+export function MarkdownPreview({ content, filePath, drive }: MarkdownPreviewProps) {
   const { t } = useTranslation()
   const tocVisible = useMarkdownPreferencesStore((s) => s.tocVisible)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [toc, setToc] = useState<TocItem[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const scrollRootRef = useRef<HTMLDivElement | null>(null)
+
+  // Relative links (`USAGE.md`, `./docs/x.md`) are resolved against the
+  // previewed file's own directory, then routed into the Files panel like any
+  // other workspace path. Without a known location they stay untouched — and
+  // harden blocks them, which is the safe fallback.
+  const linkifyWorkspaceFiles = !!filePath && !!drive
+  // Hoisted through useMemo so the memoized Markdown sees a stable reference;
+  // a new array every render would bust the memo.
+  const rehypePlugins = useMemo(
+    () =>
+      markdownRehypePluginsWith(
+        filePath && drive ? [[rehypeRelativePaths, { baseDir: dirOf(filePath), drive }]] : [],
+        [rehypeSlug],
+      ),
+    [filePath, drive],
+  )
 
   const getViewport = (): HTMLElement | null =>
     scrollRootRef.current?.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]') ?? null
@@ -143,7 +170,9 @@ export function MarkdownPreview({ content }: { content: string }) {
         )}
         <ScrollArea ref={scrollRootRef} className="flex-1">
           <div className="p-4">
-            <Markdown rehypePlugins={REHYPE_PLUGINS}>{content}</Markdown>
+            <Markdown rehypePlugins={rehypePlugins} linkifyWorkspaceFiles={linkifyWorkspaceFiles}>
+              {content}
+            </Markdown>
           </div>
         </ScrollArea>
       </div>
