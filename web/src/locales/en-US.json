@@ -2446,7 +2446,8 @@
         "editTitle": "Edit Credential"
       },
       "placeholders": {
-        "editValue": "Re-enter value (not shown for security)"
+        "editValue": "Leave blank to keep the current value (not shown for security)",
+        "renameValue": "Re-enter value (required when the name changes)"
       },
       "errors": {
         "loadFailed": "Failed to load credentials",

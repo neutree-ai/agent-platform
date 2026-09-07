@@ -67,7 +67,8 @@ const upsertRoute = createRoute({
   method: 'put',
   path: '/{name}',
   tags: ['credentials'],
-  summary: 'Upsert a credential. For env injection the name must be a valid env var identifier.',
+  summary:
+    'Upsert a credential. For env injection the name must be a valid env var identifier. Omit value to update only the metadata of an existing credential.',
   security: [{ bearerAuth: [] }],
   request: {
     params: NameParam,
@@ -109,7 +110,7 @@ credentials.openapi(upsertRoute, async (c) => {
     }
   }
 
-  await upsertUserCredential(
+  const written = await upsertUserCredential(
     currentUser.sub,
     name,
     body.value,
@@ -119,6 +120,9 @@ credentials.openapi(upsertRoute, async (c) => {
     body.scope,
     body.workspace_ids,
   )
+  if (!written) {
+    return c.json({ error: 'value is required when creating a credential' }, 400)
+  }
   await reloadUserWorkspaces(currentUser.sub)
   return c.json({ success: true }, 200)
 })

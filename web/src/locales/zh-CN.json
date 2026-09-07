@@ -2470,7 +2470,8 @@
         "editTitle": "编辑凭证"
       },
       "placeholders": {
-        "editValue": "请重新输入值（出于安全原因不会展示原值）"
+        "editValue": "留空则保持当前值（出于安全原因不会展示原值）",
+        "renameValue": "重命名需要重新输入值（出于安全原因不会展示原值）"
       },
       "errors": {
         "loadFailed": "加载凭证失败",

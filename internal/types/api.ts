@@ -829,7 +829,9 @@ export const ApiCredentialMetaSchema = z.object({
 export type ApiCredentialMeta = z.infer<typeof ApiCredentialMetaSchema>
 
 export const CredentialUpsertBodySchema = z.object({
-  value: z.string().min(1),
+  // Omit to keep the stored value untouched — lets a caller edit only the
+  // metadata (scope, workspaces, path) of an existing credential.
+  value: z.string().min(1).optional(),
   inject: z.enum(['env', 'file']),
   path: z.string().optional(),
   mode: z.string().optional(),

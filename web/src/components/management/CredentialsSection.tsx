@@ -57,10 +57,13 @@ export function CredentialsSection(_: { instanceId: string }) {
 
   const upsertMutation = useMutation({
     mutationFn: async (data: CredentialForm & { editingName: string | null }) => {
-      let value = data.value
+      let value: string | undefined = data.value
       if (data.inject === 'file' && value && !value.endsWith('\n')) {
         value += '\n'
       }
+      // Editing under the same name with the value left blank keeps the stored
+      // secret — omitting the field tells the API to touch metadata only.
+      if (!value) value = undefined
       if (data.editingName && data.name !== data.editingName) {
         await api.deleteCredential(data.editingName)
       }
@@ -120,8 +123,12 @@ export function CredentialsSection(_: { instanceId: string }) {
     setDialogOpen(true)
   }
 
+  // A rename recreates the credential under the new name, so the value has to
+  // be supplied again; editing in place can leave it blank.
+  const valueRequired = editingName === null || form.name !== editingName
+
   function handleSave() {
-    const next = validateCredentialForm(form)
+    const next = validateCredentialForm(form, { requireValue: valueRequired })
     setErrors(next)
     if (Object.keys(next).length > 0) return
     setGeneralError(null)
@@ -238,7 +245,13 @@ export function CredentialsSection(_: { instanceId: string }) {
               {t('components.credentialsSection.dialogs.editTitle')}
             </DialogTitle>
           </DialogHeader>
-          <CredentialFormFields form={form} setForm={setForm} errors={localizedErrors} isEditing />
+          <CredentialFormFields
+            form={form}
+            setForm={setForm}
+            errors={localizedErrors}
+            isEditing
+            valueRequired={valueRequired}
+          />
           {generalError && <div className="mt-3 text-xs text-destructive">{generalError}</div>}
           <DialogFooter>
             <Button type="button" size="sm" variant="ghost" onClick={() => setDialogOpen(false)}>

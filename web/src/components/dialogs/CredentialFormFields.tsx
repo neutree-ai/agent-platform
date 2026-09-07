@@ -96,6 +96,8 @@ interface CredentialFormFieldsProps {
   errors?: CredentialFormErrors
   /** Edit mode locks preset / inject choice and tweaks copy. */
   isEditing?: boolean
+  /** In edit mode, whether a value must still be entered (i.e. the name changed). */
+  valueRequired?: boolean
 }
 
 export function CredentialFormFields({
@@ -103,6 +105,7 @@ export function CredentialFormFields({
   setForm,
   errors,
   isEditing,
+  valueRequired,
 }: CredentialFormFieldsProps) {
   const { t } = useTranslation()
   const [showValue, setShowValue] = useState(false)
@@ -305,7 +308,11 @@ export function CredentialFormFields({
           }
           placeholder={
             isEditing
-              ? t('components.credentialsSection.placeholders.editValue')
+              ? t(
+                  valueRequired
+                    ? 'components.credentialsSection.placeholders.renameValue'
+                    : 'components.credentialsSection.placeholders.editValue',
+                )
               : form.inject === 'env'
                 ? t('components.createCredential.placeholders.envValue')
                 : t('components.createCredential.placeholders.fileValue')
@@ -345,10 +352,15 @@ function Field({
   )
 }
 
-export function validateCredentialForm(form: CredentialForm): CredentialFormErrors {
+// `requireValue` is false when editing an existing credential under its current
+// name: an empty value then means "keep the stored one" rather than a mistake.
+export function validateCredentialForm(
+  form: CredentialForm,
+  { requireValue = true }: { requireValue?: boolean } = {},
+): CredentialFormErrors {
   const errors: CredentialFormErrors = {}
   if (!form.name) errors.name = 'components.createCredential.errors.nameRequired'
-  if (!form.value) errors.value = 'components.createCredential.errors.valueRequired'
+  if (requireValue && !form.value) errors.value = 'components.createCredential.errors.valueRequired'
   if (form.inject === 'file' && !form.path) {
     errors.path = 'components.createCredential.errors.pathRequired'
   }

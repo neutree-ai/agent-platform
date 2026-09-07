@@ -1394,7 +1394,8 @@ class ApiClient {
   async upsertCredential(
     name: string,
     data: {
-      value: string
+      // Omit to keep the stored value; only valid for an existing credential.
+      value?: string
       inject: string
       path?: string
       mode?: string

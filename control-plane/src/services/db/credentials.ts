@@ -61,28 +61,43 @@ export async function listWorkspaceCredentials(
   return rows as UserCredential[]
 }
 
+// An undefined `value` updates metadata only and keeps the stored secret, so
+// the credential must already exist; the boolean says whether a row was written.
 export async function upsertUserCredential(
   userId: string,
   name: string,
-  value: string,
+  value: string | undefined,
   inject: string,
   path?: string,
   mode?: string,
   scope?: string,
   workspaceIds?: string[],
-): Promise<void> {
+): Promise<boolean> {
   const resolvedScope = scope ?? 'global'
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    await client.query(
-      `INSERT INTO user_credentials (user_id, name, encrypted_value, inject, path, mode, scope, status)
-       VALUES ($1, $2, encode(pgp_sym_encrypt($3, $4), 'base64'), $5, $6, $7, $8, 'active')
-       ON CONFLICT (user_id, name) DO UPDATE
-         SET encrypted_value = encode(pgp_sym_encrypt($3, $4), 'base64'),
-             inject = $5, path = $6, mode = $7, scope = $8, status = 'active', updated_at = NOW()`,
-      [userId, name, value, encKey(), inject, path ?? null, mode ?? null, resolvedScope],
-    )
+    if (value === undefined) {
+      const result = await client.query(
+        `UPDATE user_credentials
+            SET inject = $3, path = $4, mode = $5, scope = $6, status = 'active', updated_at = NOW()
+          WHERE user_id = $1 AND name = $2 AND status = 'active'`,
+        [userId, name, inject, path ?? null, mode ?? null, resolvedScope],
+      )
+      if ((result.rowCount ?? 0) === 0) {
+        await client.query('ROLLBACK')
+        return false
+      }
+    } else {
+      await client.query(
+        `INSERT INTO user_credentials (user_id, name, encrypted_value, inject, path, mode, scope, status)
+         VALUES ($1, $2, encode(pgp_sym_encrypt($3, $4), 'base64'), $5, $6, $7, $8, 'active')
+         ON CONFLICT (user_id, name) DO UPDATE
+           SET encrypted_value = encode(pgp_sym_encrypt($3, $4), 'base64'),
+               inject = $5, path = $6, mode = $7, scope = $8, status = 'active', updated_at = NOW()`,
+        [userId, name, value, encKey(), inject, path ?? null, mode ?? null, resolvedScope],
+      )
+    }
     await client.query(
       'DELETE FROM user_credential_workspaces WHERE user_id = $1 AND credential_name = $2',
       [userId, name],
@@ -97,6 +112,7 @@ export async function upsertUserCredential(
       }
     }
     await client.query('COMMIT')
+    return true
   } catch (e) {
     await client.query('ROLLBACK')
     throw e
