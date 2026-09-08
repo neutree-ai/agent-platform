@@ -187,6 +187,19 @@ export BROWSER_NODE_PORT="${BROWSER_NODE_PORT:-30085}"
 export BROWSER_JWT_SECRET="${BROWSER_JWT_SECRET:-}"
 export TURN_HOST="${TURN_HOST:-}"
 export TURN_PORT="${TURN_PORT:-3478}"
+# The address browsers dial and the address coturn binds are the same thing on
+# a LAN node and two different things behind 1:1 NAT (a cloud VM's public IP
+# lives on the gateway, never on the node's NIC, so binding it fails with
+# EADDRNOTAVAIL). TURN_HOST advertises, TURN_BIND_IP binds, and it defaults to
+# TURN_HOST so LAN installs configure one value as before.
+export TURN_BIND_IP="${TURN_BIND_IP:-$TURN_HOST}"
+# coturn takes the NAT mapping as PUBLIC/PRIVATE; a plain address when the two
+# are the same keeps the LAN rendering identical.
+if [ "$TURN_BIND_IP" = "$TURN_HOST" ]; then
+  export TURN_EXTERNAL_IP="$TURN_HOST"
+else
+  export TURN_EXTERNAL_IP="$TURN_HOST/$TURN_BIND_IP"
+fi
 export TURN_AUTH_SECRET="${TURN_AUTH_SECRET:-}"
 export COTURN_NODE_SELECTOR="${COTURN_NODE_SELECTOR:-}"
 
@@ -331,7 +344,7 @@ render_manifests() {
   VARS+='${SANDBOX_NODE_PORT}${SANDBOX_JWT_SECRET}${SANDBOX_SERVICE_KEY}${SANDBOX_DOMAIN}${OPENSANDBOX_URL}'
   VARS+='${SANDBOX_SERVICE_URL_RESOLVED}${BROWSER_SERVICE_URL_RESOLVED}'
   VARS+='${SANDBOX_OAUTH_REDIRECT_URI}${BROWSER_OAUTH_REDIRECT_URI}'
-  VARS+='${TURN_HOST}${TURN_PORT}${TURN_AUTH_SECRET}'
+  VARS+='${TURN_HOST}${TURN_BIND_IP}${TURN_EXTERNAL_IP}${TURN_PORT}${TURN_AUTH_SECRET}'
   VARS+='${AFS_STORAGE_SIZE}'
   VARS+='${SERVICE_TYPE}'
   VARS+='${PG_SYNC_REPLICAS}'

@@ -37,12 +37,17 @@ spec:
             # Pin to a single IP. Without --listening-ip coturn enumerates
             # every host interface — including kube-ipvs0 / CNI dummy
             # interfaces carrying Service ClusterIPs that reject bind() with
-            # EADDRNOTAVAIL. We use ${TURN_HOST} (from values.env, also the
-            # address browsers dial) so a node whose kubelet registered the
-            # wrong InternalIP can still be overridden explicitly.
-            - "--listening-ip=${TURN_HOST}"
-            - "--relay-ip=${TURN_HOST}"
-            - "--external-ip=${TURN_HOST}"
+            # EADDRNOTAVAIL.
+            #
+            # Bind and advertise are separate addresses: ${TURN_BIND_IP} has to
+            # exist on this node's NIC, while ${TURN_HOST} is whatever browsers
+            # dial. They are the same value on a LAN node, and behind 1:1 NAT
+            # (a cloud VM's public IP) they are not — binding the public one
+            # there fails with EADDRNOTAVAIL. install.sh defaults TURN_BIND_IP
+            # to TURN_HOST and folds both into ${TURN_EXTERNAL_IP}.
+            - "--listening-ip=${TURN_BIND_IP}"
+            - "--relay-ip=${TURN_BIND_IP}"
+            - "--external-ip=${TURN_EXTERNAL_IP}"
             - "--min-port=49152"
             - "--max-port=49252"
             - "--realm=${NAP_HOST}"
@@ -68,6 +73,15 @@ spec:
             - name: turn-udp
               containerPort: 3478
               protocol: UDP
+          # coturn exits 255 when it cannot bind, and a bare Deployment reports
+          # the CrashLoop as 1/1 Running between restarts — one install ran a
+          # dead relay for months without a single failing signal. The probe
+          # makes an unbindable address show up as a failed rollout instead.
+          readinessProbe:
+            tcpSocket:
+              port: 3478
+            initialDelaySeconds: 5
+            periodSeconds: 10
           resources:
             requests:
               cpu: 100m
