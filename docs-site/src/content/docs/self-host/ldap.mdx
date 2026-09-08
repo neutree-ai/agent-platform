@@ -34,7 +34,7 @@ The control plane ships a default schema oriented around `inetOrgPerson`. If you
 Example: a directory whose user DNs look like `cn=jdoe,ou=user,ou=corp,dc=example,dc=com`, with the login name on `cn`, the real name on `sn`, and an objectClass that may not include `inetOrgPerson`. Configure it like this:
 
 ```bash
-LDAP_SEARCH_FILTER=(objectClass=person)
+LDAP_SEARCH_FILTER='(objectClass=person)'
 LDAP_ATTR_USERNAME=cn
 LDAP_ATTR_NAME=sn
 LDAP_ATTR_EMAIL=mail
