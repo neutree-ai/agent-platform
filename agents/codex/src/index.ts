@@ -10,8 +10,15 @@ import {
   loadCredentials,
   loadRuntimeConfig,
   loadSkills,
+  pruneCodexLogs,
 } from './config.js'
-import { app, injectWebSocket, setBridgeFactory, setRestartBridge } from './server.js'
+import {
+  app,
+  getLiveBridgeCount,
+  injectWebSocket,
+  setBridgeFactory,
+  setRestartBridge,
+} from './server.js'
 
 writePlatformPrompt({
   agentKind: 'codex',
@@ -104,6 +111,27 @@ setRestartBridge(async () => {
   const rc = loadRuntimeConfig()
   if (rc) applyProviderEnv(rc)
 })
+
+// ── Keep the codex log database bounded ──
+
+// The boot-time prune in loadConfig() only bounds growth across restarts, and
+// codex fills this database fast enough (~0.75 GB/day under steady scheduled
+// load, per openai/codex#26374) that a long-lived pod would blow past the cap
+// and stay there. So re-check on an interval — but only act between sessions:
+// a live bridge means a live codex process holding the files open, and
+// unlinking them then reclaims nothing. Deliberately best effort. A workspace
+// that never goes idle is never pruned, which is the right trade: the boot
+// path still catches it, and no turn is ever interrupted to reclaim disk.
+const LOG_PRUNE_INTERVAL_MS = Number(process.env.CODEX_LOG_PRUNE_INTERVAL_MS) || 10 * 60 * 1000
+
+setInterval(() => {
+  if (getLiveBridgeCount() > 0) return
+  try {
+    pruneCodexLogs()
+  } catch (e) {
+    console.warn('[agent] Codex log prune failed:', e)
+  }
+}, LOG_PRUNE_INTERVAL_MS).unref()
 
 // ── Start HTTP server ──
 

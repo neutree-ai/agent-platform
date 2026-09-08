@@ -211,6 +211,7 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
           }
         : undefined
 
+    const failure: { message?: string } = {}
     let sseResult = await startAndConsumeSession(
       chatEndpoint,
       workspace_id,
@@ -222,6 +223,7 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
       images,
       streamSink,
       bindThreadSession,
+      failure,
     )
 
     // If resuming failed, fallback to a fresh session
@@ -238,10 +240,15 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
         images,
         streamSink,
         bindThreadSession,
+        failure,
       )
     }
 
-    if (!sseResult) throw new Error(`SSE stream failed for job=${job.id}`)
+    if (!sseResult) {
+      throw new Error(
+        `SSE stream failed for job=${job.id}${failure.message ? `: ${failure.message}` : ''}`,
+      )
+    }
 
     // If we only got a session_id but the stream failed, treat as error
     if (!sseResult.final_message && sseResult.error) {
@@ -502,6 +509,7 @@ async function startAndConsumeSession(
   images?: Array<{ data: string; media_type: string }>,
   streamSink?: StreamSink | null,
   onSessionStarted?: (sessionId: string) => void,
+  failure?: { message?: string },
 ): Promise<JobResult | null> {
   const body = JSON.stringify({
     message: prompt,
@@ -591,6 +599,10 @@ async function startAndConsumeSession(
   if (finalSessionId) {
     return { session_id: finalSessionId, error: errMsg }
   }
+  // The caller only sees `null` here, which says nothing about why the turn
+  // failed. Hand it the agent's own error so the job's failure message names
+  // the cause instead of restating that the stream did not produce a session.
+  if (failure) failure.message = errMsg
   return null
 }
 

@@ -19,7 +19,7 @@ import {
 
 let _restartBridge: (() => Promise<void>) | undefined
 
-const { app, injectWebSocket, setBridgeFactory } = createAcpAgentApp({
+const { app, injectWebSocket, setBridgeFactory, getLiveBridgeCount } = createAcpAgentApp({
   agentType: 'codex',
   capabilities: {
     system_prompt: true,
@@ -70,4 +70,4 @@ function setRestartBridge(fn: () => Promise<void>) {
   _restartBridge = fn
 }
 
-export { app, injectWebSocket, setBridgeFactory, setRestartBridge }
+export { app, injectWebSocket, setBridgeFactory, setRestartBridge, getLiveBridgeCount }

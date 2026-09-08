@@ -6,7 +6,17 @@
  * and MCP servers via ACP session/new.
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { McpServer } from '@agentclientprotocol/sdk'
 import { SkillManager } from '../../../internal/agent-skills/src/index.js'
@@ -98,6 +108,59 @@ let _userMcpServers: Record<string, UserMcpServerConfig> = {}
 // config) can still render the platform skill with the user's display name.
 let _userDisplayName: string | undefined
 
+/** Size at which the codex log database is dropped, in bytes. Kept well under
+ *  the ~200 MB where upstream reports write-lock contention crashing codex
+ *  outright (openai/codex#29237). */
+const CODEX_LOG_DB_MAX_BYTES = Number(process.env.CODEX_LOG_DB_MAX_BYTES) || 128 * 1024 * 1024
+
+const CODEX_LOG_FILE = /^logs_\d+\.sqlite(-wal|-shm)?$/
+
+/**
+ * Drop the codex log database when it grows past the cap.
+ *
+ * Codex logs every turn to `~/.codex/logs_<n>.sqlite` and never rotates it, so
+ * a long-lived workspace grows it without bound. Opening a database that large
+ * — and replaying its write-ahead log — costs more memory than the workspace
+ * container is allowed, so codex exits at startup with "failed to initialize
+ * state runtime" and every turn fails with no usable error. Codex recreates
+ * the database on its next run; session state lives in `state_<n>.sqlite` and
+ * `sessions/`, which this leaves alone.
+ *
+ * Only safe to call while no codex process is running. Unlinking a file codex
+ * still holds open reclaims nothing on the NFS-backed workspace volume — the
+ * kernel silly-renames it to `.nfsXXXX` and codex keeps writing to it.
+ */
+export function pruneCodexLogs(
+  codexDir: string = join(process.env.HOME || '/root', '.codex'),
+): void {
+  let names: string[]
+  try {
+    names = readdirSync(codexDir).filter((n) => CODEX_LOG_FILE.test(n))
+  } catch {
+    return
+  }
+  const total = names.reduce((sum, name) => {
+    try {
+      return sum + statSync(join(codexDir, name)).size
+    } catch {
+      return sum
+    }
+  }, 0)
+  if (total <= CODEX_LOG_DB_MAX_BYTES) return
+
+  for (const name of names) {
+    try {
+      rmSync(join(codexDir, name))
+    } catch (e) {
+      console.warn(`[agent] Failed to prune codex log ${name}:`, e)
+    }
+  }
+  const mb = (bytes: number) => Math.round(bytes / 1024 / 1024)
+  console.log(
+    `[agent] Pruned codex log database (${mb(total)}MB over ${mb(CODEX_LOG_DB_MAX_BYTES)}MB cap)`,
+  )
+}
+
 export async function loadConfig(): Promise<boolean> {
   if (!CP_URL || !WORKSPACE_ID) {
     console.log(
@@ -151,6 +214,7 @@ export async function loadConfig(): Promise<boolean> {
   const home = process.env.HOME || '/root'
   const codexDir = join(home, '.codex')
   mkdirSync(codexDir, { recursive: true })
+  pruneCodexLogs(codexDir)
 
   // Store MCP config as JSON for loadAcpMcpServers() (ACP adapter)
   writeFileSync(join(codexDir, 'mcp.json'), JSON.stringify({ mcpServers }, null, 2))

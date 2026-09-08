@@ -879,5 +879,9 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
     return c.json({ success: true, removed })
   })
 
-  return { app, injectWebSocket, setBridgeFactory }
+  /** Number of live agent child processes (1 bridge : 1 session). Zero means
+   *  no session is holding the agent's on-disk state open. */
+  const getLiveBridgeCount = () => sessionBridges.size
+
+  return { app, injectWebSocket, setBridgeFactory, getLiveBridgeCount }
 }
