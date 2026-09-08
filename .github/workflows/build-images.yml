@@ -143,6 +143,7 @@ jobs:
           - nap-agent-claude-code
           - nap-agent-codex
           - nap-agent-goose
+          - nap-agent-dsh
     steps:
       # Same gate as the build job, plus the final tag set.
       - name: Gate & tags
