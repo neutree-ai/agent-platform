@@ -34,7 +34,7 @@ LDAP 是可选模块，默认关闭。在 `values.env` 中把 `LDAP_ENABLED` 设
 示例：某目录的用户 DN 形如 `cn=jdoe,ou=user,ou=corp,dc=example,dc=com`，登录名在 `cn` 上，真实姓名在 `sn` 上，objectClass 可能不包含 `inetOrgPerson`。这样配置：
 
 ```bash
-LDAP_SEARCH_FILTER=(objectClass=person)
+LDAP_SEARCH_FILTER='(objectClass=person)'
 LDAP_ATTR_USERNAME=cn
 LDAP_ATTR_NAME=sn
 LDAP_ATTR_EMAIL=mail
