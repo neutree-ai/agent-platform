@@ -62,7 +62,7 @@ COPY .npmrc /root/.npmrc
 # System packages — slowest layer, changes least
 RUN apt-get update && apt-get install -y --no-install-recommends -o Acquire::Retries=3 \
     git bash curl ca-certificates python3 python-is-python3 python3-requests python3-yaml ripgrep jq less unzip bzip2 openssh-client poppler-utils \
-    tmux sudo locales vim-tiny sshpass \
+    tmux sudo locales vim-tiny sshpass sqlite3 file \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
     && locale-gen \
     && echo "node ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
