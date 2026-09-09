@@ -9,7 +9,7 @@
 
 1. 前往 [api.slack.com/apps](https://api.slack.com/apps) 创建新 App
 2. 开启 **Socket Mode**
-3. 在 **OAuth & Permissions** 添加 Bot Token Scopes：`chat:write`, `channels:history`, `channels:read`, `app_mentions:read`
+3. 在 **OAuth & Permissions** 添加 Bot Token Scopes：`chat:write`, `channels:history`, `channels:read`, `app_mentions:read`, `files:read`
 4. 在 **Basic Information** 创建 App-Level Token（scope: `connections:write`）
 5. 安装 App 到 workspace
 
