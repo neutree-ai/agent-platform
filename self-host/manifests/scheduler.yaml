@@ -20,13 +20,11 @@ spec:
           image: ${PLATFORM_IMAGE_PREFIX}-scheduler:${IMAGE_TAG}
           imagePullPolicy: Always
           env:
-            - name: POSTGRES_PASSWORD
+            - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ${APP_PREFIX}-pg-user
-                  key: password
-            - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
+                  key: connection-url
             - name: NAP_API_URL
               value: "http://${APP_PREFIX}-cp:3000"
             - name: CG_API_URL

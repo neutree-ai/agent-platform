@@ -13,13 +13,11 @@ spec:
           image: ${PLATFORM_IMAGE_PREFIX}-cp:${IMAGE_TAG}
           command: ["node", "dist/seed-mcp-catalog-core.js"]
           env:
-            - name: POSTGRES_PASSWORD
+            - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ${APP_PREFIX}-pg-user
-                  key: password
-            - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
+                  key: connection-url
             # Prefix-aware host for the platform MCP catalog URL. Without it the
             # seed writes http://nap-cp:3000/mcp, which only resolves when
             # APP_PREFIX is "nap". Keep in sync with control-plane.yaml.

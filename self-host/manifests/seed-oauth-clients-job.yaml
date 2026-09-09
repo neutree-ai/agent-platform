@@ -13,13 +13,11 @@ spec:
           image: ${PLATFORM_IMAGE_PREFIX}-cp:${IMAGE_TAG}
           command: ["node", "dist/seed-oauth-clients.js"]
           env:
-            - name: POSTGRES_PASSWORD
+            - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ${APP_PREFIX}-pg-user
-                  key: password
-            - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
+                  key: connection-url
             # Empty for disabled modules — the seed script skips those clients.
             - name: SANDBOX_OAUTH_REDIRECT_URI
               value: "${SANDBOX_OAUTH_REDIRECT_URI}"

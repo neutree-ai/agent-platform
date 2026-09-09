@@ -93,13 +93,11 @@ spec:
               value: "afs-controller.${NAMESPACE}.svc:9100"
             - name: MEMORY_FUSE_IMAGE
               value: "${PLATFORM_IMAGE_PREFIX}-memory-fuse:${IMAGE_TAG}"
-            - name: POSTGRES_PASSWORD
+            - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: ${APP_PREFIX}-pg-user
-                  key: password
-            - name: DATABASE_URL
-              value: "postgresql://${PG_USERNAME}:$(POSTGRES_PASSWORD)@${APP_PREFIX}-pg-rw:5432/${DB_NAME}"
+                  key: connection-url
           resources:
             requests:
               memory: "128Mi"

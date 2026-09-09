@@ -320,19 +320,46 @@ check_app_prefix() {
 
 # --- Render templates ------------------------------------------------------
 
+# Percent-encode a string for the userinfo of a connection URI (RFC 3986
+# unreserved set kept verbatim, everything else escaped byte by byte).
+# LC_ALL=C makes the loop iterate bytes, so a multi-byte character encodes as
+# the sequence of its UTF-8 bytes rather than one out-of-range escape.
+urlencode() {
+  local LC_ALL=C s="$1" i c out=''
+  for (( i = 0; i < ${#s}; i++ )); do
+    c=${s:i:1}
+    case "$c" in
+      [A-Za-z0-9._~-]) out+="$c" ;;
+      # & 0xFF: printf reads a byte >= 0x80 as a negative number, and the
+      # escape has to carry the byte's own value.
+      *) printf -v c '%%%02X' "$(( $(printf '%d' "'$c") & 0xFF ))"; out+="$c" ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 render_manifests() {
   log "Rendering manifests to $RENDERED_DIR ..."
   rm -rf "$RENDERED_DIR"
   mkdir -p "$RENDERED_DIR"
 
+  # The pg Secret carries a ready-made DATABASE_URL so no consumer has to
+  # assemble one from a raw password: a password is free-form and a URI is not,
+  # and this is the last place that still holds the plaintext and can encode it.
+  # Assembling downstream is where an unencoded '@' or ':' silently reparses the
+  # URL — and each driver disagrees about how.
+  export PG_USERNAME_ENC PG_PASSWORD_ENC
+  PG_USERNAME_ENC="$(urlencode "${PG_USERNAME}")"
+  PG_PASSWORD_ENC="$(urlencode "${PG_PASSWORD}")"
+
   # Explicit variable list — prevents envsubst from replacing k8s $(VAR)
-  # references like $(POSTGRES_PASSWORD)
+  # references like $(TURN_AUTH_SECRET)
   local VARS='${NAMESPACE}${REGISTRY}${IMAGE_TAG}${APP_PREFIX}${PLATFORM_IMAGE_PREFIX}${DB_NAME}${NAP_HOST}${NAP_NODE_PORT}'
   VARS+='${IMAGE_PULL_SECRET}'
   VARS+='${POSTGRES_IMAGE}${GOTENBERG_IMAGE}${COTURN_IMAGE}${NFS_SERVER_IMAGE}'
   VARS+='${RUNTIME_NODE_IMAGE}${RUNTIME_PYTHON_IMAGE}${RUNTIME_GOLANG_IMAGE}${PAUSE_IMAGE}'
   VARS+='${AFS_IMAGE}'
-  VARS+='${PG_USERNAME}${PG_PASSWORD}${PG_INSTANCES}${PG_STORAGE_SIZE}${PG_STORAGE_CLASS}'
+  VARS+='${PG_USERNAME}${PG_PASSWORD}${PG_USERNAME_ENC}${PG_PASSWORD_ENC}${PG_INSTANCES}${PG_STORAGE_SIZE}${PG_STORAGE_CLASS}'
   VARS+='${NFS_SERVER}${NFS_PATH}${NFS_STORAGE_CLASS}'
   VARS+='${JWT_SECRET}${CREDENTIAL_ENCRYPTION_KEY}${PLATFORM_SERVICE_KEY}'
   VARS+='${AGENT_IMAGE_PREFIX}${AGENT_IMAGE_TAG}${AGENT_STORAGE_CLASS}${AGENT_NODE_SELECTOR}'
