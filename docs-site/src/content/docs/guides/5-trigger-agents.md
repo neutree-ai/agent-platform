@@ -112,7 +112,7 @@ Same shape, more credential work up front. Create an app in Slack, enable Socket
 - **Bot Token** (`xoxb-...`) — from OAuth & Permissions
 - **App Token** (`xapp-...`) — from Basic Information, with scope `connections:write`
 
-The Bot Token needs `chat:write`, `channels:history`, `channels:read` and `app_mentions:read`.
+The Bot Token needs `chat:write`, `channels:history`, `channels:read`, `app_mentions:read` and `files:read`.
 
 Fill both in, create the Slack Connector, then attach a Route: the channel to listen on (only channels the bot has joined appear) and the target workspace.
 
