@@ -9,7 +9,7 @@ Connect a Slack Workspace so the platform can receive Slack events (e.g. @mentio
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new App
 2. Enable **Socket Mode**
-3. Under **OAuth & Permissions**, add Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`, `app_mentions:read`
+3. Under **OAuth & Permissions**, add Bot Token Scopes: `chat:write`, `channels:history`, `channels:read`, `app_mentions:read`, `files:read`
 4. Under **Basic Information**, create an App-Level Token (scope: `connections:write`)
 5. Install the App to your Workspace
 
