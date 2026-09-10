@@ -2,6 +2,7 @@ import type { ComputeResources } from '../../../internal/types/api'
 import { getWorkspaceConfig, updateWorkspace } from './db/workspaces'
 import * as k8s from './k8s'
 import { bumpWorkspaceSpec, ensureReplicaFloor, setDesiredPhase } from './placement'
+import { reconcileReflectSchedule } from './reflect'
 
 interface DesiredSpec {
   agentType: string
@@ -111,6 +112,11 @@ export async function startWorkspaceInstance(
   if (reconciled.rebuilt) {
     console.log(`[start ${workspaceId}] rebuilt: ${reconciled.reason}`)
   }
+  // Best-effort: a missing/stale Reflect schedule shouldn't block starting
+  // the workspace itself.
+  await reconcileReflectSchedule(workspaceId).catch((e) =>
+    console.error(`[start ${workspaceId}] reflect schedule reconcile failed:`, e),
+  )
   await ensureReplicaFloor(workspaceId)
   await setDesiredPhase(workspaceId, 'running')
   await updateWorkspace(workspaceId, { status: 'starting' })

@@ -1632,8 +1632,8 @@ export const ApiScheduleSchema = z.object({
   prompt_id: z.string().nullable(),
   prompt_content: z.string().nullable(),
   enabled: z.boolean(),
-  /** 'local' = user's own; 'template' = materialized from the template (read-only except enable/disable). */
-  origin: z.enum(['local', 'template']),
+  /** 'local' = user's own; 'template' = materialized from the template (read-only except enable/disable); 'reflect' = builtin Reflect schedule (prompt is platform-managed, cannot be deleted). */
+  origin: z.enum(['local', 'template', 'reflect']),
   last_run_at: z.string().nullable(),
   completed_at: z.string().nullable(),
   created_at: z.string(),

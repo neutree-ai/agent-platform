@@ -1,6 +1,8 @@
 import * as jobs from '../lib/jobs'
-import { setStoreReflectSchedule } from './db/memory'
-import { createSchedule, updateSchedule } from './db/schedules'
+import { getStoreById, listAttachmentsForWorkspace, setStoreReflectSchedule } from './db/memory'
+import { createSchedule, getSchedule, updateSchedule } from './db/schedules'
+import { getWorkspace } from './db/workspaces'
+import { isMemoryFuseAvailable } from './k8s'
 import { REFLECT_PROMPT } from './reflect-prompt'
 
 /** Default cadence for an auto-created Reflect schedule: weekly. */
@@ -12,6 +14,14 @@ const DEFAULT_REFLECT_CRON = '0 3 * * 0'
  * lives on the store, not on `schedules` — `schedules` stays a generic
  * "cron/one-shot -> workspace chat" primitive shared with template and
  * user-created schedules, with no awareness of Reflect.
+ *
+ * `origin: 'reflect'` makes the prompt platform-managed (routes/workspaces/
+ * schedules.ts rejects edits to `prompt`/`prompt_id` and blocks deletion for
+ * this origin) — see reconcileReflectSchedule for how it stays in sync with
+ * the current REFLECT_PROMPT. Deliberately NOT `origin: 'template'`:
+ * reconcileTemplateSchedules matches schedules by name against a template
+ * version's defs and deletes ones it can't find, which would delete this
+ * schedule the moment the workspace's template version bumped.
  *
  * Mirrors `materializeOne` in template-schedules.ts: on pg-boss registration
  * failure, leave the row but flip it disabled rather than claim it's active.
@@ -33,7 +43,7 @@ export async function createReflectSchedule(args: {
     timezone: 'UTC',
     prompt: REFLECT_PROMPT,
     prompt_id: null,
-    origin: 'local',
+    origin: 'reflect',
     enabled: true,
   })
   await setStoreReflectSchedule(args.storeId, schedule.id)
@@ -42,5 +52,44 @@ export async function createReflectSchedule(args: {
     if (pgbossJobId) await updateSchedule(schedule.id, { pgboss_job_id: pgbossJobId })
   } catch {
     await updateSchedule(schedule.id, { enabled: false, pgboss_job_id: null })
+  }
+}
+
+/**
+ * Keep a workspace's Reflect schedule in sync: create it if the workspace's
+ * own store doesn't have one yet (covers workspaces created before this
+ * feature shipped — no one-off backfill script needed, this runs every time
+ * the workspace starts), and refresh a stale prompt in place (safe to
+ * overwrite unconditionally — `origin: 'reflect'` schedules reject prompt
+ * edits at the API layer, so a mismatch only ever means "we shipped a new
+ * REFLECT_PROMPT since this schedule was created/last reconciled", never a
+ * user customization).
+ *
+ * Only acts when the workspace has exactly one attached store — zero means
+ * memory wasn't provisioned for it (predates the feature, or the cluster
+ * lacks the memory-fuse image), more than one means the store is shared
+ * across workspaces (see memory-store-plan.md 3.1: auto-reflect is
+ * deliberately scoped to a store's single owning workspace to avoid
+ * concurrent Reflect turns racing on the same store).
+ *
+ * Called from startWorkspaceInstance, the same lazy "fix drift on open"
+ * chokepoint reconcileWorkspacePod uses for the pod spec.
+ */
+export async function reconcileReflectSchedule(workspaceId: string): Promise<void> {
+  const workspace = await getWorkspace(workspaceId)
+  if (!workspace || workspace.is_system || !isMemoryFuseAvailable()) return
+
+  const attachments = await listAttachmentsForWorkspace(workspaceId)
+  if (attachments.length !== 1) return
+  const storeId = attachments[0].store_id
+
+  const store = await getStoreById(storeId)
+  const schedule = store?.reflect_schedule_id ? await getSchedule(store.reflect_schedule_id) : null
+  if (!schedule) {
+    await createReflectSchedule({ workspaceId, userId: workspace.user_id, storeId })
+    return
+  }
+  if (schedule.origin === 'reflect' && schedule.prompt !== REFLECT_PROMPT) {
+    await updateSchedule(schedule.id, { prompt: REFLECT_PROMPT })
   }
 }

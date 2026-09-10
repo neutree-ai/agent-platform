@@ -16,7 +16,7 @@ export async function createSchedule(data: {
   timezone?: string
   prompt: string
   prompt_id?: string | null
-  origin?: 'local' | 'template'
+  origin?: 'local' | 'template' | 'reflect'
   enabled?: boolean
 }): Promise<Schedule> {
   const { rows } = await pool.query(

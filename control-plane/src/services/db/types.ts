@@ -460,8 +460,8 @@ export interface Schedule {
   prompt_id: string | null
   prompt_content: string | null
   enabled: boolean
-  /** 'local' = user's own schedule; 'template' = materialized from the template (read-only except enable/disable). */
-  origin: 'local' | 'template'
+  /** 'local' = user's own schedule; 'template' = materialized from the template (read-only except enable/disable); 'reflect' = builtin Reflect schedule (prompt is platform-managed, cannot be deleted). */
+  origin: 'local' | 'template' | 'reflect'
   last_run_at: string | null
   completed_at: string | null
   pgboss_job_id: string | null

@@ -183,6 +183,18 @@ schedules.openapi(patchRoute, async (c) => {
       400,
     )
   }
+  if (
+    existing.origin === 'reflect' &&
+    Object.keys(body).some((k) => k === 'prompt' || k === 'prompt_id')
+  ) {
+    return c.json(
+      {
+        error:
+          'Reflect schedule prompt is platform-managed and cannot be edited; cadence and enabled state can still be changed',
+      },
+      400,
+    )
+  }
   if (body.run_at && new Date(body.run_at).getTime() <= Date.now()) {
     return c.json({ error: 'run_at must be in the future' }, 400)
   }
@@ -250,6 +262,9 @@ schedules.openapi(deleteRouteDef, async (c) => {
       { error: 'Template-provided schedule cannot be deleted; disable it instead' },
       400,
     )
+  }
+  if (existing.origin === 'reflect') {
+    return c.json({ error: 'Reflect schedule cannot be deleted; disable it instead' }, 400)
   }
 
   await jobs.cancelScheduleTimer(existing)
