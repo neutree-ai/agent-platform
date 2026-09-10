@@ -48,6 +48,7 @@ export async function dispatchChatTurn(opts: DispatchChatTurnOpts): Promise<Resp
     source: body.source,
     callerUserId,
     taskId: taskId ?? null,
+    reflectStoreId: body.reflect_store_id ?? null,
   })
 
   const ct = sseResponse.headers.get('Content-Type') ?? ''

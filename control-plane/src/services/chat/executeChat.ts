@@ -34,6 +34,14 @@ interface ExecuteChatOpts {
    * binding before passing this; executeChat treats it as already-trusted.
    */
   taskId?: string | null
+  /**
+   * Set when this turn is a Reflect run for this memory store — persisted
+   * onto the new session and onto the workspace for the duration of the
+   * turn (see createInterceptedSSEResponse). Only meaningful for a
+   * brand-new session; Reflect never resumes an existing one (the scheduler
+   * never passes sessionId for its cron trigger).
+   */
+  reflectStoreId?: string | null
 }
 
 /**
@@ -237,6 +245,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
       sessionToken,
       onNewSession,
       replicaId,
+      reflectStoreId: opts.reflectStoreId ?? null,
       // Hand the admission slot to the interceptor: it releases exactly once when
       // the turn terminates (clean end, error, interrupt, or pod death), which is
       // the single point that also frees the accounting for the autoscaler.

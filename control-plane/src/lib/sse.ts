@@ -15,7 +15,7 @@ import {
   updateSessionActivity,
   updateSessionStats,
 } from '../services/db/sessions'
-import { getWorkspace, getWorkspaceConfig } from '../services/db/workspaces'
+import { getWorkspace, getWorkspaceConfig, setActiveReflectStore } from '../services/db/workspaces'
 import { notify } from '../services/notifications'
 import { pullWorkspaceUsage } from '../services/usage/pull'
 import { setSseStreamCountProvider, sseStreamDuration } from './metrics'
@@ -393,6 +393,14 @@ interface InterceptedSSEOptions {
    * termination path, including pod death (the slot-leak risk).
    */
   onTurnEnd?: () => void
+  /**
+   * Set when this turn is a Reflect run for this memory store. Persisted
+   * onto the new session (sessions.reflect_store_id) and the workspace
+   * (workspaces.active_reflect_store_id) in the same `session.started`
+   * transaction that creates the session row. Only meaningful when
+   * `existingSessionId` is null — Reflect always creates a fresh session.
+   */
+  reflectStoreId?: string | null
 }
 
 export function createInterceptedSSEResponse(
@@ -412,6 +420,7 @@ export function createInterceptedSSEResponse(
     onNewSession,
     replicaId,
     onTurnEnd,
+    reflectStoreId,
   } = opts
   if (!response.body) {
     // No stream to intercept — the turn is over before it began. Fire the
@@ -480,6 +489,7 @@ export function createInterceptedSSEResponse(
     sessionToken,
     onNewSession,
     replicaId,
+    reflectStoreId,
   })
   const broadcastPlugin = createBroadcastPlugin({
     workspaceId,
@@ -694,6 +704,13 @@ interface PersistPluginCtx {
    */
   replicaId?: number
   /**
+   * Set when this turn is a Reflect run for this memory store. Written onto
+   * the new session (sessions.reflect_store_id) and the workspace
+   * (workspaces.active_reflect_store_id) in the same `session.started`
+   * handler that creates the session row — see createInterceptedSSEResponse.
+   */
+  reflectStoreId?: string | null
+  /**
    * Optional initial assistant-message state. Set on the recovery path
    * (CP restart) so the plugin resumes writing into the existing DB row
    * instead of creating a duplicate. When provided, new events are
@@ -906,9 +923,23 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
           )
           const token = ctx.sessionToken
           const onNewSession = ctx.onNewSession
+          const reflectStoreId = ctx.reflectStoreId
           queue.run(async () => {
             if (isNew) {
-              await createSession(workspaceId, newSid, '', callerUserId, source)
+              await createSession(
+                workspaceId,
+                newSid,
+                '',
+                callerUserId,
+                source,
+                null,
+                reflectStoreId,
+              )
+              if (reflectStoreId) {
+                await setActiveReflectStore(workspaceId, reflectStoreId).catch((e) => {
+                  console.warn(`[SSE] setActiveReflectStore failed workspace=${workspaceId}:`, e)
+                })
+              }
             } else {
               await updateSessionActivity(newSid)
             }

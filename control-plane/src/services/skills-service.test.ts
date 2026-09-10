@@ -94,6 +94,7 @@ function buildWorkspace(over: Partial<Workspace> & { id: string; user_id: string
     status: over.status ?? 'running',
     created_at: over.created_at ?? new Date().toISOString(),
     runtime_version: over.runtime_version ?? null,
+    active_reflect_store_id: over.active_reflect_store_id ?? null,
   }
 }
 
