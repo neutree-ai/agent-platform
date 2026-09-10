@@ -8,13 +8,21 @@ const name = 'funasr'
 // /v1/audio/transcriptions endpoint it serves a richer native /asr endpoint
 // (hotwords, char-level timestamps, duration). We use /asr so the caller's
 // `hint` can be forwarded as hotwords and the reported duration kept.
-// Auth is HTTP Basic, not Bearer — the server rejects a Bearer token, so an
-// OpenAI-compatible client cannot talk to it directly.
-const configSchema = z.object({
-  base_url: z.string().url().default('http://localhost:8899'),
-  username: z.string().min(1).default('funasr'),
-  password: z.string().min(1),
-})
+// Auth depends on how the server is fronted: a direct vLLM deployment guards it
+// with HTTP Basic (it rejects a Bearer token, so an OpenAI-compatible client
+// cannot talk to it directly), while behind the inference gateway the same
+// server takes a Bearer API key. Set `api_key` for the gateway, or
+// `username`/`password` for a direct deployment.
+const configSchema = z
+  .object({
+    base_url: z.string().url().default('http://localhost:8899'),
+    username: z.string().min(1).default('funasr'),
+    password: z.string().min(1).optional(),
+    api_key: z.string().min(1).optional(),
+  })
+  .refine((c) => Boolean(c.api_key || c.password), {
+    message: 'funasr needs either api_key (gateway) or password (basic auth)',
+  })
 
 type Config = z.infer<typeof configSchema>
 
@@ -36,7 +44,9 @@ interface AsrResponse {
 }
 
 function create(config: Config): AsrProvider {
-  const authHeader = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`
+  const authHeader = config.api_key
+    ? `Bearer ${config.api_key}`
+    : `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`
 
   return {
     name,
