@@ -1,10 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { getSessionReflectStoreId } from '../services/db/sessions'
 import { registerAfsTools } from './tools/afs'
 import { registerAgentTools } from './tools/agent'
 import { registerBrowserTools } from './tools/browser'
 import { registerBuilderTools } from './tools/builder-mode'
 import { registerExportFileUrlTool } from './tools/export-file-url'
 import { registerMemoryTools } from './tools/memory'
+import { registerReflectTools } from './tools/reflect'
 import { registerSandboxTools } from './tools/sandbox'
 import { registerSkillsTools } from './tools/skills'
 
@@ -23,9 +25,22 @@ interface McpRequestContext {
 /**
  * Pure dispatcher. Each tool registrar reads what it needs off the context
  * — keep this function unaware of specific tool options.
+ *
+ * A session reflecting on a store (see reconcileReflectSchedule /
+ * scheduler/src/handler.ts) gets ONLY the Reflect toolset — no bash,
+ * browser, sandbox, other MCP servers, or Builder Mode — to keep a
+ * consolidation turn's blast radius small. See memory-store-plan.md 3.3 for
+ * why this isn't done via Builder Mode's cap model instead.
  */
-export function registerTools(server: McpServer, ctx: McpRequestContext) {
-  const { workspaceId, taskId, headers } = ctx
+export async function registerTools(server: McpServer, ctx: McpRequestContext) {
+  const { workspaceId, sessionId, taskId, headers } = ctx
+
+  const reflectStoreId = sessionId ? await getSessionReflectStoreId(sessionId) : null
+  if (reflectStoreId) {
+    registerReflectTools(server, workspaceId, reflectStoreId)
+    return
+  }
+
   registerMemoryTools(server, workspaceId)
   registerAgentTools(server, workspaceId, taskId)
   registerBrowserTools(server, workspaceId)
