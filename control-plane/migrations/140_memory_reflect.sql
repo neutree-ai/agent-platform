@@ -1,16 +1,19 @@
 -- Memory Reflect: periodic memory consolidation, triggered as a builtin
 -- workspace schedule and executed by the workspace's own agent.
 --
--- `schedules.reflect_store_id` marks a schedule as a builtin Reflect
--- schedule and names its target store; ON DELETE CASCADE removes the
--- schedule if its store is ever deleted.
-ALTER TABLE public.schedules
-    ADD COLUMN IF NOT EXISTS reflect_store_id text REFERENCES public.memory_stores(id) ON DELETE CASCADE;
-
--- Checkpoint + opt-in review gate live on the store, not the schedule --
+-- `memory_stores.reflect_schedule_id` marks a store as having a builtin
+-- Reflect schedule and names it. The link lives on the store, not on
+-- `schedules` -- `schedules` stays a generic "cron/one-shot -> workspace
+-- chat" primitive shared with template and user-created schedules, with no
+-- awareness of Reflect. UNIQUE because the relationship is 1:1; ON DELETE
+-- SET NULL because deleting the schedule (e.g. the user detaches it some
+-- other way) shouldn't delete the store it describes.
+--
+-- Checkpoint + opt-in review gate live on the store for the same reason --
 -- they describe properties of the memory itself, independent of how a
 -- Reflect run gets triggered.
 ALTER TABLE public.memory_stores
+    ADD COLUMN IF NOT EXISTS reflect_schedule_id uuid UNIQUE REFERENCES public.schedules(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS last_reflected_at timestamptz,
     ADD COLUMN IF NOT EXISTS reflect_review_mode boolean NOT NULL DEFAULT false;
 

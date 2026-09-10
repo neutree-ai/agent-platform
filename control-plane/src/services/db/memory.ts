@@ -11,6 +11,8 @@ interface MemoryStoreRow {
   name: string
   description: string
   archived_at: string | null
+  /** Non-null when a builtin Reflect schedule targets this store. */
+  reflect_schedule_id: string | null
   created_at: string
   updated_at: string
 }
@@ -62,7 +64,7 @@ function sha256(text: string): string {
 }
 
 const STORE_COLS_WITH_COUNTS = `s.id, s.owner_user_id, s.name, s.description,
-  s.archived_at, s.created_at, s.updated_at,
+  s.archived_at, s.reflect_schedule_id, s.created_at, s.updated_at,
   COALESCE(c.memory_count, 0)::int AS memory_count`
 
 const STORE_COUNT_JOIN = `LEFT JOIN (
@@ -144,6 +146,17 @@ export async function patchStore(
 export async function deleteStore(id: string): Promise<boolean> {
   const r = await pool.query('DELETE FROM memory_stores WHERE id = $1', [id])
   return (r.rowCount ?? 0) > 0
+}
+
+/** Link (or unlink, with `null`) the builtin Reflect schedule that targets this store. */
+export async function setStoreReflectSchedule(
+  storeId: string,
+  scheduleId: string | null,
+): Promise<void> {
+  await pool.query('UPDATE memory_stores SET reflect_schedule_id = $1 WHERE id = $2', [
+    scheduleId,
+    storeId,
+  ])
 }
 
 // ── Memories ────────────────────────────────────────────────────────────────

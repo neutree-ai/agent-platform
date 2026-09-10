@@ -18,12 +18,10 @@ export async function createSchedule(data: {
   prompt_id?: string | null
   origin?: 'local' | 'template'
   enabled?: boolean
-  /** Non-null marks this as a builtin Reflect schedule targeting this memory store. */
-  reflect_store_id?: string | null
 }): Promise<Schedule> {
   const { rows } = await pool.query(
-    `INSERT INTO schedules (workspace_id, user_id, name, cron, run_at, timezone, prompt, prompt_id, origin, enabled, reflect_store_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+    `INSERT INTO schedules (workspace_id, user_id, name, cron, run_at, timezone, prompt, prompt_id, origin, enabled)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
     [
       data.workspace_id,
       data.user_id,
@@ -35,7 +33,6 @@ export async function createSchedule(data: {
       data.prompt_id ?? null,
       data.origin ?? 'local',
       data.enabled ?? true,
-      data.reflect_store_id ?? null,
     ],
   )
   return (await getSchedule(rows[0].id))!

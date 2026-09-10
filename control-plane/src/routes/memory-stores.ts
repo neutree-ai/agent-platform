@@ -15,6 +15,7 @@ import {
   WorkspaceMemoryAttachBodySchema,
   WorkspaceMemoryAttachmentPatchBodySchema,
 } from '../../../internal/types/api'
+import * as jobs from '../lib/jobs'
 import type { AppEnv } from '../lib/types'
 import { notifyAgentReload } from '../lib/workspace-address'
 import {
@@ -40,6 +41,7 @@ import {
   putMemory,
   rollbackToVersion,
 } from '../services/db/memory'
+import { deleteSchedule, getSchedule } from '../services/db/schedules'
 import { getWorkspace } from '../services/db/workspaces'
 import { isMemoryFuseAvailable } from '../services/k8s'
 import * as memoryFuse from '../services/memory-fuse'
@@ -230,6 +232,15 @@ stores.openapi(
         },
         409,
       )
+    }
+    // Deleting a store doesn't cascade to its Reflect schedule (the FK points
+    // store -> schedule, so an orphaned schedule would otherwise keep firing
+    // cron jobs against a store that no longer exists). Clean it up first.
+    const store = await getStoreById(storeId)
+    if (store?.reflect_schedule_id) {
+      const schedule = await getSchedule(store.reflect_schedule_id)
+      if (schedule) await jobs.cancelScheduleTimer(schedule)
+      await deleteSchedule(store.reflect_schedule_id)
     }
     await deleteStore(storeId)
     return c.json({ success: true }, 200)
