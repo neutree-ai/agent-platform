@@ -15,7 +15,6 @@ import {
   WorkspaceMemoryAttachBodySchema,
   WorkspaceMemoryAttachmentPatchBodySchema,
 } from '../../../internal/types/api'
-import * as jobs from '../lib/jobs'
 import type { AppEnv } from '../lib/types'
 import { notifyAgentReload } from '../lib/workspace-address'
 import {
@@ -41,7 +40,6 @@ import {
   putMemory,
   rollbackToVersion,
 } from '../services/db/memory'
-import { deleteSchedule, getSchedule } from '../services/db/schedules'
 import { getWorkspace } from '../services/db/workspaces'
 import { isMemoryFuseAvailable } from '../services/k8s'
 import * as memoryFuse from '../services/memory-fuse'
@@ -234,14 +232,11 @@ stores.openapi(
       )
     }
     // Deleting a store doesn't cascade to its Reflect schedule (the FK points
-    // store -> schedule, so an orphaned schedule would otherwise keep firing
-    // cron jobs against a store that no longer exists). Clean it up first.
-    const store = await getStoreById(storeId)
-    if (store?.reflect_schedule_id) {
-      const schedule = await getSchedule(store.reflect_schedule_id)
-      if (schedule) await jobs.cancelScheduleTimer(schedule)
-      await deleteSchedule(store.reflect_schedule_id)
-    }
+    // store -> schedule) — it's left to self-heal the next time it fires:
+    // the scheduler's reverse lookup finds no store, cancels its own timer,
+    // and deletes itself (see scheduler/src/handler.ts). This route stays
+    // unaware of schedules; "run now" gives the owner an immediate trigger
+    // if they don't want to wait for the next cron tick.
     await deleteStore(storeId)
     return c.json({ success: true }, 200)
   },

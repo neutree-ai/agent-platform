@@ -97,7 +97,7 @@ await boss.work<JobData>(
   { localConcurrency: 30, includeMetadata: true },
   async (jobs: JobWithMetadata<JobData>[]) => {
     for (const job of jobs) {
-      await handleJob(job)
+      await handleJob(job, boss)
     }
   },
 )
