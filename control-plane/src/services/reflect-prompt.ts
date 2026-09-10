@@ -14,7 +14,7 @@
 export function buildReflectPrompt(storeId: string): string {
   return `This is a memory consolidation ("Reflect") pass. The target store is mounted at /mnt/memory/${storeId}/.
 
-1. Call \`list_recent_activity\` to see what happened since the last consolidation pass. Pick out sessions that look relevant to this memory.
+1. Call \`list_recent_activity\` to see what happened in this pass's window. Pick out sessions that look relevant to this memory. The window is bounded — on a store with a lot of backlog, it may not reach all the way to now, and that's fine; the next scheduled run picks up exactly where this one stops.
 2. Call \`get_activity_digest\` to read the sessions you picked in full.
 3. Compare against the current memory files. Only make a change when one of these applies:
    - Merge: a new fact fully subsumes an existing memory — combine them.

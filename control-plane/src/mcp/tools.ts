@@ -36,8 +36,8 @@ export async function registerTools(server: McpServer, ctx: McpRequestContext) {
   const { workspaceId, sessionId, taskId, headers } = ctx
 
   const reflectStoreId = sessionId ? await getSessionReflectStoreId(sessionId) : null
-  if (reflectStoreId) {
-    registerReflectTools(server, workspaceId, reflectStoreId)
+  if (reflectStoreId && sessionId) {
+    registerReflectTools(server, workspaceId, reflectStoreId, sessionId)
     return
   }
 

@@ -62,6 +62,10 @@ interface SessionListFilter {
   statuses?: string[]
   /** Only sessions active at or after this instant. */
   activeAfter?: string
+  /** Only sessions active strictly before this instant — paired with
+   *  `activeAfter` to bound a window (e.g. Reflect's per-turn catch-up
+   *  chunk) rather than an open-ended "since". */
+  activeBefore?: string
 }
 
 /** SQL expression collapsing chat_status into the three coarse buckets. */
@@ -102,15 +106,21 @@ export function buildSessionListWhere(
     where += ` AND s.last_active_at >= $${params.length}`
   }
 
+  if (filter?.activeBefore) {
+    params.push(filter.activeBefore)
+    where += ` AND s.last_active_at < $${params.length}`
+  }
+
   return { where, params }
 }
 
 export async function listSessions(
   workspaceId: string,
-  opts?: { limit?: number; offset?: number } & SessionListFilter,
+  opts?: { limit?: number; offset?: number; order?: 'asc' | 'desc' } & SessionListFilter,
 ): Promise<PaginatedSessions> {
   const limit = opts?.limit ?? 20
   const offset = opts?.offset ?? 0
+  const order = opts?.order === 'asc' ? 'ASC' : 'DESC'
   const { where, params } = buildSessionListWhere(workspaceId, opts)
 
   const [{ rows }, countResult] = await Promise.all([
@@ -131,7 +141,7 @@ export async function listSessions(
        ) fm ON true
        LEFT JOIN workspaces cw ON cw.id = s.caller_workspace_id
        WHERE ${where}
-       ORDER BY s.last_active_at DESC
+       ORDER BY s.last_active_at ${order}
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset],
     ),
