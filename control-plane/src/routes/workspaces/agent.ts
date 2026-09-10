@@ -14,6 +14,7 @@ import {
 } from '../../services/db/export-tokens'
 import type { Workspace } from '../../services/db/types'
 import { getWorkspace } from '../../services/db/workspaces'
+import { WorkspaceStartError, ensureWorkspaceRunning } from '../../services/workspace-autostart'
 import { canManage } from './_shared'
 
 type UpgradeWebSocket = ReturnType<typeof createNodeWebSocket>['upgradeWebSocket']
@@ -332,7 +333,20 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
     })
     agent.openapi(writeFileRoute, async (c) => {
       const { id } = c.req.valid('param')
-      const resolved = await resolveWorkspace(id, c.get('user'))
+      let resolved = await resolveWorkspace(id, c.get('user'))
+      if ('error' in resolved && resolved.error === 'not-running' && routeNoun === 'files') {
+        const workspace = await getWorkspace(id)
+        if (!workspace || !canManage(workspace, c.get('user'))) {
+          return c.json({ error: 'Workspace not found' }, 404)
+        }
+        try {
+          await ensureWorkspaceRunning(workspace)
+        } catch (e) {
+          if (e instanceof WorkspaceStartError) return c.json({ error: e.message }, 503)
+          throw e
+        }
+        resolved = { workspace, address: getWorkspaceAddress(workspace.id) }
+      }
       if ('error' in resolved) {
         if (resolved.error === 'not-found') return c.json({ error: 'Workspace not found' }, 404)
         return c.json({ error: 'Workspace not running' }, 503)

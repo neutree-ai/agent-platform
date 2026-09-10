@@ -89,4 +89,17 @@ export class WorkspacesApi {
       body: JSON.stringify(sessionId ? { sessionId } : {}),
     })
   }
+
+  async writeFile(
+    id: string,
+    path: string,
+    data: BodyInit,
+    contentType = 'application/octet-stream',
+  ): Promise<void> {
+    await this.http.fetch(`/api/workspaces/${id}/agent/files?path=${encodeURIComponent(path)}`, {
+      method: 'PUT',
+      body: data,
+      headers: { 'Content-Type': contentType },
+    })
+  }
 }
