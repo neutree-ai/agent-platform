@@ -465,8 +465,6 @@ export interface Schedule {
   last_run_at: string | null
   completed_at: string | null
   pgboss_job_id: string | null
-  /** Non-null marks this as a builtin Reflect schedule targeting this memory store. */
-  reflect_store_id: string | null
   created_at: string
   updated_at: string
 }
