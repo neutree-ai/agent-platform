@@ -5,8 +5,8 @@ import { getWorkspace } from './db/workspaces'
 import { isMemoryFuseAvailable } from './k8s'
 import { REFLECT_PROMPT } from './reflect-prompt'
 
-/** Default cadence for an auto-created Reflect schedule: weekly. */
-const DEFAULT_REFLECT_CRON = '0 3 * * 0'
+/** Default cadence for an auto-created Reflect schedule: daily at 03:00 UTC. */
+const DEFAULT_REFLECT_CRON = '0 3 * * *'
 
 /**
  * Create the builtin Reflect schedule for a workspace's own memory store and
@@ -25,11 +25,14 @@ const DEFAULT_REFLECT_CRON = '0 3 * * 0'
  *
  * Mirrors `materializeOne` in template-schedules.ts: on pg-boss registration
  * failure, leave the row but flip it disabled rather than claim it's active.
- * Never throws — a Reflect bootstrap failure should not fail workspace
- * creation, matching the caller's existing try/catch around the store
- * auto-provision this sits next to.
+ * Never throws — a Reflect bootstrap failure should not block whatever
+ * reconcile pass is calling it.
+ *
+ * Only called from reconcileReflectSchedule below — not exported. There is
+ * deliberately no eager call at workspace-creation time; the first
+ * reconcile (on the workspace's first start) creates it.
  */
-export async function createReflectSchedule(args: {
+async function createReflectSchedule(args: {
   workspaceId: string
   userId: string
   storeId: string

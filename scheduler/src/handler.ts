@@ -1,9 +1,16 @@
-import type { Job, JobWithMetadata } from 'pg-boss'
+import type { Job, JobWithMetadata, PgBoss } from 'pg-boss'
 import { type TurnPlugin, runTurn } from '../../internal/sse-consumer/src'
 import * as db from './db'
 
 const NAP_API_URL = process.env.NAP_API_URL || 'http://nap-cp:3000'
 const CG_API_URL = process.env.CG_API_URL || 'http://nap-cg:3002'
+
+// Mirrors control-plane's lib/jobs.ts — the two processes coordinate purely
+// through pg-boss's shared Postgres tables, not an in-memory object, so
+// there's no import to share; the queue name and key format must just stay
+// byte-identical on both sides.
+const AGENT_SESSION_QUEUE = 'agent-session'
+const SCHEDULE_KEY = (id: string) => `schedule-${id}`
 
 function getChatEndpoint(workspaceId: string): string {
   return `${NAP_API_URL}/api/workspaces/${workspaceId}/chat`
@@ -63,7 +70,7 @@ function buildPrompt(opts: {
 
 // --- Main Handler ---
 
-export async function handleJob(job: JobWithMetadata<JobData>): Promise<JobResult> {
+export async function handleJob(job: JobWithMetadata<JobData>, boss: PgBoss): Promise<JobResult> {
   // Handle batch trigger: wrap execution with task status tracking
   if (job.data.trigger?.type === 'batch') {
     return handleBatchJob(job)
@@ -88,7 +95,7 @@ export async function handleJob(job: JobWithMetadata<JobData>): Promise<JobResul
 
   const execStart = Date.now()
   try {
-    const result = await executeJob(job)
+    const result = await executeJob(job, boss)
     const execSec = ((Date.now() - execStart) / 1000).toFixed(1)
     console.log(`[Scheduler] Job=${job.id} finished in ${execSec}s session=${result.session_id}`)
 
@@ -98,7 +105,7 @@ export async function handleJob(job: JobWithMetadata<JobData>): Promise<JobResul
   }
 }
 
-async function executeJob(job: Job<JobData>): Promise<JobResult> {
+async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
   // Resolve cron schedule: read latest config from DB
   if (job.data.trigger?.type === 'cron') {
     const scheduleId = (job.data.trigger.payload as Record<string, unknown>)?.schedule_id as string
@@ -107,6 +114,25 @@ async function executeJob(job: Job<JobData>): Promise<JobResult> {
       if (!schedule || !schedule.enabled) {
         console.log(`[Scheduler] Skipping disabled/missing schedule=${scheduleId} job=${job.id}`)
         return { session_id: '', error: 'Schedule disabled or not found' }
+      }
+      // Reflect schedules are deleted lazily, not eagerly when their store is
+      // deleted (memory-stores.ts's DELETE route stays unaware of schedules
+      // entirely — see memory-store-plan.md 3.1). This is where that delete
+      // actually catches up: if no store points back at this schedule
+      // anymore, it's an orphan — clean it up here instead of dispatching a
+      // turn against a store that no longer exists. "Run now" hits this same
+      // path, so a user who doesn't want to wait for the next cron tick has
+      // an immediate way to trigger the cleanup.
+      if (schedule.origin === 'reflect') {
+        const storeId = await db.getReflectTargetStoreId(scheduleId)
+        if (!storeId) {
+          console.log(
+            `[Scheduler] Reflect schedule=${scheduleId} orphaned (store deleted); cleaning up job=${job.id}`,
+          )
+          if (schedule.cron) await boss.unschedule(AGENT_SESSION_QUEUE, SCHEDULE_KEY(scheduleId))
+          await db.deleteSchedule(scheduleId)
+          return { session_id: '', error: 'Reflect schedule orphaned (store deleted); cleaned up' }
+        }
       }
       const platformToken = await db.getPlatformToken(schedule.user_id)
       if (!platformToken) {

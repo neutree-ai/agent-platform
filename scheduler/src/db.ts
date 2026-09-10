@@ -20,12 +20,13 @@ interface Schedule {
   prompt: string
   prompt_id: string | null
   enabled: boolean
+  origin: 'local' | 'template' | 'reflect'
 }
 
 export async function getSchedule(id: string): Promise<Schedule | null> {
   const { rows } = await pool.query(
     `SELECT s.id, s.workspace_id, s.user_id, s.name, s.cron, s.run_at,
-            s.prompt, s.prompt_id, s.enabled,
+            s.prompt, s.prompt_id, s.enabled, s.origin,
             p.content AS prompt_content
      FROM schedules s
      LEFT JOIN prompts p ON s.prompt_id = p.id
@@ -40,6 +41,25 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
   }
   row.prompt_content = undefined
   return row
+}
+
+/**
+ * Reverse lookup for an `origin: 'reflect'` schedule: which store (if any)
+ * still points at it via memory_stores.reflect_schedule_id. Null means the
+ * store was deleted out from under this schedule — see the orphan cleanup
+ * in handler.ts's cron branch.
+ */
+export async function getReflectTargetStoreId(scheduleId: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT id FROM memory_stores WHERE reflect_schedule_id = $1', [
+    scheduleId,
+  ])
+  return rows[0]?.id ?? null
+}
+
+/** Delete a schedule row. Used to self-clean an orphaned `origin: 'reflect'`
+ *  schedule whose store was deleted — see handler.ts. */
+export async function deleteSchedule(id: string): Promise<void> {
+  await pool.query('DELETE FROM schedules WHERE id = $1', [id])
 }
 
 export async function updateScheduleLastRun(id: string): Promise<void> {
