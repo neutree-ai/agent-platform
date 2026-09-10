@@ -18,6 +18,7 @@ import {
 import { isMemoryFuseAvailable } from '../../services/k8s'
 import { bumpWorkspaceSpec, placeWorkspace } from '../../services/placement'
 import { chooseEnvironment } from '../../services/placement-decision'
+import { createReflectSchedule } from '../../services/reflect'
 import { skillRepo } from '../../services/skills-composition'
 import { materializeTemplateLayout } from '../../services/template-layout'
 import { materializeTemplateSchedules } from '../../services/template-schedules'
@@ -194,10 +195,11 @@ write.openapi(createRouteDef, async (c) => {
       }
     }
 
-    // Auto-provision the workspace's default memory store + attach it. Skipped
-    // for system workspaces (shared, no human owner to file the store under)
-    // and when the cluster doesn't ship the memory-fuse image (sidecar
-    // wouldn't be present — store would just be dead weight in the prompt).
+    // Auto-provision the workspace's default memory store, attach it, and
+    // give it a builtin weekly Reflect schedule. Skipped for system
+    // workspaces (shared, no human owner to file the store under) and when
+    // the cluster doesn't ship the memory-fuse image (sidecar wouldn't be
+    // present — store would just be dead weight in the prompt).
     if (!isSystem && isMemoryFuseAvailable() && placement.supports.persistentMemory) {
       try {
         // Reuse the workspace name verbatim so the store is identifiable from
@@ -211,6 +213,11 @@ write.openapi(createRouteDef, async (c) => {
           workspaceId: workspace.id,
           storeId: store.id,
           access: 'read_write',
+        })
+        await createReflectSchedule({
+          workspaceId: workspace.id,
+          userId: currentUser.sub,
+          storeId: store.id,
         })
       } catch (e: any) {
         // Don't fail ws creation if the memory bootstrap trips — user can
