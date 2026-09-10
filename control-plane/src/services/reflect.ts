@@ -3,7 +3,7 @@ import { getStoreById, listAttachmentsForWorkspace, setStoreReflectSchedule } fr
 import { createSchedule, getSchedule, updateSchedule } from './db/schedules'
 import { getWorkspace } from './db/workspaces'
 import { isMemoryFuseAvailable } from './k8s'
-import { REFLECT_PROMPT } from './reflect-prompt'
+import { buildReflectPrompt } from './reflect-prompt'
 
 /** Default cadence for an auto-created Reflect schedule: daily at 03:00 UTC. */
 const DEFAULT_REFLECT_CRON = '0 3 * * *'
@@ -18,7 +18,7 @@ const DEFAULT_REFLECT_CRON = '0 3 * * *'
  * `origin: 'reflect'` makes the prompt platform-managed (routes/workspaces/
  * schedules.ts rejects edits to `prompt`/`prompt_id` and blocks deletion for
  * this origin) — see reconcileReflectSchedule for how it stays in sync with
- * the current REFLECT_PROMPT. Deliberately NOT `origin: 'template'`:
+ * buildReflectPrompt. Deliberately NOT `origin: 'template'`:
  * reconcileTemplateSchedules matches schedules by name against a template
  * version's defs and deletes ones it can't find, which would delete this
  * schedule the moment the workspace's template version bumped.
@@ -44,7 +44,7 @@ async function createReflectSchedule(args: {
     cron: DEFAULT_REFLECT_CRON,
     run_at: null,
     timezone: 'UTC',
-    prompt: REFLECT_PROMPT,
+    prompt: buildReflectPrompt(args.storeId),
     prompt_id: null,
     origin: 'reflect',
     enabled: true,
@@ -65,8 +65,8 @@ async function createReflectSchedule(args: {
  * the workspace starts), and refresh a stale prompt in place (safe to
  * overwrite unconditionally — `origin: 'reflect'` schedules reject prompt
  * edits at the API layer, so a mismatch only ever means "we shipped a new
- * REFLECT_PROMPT since this schedule was created/last reconciled", never a
- * user customization).
+ * buildReflectPrompt since this schedule was created/last reconciled", never
+ * a user customization).
  *
  * Only acts when the workspace has exactly one attached store — zero means
  * memory wasn't provisioned for it (predates the feature, or the cluster
@@ -92,7 +92,8 @@ export async function reconcileReflectSchedule(workspaceId: string): Promise<voi
     await createReflectSchedule({ workspaceId, userId: workspace.user_id, storeId })
     return
   }
-  if (schedule.origin === 'reflect' && schedule.prompt !== REFLECT_PROMPT) {
-    await updateSchedule(schedule.id, { prompt: REFLECT_PROMPT })
+  const expectedPrompt = buildReflectPrompt(storeId)
+  if (schedule.origin === 'reflect' && schedule.prompt !== expectedPrompt) {
+    await updateSchedule(schedule.id, { prompt: expectedPrompt })
   }
 }

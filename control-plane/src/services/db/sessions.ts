@@ -29,6 +29,17 @@ export async function getSession(id: string): Promise<Session | null> {
   return (rows[0] as Session) ?? null
 }
 
+/** Which memory store (if any) this session's turn is reflecting on — set at
+ *  chat-request time when the turn was triggered by a Reflect schedule. Read
+ *  by MCP tool registration to decide whether to swap in the Reflect-only
+ *  toolset (see mcp/tools.ts). */
+export async function getSessionReflectStoreId(sessionId: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT reflect_store_id FROM sessions WHERE id = $1', [
+    sessionId,
+  ])
+  return rows[0]?.reflect_store_id ?? null
+}
+
 /**
  * View filter for the session list. Every facet is applied server-side: the
  * list is paginated, so filtering client-side would only ever narrow the pages

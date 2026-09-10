@@ -13,6 +13,10 @@ interface MemoryStoreRow {
   archived_at: string | null
   /** Non-null when a builtin Reflect schedule targets this store. */
   reflect_schedule_id: string | null
+  /** Advanced past a Reflect turn only once it completes successfully. */
+  last_reflected_at: string | null
+  /** true = Reflect proposes changes via agent_requests instead of writing directly. */
+  reflect_review_mode: boolean
   created_at: string
   updated_at: string
 }
@@ -64,7 +68,8 @@ function sha256(text: string): string {
 }
 
 const STORE_COLS_WITH_COUNTS = `s.id, s.owner_user_id, s.name, s.description,
-  s.archived_at, s.reflect_schedule_id, s.created_at, s.updated_at,
+  s.archived_at, s.reflect_schedule_id, s.last_reflected_at, s.reflect_review_mode,
+  s.created_at, s.updated_at,
   COALESCE(c.memory_count, 0)::int AS memory_count`
 
 const STORE_COUNT_JOIN = `LEFT JOIN (

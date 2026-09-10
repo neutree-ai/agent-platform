@@ -65,7 +65,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     name: 'tos-platform',
     version: '0.1.0',
   })
-  registerTools(server, {
+  await registerTools(server, {
     workspaceId,
     sessionId,
     taskId,
