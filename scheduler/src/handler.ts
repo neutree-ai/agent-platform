@@ -22,6 +22,38 @@ function getCpReconnectEndpoint(workspaceId: string, sessionId: string): string 
   return `${NAP_API_URL}/_proxy/agent/${workspaceId}/cp-reconnect?session_id=${encodeURIComponent(sessionId)}`
 }
 
+function getReflectEndEndpoint(workspaceId: string): string {
+  return `${NAP_API_URL}/api/workspaces/${workspaceId}/reflect/end`
+}
+
+/** Tell cp a Reflect turn is over: clears workspaces.active_reflect_store_id
+ *  and, on success, advances memory_stores.last_reflected_at (see
+ *  routes/workspaces/reflect.ts). Best-effort — a failure here just leaves
+ *  the checkpoint where it was, which the next scheduled run recovers from
+ *  by re-covering the same window; it never leaves the store worse off. */
+async function notifyReflectEnd(
+  workspaceId: string,
+  storeId: string,
+  sessionId: string,
+  success: boolean,
+  authHeaders: Record<string, string>,
+): Promise<void> {
+  try {
+    const resp = await fetch(getReflectEndEndpoint(workspaceId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ store_id: storeId, session_id: sessionId, success }),
+    })
+    if (!resp.ok) {
+      console.warn(
+        `[Scheduler] reflect/end returned ${resp.status} workspace=${workspaceId} store=${storeId}`,
+      )
+    }
+  } catch (e) {
+    console.warn(`[Scheduler] reflect/end failed workspace=${workspaceId} store=${storeId}:`, e)
+  }
+}
+
 // --- Types ---
 
 export interface JobData {
@@ -106,6 +138,10 @@ export async function handleJob(job: JobWithMetadata<JobData>, boss: PgBoss): Pr
 }
 
 async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
+  // Set below when this job is a Reflect schedule with a live target store.
+  // Forwarded into the /chat body so cp marks the new session/workspace, and
+  // used after the turn ends to call reflect/end (see the outer finally).
+  let reflectStoreId: string | undefined
   // Resolve cron schedule: read latest config from DB
   if (job.data.trigger?.type === 'cron') {
     const scheduleId = (job.data.trigger.payload as Record<string, unknown>)?.schedule_id as string
@@ -133,6 +169,7 @@ async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
           await db.deleteSchedule(scheduleId)
           return { session_id: '', error: 'Reflect schedule orphaned (store deleted); cleaned up' }
         }
+        reflectStoreId = storeId
       }
       const platformToken = await db.getPlatformToken(schedule.user_id)
       if (!platformToken) {
@@ -181,6 +218,13 @@ async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
       `[Scheduler] Acquired thread lock for route=${routeId} thread=${threadId} job=${job.id}`,
     )
   }
+
+  // Captured as soon as session.started fires, independent of whether the
+  // turn ultimately succeeds — reflect/end (in the outer finally) needs the
+  // session id to compute the checkpoint window and clear the workspace's
+  // active-Reflect marker even on failure.
+  let reflectSessionId: string | undefined
+  let reflectSucceeded = false
 
   try {
     let existingSessionId: string | null = null
@@ -236,6 +280,12 @@ async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
               )
           }
         : undefined
+    // Capture the session id the instant it's known, regardless of thread
+    // binding — reflect/end (outer finally) needs it even on failure.
+    const onSessionStarted = (sessionId: string) => {
+      reflectSessionId = sessionId
+      bindThreadSession?.(sessionId)
+    }
 
     const failure: { message?: string } = {}
     let sseResult = await startAndConsumeSession(
@@ -248,8 +298,9 @@ async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
       source,
       images,
       streamSink,
-      bindThreadSession,
+      onSessionStarted,
       failure,
+      reflectStoreId,
     )
 
     // If resuming failed, fallback to a fresh session
@@ -300,6 +351,7 @@ async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
       await db.upsertThreadSession(routeId, threadId, sseResult.session_id, workspace_id, channelId)
     }
 
+    reflectSucceeded = true
     return sseResult
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : String(e)
@@ -315,6 +367,15 @@ async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
     if (threadLockClient) {
       db.releaseThreadLock(threadLockClient)
       console.log(`[Scheduler] Released thread lock for job=${job.id}`)
+    }
+    if (reflectStoreId && reflectSessionId) {
+      await notifyReflectEnd(
+        workspace_id,
+        reflectStoreId,
+        reflectSessionId,
+        reflectSucceeded,
+        authHeaders,
+      )
     }
   }
 }
@@ -536,12 +597,14 @@ async function startAndConsumeSession(
   streamSink?: StreamSink | null,
   onSessionStarted?: (sessionId: string) => void,
   failure?: { message?: string },
+  reflectStoreId?: string,
 ): Promise<JobResult | null> {
   const body = JSON.stringify({
     message: prompt,
     ...(sessionId ? { session_id: sessionId } : {}),
     ...(source ? { source } : {}),
     ...(images?.length ? { images } : {}),
+    ...(reflectStoreId ? { reflect_store_id: reflectStoreId } : {}),
   })
   console.log(
     `[Scheduler] POST /chat workspace=${workspaceId} session=${sessionId ?? '(new)'} source=${source ?? '-'} images=${images?.length ?? 0} body_bytes=${body.length}`,

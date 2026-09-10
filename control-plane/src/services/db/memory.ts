@@ -164,6 +164,17 @@ export async function setStoreReflectSchedule(
   ])
 }
 
+/** Advance a store's Reflect checkpoint. Only called after a Reflect turn
+ *  succeeds, to exactly the `until` bound of the window that turn actually
+ *  covered (see services/reflect.ts::reflectWindow) — never unconditionally
+ *  to "now". */
+export async function setStoreLastReflectedAt(storeId: string, until: string): Promise<void> {
+  await pool.query('UPDATE memory_stores SET last_reflected_at = $1 WHERE id = $2', [
+    until,
+    storeId,
+  ])
+}
+
 // ── Memories ────────────────────────────────────────────────────────────────
 
 export async function listMemories(storeId: string): Promise<Omit<MemoryRow, 'content'>[]> {

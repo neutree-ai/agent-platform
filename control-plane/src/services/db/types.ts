@@ -26,6 +26,10 @@ export interface Workspace {
   // workspace-version annotation). null = unknown/legacy. Compared against
   // CURRENT_TEMPLATE_VERSION to decide whether a rebuild/update is available.
   runtime_version: number | null
+  /** Set for the duration of a Reflect turn (see sse.ts's session.started
+   *  handler), cleared on turn end. Read by the FUSE write path to tag
+   *  actor_kind='reflect' on memory writes for this store. */
+  active_reflect_store_id: string | null
 }
 
 /**
@@ -74,6 +78,8 @@ export interface Session {
   pending_message: SessionPendingMessage | null
   /** When the session was starred, or null when it is not starred. */
   starred_at: string | null
+  /** Non-null when this session's turn is a Reflect run for this store. */
+  reflect_store_id: string | null
 }
 
 export interface Message {

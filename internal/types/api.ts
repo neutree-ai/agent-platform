@@ -1755,6 +1755,13 @@ export const ChatBodySchema = z.object({
    * header, defaulting to SSE.
    */
   stream: z.boolean().optional(),
+  /**
+   * Set by the scheduler when this turn is a Reflect run for the named
+   * memory store — persisted onto the new session (`sessions.reflect_store_id`)
+   * and the workspace (`workspaces.active_reflect_store_id`) for the
+   * duration of the turn. Not for direct API callers to set themselves.
+   */
+  reflect_store_id: z.string().optional(),
 })
 export type ChatBody = z.infer<typeof ChatBodySchema>
 
