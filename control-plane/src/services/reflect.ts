@@ -9,6 +9,38 @@ import { buildReflectPrompt } from './reflect-prompt'
 const DEFAULT_REFLECT_CRON = '0 3 * * *'
 
 /**
+ * Per-turn catch-up chunk: how far past its checkpoint a single Reflect turn
+ * is allowed to advance. Bounds one turn's workload regardless of how far
+ * behind the schedule has fallen (disabled for months, repeatedly failing,
+ * or simply never run before on a store that predates this feature) —
+ * without ever permanently skipping the gap the way a hard lookback cap
+ * would. A store further behind than this just takes multiple scheduled
+ * runs to catch up; each one picks up exactly where the last left off.
+ */
+const REFLECT_CATCHUP_CHUNK_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * The [since, until) window a Reflect turn is allowed to look at and is
+ * responsible for once it succeeds. `turnCreatedAt` anchors "now" to the
+ * triggering session's own created_at (rather than each caller taking its
+ * own wall-clock reading) so `list_recent_activity` (mcp/tools/reflect.ts)
+ * and the eventual checkpoint-advance step (reflect/end) compute byte-
+ * identical bounds from the same two persisted facts — no state needs to be
+ * threaded between them.
+ */
+export function reflectWindow(
+  store: { last_reflected_at: string | null; created_at: string },
+  turnCreatedAt: string,
+): { since: string; until: string } {
+  const since = store.last_reflected_at ?? store.created_at
+  const untilMs = Math.min(
+    new Date(turnCreatedAt).getTime(),
+    new Date(since).getTime() + REFLECT_CATCHUP_CHUNK_MS,
+  )
+  return { since, until: new Date(untilMs).toISOString() }
+}
+
+/**
  * Create the builtin Reflect schedule for a workspace's own memory store and
  * link the store back to it (memory_stores.reflect_schedule_id). The link
  * lives on the store, not on `schedules` — `schedules` stays a generic
