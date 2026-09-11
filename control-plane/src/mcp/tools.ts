@@ -1,5 +1,4 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { getSessionReflectStoreId } from '../services/db/sessions'
 import { registerAfsTools } from './tools/afs'
 import { registerAgentTools } from './tools/agent'
 import { registerBrowserTools } from './tools/browser'
@@ -11,14 +10,18 @@ import { registerSandboxTools } from './tools/sandbox'
 import { registerSkillsTools } from './tools/skills'
 
 /**
- * Per-request context resolved by `handleMcpRequest`. `sessionId` and
- * `taskId` come from reverse-resolving `X-Session-Token`; tools that need
- * either can read directly off this object instead of re-parsing headers.
+ * Per-request context resolved by `handleMcpRequest`. `sessionId`, `taskId`,
+ * and `reflectStoreId` all come from reverse-resolving `X-Session-Token` via
+ * `session_tokens` (see lib/session-token.ts) — tools that need any of them
+ * can read directly off this object instead of re-parsing headers or
+ * querying again.
  */
 interface McpRequestContext {
   workspaceId: string
   sessionId: string | null
   taskId: string | null
+  /** Set when this turn is a Reflect run for this memory store. */
+  reflectStoreId: string | null
   headers: Headers
 }
 
@@ -32,10 +35,9 @@ interface McpRequestContext {
  * consolidation turn's blast radius small. See memory-store-plan.md 3.3 for
  * why this isn't done via Builder Mode's cap model instead.
  */
-export async function registerTools(server: McpServer, ctx: McpRequestContext) {
-  const { workspaceId, sessionId, taskId, headers } = ctx
+export function registerTools(server: McpServer, ctx: McpRequestContext) {
+  const { workspaceId, sessionId, taskId, reflectStoreId, headers } = ctx
 
-  const reflectStoreId = sessionId ? await getSessionReflectStoreId(sessionId) : null
   if (reflectStoreId && sessionId) {
     registerReflectTools(server, workspaceId, reflectStoreId, sessionId)
     return

@@ -35,11 +35,13 @@ interface ExecuteChatOpts {
    */
   taskId?: string | null
   /**
-   * Set when this turn is a Reflect run for this memory store — persisted
-   * onto the new session and onto the workspace for the duration of the
-   * turn (see createInterceptedSSEResponse). Only meaningful for a
-   * brand-new session; Reflect never resumes an existing one (the scheduler
-   * never passes sessionId for its cron trigger).
+   * Set when this turn is a Reflect run for this memory store — minted onto
+   * the new session_token (read by MCP tool registration on every
+   * subsequent request) and, once session.started fires, onto the
+   * workspace for the turn's duration (see createInterceptedSSEResponse).
+   * Only meaningful for a brand-new session; Reflect never resumes an
+   * existing one (the scheduler never passes sessionId for its cron
+   * trigger).
    */
   reflectStoreId?: string | null
 }
@@ -139,7 +141,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
     // transport as `X-Session-Token`.
     const sessionToken = sessionId
       ? await ensureTokenForSession(workspaceId, sessionId)
-      : await mintToken({ workspaceId })
+      : await mintToken({ workspaceId, reflectStoreId: opts.reflectStoreId })
 
     const agentBody = JSON.stringify(
       buildAgentChatBody({

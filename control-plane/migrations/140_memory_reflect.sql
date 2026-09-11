@@ -29,10 +29,14 @@ ALTER TABLE public.memory_stores
     ADD COLUMN IF NOT EXISTS last_reflected_at timestamptz,
     ADD COLUMN IF NOT EXISTS reflect_review_mode boolean NOT NULL DEFAULT false;
 
--- Session-level marker: which store (if any) this session's turn is
--- reflecting on. Read by MCP tool registration, which only has session
--- context (not workspace-wide state) available per request.
-ALTER TABLE public.sessions
+-- Per-turn marker: which store (if any) this session's turn is reflecting
+-- on. Lives on session_tokens, not sessions -- MCP tool registration already
+-- resolves X-Session-Token via session_tokens on every request (see
+-- lib/session-token.ts::resolveToken) to get session_id, so this rides the
+-- same lookup for free instead of costing a second query against a niche
+-- column on the much wider, much hotter `sessions` table. Set at mint time
+-- (before the session even exists for a new session), not at bind time.
+ALTER TABLE public.session_tokens
     ADD COLUMN IF NOT EXISTS reflect_store_id text REFERENCES public.memory_stores(id) ON DELETE SET NULL;
 
 -- Workspace-level marker: set for the duration of a Reflect turn, cleared

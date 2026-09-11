@@ -26,6 +26,10 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   // workspace-level (same as a non-teamwork, non-session-aware chat).
   let sessionId: string | null = null
   let taskId: string | null = null
+  // Set from the same token record when this turn is a Reflect run — see
+  // mcp/tools.ts's registerTools, which swaps in the Reflect-only toolset
+  // instead of doing a second, session-scoped lookup for this.
+  let reflectStoreId: string | null = null
   const tokenHeader = request.headers.get('x-session-token')
   if (tokenHeader) {
     const record = await resolveToken(tokenHeader).catch((e) => {
@@ -34,6 +38,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     })
     if (record && record.workspaceId === workspaceId) {
       sessionId = record.sessionId
+      reflectStoreId = record.reflectStoreId
     } else if (record) {
       console.warn(
         `[mcp] X-Session-Token workspace mismatch token=${tokenHeader} expected=${workspaceId} actual=${record.workspaceId}`,
@@ -65,10 +70,11 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     name: 'tos-platform',
     version: '0.1.0',
   })
-  await registerTools(server, {
+  registerTools(server, {
     workspaceId,
     sessionId,
     taskId,
+    reflectStoreId,
     headers: request.headers,
   })
 
