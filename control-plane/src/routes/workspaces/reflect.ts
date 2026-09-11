@@ -2,7 +2,7 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
 import { getStoreById, setStoreLastReflectedAt } from '../../services/db/memory'
 import { getSession } from '../../services/db/sessions'
-import { clearActiveReflectStoreIfMatches, getWorkspace } from '../../services/db/workspaces'
+import { getWorkspace } from '../../services/db/workspaces'
 import { reflectWindow } from '../../services/reflect'
 
 const reflect = new OpenAPIHono<AppEnv>()
@@ -27,6 +27,14 @@ const ReflectEndBodySchema = z.object({
  * internal-only lane) because the scheduler already holds the schedule
  * owner's platform bearer token for this workspace, same as the /chat call
  * that started the turn.
+ *
+ * Only advances the checkpoint (on success) — there is no other per-turn
+ * state to clean up. An earlier draft also cleared a workspace-level
+ * "active Reflect store" marker for FUSE actor_kind tagging, but that was
+ * cut: it's pure audit-trail polish (nothing branches on actor_kind), FUSE
+ * writes are already attributed at actor_id=workspace_id regardless of
+ * which turn made them, and maintaining that marker correctly needed
+ * meaningfully complex turn-scoped state. Not worth it for v1.
  */
 const endRouteDef = createRoute({
   method: 'post',
@@ -56,10 +64,6 @@ reflect.openapi(endRouteDef, async (c) => {
   if (!workspace || workspace.user_id !== currentUser.sub) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
-
-  // Clear the turn-scoped marker regardless of outcome. Conditional on still
-  // matching store_id: a defensive no-op if something else already moved it.
-  await clearActiveReflectStoreIfMatches(id, store_id)
 
   if (success) {
     const [session, store] = await Promise.all([getSession(session_id), getStoreById(store_id)])

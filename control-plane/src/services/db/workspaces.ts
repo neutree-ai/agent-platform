@@ -144,34 +144,6 @@ export async function updateWorkspace(
   return (result.rowCount ?? 0) > 0
 }
 
-/** Set (or clear, with `null`) which memory store this workspace is
- *  currently reflecting on. Set at the start of a Reflect turn, cleared at
- *  the end — read by the FUSE write path to tag actor_kind='reflect' on
- *  memory writes for this store. Separate from `updateWorkspace`'s allowlist
- *  since this is turn-scoped state, not a workspace setting. */
-export async function setActiveReflectStore(
-  workspaceId: string,
-  storeId: string | null,
-): Promise<void> {
-  await pool.query('UPDATE workspaces SET active_reflect_store_id = $1 WHERE id = $2', [
-    storeId,
-    workspaceId,
-  ])
-}
-
-/** Clear the active-Reflect marker, but only if it still points at `storeId`
- *  — a defensive no-op if something else already changed it (e.g. a second
- *  turn) rather than clobbering an unrelated turn's marker. */
-export async function clearActiveReflectStoreIfMatches(
-  workspaceId: string,
-  storeId: string,
-): Promise<void> {
-  await pool.query(
-    'UPDATE workspaces SET active_reflect_store_id = NULL WHERE id = $1 AND active_reflect_store_id = $2',
-    [workspaceId, storeId],
-  )
-}
-
 export async function markSessionSeen(workspaceId: string, sessionId: string): Promise<boolean> {
   const result = await pool.query(
     "UPDATE sessions SET chat_status = 'idle' WHERE id = $1 AND workspace_id = $2 AND chat_status = 'human'",
