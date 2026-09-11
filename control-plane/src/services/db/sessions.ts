@@ -14,21 +14,12 @@ export async function createSession(
   callerUserId?: string,
   source = 'web',
   callerWorkspaceId?: string | null,
-  reflectStoreId?: string | null,
 ): Promise<Session> {
   await pool.query(
-    `INSERT INTO sessions (id, workspace_id, name, caller_user_id, source, caller_workspace_id, reflect_store_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO sessions (id, workspace_id, name, caller_user_id, source, caller_workspace_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (id) DO UPDATE SET last_active_at = NOW()`,
-    [
-      sessionId,
-      workspaceId,
-      name,
-      callerUserId ?? null,
-      source,
-      callerWorkspaceId ?? null,
-      reflectStoreId ?? null,
-    ],
+    [sessionId, workspaceId, name, callerUserId ?? null, source, callerWorkspaceId ?? null],
   )
   return (await getSession(sessionId))!
 }
@@ -36,17 +27,6 @@ export async function createSession(
 export async function getSession(id: string): Promise<Session | null> {
   const { rows } = await pool.query('SELECT * FROM sessions WHERE id = $1', [id])
   return (rows[0] as Session) ?? null
-}
-
-/** Which memory store (if any) this session's turn is reflecting on — set at
- *  chat-request time when the turn was triggered by a Reflect schedule. Read
- *  by MCP tool registration to decide whether to swap in the Reflect-only
- *  toolset (see mcp/tools.ts). */
-export async function getSessionReflectStoreId(sessionId: string): Promise<string | null> {
-  const { rows } = await pool.query('SELECT reflect_store_id FROM sessions WHERE id = $1', [
-    sessionId,
-  ])
-  return rows[0]?.reflect_store_id ?? null
 }
 
 /**

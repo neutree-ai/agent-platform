@@ -926,15 +926,7 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
           const reflectStoreId = ctx.reflectStoreId
           queue.run(async () => {
             if (isNew) {
-              await createSession(
-                workspaceId,
-                newSid,
-                '',
-                callerUserId,
-                source,
-                null,
-                reflectStoreId,
-              )
+              await createSession(workspaceId, newSid, '', callerUserId, source)
               if (reflectStoreId) {
                 await setActiveReflectStore(workspaceId, reflectStoreId).catch((e) => {
                   console.warn(`[SSE] setActiveReflectStore failed workspace=${workspaceId}:`, e)

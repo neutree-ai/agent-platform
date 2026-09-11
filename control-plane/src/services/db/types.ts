@@ -78,8 +78,6 @@ export interface Session {
   pending_message: SessionPendingMessage | null
   /** When the session was starred, or null when it is not starred. */
   starred_at: string | null
-  /** Non-null when this session's turn is a Reflect run for this store. */
-  reflect_store_id: string | null
 }
 
 export interface Message {
