@@ -38,10 +38,3 @@ ALTER TABLE public.memory_stores
 -- (before the session even exists for a new session), not at bind time.
 ALTER TABLE public.session_tokens
     ADD COLUMN IF NOT EXISTS reflect_store_id text REFERENCES public.memory_stores(id) ON DELETE SET NULL;
-
--- Workspace-level marker: set for the duration of a Reflect turn, cleared
--- on turn end. The memory-fuse write path authenticates as a workspace
--- (not a session), so actor_kind tagging on memory writes reads this
--- column rather than sessions.reflect_store_id.
-ALTER TABLE public.workspaces
-    ADD COLUMN IF NOT EXISTS active_reflect_store_id text REFERENCES public.memory_stores(id) ON DELETE SET NULL;

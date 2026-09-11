@@ -36,12 +36,11 @@ interface ExecuteChatOpts {
   taskId?: string | null
   /**
    * Set when this turn is a Reflect run for this memory store — minted onto
-   * the new session_token (read by MCP tool registration on every
-   * subsequent request) and, once session.started fires, onto the
-   * workspace for the turn's duration (see createInterceptedSSEResponse).
-   * Only meaningful for a brand-new session; Reflect never resumes an
-   * existing one (the scheduler never passes sessionId for its cron
-   * trigger).
+   * the new session_token so MCP tool registration can swap in the
+   * Reflect-only toolset on every subsequent request for this turn (see
+   * lib/session-token.ts, mcp/tools.ts). Only meaningful for a brand-new
+   * session; Reflect never resumes an existing one (the scheduler never
+   * passes sessionId for its cron trigger).
    */
   reflectStoreId?: string | null
 }
@@ -247,7 +246,6 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
       sessionToken,
       onNewSession,
       replicaId,
-      reflectStoreId: opts.reflectStoreId ?? null,
       // Hand the admission slot to the interceptor: it releases exactly once when
       // the turn terminates (clean end, error, interrupt, or pod death), which is
       // the single point that also frees the accounting for the autoscaler.
