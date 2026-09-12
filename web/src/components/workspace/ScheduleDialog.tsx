@@ -93,14 +93,20 @@ export function ScheduleDialog({
               },
             )
           } else {
-            createMutation.mutate(data, {
-              onSuccess: (created) => {
-                toast.success(t('components.configSchedules.toasts.created'))
-                onOpenChange(false)
-                onSaved?.(created.id)
+            // Creation never targets a Reflect schedule (those are only ever
+            // server-created), so `data.prompt` is always populated here —
+            // the fallback just satisfies the stricter create-payload type.
+            createMutation.mutate(
+              { ...data, prompt: data.prompt ?? '' },
+              {
+                onSuccess: (created) => {
+                  toast.success(t('components.configSchedules.toasts.created'))
+                  onOpenChange(false)
+                  onSaved?.(created.id)
+                },
+                onError: (err) => toast.error(err.message),
               },
-              onError: (err) => toast.error(err.message),
-            })
+            )
           }
         }}
       />

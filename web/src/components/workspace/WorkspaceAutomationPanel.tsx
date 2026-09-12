@@ -85,6 +85,11 @@ function ScheduleCard({
   const runMutation = useRunSchedule(workspaceId)
   const onError = (err: Error) => toast.error(err.message)
   const isTemplate = schedule.origin === 'template'
+  const isReflect = schedule.origin === 'reflect'
+  // Reflect schedules are edited like normal ones (name/cron/timezone/enabled
+  // stay writable — see ScheduleForm's isReflect branch for the prompt lock),
+  // just never forked and never deleted from here: the API rejects DELETE for
+  // this origin (the scheduler self-heals it if its store ever disappears).
 
   const promptPreview = previewText(schedule.prompt_content ?? schedule.prompt)
   const lastRun = schedule.last_run_at
@@ -131,14 +136,18 @@ function ScheduleCard({
       name={schedule.name}
       description={promptPreview || undefined}
       type={
-        isTemplate ? (
+        isTemplate || isReflect ? (
           <span className="flex items-center gap-1.5">
             {typeChip}
             <Badge
               variant="muted-soft"
               className="rounded-md px-1.5 py-0 font-normal text-[11px] leading-5"
             >
-              {t('components.automation.badges.template')}
+              {t(
+                isTemplate
+                  ? 'components.automation.badges.template'
+                  : 'components.automation.badges.reflect',
+              )}
             </Badge>
           </span>
         ) : (
@@ -221,21 +230,24 @@ function ScheduleCard({
               >
                 <Pencil className="h-3 w-3" />
               </Button>
-              <ConfirmButton
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                disabled={deleteMutation.isPending}
-                onConfirm={() =>
-                  deleteMutation.mutate(schedule.id, {
-                    onSuccess: () => toast.success(t('components.configSchedules.toasts.deleted')),
-                    onError,
-                  })
-                }
-                icon={<Trash2 className="h-3 w-3" />}
-                tooltip={t('components.configCommands.actions.delete')}
-              />
+              {!isReflect && (
+                <ConfirmButton
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                  disabled={deleteMutation.isPending}
+                  onConfirm={() =>
+                    deleteMutation.mutate(schedule.id, {
+                      onSuccess: () =>
+                        toast.success(t('components.configSchedules.toasts.deleted')),
+                      onError,
+                    })
+                  }
+                  icon={<Trash2 className="h-3 w-3" />}
+                  tooltip={t('components.configCommands.actions.delete')}
+                />
+              )}
             </>
           )}
         </>

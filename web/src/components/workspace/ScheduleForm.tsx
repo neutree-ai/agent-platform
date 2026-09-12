@@ -8,6 +8,7 @@ import {
 } from '@/components/workspace/ScheduleFields'
 import type { Schedule } from '@/lib/api/types'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 // Re-exported so existing importers (ScheduleDialog) keep their import path.
 export { detectScheduleMode }
@@ -30,10 +31,16 @@ export function ScheduleForm({
     cron?: string | null
     run_at?: string | null
     timezone: string
-    prompt: string
+    prompt?: string
     prompt_id?: string | null
   }) => void
 }) {
+  const { t } = useTranslation()
+  // A Reflect-managed schedule's prompt is platform-controlled: the API
+  // rejects a PATCH body that even contains `prompt`/`prompt_id` keys, so
+  // those keys must be omitted from the submit payload entirely rather than
+  // sent unchanged.
+  const isReflect = initial?.origin === 'reflect'
   const [name, setName] = useState(initial?.name ?? '')
   const [cron, setCron] = useState(initial?.cron ?? '0 9 * * *')
   const [runAt, setRunAt] = useState<string>(
@@ -52,14 +59,16 @@ export function ScheduleForm({
       id={formId}
       onSubmit={(e) => {
         e.preventDefault()
+        const promptFields = isReflect
+          ? {}
+          : { prompt: promptId ? '' : prompt, prompt_id: promptId }
         if (mode === 'recurring') {
           onSubmit({
             name,
             cron,
             run_at: null,
             timezone,
-            prompt: promptId ? '' : prompt,
-            prompt_id: promptId,
+            ...promptFields,
           })
         } else {
           // datetime-local has no tz suffix; interpret as local wall-clock and
@@ -70,8 +79,7 @@ export function ScheduleForm({
             cron: null,
             run_at: runAtIso,
             timezone,
-            prompt: promptId ? '' : prompt,
-            prompt_id: promptId,
+            ...promptFields,
           })
         }
       }}
@@ -90,6 +98,8 @@ export function ScheduleForm({
         mode={mode}
         onModeChange={onModeChange}
         modeDisabled={isCompleted}
+        promptLocked={isReflect}
+        promptLockedNote={t('components.automation.reflect.promptLocked')}
       />
     </form>
   )

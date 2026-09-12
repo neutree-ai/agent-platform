@@ -3695,8 +3695,12 @@
         "enabled": "Enabled",
         "disabled": "Disabled"
       },
+      "reflect": {
+        "promptLocked": "Managed by Reflect — the prompt is platform-controlled and can't be edited here."
+      },
       "badges": {
-        "template": "Template"
+        "template": "Template",
+        "reflect": "Built-in"
       },
       "fields": {
         "enabledDefault": "Enabled by default"
