@@ -3719,8 +3719,12 @@
         "enabled": "已启用",
         "disabled": "已停用"
       },
+      "reflect": {
+        "promptLocked": "由 Reflect 管理，prompt 由平台维护，无法在此编辑。"
+      },
       "badges": {
-        "template": "模板"
+        "template": "模板",
+        "reflect": "内置"
       },
       "fields": {
         "enabledDefault": "默认启用"

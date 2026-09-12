@@ -45,6 +45,8 @@ export function ScheduleFields({
   mode,
   onModeChange,
   modeDisabled,
+  promptLocked,
+  promptLockedNote,
   idPrefix = 'schedule',
 }: {
   value: ScheduleFieldsValue
@@ -52,6 +54,9 @@ export function ScheduleFields({
   mode: ScheduleMode
   onModeChange?: (m: ScheduleMode) => void
   modeDisabled?: boolean
+  /** Hide the prompt editor for a platform-managed prompt (e.g. a Reflect schedule) the API rejects edits to. */
+  promptLocked?: boolean
+  promptLockedNote?: string
   idPrefix?: string
 }) {
   const { t } = useTranslation()
@@ -112,19 +117,28 @@ export function ScheduleFields({
         <TimezoneSelect value={value.timezone} onChange={(timezone) => onChange({ timezone })} />
       </div>
 
-      <PromptField
-        label={t('components.configSchedules.form.prompt')}
-        promptId={value.prompt_id}
-        content={value.prompt}
-        onChange={(patch) =>
-          onChange({
-            ...(patch.promptId !== undefined ? { prompt_id: patch.promptId } : {}),
-            ...(patch.content !== undefined ? { prompt: patch.content } : {}),
-          })
-        }
-        placeholder={t('components.configSchedules.form.placeholders.prompt')}
-        previewMaxHeight="200px"
-      />
+      {promptLocked ? (
+        <div className="space-y-2">
+          <Label>{t('components.configSchedules.form.prompt')}</Label>
+          <p className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+            {promptLockedNote}
+          </p>
+        </div>
+      ) : (
+        <PromptField
+          label={t('components.configSchedules.form.prompt')}
+          promptId={value.prompt_id}
+          content={value.prompt}
+          onChange={(patch) =>
+            onChange({
+              ...(patch.promptId !== undefined ? { prompt_id: patch.promptId } : {}),
+              ...(patch.content !== undefined ? { prompt: patch.content } : {}),
+            })
+          }
+          placeholder={t('components.configSchedules.form.placeholders.prompt')}
+          previewMaxHeight="200px"
+        />
+      )}
     </div>
   )
 }
