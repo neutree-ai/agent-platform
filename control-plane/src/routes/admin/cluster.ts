@@ -5,6 +5,7 @@ import type { AppEnv } from '../../lib/types'
 import { listStreamingWorkspaceIds } from '../../services/db/sessions'
 import * as k8sService from '../../services/k8s'
 import { bumpWorkspaceSpec } from '../../services/placement'
+import { reconcileReflectSchedule } from '../../services/reflect'
 import { computeWorkspaceDrift, reconcileWorkspacePod } from '../../services/workspace-reconcile'
 
 const cluster = new Hono<AppEnv>()
@@ -209,6 +210,19 @@ cluster.post('/rebuild-stale', async (c) => {
       try {
         const drift = await computeWorkspaceDrift(wsId)
         if (!drift.hasInstance) continue
+        // Reflect schedule backfill/prompt-refresh is otherwise only lazy-
+        // reconciled on workspace start (see startWorkspaceInstance) — a
+        // long-running workspace that never restarts would never pick it up
+        // without also converging here, on the same fleet-wide sweep the
+        // rollout pipeline already calls for pod-spec drift. Independent of
+        // drift.reasons (pod spec can be in sync while Reflect is still
+        // missing) and skipped under dryRun (this sweep's contract is
+        // "report drift without mutating").
+        if (!dryRun) {
+          await reconcileReflectSchedule(wsId).catch((e) =>
+            console.error(`[rebuild-stale ${wsId}] reflect schedule reconcile failed:`, e),
+          )
+        }
         if (drift.reasons.length > 0) {
           if (dryRun) {
             result.rebuilt.push(wsId)
