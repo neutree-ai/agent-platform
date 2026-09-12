@@ -114,7 +114,7 @@ Slack 的接入流程类似，但凭证更复杂一些——需要先在 Slack �
 - **Bot Token**（`xoxb-...`） ——OAuth & Permissions 页
 - **App Token**（`xapp-...`） ——Basic Information 页，scope 为 `connections:write`
 
-Bot Token 需要的 scope：`chat:write`、`channels:history`、`channels:read`、`app_mentions:read`。
+Bot Token 需要的 scope：`chat:write`、`channels:history`、`channels:read`、`app_mentions:read`、`files:read`。
 
 填好 token 创建 Slack 连接器后，给它挂路由——选监听的 channel（仅列出 bot 已加入的）和目标 Workspace。
 

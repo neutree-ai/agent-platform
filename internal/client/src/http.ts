@@ -33,14 +33,17 @@ export class HttpClient {
     }
 
     if (this.serviceToken) {
-      headers['Authorization'] = `Bearer ${this.serviceToken}`
+      headers.Authorization = `Bearer ${this.serviceToken}`
     } else if (this.token) {
-      headers['Cookie'] = `token=${this.token}`
+      headers.Cookie = `token=${this.token}`
     }
 
+    const isStream = typeof ReadableStream !== 'undefined' && init?.body instanceof ReadableStream
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...init,
       headers: { ...headers, ...(init?.headers as Record<string, string>) },
+      // @ts-expect-error -- Node.js fetch requires duplex when sending a streaming body
+      duplex: isStream ? 'half' : undefined,
     })
 
     if (!res.ok) {
