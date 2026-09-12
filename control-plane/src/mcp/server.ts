@@ -1,5 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+import {
+  ListResourceTemplatesRequestSchema,
+  ListResourcesRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js'
 import { resolveToken } from '../lib/session-token'
 import { findTaskBySession, getTeamworkTask } from '../services/db/teamwork'
 import { registerTools } from './tools'
@@ -77,6 +81,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     reflectStoreId,
     headers: request.headers,
   })
+  registerEmptyResources(server)
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -85,4 +90,21 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   await server.connect(transport)
 
   return transport.handleRequest(request)
+}
+
+/**
+ * Answer `resources/list` and `resources/templates/list` with an empty set.
+ *
+ * This server exposes tools only. Without the capability the SDK omits the
+ * handlers, so a client that asks for resources anyway gets `-32601 Method not
+ * found` — which agents surface as a tool failure rather than "there are none",
+ * costing a wasted call and an error the model then reasons about. Answering
+ * with an empty list says the same thing without the error.
+ */
+function registerEmptyResources(server: McpServer): void {
+  server.server.registerCapabilities({ resources: {} })
+  server.server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [] }))
+  server.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+    resourceTemplates: [],
+  }))
 }
