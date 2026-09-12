@@ -1,4 +1,3 @@
-import * as jobs from '../lib/jobs'
 import { getStoreById, listAttachmentsForWorkspace, setStoreReflectSchedule } from './db/memory'
 import { createSchedule, getSchedule, updateSchedule } from './db/schedules'
 import { getWorkspace } from './db/workspaces'
@@ -55,10 +54,20 @@ export function reflectWindow(
  * version's defs and deletes ones it can't find, which would delete this
  * schedule the moment the workspace's template version bumped.
  *
- * Mirrors `materializeOne` in template-schedules.ts: on pg-boss registration
- * failure, leave the row but flip it disabled rather than claim it's active.
- * Never throws — a Reflect bootstrap failure should not block whatever
- * reconcile pass is calling it.
+ * Created **disabled** by default: task 9 (review mode) and task 10 (Memory
+ * app / Schedules UI surfacing what this is) aren't built yet, and the
+ * feature hasn't run in production at all — auto-enabling it would mean
+ * every workspace starts silently editing its own memory daily with zero
+ * visible explanation. The user turns it on per-workspace once they want to
+ * try it (`enabled` is a normal editable field even for `origin: 'reflect'`
+ * — see routes/workspaces/schedules.ts). Flip this default once review
+ * mode + UI ship and the mechanism has some real mileage on it.
+ *
+ * Mirrors `materializeOne` in template-schedules.ts: skip pg-boss
+ * registration entirely for a disabled row (nothing to fire), and on
+ * registration failure for an enabled one, leave the row but flip it
+ * disabled rather than claim it's active. Never throws — a Reflect
+ * bootstrap failure should not block whatever reconcile pass is calling it.
  *
  * Only called from reconcileReflectSchedule below — not exported. There is
  * deliberately no eager call at workspace-creation time; the first
@@ -79,15 +88,9 @@ async function createReflectSchedule(args: {
     prompt: buildReflectPrompt(args.storeId),
     prompt_id: null,
     origin: 'reflect',
-    enabled: true,
+    enabled: false,
   })
   await setStoreReflectSchedule(args.storeId, schedule.id)
-  try {
-    const pgbossJobId = await jobs.enqueueScheduleTimer(schedule)
-    if (pgbossJobId) await updateSchedule(schedule.id, { pgboss_job_id: pgbossJobId })
-  } catch {
-    await updateSchedule(schedule.id, { enabled: false, pgboss_job_id: null })
-  }
 }
 
 /**
