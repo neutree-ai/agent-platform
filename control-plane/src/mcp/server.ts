@@ -6,20 +6,50 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { resolveToken } from '../lib/session-token'
 import { findTaskBySession, getTeamworkTask } from '../services/db/teamwork'
+import { verifyWorkspaceToken } from '../services/db/workspace-tokens'
 import { registerTools } from './tools'
+
+function errorResponse(status: number, error: string): Response {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
 
 /**
  * Handle an incoming MCP request via Streamable HTTP.
  * Creates a fresh server+transport per request (stateless mode).
  * Designed to be called from a Hono route: `return handleMcpRequest(c.req.raw)`
+ *
+ * This route carries its own auth rather than sitting behind the user-auth
+ * middleware: its callers are workspace workloads, not users. The pairing is
+ * the same one /workspace/v1 uses (workspaceAuth + requireWorkspaceParam) —
+ * `X-Workspace-ID` says which workspace the tools should act on, and the Bearer
+ * workspace token is what proves the caller is that workspace's own agent. The
+ * header alone is not a credential: workspace ids travel in URLs and share
+ * links, and every tool here acts with the workspace owner's reach.
  */
 export async function handleMcpRequest(request: Request): Promise<Response> {
   const workspaceId = request.headers.get('x-workspace-id')
   if (!workspaceId) {
-    return new Response(JSON.stringify({ error: 'X-Workspace-ID header required' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return errorResponse(400, 'X-Workspace-ID header required')
+  }
+
+  const authHeader = request.headers.get('authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return errorResponse(401, 'Unauthorized')
+  }
+  const principal = await verifyWorkspaceToken(authHeader.slice(7))
+  if (!principal) {
+    return errorResponse(401, 'Unauthorized')
+  }
+  // Answers 404, not 403, like requireWorkspaceParam: a caller asking about a
+  // workspace that is not its own learns nothing about whether it exists.
+  if (principal.workspaceId !== workspaceId) {
+    console.warn(
+      `[mcp] workspace token mismatch: token=${principal.workspaceId} requested=${workspaceId}`,
+    )
+    return errorResponse(404, 'Workspace not found')
   }
 
   // `X-Session-Token` carries the CP-minted proxy id for this session. We

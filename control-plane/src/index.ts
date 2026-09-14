@@ -178,6 +178,9 @@ app.use('/*', async (c, next) => {
     // middleware/service-auth), not by user auth — same arrangement as /env/v1.
     path.startsWith('/workspace/v1/') ||
     path.startsWith('/svc/v1/') ||
+    // Same arrangement: handleMcpRequest authenticates the caller as the
+    // workspace itself (Bearer workspace token) before registering any tool.
+    path === '/mcp' ||
     path === '/env-gateway' ||
     path.startsWith('/static/') ||
     path.startsWith('/assets/') ||
@@ -186,8 +189,7 @@ app.use('/*', async (c, next) => {
     path.startsWith('/empty/') ||
     path === '/__webpack_hmr' ||
     path === '/api/oauth/token' ||
-    path === '/api/oauth/userinfo' ||
-    path === '/mcp'
+    path === '/api/oauth/userinfo'
   ) {
     return next()
   }
@@ -409,7 +411,8 @@ app.get(
   } as any),
 )
 
-// MCP endpoint (auth via X-Workspace-ID header)
+// MCP endpoint (auth inside handleMcpRequest: Bearer workspace token, bound to
+// the X-Workspace-ID header)
 app.all('/mcp', async (c) => {
   return handleMcpRequest(c.req.raw)
 })
