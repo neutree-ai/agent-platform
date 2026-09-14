@@ -56,7 +56,7 @@ export function genericSlackFiles(files: SlackFile[] | undefined): SlackFile[] {
 export function slackAttachmentPath(file: SlackFile): string | null {
   if (!file.id) return null
   const segment = (value: string, fallback: string) =>
-    value.replaceAll(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '') || fallback
+    value.replace(/[\/\\]|\p{Cc}/gu, '_').replace(/^\.+/, '') || fallback
   return `.attachments/slack/${segment(file.id, 'file')}/${segment(file.name || 'attachment', 'attachment')}`
 }
 
@@ -66,7 +66,7 @@ export function appendAttachmentPaths(text: string, paths: string[], failures: s
     text.trim(),
     '<attachments>',
     ...paths.map((path) => `- /workspace/${path}`),
-    ...failures.map((failure) => `- ${failure}`),
+    ...failures.map((failure) => `- [failed] ${failure}`),
     '</attachments>',
   ]
     .filter(Boolean)
@@ -88,9 +88,23 @@ export async function stageGenericFiles(
       failures.push(`${name} — attachment download failed: missing file id or URL`)
       continue
     }
+    let fileUrl: URL
+    try {
+      fileUrl = new URL(file.url_private)
+    } catch {
+      failures.push(`${name} — attachment download failed: invalid file URL`)
+      continue
+    }
+    if (
+      fileUrl.protocol !== 'https:' ||
+      (fileUrl.hostname !== 'slack.com' && !fileUrl.hostname.endsWith('.slack.com'))
+    ) {
+      failures.push(`${name} — attachment download failed: untrusted file URL`)
+      continue
+    }
     let response: Response
     try {
-      response = await fetch(file.url_private, {
+      response = await fetch(fileUrl, {
         headers: { Authorization: `Bearer ${botToken}` },
       })
     } catch (e) {
@@ -102,6 +116,15 @@ export async function stageGenericFiles(
     if (!response.ok || !response.body) {
       failures.push(
         `${name} — attachment download failed: ${response.ok ? 'empty response' : response.status}`,
+      )
+      continue
+    }
+    if (
+      response.headers.get('content-type')?.toLowerCase().startsWith('text/html') &&
+      !file.mimetype?.toLowerCase().startsWith('text/html')
+    ) {
+      failures.push(
+        `${name} — attachment download failed: Slack returned an HTML login page; add the files:read bot scope and reinstall the app`,
       )
       continue
     }
@@ -493,6 +516,17 @@ Indexes are 1-based and match the attached images order.
     )
     if (!jobClient) return
 
+    // Show progress before attachment staging, which may wait for a workspace cold start.
+    try {
+      await web.apiCall('assistant.threads.setStatus', {
+        channel_id: channel,
+        thread_ts: threadTs,
+        status: 'is processing your request...',
+      })
+    } catch (e) {
+      console.warn(`[Slack] ${connector.name}: failed to set thread status:`, e)
+    }
+
     let attachmentPaths: string[] = []
     let attachmentFailures: string[] = []
     try {
@@ -548,17 +582,6 @@ Indexes are 1-based and match the attached images order.
     console.log(
       `[Slack] ${connector.name}: triggering job: channel=${channel} user=${user} workspace=${route.workspace_id}`,
     )
-
-    // Set assistant thread status immediately
-    try {
-      await web.apiCall('assistant.threads.setStatus', {
-        channel_id: channel,
-        thread_ts: threadTs,
-        status: 'is processing your request...',
-      })
-    } catch (e) {
-      console.warn(`[Slack] ${connector.name}: failed to set thread status:`, e)
-    }
 
     cleanText = appendImageMarkers(cleanText, images, threadImages.length + 1)
     const allImages = [...threadImages, ...images]
