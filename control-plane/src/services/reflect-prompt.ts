@@ -23,5 +23,6 @@ export function buildReflectPrompt(storeId: string): string {
    - When the evidence is ambiguous, do nothing. Doing nothing is better than guessing.
 4. Base every decision only on what \`list_recent_activity\` / \`get_activity_digest\` returned and the current memory files — never invent facts that didn't appear there.
 5. Update MEMORY.md if needed so the index stays in sync with the actual files.
-6. When done, summarize in one or two sentences what changed and why.`
+6. The mount is always writable for this pass — never write throwaway or placeholder content to test that. Every write is a permanent, versioned change, even one you intend to remove right after. If a write unexpectedly fails, stop and report the error instead of retrying with test content.
+7. When done, summarize in one or two sentences what changed and why.`
 }
