@@ -95,6 +95,24 @@ export async function revokeAllWorkspaceTokens(workspaceId: string): Promise<num
   return result.rowCount ?? 0
 }
 
+/**
+ * Whether the workspace still has a token nothing has revoked.
+ *
+ * The workload reads its token from the environment at container start, so a
+ * live row is what says the pod that is up can still authenticate to cp. A
+ * workspace with none left is not merely unauthenticated in the future — every
+ * call its running pod makes is already being rejected, and no amount of
+ * waiting fixes it, because the env var is only re-read by a new container.
+ */
+export async function hasLiveWorkspaceToken(workspaceId: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM workspace_tokens
+      WHERE workspace_id = $1 AND revoked_at IS NULL LIMIT 1`,
+    [workspaceId],
+  )
+  return rows.length > 0
+}
+
 /** How long a superseded token stays valid so a rolling update can overlap. */
 const SUPERSEDED_GRACE_MS = 60 * 60 * 1000
 
