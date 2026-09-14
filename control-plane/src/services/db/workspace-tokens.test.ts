@@ -6,6 +6,7 @@ vi.mock('./pool', () => ({ pool: { query: vi.fn() } }))
 import { pool } from './pool'
 import {
   createWorkspaceToken,
+  hasLiveWorkspaceToken,
   revokeAllWorkspaceTokens,
   sweepSupersededWorkspaceTokens,
   verifyWorkspaceToken,
@@ -125,5 +126,21 @@ describe('revocation', () => {
     await sweepSupersededWorkspaceTokens(1, 5_000)
 
     expect(q.mock.calls[0][1]).toEqual([1, 5])
+  })
+})
+
+describe('hasLiveWorkspaceToken', () => {
+  it('is true while any token of the workspace is unrevoked', async () => {
+    q.mockResolvedValueOnce({ rows: [{ '?column?': 1 }], rowCount: 1 } as never)
+
+    expect(await hasLiveWorkspaceToken('ws1')).toBe(true)
+    expect(q.mock.calls[0][1]).toEqual(['ws1'])
+    expect(String(q.mock.calls[0][0])).toContain('revoked_at IS NULL')
+  })
+
+  it('is false once every token has been revoked', async () => {
+    q.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
+
+    expect(await hasLiveWorkspaceToken('ws1')).toBe(false)
   })
 })
