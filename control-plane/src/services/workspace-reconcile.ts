@@ -1,5 +1,5 @@
 import type { ComputeResources } from '../../../internal/types/api'
-import { getWorkspaceConfig, updateWorkspace } from './db/workspaces'
+import { getWorkspace, getWorkspaceConfig, updateWorkspace } from './db/workspaces'
 import * as k8s from './k8s'
 import { bumpWorkspaceSpec, ensureReplicaFloor, setDesiredPhase } from './placement'
 import { reconcileReflectSchedule } from './reflect'
@@ -74,12 +74,19 @@ export async function computeWorkspaceDrift(workspaceId: string): Promise<Worksp
  * {@link computeWorkspaceDrift}. Returns `rebuilt: false` when the workspace
  * has no Deployment yet (caller should use createInstance) or is already in
  * sync. The PVC and Service are preserved — only the Deployment is replaced.
+ *
+ * `opts.force` rebuilds even with zero drift reasons — used by
+ * {@link startWorkspaceInstance} when resuming from a non-running phase,
+ * where the pod can be stale for a reason drift-detection can't see (see its
+ * doc comment).
  */
 export async function reconcileWorkspacePod(
   workspaceId: string,
+  opts: { force?: boolean } = {},
 ): Promise<{ rebuilt: boolean; reason?: string }> {
   const drift = await computeWorkspaceDrift(workspaceId)
-  if (!drift.hasInstance || drift.reasons.length === 0) return { rebuilt: false }
+  if (!drift.hasInstance) return { rebuilt: false }
+  if (!opts.force && drift.reasons.length === 0) return { rebuilt: false }
 
   // Control inversion (P1): bump the placement spec; the env-runner re-applies
   // (rebuilds the Deployment) when the ws is running. Detection stays here (cp
@@ -88,7 +95,11 @@ export async function reconcileWorkspacePod(
   // Cache the now-desired version so the "update available" prompt clears
   // immediately, without waiting for the reconcile loop's next annotation sync.
   await updateWorkspace(workspaceId, { runtime_version: k8s.CURRENT_TEMPLATE_VERSION })
-  return { rebuilt: true, reason: drift.reasons.join('; ') }
+  return {
+    rebuilt: true,
+    reason:
+      drift.reasons.length > 0 ? drift.reasons.join('; ') : 'forced (resuming from non-running)',
+  }
 }
 
 /**
@@ -99,16 +110,31 @@ export async function reconcileWorkspacePod(
  * Shared by the `POST /:id/start` route and auto-start (`ensureWorkspaceRunning`).
  * Does NOT wait for readiness — the start route lets the reconcile watch flip
  * status to `running`, while auto-start polls the agent `/health` endpoint.
+ *
+ * Forces a pod rebuild (not just a drift-gated one) whenever the workspace's
+ * recorded status isn't already `running`: `setDesiredPhase` revokes every
+ * token of a workspace the instant it leaves `running` (placement.ts), but
+ * the env-runner's actual scale-down is asynchronous — the physical pod
+ * holding that now-revoked token can still be alive when desired_phase flips
+ * back to running moments later (the same stop+start race POST /:id/restart's
+ * own doc calls out, reachable here too via idle-GC stopping a workspace and
+ * an auto-start racing right behind it). Plain drift detection can't see this
+ * — the pod spec never changed, only its token did — so force it
+ * unconditionally on this transition rather than trust drift.reasons.
  */
 export async function startWorkspaceInstance(
   workspaceId: string,
 ): Promise<{ rebuilt: boolean; reason?: string }> {
-  // Control inversion (P1): bump spec on template drift, then set desired=running.
-  // The env-runner converges: spec drift → apply (rebuild, picks up the latest
-  // config/resources baked into the spec); otherwise scale the Deployment up.
-  // No separate resize call here — resource changes are folded into the spec at
-  // config-edit time (PUT /config bumps the spec).
-  const reconciled = await reconcileWorkspacePod(workspaceId)
+  const workspace = await getWorkspace(workspaceId)
+  // Control inversion (P1): bump spec on template drift (or when forced), then
+  // set desired=running. The env-runner converges: spec drift → apply
+  // (rebuild, picks up the latest config/resources baked into the spec);
+  // otherwise scale the Deployment up. No separate resize call here —
+  // resource changes are folded into the spec at config-edit time (PUT
+  // /config bumps the spec).
+  const reconciled = await reconcileWorkspacePod(workspaceId, {
+    force: workspace?.status !== 'running',
+  })
   if (reconciled.rebuilt) {
     console.log(`[start ${workspaceId}] rebuilt: ${reconciled.reason}`)
   }
