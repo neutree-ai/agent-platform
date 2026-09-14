@@ -429,6 +429,21 @@ Indexes are 1-based and match the attached images order.
     return { texts, error: null }
   }
 
+  /** Set the assistant thread status indicator. An empty status clears it.
+   *  The indicator is otherwise only cleared once a job reports back, so any
+   *  path that sets it and then bails without creating a job has to clear it. */
+  async function setThreadStatus(channel: string, threadTs: string, status: string) {
+    try {
+      await web.apiCall('assistant.threads.setStatus', {
+        channel_id: channel,
+        thread_ts: threadTs,
+        status,
+      })
+    } catch (e) {
+      console.warn(`[Slack] ${connector.name}: failed to set thread status:`, e)
+    }
+  }
+
   /** Resolve route for a channel, falling back to wildcard. */
   async function resolveRoute(channel: string) {
     const route = await db.getRouteByExternalId(connector.id, channel)
@@ -517,15 +532,7 @@ Indexes are 1-based and match the attached images order.
     if (!jobClient) return
 
     // Show progress before attachment staging, which may wait for a workspace cold start.
-    try {
-      await web.apiCall('assistant.threads.setStatus', {
-        channel_id: channel,
-        thread_ts: threadTs,
-        status: 'is processing your request...',
-      })
-    } catch (e) {
-      console.warn(`[Slack] ${connector.name}: failed to set thread status:`, e)
-    }
+    await setThreadStatus(channel, threadTs, 'is processing your request...')
 
     let attachmentPaths: string[] = []
     let attachmentFailures: string[] = []
@@ -540,6 +547,7 @@ Indexes are 1-based and match the attached images order.
       attachmentFailures = staged.failures
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e)
+      await setThreadStatus(channel, threadTs, '')
       await web.chat
         .postMessage({
           channel,
