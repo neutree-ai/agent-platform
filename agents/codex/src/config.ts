@@ -540,6 +540,10 @@ export function loadAcpMcpServers(sessionToken?: string): McpServer[] {
   }
   platformHeaders.set('X-Workspace-ID', WORKSPACE_ID)
   platformHeaders.set('X-Agent-ID', WORKSPACE_ID)
+  // cp's /mcp authenticates the caller as this workspace. Without the token the
+  // endpoint answers 401 — a pod predating token delivery has none and needs a
+  // rebuild, the same trade-off the other cp calls here already make.
+  for (const [name, value] of Object.entries(cpAuthHeaders())) platformHeaders.set(name, value)
   if (sessionToken) platformHeaders.set('X-Session-Token', sessionToken)
   servers.push({
     type: 'http',
