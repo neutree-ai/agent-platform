@@ -91,6 +91,50 @@ function describeFetchError(e: unknown): string {
   return parts.join(' <- ')
 }
 
+/** Attempts per Slack file download, and the budget for one attempt to produce
+ *  response headers. */
+const SLACK_FETCH_ATTEMPTS = 3
+const SLACK_FETCH_HEADERS_TIMEOUT_MS = 4000
+
+/** Fetch a Slack-hosted file, retrying when no response headers arrive in time.
+ *
+ *  `files.slack.com` resolves to several CloudFront addresses, and a rotating
+ *  subset of them is blackholed from our egress — the SYN draws no reply rather
+ *  than a refusal, so an attempt that picks one stalls until undici's 10s
+ *  connect timeout and then fails outright. Measured from the cluster, roughly
+ *  a quarter of connections landed on a dead address, and undici does not fall
+ *  back to another address once it has committed to one.
+ *
+ *  Each attempt is therefore bounded well below that connect timeout and simply
+ *  retried; a fresh attempt re-resolves and normally lands somewhere healthy,
+ *  so three short tries beat one long one on both success rate and latency.
+ *
+ *  The timer covers DNS, connect, TLS and headers only — it is cleared the
+ *  moment `fetch` resolves, so a large body still streams without a deadline. */
+async function fetchSlackFile(url: URL | string, botToken: string, label: string) {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= SLACK_FETCH_ATTEMPTS; attempt++) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), SLACK_FETCH_HEADERS_TIMEOUT_MS)
+    try {
+      return await fetch(url, {
+        headers: { Authorization: `Bearer ${botToken}` },
+        signal: controller.signal,
+      })
+    } catch (e) {
+      lastError = controller.signal.aborted
+        ? new Error(`no response within ${SLACK_FETCH_HEADERS_TIMEOUT_MS}ms`)
+        : e
+      console.warn(
+        `[Slack] ${label}: download attempt ${attempt}/${SLACK_FETCH_ATTEMPTS} failed: ${describeFetchError(lastError)}`,
+      )
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  throw lastError
+}
+
 export async function stageGenericFiles(
   files: SlackFile[],
   client: NapClient,
@@ -130,9 +174,7 @@ export async function stageGenericFiles(
     }
     let response: Response
     try {
-      response = await fetch(fileUrl, {
-        headers: { Authorization: `Bearer ${botToken}` },
-      })
+      response = await fetchSlackFile(fileUrl, botToken, `${name} (${fileUrl.host})`)
     } catch (e) {
       const detail = describeFetchError(e)
       console.warn(`[Slack] attachment download failed for ${name} (${fileUrl.host}): ${detail}`)
@@ -268,9 +310,7 @@ export async function startOne(connectorId: string) {
       return null
     }
     try {
-      const res = await fetch(file.url_private, {
-        headers: { Authorization: `Bearer ${creds.bot_token}` },
-      })
+      const res = await fetchSlackFile(file.url_private, botToken, file.name || 'image')
       if (!res.ok) {
         console.warn(`[Slack] ${connector.name}: failed to download ${file.name}: ${res.status}`)
         return null

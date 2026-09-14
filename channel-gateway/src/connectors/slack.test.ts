@@ -193,6 +193,7 @@ describe('generic Slack attachments', () => {
     expect(calls).toEqual(['download', 'write'])
     expect(fetchMock).toHaveBeenNthCalledWith(1, new URL('https://files.slack.com/report'), {
       headers: { Authorization: 'Bearer xoxb-test' },
+      signal: expect.any(AbortSignal),
     })
   })
 
@@ -245,6 +246,39 @@ describe('generic Slack attachments', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('retries a download that draws no response and succeeds on a later address', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: Object.assign(new Error('Connect Timeout Error'), {
+            code: 'UND_ERR_CONNECT_TIMEOUT',
+          }),
+        }),
+      )
+      .mockResolvedValueOnce(new Response('report body'))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      stageGenericFiles(
+        [
+          {
+            id: 'F1',
+            name: 'report.pdf',
+            mimetype: 'application/pdf',
+            url_private: 'https://files.slack.com/report',
+          },
+        ],
+        new NapClient({ baseUrl: 'https://nap.test', serviceToken: 'route-owner-token' }),
+        'ws1',
+        'xoxb-test',
+      ),
+    ).resolves.toEqual({ paths: ['.attachments/slack/F1/report.pdf'], failures: [] })
+    // download, download again after the dead address, then the workspace write
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('unwraps the cause chain undici hides behind "fetch failed"', async () => {
     const cause = Object.assign(new Error('getaddrinfo EAI_AGAIN slack-files.com'), {
       code: 'EAI_AGAIN',
@@ -267,6 +301,8 @@ describe('generic Slack attachments', () => {
         'report.pdf — attachment download failed: fetch failed <- EAI_AGAIN: getaddrinfo EAI_AGAIN slack-files.com',
       ],
     })
+    // the whole retry budget is spent before the failure is reported
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('reports download failures without attempting a workspace write', async () => {
