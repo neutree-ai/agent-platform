@@ -245,6 +245,30 @@ describe('generic Slack attachments', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('unwraps the cause chain undici hides behind "fetch failed"', async () => {
+    const cause = Object.assign(new Error('getaddrinfo EAI_AGAIN slack-files.com'), {
+      code: 'EAI_AGAIN',
+    })
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new TypeError('fetch failed'), { cause }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      stageGenericFiles(
+        [{ id: 'F1', name: 'report.pdf', url_private: 'https://files.slack.com/report' }],
+        new NapClient({ baseUrl: 'https://nap.test', serviceToken: 'route-owner-token' }),
+        'ws1',
+        'xoxb-test',
+      ),
+    ).resolves.toEqual({
+      paths: [],
+      failures: [
+        'report.pdf — attachment download failed: fetch failed <- EAI_AGAIN: getaddrinfo EAI_AGAIN slack-files.com',
+      ],
+    })
+  })
+
   it('reports download failures without attempting a workspace write', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 403 }))
     vi.stubGlobal('fetch', fetchMock)
