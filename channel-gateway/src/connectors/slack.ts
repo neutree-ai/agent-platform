@@ -688,7 +688,19 @@ Indexes are 1-based and match the attached images order.
       await db.updateEvent(eventId, { job_id: result.id, status: 'success' })
     } catch (e) {
       console.error(`[Slack] ${connector.name}: failed to create job:`, e)
-
+      await setThreadStatus(channel, threadTs, '')
+      await web.chat
+        .postMessage({
+          channel,
+          thread_ts: threadTs,
+          text: 'Failed to start the job. Please retry.',
+        })
+        .catch((replyError) =>
+          console.warn(
+            `[Slack] ${connector.name}: failed to send job-creation-error reply:`,
+            replyError,
+          ),
+        )
       await db.updateEvent(eventId, {
         status: 'error',
         error: e instanceof Error ? e.message : String(e),
