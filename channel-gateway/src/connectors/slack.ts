@@ -73,6 +73,24 @@ export function appendAttachmentPaths(text: string, paths: string[], failures: s
     .join('\n')
 }
 
+/** Flatten a fetch rejection into something a human can act on.
+ *
+ *  undici rejects with a bare `TypeError: fetch failed` and puts the part that
+ *  identifies the failure — `EAI_AGAIN`, `ECONNRESET`, `UND_ERR_CONNECT_TIMEOUT`,
+ *  a certificate error — on `cause`, sometimes nested one level further. Report
+ *  just the message and DNS/TLS/socket triage is impossible after the fact. */
+function describeFetchError(e: unknown): string {
+  if (!(e instanceof Error)) return String(e)
+  const parts = [e.message]
+  let cause: unknown = e.cause
+  for (let depth = 0; depth < 3 && cause instanceof Error; depth++) {
+    const code = (cause as NodeJS.ErrnoException).code
+    parts.push(code ? `${code}: ${cause.message}` : cause.message)
+    cause = cause.cause
+  }
+  return parts.join(' <- ')
+}
+
 export async function stageGenericFiles(
   files: SlackFile[],
   client: NapClient,
@@ -95,6 +113,14 @@ export async function stageGenericFiles(
       failures.push(`${name} — attachment download failed: invalid file URL`)
       continue
     }
+    // Gate on the origin Slack hands us, so the bot token is only ever offered
+    // to Slack. This checks the URL we request, not the one the bytes finally
+    // come from: an authenticated `files.slack.com` request 302s to
+    // `slack-files.com`, which is a different registrable domain and is not
+    // covered here. That redirect is followed automatically, and the fetch spec
+    // drops `Authorization` when a redirect crosses origins, so the token stays
+    // with Slack either way — but the transfer itself reaches a host this
+    // allow-list never saw. Egress policy has to account for both names.
     if (
       fileUrl.protocol !== 'https:' ||
       (fileUrl.hostname !== 'slack.com' && !fileUrl.hostname.endsWith('.slack.com'))
@@ -108,9 +134,9 @@ export async function stageGenericFiles(
         headers: { Authorization: `Bearer ${botToken}` },
       })
     } catch (e) {
-      failures.push(
-        `${name} — attachment download failed: ${e instanceof Error ? e.message : String(e)}`,
-      )
+      const detail = describeFetchError(e)
+      console.warn(`[Slack] attachment download failed for ${name} (${fileUrl.host}): ${detail}`)
+      failures.push(`${name} — attachment download failed: ${detail}`)
       continue
     }
     if (!response.ok || !response.body) {
