@@ -324,19 +324,12 @@ export async function loadCredentials(): Promise<boolean> {
 export const DEFAULT_MAX_TURNS = 100
 let _maxTurns = DEFAULT_MAX_TURNS
 
-// Defensive only — cp validates `max_steps` against the same ceiling before it
-// is ever stored. Kept local so this core needs no dependency on cp's schema.
-const MAX_STEPS_CEILING = 1000
-
+// Guards a malformed config payload, not the operator's choice of number: a
+// workspace that asks for a big budget gets it.
 function readMaxSteps(raw: unknown): number {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULT_MAX_TURNS
   const n = Math.floor(raw)
-  if (n < 1) return DEFAULT_MAX_TURNS
-  if (n > MAX_STEPS_CEILING) {
-    console.warn(`[agent] max_steps=${n} above ceiling, clamped to ${MAX_STEPS_CEILING}`)
-    return MAX_STEPS_CEILING
-  }
-  return n
+  return n >= 1 ? n : DEFAULT_MAX_TURNS
 }
 
 /** This core's native form of the workspace's step budget. */

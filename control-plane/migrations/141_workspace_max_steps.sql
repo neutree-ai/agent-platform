@@ -14,6 +14,9 @@
 -- exactly those) -- a step is one iteration inside a single turn.
 --
 -- NULL = use the core's own default, which is what every existing workspace
--- gets. The ceiling is enforced in the write path, alongside the other
--- quantity validations.
+-- gets. Only the lower bound is validated in the write path, matching the
+-- other platform quantities here (`max_concurrency`, the replica bounds):
+-- a runaway turn is already bounded by the context window and by metering,
+-- so an arbitrary upper bound would only stand between an operator and a
+-- budget they meant to set.
 ALTER TABLE workspace_config ADD COLUMN IF NOT EXISTS max_steps integer;
