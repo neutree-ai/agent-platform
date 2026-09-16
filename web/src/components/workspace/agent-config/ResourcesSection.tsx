@@ -4,7 +4,6 @@ import { Switch } from '@/components/ui/switch'
 import { ResourceFields } from '@/components/workspace/ConfigResourcesButton'
 import { ScalingFields } from '@/components/workspace/ScalingFields'
 import type { AutoScaling, ComputeResources } from '@/lib/api/types'
-import { MAX_STEPS_CEILING } from '@neutree-ai/types'
 import { useTranslation } from 'react-i18next'
 import { FieldHint, resourcesEqual } from './FieldHint'
 
@@ -109,7 +108,6 @@ export function ResourcesSection({
           className="h-8 text-xs"
           type="number"
           min={1}
-          max={MAX_STEPS_CEILING}
           value={maxSteps ?? ''}
           placeholder={t('components.settings.stepBudget.placeholder', {
             default: defaultMaxSteps,
@@ -121,7 +119,7 @@ export function ResourcesSection({
             if (!raw) return onMaxStepsChange(null)
             const n = Number.parseInt(raw, 10)
             if (!Number.isFinite(n) || n < 1) return
-            onMaxStepsChange(Math.min(n, MAX_STEPS_CEILING))
+            onMaxStepsChange(n)
           }}
         />
         <p className="text-mini text-muted-foreground">
