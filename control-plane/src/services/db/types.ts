@@ -155,6 +155,12 @@ export interface WorkspaceConfig {
    * capacity (and hence the divisor the autoscaler sizes replicas by).
    */
   max_concurrency: number
+  /**
+   * Per-turn agentic step budget: how many model round-trips one user turn may
+   * drive. NULL leaves the core's own default in force. Each agent adapter
+   * translates it into that core's native mechanism.
+   */
+  max_steps: number | null
   updated_at: string
 }
 

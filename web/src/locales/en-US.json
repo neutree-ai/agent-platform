@@ -3772,6 +3772,11 @@
           "hintAutoScaling": "Turns one replica takes at once. Auto-scaling divides by it: queued turns beyond what one replica can take add another.",
           "hintStatic": "Turns the workspace takes at once; the rest queue."
         }
+      },
+      "stepBudget": {
+        "label": "Step budget",
+        "description": "How many model round-trips one turn may drive before it stops. Raise it for long unattended runs; leave empty to use the agent's own default ({{default}}).",
+        "placeholder": "Agent default ({{default}})"
       }
     },
     "automationDropdown": {

@@ -333,6 +333,7 @@ read.openapi(getConfigRoute, async (c) => {
       compute_resources: config.compute_resources ?? {},
       auto_scaling: config.auto_scaling ?? null,
       max_concurrency: config.max_concurrency,
+      max_steps: config.max_steps ?? null,
       auto_start: config.auto_start ?? true,
       muted: config.muted ?? false,
       user_display_name: currentUser.display_name || currentUser.username || null,

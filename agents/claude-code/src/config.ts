@@ -114,6 +114,11 @@ export async function loadConfig(): Promise<boolean> {
     agentSettings = JSON.parse(config.agent_settings || '{}')
   } catch {}
   agentSettings.autoMemoryEnabled = false
+  // The step budget is a platform field, not a settings.json key — the CLI has
+  // no such setting and would reject it. Translate it here into the SDK's own
+  // `maxTurns` (see agent.ts), leaving `agent_settings` the core's verbatim
+  // native document.
+  _maxTurns = readMaxSteps(config.max_steps)
   writeFileSync(
     join(WORKSPACE_DIR, '.claude/settings.json'),
     JSON.stringify(agentSettings, null, 2),
@@ -130,7 +135,7 @@ export async function loadConfig(): Promise<boolean> {
     }),
   )
   console.log(
-    `[agent] Config written: model=${config.model} provider=${config.provider_type} prompt=${config.system_prompt.length}chars mcp=${config.mcp_config.length}chars`,
+    `[agent] Config written: model=${config.model} provider=${config.provider_type} prompt=${config.system_prompt.length}chars mcp=${config.mcp_config.length}chars maxTurns=${_maxTurns}`,
   )
   return true
 }
@@ -309,6 +314,34 @@ export async function loadCredentials(): Promise<boolean> {
 
   console.log(`[agent] Credentials loaded: ${injected} injected, ${cleaned} cleaned`)
   return true
+}
+
+/**
+ * The core's own step budget, used when the workspace sets none. Mirrors the
+ * SDK's documented `maxTurns` default, so an unconfigured workspace behaves
+ * exactly as it did before the field existed.
+ */
+export const DEFAULT_MAX_TURNS = 100
+let _maxTurns = DEFAULT_MAX_TURNS
+
+// Defensive only — cp validates `max_steps` against the same ceiling before it
+// is ever stored. Kept local so this core needs no dependency on cp's schema.
+const MAX_STEPS_CEILING = 1000
+
+function readMaxSteps(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULT_MAX_TURNS
+  const n = Math.floor(raw)
+  if (n < 1) return DEFAULT_MAX_TURNS
+  if (n > MAX_STEPS_CEILING) {
+    console.warn(`[agent] max_steps=${n} above ceiling, clamped to ${MAX_STEPS_CEILING}`)
+    return MAX_STEPS_CEILING
+  }
+  return n
+}
+
+/** This core's native form of the workspace's step budget. */
+export function getMaxTurns(): number {
+  return _maxTurns
 }
 
 export interface RuntimeConfig {

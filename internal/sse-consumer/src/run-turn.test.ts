@@ -217,6 +217,39 @@ describe('runTurn — session.ended reasons', () => {
     expect(result.reason).toBe('error')
     expect(result.error?.message).toContain('error')
   })
+
+  it('carries a reported error message into the failed TurnResult', async () => {
+    const response = makeResponse([
+      sseFrame(evt({ type: 'session.started', session_id: 's' })),
+      sseFrame(
+        evt({
+          type: 'error',
+          message: "Reached this turn's step budget (100 model round-trips).",
+        }),
+      ),
+      sseFrame(evt({ type: 'session.ended', reason: 'error' })),
+    ])
+    const result = await runTurn(
+      { stream: async () => response, idleTimeoutMs: 0 },
+      [],
+    )
+    expect(result.reason).toBe('error')
+    expect(result.error?.message).toBe(
+      "Reached this turn's step budget (100 model round-trips).",
+    )
+  })
+
+  it('falls back to the reason word when no error event was reported', async () => {
+    const response = makeResponse([
+      sseFrame(evt({ type: 'session.started', session_id: 's' })),
+      sseFrame(evt({ type: 'session.ended', reason: 'error' })),
+    ])
+    const result = await runTurn(
+      { stream: async () => response, idleTimeoutMs: 0 },
+      [],
+    )
+    expect(result.error?.message).toBe('session ended with reason=error')
+  })
 })
 
 describe('runTurn — abnormal stream ends', () => {

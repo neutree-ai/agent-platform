@@ -407,6 +407,22 @@ export const ModelProfileSchema = z
 
 export type ModelProfile = z.infer<typeof ModelProfileSchema>
 
+/**
+ * Upper bound for `max_steps`. A budget, not a safety limit: it exists so a
+ * mistyped value cannot let one turn run away, while still leaving room for the
+ * long unattended flows (UI automation, large refactors) that outgrow a core's
+ * stock default.
+ */
+export const MAX_STEPS_CEILING = 1000
+
+/**
+ * The step budget a workspace runs at when it sets none, shown in the UI so the
+ * empty field still says what will happen. Each core owns its real default (see
+ * the claude-code adapter); they agree on this number today, and a core that
+ * diverged would only make this placeholder imprecise, never change behavior.
+ */
+export const DEFAULT_MAX_STEPS = 100
+
 export const ApiWorkspaceConfigSchema = z.object({
   agent_type: z.string(),
   provider_id: z.string().nullable(),
@@ -437,6 +453,13 @@ export const ApiWorkspaceConfigSchema = z.object({
   auto_scaling: AutoScalingSchema.nullable(),
   /** Turns one replica admits at once; the autoscaler's per-replica capacity. */
   max_concurrency: z.number().int().min(1),
+  /**
+   * Per-turn agentic step budget: model round-trips one user turn may drive.
+   * null leaves the core's own default in force. A platform quantity, not a
+   * core setting — `agent_settings` stays the core's verbatim native document,
+   * and each adapter maps this onto its own mechanism.
+   */
+  max_steps: z.number().int().min(1).max(MAX_STEPS_CEILING).nullable(),
   /** When false, a stopped workspace is not auto-started on incoming chat. */
   auto_start: z.boolean(),
   /**
