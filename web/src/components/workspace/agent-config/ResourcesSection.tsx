@@ -4,6 +4,7 @@ import { Switch } from '@/components/ui/switch'
 import { ResourceFields } from '@/components/workspace/ConfigResourcesButton'
 import { ScalingFields } from '@/components/workspace/ScalingFields'
 import type { AutoScaling, ComputeResources } from '@/lib/api/types'
+import { MAX_STEPS_CEILING } from '@neutree-ai/types'
 import { useTranslation } from 'react-i18next'
 import { FieldHint, resourcesEqual } from './FieldHint'
 
@@ -20,6 +21,11 @@ interface ResourcesSectionProps {
   onAutoScalingChange: (value: AutoScaling) => void
   maxConcurrency: number
   onMaxConcurrencyChange: (value: number) => void
+  /** Per-turn step budget; null leaves the agent core's own default in force. */
+  maxSteps: number | null
+  onMaxStepsChange: (value: number | null) => void
+  /** The core's default, shown as the placeholder when no budget is set. */
+  defaultMaxSteps: number
   /** Live replica counts, for an auto-scaling workspace that is up. */
   replicas?: { ready: number; desired: number } | null
 }
@@ -36,6 +42,9 @@ export function ResourcesSection({
   onAutoScalingChange,
   maxConcurrency,
   onMaxConcurrencyChange,
+  maxSteps,
+  onMaxStepsChange,
+  defaultMaxSteps,
   replicas,
 }: ResourcesSectionProps) {
   const { t } = useTranslation()
@@ -92,6 +101,32 @@ export function ResourcesSection({
             {t('components.settings.scaling.staticNote')}
           </p>
         )}
+      </div>
+
+      <div className="mt-4 space-y-1 border-t border-border/60 pt-4 text-xs">
+        <Label className="text-xs">{t('components.settings.stepBudget.label')}</Label>
+        <Input
+          className="h-8 text-xs"
+          type="number"
+          min={1}
+          max={MAX_STEPS_CEILING}
+          value={maxSteps ?? ''}
+          placeholder={t('components.settings.stepBudget.placeholder', {
+            default: defaultMaxSteps,
+          })}
+          onChange={(e) => {
+            // Empty means "no budget of our own" — hand back null so the core
+            // keeps deciding, rather than pinning today's default into the row.
+            const raw = e.target.value.trim()
+            if (!raw) return onMaxStepsChange(null)
+            const n = Number.parseInt(raw, 10)
+            if (!Number.isFinite(n) || n < 1) return
+            onMaxStepsChange(Math.min(n, MAX_STEPS_CEILING))
+          }}
+        />
+        <p className="text-mini text-muted-foreground">
+          {t('components.settings.stepBudget.description', { default: defaultMaxSteps })}
+        </p>
       </div>
 
       <div className="mt-4 flex items-start justify-between gap-3 border-t border-border/60 pt-4">

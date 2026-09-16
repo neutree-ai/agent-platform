@@ -19,6 +19,7 @@ import {
   WORKSPACE_ID,
   applyProviderEnv,
   cpAuthHeaders,
+  getMaxTurns,
   getUserMcpServers,
   loadRuntimeConfig,
 } from './config.js'
@@ -149,6 +150,21 @@ export function interruptSession(sessionId: string): boolean {
   return false
 }
 
+/**
+ * Restore the reason the SDK dropped when it turned a terminal error result
+ * into a plain non-zero-exit error.
+ */
+function describeTurnFailure(error: Error, subtype: string | undefined): Error {
+  if (!subtype) return error
+  const explained =
+    subtype === 'error_max_turns'
+      ? `Reached this turn's step budget (${getMaxTurns()} model round-trips). Raise the workspace's max steps, or send a new message to continue from here.`
+      : `Turn ended with ${subtype}.`
+  const wrapped = new Error(`${explained} (${error.message})`)
+  wrapped.stack = error.stack
+  return wrapped
+}
+
 export async function chat(
   sessionId: string | undefined,
   userMessage: string,
@@ -202,16 +218,23 @@ export async function chat(
   }
   activeControllers.set(queryKey, activeTurn)
 
-  // Build prompt: plain string if no images, SDKUserMessage async generator if images
-  let prompt: string | AsyncIterable<SDKUserMessage>
+  // Always hand the SDK an async generator, never a bare string. A string makes
+  // the SDK treat the run as a single user turn and close stdin on the first
+  // `result` — but this turn deliberately outlives that result (see the consumer
+  // loop below), so the CLI keeps running tools with its permission channel
+  // already shut. Every call needing a permission round-trip then comes back
+  // `Tool permission request failed: AbortError: Stream closed`, while
+  // auto-allowed ones still succeed. A generator keeps stdin open until the
+  // stream itself ends.
+  const contentBlocks: Array<
+    | {
+        type: 'image'
+        source: { type: 'base64'; media_type: string; data: string }
+      }
+    | { type: 'text'; text: string }
+  > = []
+  let promptText = userMessage
   if (images?.length) {
-    const contentBlocks: Array<
-      | {
-          type: 'image'
-          source: { type: 'base64'; media_type: string; data: string }
-        }
-      | { type: 'text'; text: string }
-    > = []
     for (const img of images) {
       contentBlocks.push({
         type: 'image',
@@ -221,19 +244,18 @@ export async function chat(
     // Also persist the images as files so the model can hand them to tools that
     // need a real file or URL (vision content alone cannot be re-exported).
     const written = writeInputAttachments(images, { workspaceDir: WORKSPACE_DIR, sessionId })
-    contentBlocks.push({ type: 'text', text: userMessage + formatAttachmentNote(written) })
-    const userMsg = {
-      type: 'user' as const,
-      message: { role: 'user' as const, content: contentBlocks },
-      parent_tool_use_id: null,
-      session_id: sessionId || '',
-    }
-    prompt = (async function* () {
-      yield userMsg as SDKUserMessage
-    })()
-  } else {
-    prompt = userMessage
+    promptText = userMessage + formatAttachmentNote(written)
   }
+  contentBlocks.push({ type: 'text', text: promptText })
+  const userMsg = {
+    type: 'user' as const,
+    message: { role: 'user' as const, content: contentBlocks },
+    parent_tool_use_id: null,
+    session_id: sessionId || '',
+  }
+  const prompt: AsyncIterable<SDKUserMessage> = (async function* () {
+    yield userMsg as SDKUserMessage
+  })()
 
   // Build per-turn mcpServers. We own `tos-platform` here (instead of letting
   // cp's .mcp.json supply it) so the headers can vary by turn — specifically,
@@ -286,6 +308,10 @@ export async function chat(
     }
   }
 
+  // Last non-success result subtype. Declared outside the try so the catch can
+  // still name the reason the SDK dropped on its way out.
+  let lastErrorSubtype: string | undefined
+
   try {
     const messageStream = query({
       prompt,
@@ -295,7 +321,7 @@ export async function chat(
         permissionMode: 'default',
         disallowedTools: ['WebSearch', 'WebFetch'],
         mcpServers,
-        maxTurns: 100,
+        maxTurns: getMaxTurns(),
         cwd: WORKSPACE_DIR,
         resume: sessionId,
         systemPrompt: { type: 'preset', preset: 'claude_code' },
@@ -446,6 +472,7 @@ export async function chat(
 
         // Log result subtype and errors for debugging
         if (r.subtype && r.subtype !== 'success') {
+          lastErrorSubtype = r.subtype
           console.error(
             `[chat] Result subtype=${r.subtype} errors=${JSON.stringify((r as any).errors ?? [])}`,
           )
@@ -519,7 +546,12 @@ export async function chat(
       await callbacks.onComplete()
     } else {
       console.error('[chat] Error:', error)
-      await callbacks.onError(error instanceof Error ? error : new Error(String(error)))
+      // The CLI exits non-zero on a terminal error result and the SDK rethrows
+      // that as a bare non-zero-exit error, dropping the reason. The result
+      // message carried it, so restore it here — otherwise every failure
+      // reaches the user as an unattributable "reason=error".
+      const raw = error instanceof Error ? error : new Error(String(error))
+      await callbacks.onError(describeTurnFailure(raw, lastErrorSubtype))
     }
   } finally {
     const key = resultSessionId || queryKey

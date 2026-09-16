@@ -62,6 +62,7 @@ import { cn } from '@/lib/utils'
 import { workspaceConfigRefresh } from '@/plugins/builder-mode'
 import { skillsRefresh } from '@/plugins/skills'
 import { useInstancePersistentState, useInstanceState } from '@/stores/instance-state-store'
+import { DEFAULT_MAX_STEPS } from '@neutree-ai/types'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -109,6 +110,8 @@ interface ConfigDraft {
   /** Replica bounds; null for a static workspace, which the panel cannot change. */
   autoScaling: AutoScaling | null
   maxConcurrency: number
+  /** Per-turn step budget; null defers to the agent core's own default. */
+  maxSteps: number | null
   autoStart: boolean
   muted: boolean
   enabledSkills: Set<string>
@@ -482,6 +485,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       computeResources: withDefaults(config.compute_resources),
       autoScaling: config.auto_scaling,
       maxConcurrency: config.max_concurrency,
+      maxSteps: config.max_steps ?? null,
       autoStart: config.auto_start ?? true,
       muted: config.muted ?? false,
     }))
@@ -577,6 +581,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
     computeResources: { ...DEFAULTS },
     autoScaling: null,
     maxConcurrency: 10,
+    maxSteps: null,
     autoStart: true,
     muted: false,
     enabledSkills: new Set(),
@@ -624,6 +629,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       computeResources: withDefaults(config.compute_resources),
       autoScaling: config.auto_scaling,
       maxConcurrency: config.max_concurrency,
+      maxSteps: config.max_steps ?? null,
       autoStart: config.auto_start ?? true,
       muted: config.muted ?? false,
       enabledSkills: new Set(),
@@ -760,6 +766,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
       return true
     if (JSON.stringify(draft.autoScaling) !== JSON.stringify(config.auto_scaling)) return true
     if (draft.maxConcurrency !== config.max_concurrency) return true
+    if (draft.maxSteps !== (config.max_steps ?? null)) return true
     if (draft.autoStart !== (config.auto_start ?? true)) return true
     if (draft.muted !== (config.muted ?? false)) return true
     const orig = originalSkills
@@ -830,6 +837,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
           patch.auto_scaling = draft.autoScaling
         if (draft.maxConcurrency !== config.max_concurrency)
           patch.max_concurrency = draft.maxConcurrency
+        if (draft.maxSteps !== (config.max_steps ?? null)) patch.max_steps = draft.maxSteps
         if (draft.autoStart !== (config.auto_start ?? true)) patch.auto_start = draft.autoStart
         if (draft.muted !== (config.muted ?? false)) patch.muted = draft.muted
 
@@ -1059,6 +1067,9 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
             onAutoScalingChange={(v) => patchDraft({ autoScaling: v })}
             maxConcurrency={draft.maxConcurrency}
             onMaxConcurrencyChange={(v) => patchDraft({ maxConcurrency: v })}
+            maxSteps={draft.maxSteps}
+            onMaxStepsChange={(v) => patchDraft({ maxSteps: v })}
+            defaultMaxSteps={DEFAULT_MAX_STEPS}
             replicas={k8sStatus?.replicas}
             templateConfig={tplResources}
           />

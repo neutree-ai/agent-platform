@@ -1,0 +1,19 @@
+-- Per-turn agentic step budget, per workspace.
+--
+-- One user turn can drive many model round-trips (tool call -> result -> next
+-- tool call). Every core caps that loop so a runaway agent cannot bill
+-- forever, but each names the cap in its own dialect -- claude-code takes a
+-- `maxTurns` query option, other cores have their own. The cap itself is a
+-- platform-level quantity, not a core setting, so it lives here rather than
+-- inside `agent_settings`: that column stays the verbatim native settings
+-- document of whichever core the workspace runs, and each adapter translates
+-- this number into its own mechanism (ignoring it where the core has none).
+--
+-- Named `max_steps` rather than `max_turns` because "turn" already means one
+-- user exchange throughout this codebase (see `max_concurrency`, which counts
+-- exactly those) -- a step is one iteration inside a single turn.
+--
+-- NULL = use the core's own default, which is what every existing workspace
+-- gets. The ceiling is enforced in the write path, alongside the other
+-- quantity validations.
+ALTER TABLE workspace_config ADD COLUMN IF NOT EXISTS max_steps integer;

@@ -189,6 +189,11 @@ export async function runTurn(
   // Error collected from stream consumption (distinct from abortCause).
   let streamError: { message: string; cause?: unknown } | null = null
 
+  // Last `error` event the agent reported. `session.ended` carries only the
+  // reason word, so without this the cause the agent took care to send would be
+  // dropped and every failure would surface as a bare "reason=error".
+  let reportedError: string | null = null
+
   // Whether plugin onStart succeeded for all plugins. If not, skip stream.
   let startFailed = false
 
@@ -220,6 +225,8 @@ export async function runTurn(
         } else if (evt.type === 'session.ended') {
           sessionEndedReason = normalizeEndedReason(evt.reason)
           sessionEndedStats = evt.stats
+        } else if (evt.type === 'error' && typeof evt.message === 'string' && evt.message) {
+          reportedError = evt.message
         }
 
         // Dispatch to plugins (sync, errors isolated)
@@ -334,6 +341,7 @@ export async function runTurn(
     sessionEndedStats,
     abortCause,
     streamError,
+    reportedError,
     idleTimeoutMs,
     startFailed,
   })
@@ -420,6 +428,7 @@ interface BuildResultInput {
   sessionEndedStats: TurnStats | undefined
   abortCause: AbortCause | null
   streamError: { message: string; cause?: unknown } | null
+  reportedError: string | null
   idleTimeoutMs: number
   startFailed: boolean
 }
@@ -431,6 +440,7 @@ function buildResult(input: BuildResultInput): TurnResult {
     sessionEndedStats,
     abortCause,
     streamError,
+    reportedError,
     idleTimeoutMs,
     startFailed,
   } = input
@@ -458,7 +468,9 @@ function buildResult(input: BuildResultInput): TurnResult {
       stats: sessionEndedStats,
       error: {
         reason: 'error',
-        message: 'session ended with reason=error',
+        // Prefer what the agent actually reported; the reason word alone leaves
+        // a failure unattributable once the pod is gone.
+        message: reportedError ?? 'session ended with reason=error',
       },
     }
   }

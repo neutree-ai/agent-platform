@@ -3796,6 +3796,11 @@
           "hintAutoScaling": "一个副本同时接几个 turn。自动伸缩也按它算：排队的 turn 超过一个副本接得下的量就扩容。",
           "hintStatic": "同时接几个 turn，超出的排队等待。"
         }
+      },
+      "stepBudget": {
+        "label": "单轮步数上限",
+        "description": "一轮对话最多允许多少次模型往返，超过即停止。长时间无人值守的任务可以调大；留空则使用该 agent 自带的默认值（{{default}}）。",
+        "placeholder": "Agent 默认值（{{default}}）"
       }
     },
     "automationDropdown": {
