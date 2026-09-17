@@ -1,4 +1,4 @@
-const MAX_TOOL_OUTPUT_BYTES = 32 * 1024
+export const MAX_TOOL_OUTPUT_BYTES = 32 * 1024
 
 // jsonb forbids U+0000; replace at the write boundary so payloads round-trip.
 function stripNul(s: string): string {

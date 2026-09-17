@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { MAX_TOOL_OUTPUT_BYTES } from '../../../lib/truncate-tool-output'
 import {
   createAgentRequest,
   getAgentRequest,
@@ -45,6 +46,31 @@ interface BuilderAction<P> {
   apply: (ctx: { workspaceId: string; userId: string; payload: P }) => Promise<string>
 }
 
+// The agent host re-serializes the tool result into its own content envelope
+// (one more JSON-escaping layer) before cp caps it at MAX_TOOL_OUTPUT_BYTES.
+// Leave headroom for that wrapper and the truncation marker.
+const PROPOSE_ENVELOPE_BUDGET_BYTES = MAX_TOOL_OUTPUT_BYTES - 1024
+
+/**
+ * Serialize the propose tool_result envelope. The payload copy is only a
+ * render seed for the approval card; when it would push the result past the
+ * tool output cap, it is dropped so the envelope stays parseable and the card
+ * fetches the request by id instead.
+ */
+export function buildProposeEnvelope(env: {
+  request_id: string
+  kind: string
+  label: string
+  payload: unknown
+}): string {
+  const full = JSON.stringify({ ...env, status: 'pending' })
+  if (Buffer.byteLength(JSON.stringify(full), 'utf8') <= PROPOSE_ENVELOPE_BUDGET_BYTES) {
+    return full
+  }
+  const { payload: _payload, ...rest } = env
+  return JSON.stringify({ ...rest, status: 'pending' })
+}
+
 /** Identity helper so callers get inference for `P` from the zod schema. */
 export function defineBuilderAction<P>(action: BuilderAction<P>): BuilderAction<P> {
   return action
@@ -86,12 +112,11 @@ export function registerBuilderAction<P>(
         })
 
         return textResult(
-          JSON.stringify({
+          buildProposeEnvelope({
             request_id: req.id,
             kind: req.kind,
             label: action.label,
-            payload: payload,
-            status: 'pending',
+            payload,
           }),
         )
       } catch (e: any) {
