@@ -124,6 +124,16 @@ export type {
 } from '@neutree-ai/types'
 
 export type {
+  ApiTransferPlan,
+  ApiWorkspaceTransfer,
+  TransferAction,
+  TransferCopySelection,
+  TransferItem,
+  TransferItemKind,
+  TransferStatus,
+} from '@neutree-ai/types'
+
+export type {
   ApiTeamworkParticipant,
   ApiTeamworkRosterCandidate,
   ApiTeamworkSession,

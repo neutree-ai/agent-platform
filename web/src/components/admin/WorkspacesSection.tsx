@@ -24,6 +24,7 @@ import { useInstancePersistentState } from '@/stores/instance-state-store'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowDown,
+  ArrowRightLeft,
   ArrowUp,
   ArrowUpDown,
   ChevronLeft,
@@ -36,6 +37,7 @@ import {
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { AdminTransferDialog } from './AdminTransferDialog'
 import { formatCompact } from './format'
 
 const PAGE_SIZE = 10
@@ -52,6 +54,7 @@ export function WorkspacesSection({ instanceId }: { instanceId: string }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [action, setAction] = useState<{ kind: 'stop' | 'delete'; ws: AdminWorkspace } | null>(null)
+  const [transferring, setTransferring] = useState<AdminWorkspace | null>(null)
 
   const [sort, setSort] = useInstancePersistentState<AdminWorkspacesSort>(
     instanceId,
@@ -218,6 +221,15 @@ export function WorkspacesSection({ instanceId }: { instanceId: string }) {
                 <CircleStop className="h-3 w-3" />
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              title={t('components.admin.workspacesSection.actions.transfer')}
+              onClick={() => setTransferring(w)}
+            >
+              <ArrowRightLeft className="h-3 w-3" />
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -390,6 +402,15 @@ export function WorkspacesSection({ instanceId }: { instanceId: string }) {
           </>
         )}
       </div>
+
+      {transferring && (
+        <AdminTransferDialog
+          workspace={transferring}
+          onOpenChange={(o) => {
+            if (!o) setTransferring(null)
+          }}
+        />
+      )}
 
       {action && (
         <ConfirmDialog

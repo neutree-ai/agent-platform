@@ -36,6 +36,7 @@ import { PromptSection } from '@/components/workspace/agent-config/PromptSection
 import { ResourcesSection } from '@/components/workspace/agent-config/ResourcesSection'
 import { SettingsSection } from '@/components/workspace/agent-config/SettingsSection'
 import { SkillsSection } from '@/components/workspace/agent-config/SkillsSection'
+import { TransferOwnershipRow } from '@/components/workspace/transfer/TransferOwnershipRow'
 import { getAgentConfigDoc } from '@/docs/inline-help/agent-config-docs'
 import { getWorkspaceSettingsDoc } from '@/docs/inline-help/misc-docs'
 import { useCurrentWorkspace } from '@/hooks/useCurrentWorkspace'
@@ -311,7 +312,8 @@ function GeneralSection({
       </div>
 
       {/* Danger zone — inline at the bottom of General */}
-      <div className="mt-4 border-t border-border/60 pt-4">
+      <div className="mt-4 flex flex-col gap-4 border-t border-border/60 pt-4">
+        {!workspace.is_system && <TransferOwnershipRow workspace={workspace} />}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
