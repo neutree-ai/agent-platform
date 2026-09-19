@@ -278,6 +278,40 @@
         "moveChatToBottom": "Move chat to bottom",
         "moveChatToSide": "Move chat to side"
       }
+    },
+    "transferPage": {
+      "title": "Workspace transfer",
+      "offeredBy": "{{name}} wants to transfer this workspace to you",
+      "waiting": "Waiting for {{name}} to accept (valid until {{date}}).",
+      "openWorkspace": "Open workspace",
+      "accept": "Accept",
+      "decline": "Decline",
+      "status": {
+        "pending": "This transfer is still waiting.",
+        "executing": "The transfer is in progress; refresh shortly.",
+        "completed": "The transfer is complete.",
+        "declined": "The recipient declined this transfer.",
+        "cancelled": "The sender withdrew this transfer.",
+        "expired": "This transfer has expired.",
+        "failed": "This transfer did not complete."
+      },
+      "slug": {
+        "label": "You already have a workspace with slug {{slug}}; choose another slug for this one"
+      },
+      "provider": {
+        "label": "You cannot use the current model provider; choose one of yours",
+        "placeholder": "Select a model provider",
+        "none": "You have no model provider yet; create one first."
+      },
+      "toasts": {
+        "accepted": "The workspace is now yours",
+        "declined": "Declined"
+      },
+      "errors": {
+        "notFound": "Transfer not found, or you cannot view it.",
+        "accept": "Failed to accept",
+        "decline": "Failed to decline"
+      }
     }
   },
   "components": {
@@ -3317,7 +3351,8 @@
         "filterByOwner": "Filter by this owner",
         "actions": {
           "stop": "Stop workspace",
-          "delete": "Delete workspace"
+          "delete": "Delete workspace",
+          "transfer": "Transfer"
         },
         "stopDialog": {
           "title": "Stop workspace",
@@ -3332,7 +3367,8 @@
         },
         "toasts": {
           "stopped": "Workspace {{name}} stopped",
-          "deleted": "Workspace {{name}} deleted"
+          "deleted": "Workspace {{name}} deleted",
+          "transferred": "Transferred {{name}} to {{user}}"
         },
         "pagination": {
           "total": "{{count}} workspaces",
@@ -3340,6 +3376,14 @@
         },
         "empty": {
           "noWorkspaces": "No workspaces"
+        },
+        "transferDialog": {
+          "title": "Transfer {{name}}",
+          "description": "Reassign the workspace to another user directly, without their acceptance. For owners who have left or cannot be reached.",
+          "change": "Change",
+          "searchUser": "Search by username or name",
+          "noProvider": "The recipient cannot use the current model provider. The workspace is left without one, and the recipient picks their own on first use.",
+          "confirm": "Transfer now"
         }
       },
       "createUser": {
@@ -4074,6 +4118,80 @@
       },
       "errors": {
         "createFailed": "Failed to register environment"
+      }
+    },
+    "workspaceTransfer": {
+      "title": "Transfer ownership",
+      "description": "Hand this workspace over to another user. Once they accept, you lose all access to it.",
+      "open": "Transfer",
+      "cancel": "Withdraw",
+      "pending": "Offered to {{name}}, waiting for them to accept (valid until {{date}}).",
+      "submit": "Offer transfer",
+      "summary": "Transfer {{workspace}} to {{name}} ({{username}}). Takes effect when they accept:",
+      "acknowledge": "I understand the risks: files in the working directory and the conversation history go to the recipient as they are.",
+      "copyToRecipient": "Copy to recipient",
+      "recipient": {
+        "label": "Recipient username",
+        "placeholder": "Enter their username",
+        "hint": "Enter the exact username; there is no search.",
+        "review": "Review"
+      },
+      "risks": {
+        "files": "Files in the working directory go to the recipient as they are, including credential files, SSH keys and CLI logins in the agent home (.home). The platform does not clean these up; delete them yourself before transferring if needed.",
+        "history": "The recipient can see the workspace's entire conversation history.",
+        "access": "You lose all access after the transfer; it cannot be kept."
+      },
+      "groups": {
+        "moves": "Goes to the recipient",
+        "drops": "Detached or removed",
+        "keeps": "Unchanged",
+        "notices": "Worth knowing"
+      },
+      "actions": {
+        "move": "Moves",
+        "copy": "Copy",
+        "eject": "Baked in",
+        "keep": "Kept",
+        "detach": "Detached",
+        "replace": "Replace",
+        "remove": "Removed",
+        "revoke": "Revoked",
+        "block": "Blocks",
+        "notice": "Note"
+      },
+      "items": {
+        "files": "All files in the working directory",
+        "sessions": "Conversation history ({{count}} sessions)",
+        "schedules": "Schedules ({{count}}), which then run as the recipient",
+        "mcp_config": "MCP configuration, including any headers and keys entered in it",
+        "inline_api_key": "API key entered directly on the workspace",
+        "memory_store": "Memory store {{name}}",
+        "provider": "Model provider {{name}}",
+        "prompt": "Prompt {{name}}",
+        "skill": "Skill {{name}}",
+        "template": "Template {{name}} (a private template's configuration is written into the workspace)",
+        "environment": "Environment {{name}}",
+        "afs_share": "Directory shared with other workspaces: {{name}}",
+        "teamwork_task": "Teamwork task {{name}}",
+        "tag": "The previous owner's tags ({{count}})",
+        "credential_binding": "Credentials the previous owner bound to this workspace ({{count}})",
+        "export_link": "Public file and session links already handed out ({{count}})",
+        "channel_route": "Slack, WeCom and webhook routes pointing at this workspace stop working; the recipient sets up their own",
+        "recipient_credentials": "The recipient's global credentials are injected into this workspace",
+        "mcp_oauth": "MCP servers that use OAuth need to be reconnected by the recipient",
+        "slug_reference": "References that call this agent as username/{{name}} elsewhere stop working"
+      },
+      "blocked": {
+        "environment": "This workspace runs on the owner's private environment {{name}}, which the recipient cannot use. Transferring it is not supported."
+      },
+      "toasts": {
+        "offered": "Offered to {{name}}; waiting for them to accept",
+        "cancelled": "Transfer withdrawn"
+      },
+      "errors": {
+        "plan": "Could not build the transfer plan",
+        "create": "Failed to start the transfer",
+        "cancel": "Failed to withdraw the transfer"
       }
     }
   }
