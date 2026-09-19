@@ -40,6 +40,7 @@ export interface RuntimeEventRow {
 
 /** One workspace's current observation, next to the last one already logged. */
 export interface RuntimeMeterRow extends RuntimeEventRow {
+  last_user_id: string | null
   last_environment_id: string | null
   last_phase: MeterPhase | null
   last_ready_replicas: number | null
@@ -86,6 +87,7 @@ export async function listRuntimeMeterRows(thresholdSec: number): Promise<Runtim
             p.spec_version,
             p.observed_template_version,
             ${ENV_OFFLINE_SQL} AS env_offline,
+            last.user_id AS last_user_id,
             last.environment_id AS last_environment_id,
             last.phase AS last_phase,
             last.ready_replicas AS last_ready_replicas,
@@ -97,7 +99,7 @@ export async function listRuntimeMeterRows(thresholdSec: number): Promise<Runtim
        JOIN environments e ON e.id = p.environment_id
        JOIN workspaces w ON w.id = p.workspace_id
        LEFT JOIN LATERAL (
-         SELECT r.environment_id, r.phase, r.ready_replicas, r.desired_replicas,
+         SELECT r.user_id, r.environment_id, r.phase, r.ready_replicas, r.desired_replicas,
                 r.spec_version, r.observed_template_version, r.env_offline
            FROM workspace_runtime_events r
           WHERE r.workspace_id = p.workspace_id

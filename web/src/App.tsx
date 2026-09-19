@@ -15,6 +15,9 @@ const WorkspacePage = lazy(() =>
 )
 const SharePage = lazy(() => import('./pages/SharePage').then((m) => ({ default: m.SharePage })))
 const InvitePage = lazy(() => import('./pages/InvitePage').then((m) => ({ default: m.InvitePage })))
+const TransferPage = lazy(() =>
+  import('./pages/TransferPage').then((m) => ({ default: m.TransferPage })),
+)
 
 function Fallback() {
   const { t } = useTranslation()
@@ -90,6 +93,16 @@ function App() {
           <ProtectedRoute>
             <Suspense fallback={<Fallback />}>
               <InvitePage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/transfers/:id"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={<Fallback />}>
+              <TransferPage />
             </Suspense>
           </ProtectedRoute>
         }

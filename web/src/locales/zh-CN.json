@@ -278,6 +278,40 @@
         "moveChatToBottom": "将对话移动到底部",
         "moveChatToSide": "将对话移动到侧边"
       }
+    },
+    "transferPage": {
+      "title": "工作空间转移",
+      "offeredBy": "{{name}} 想把这个工作空间转给你",
+      "waiting": "等待 {{name}} 接受（{{date}} 前有效）。",
+      "openWorkspace": "打开工作空间",
+      "accept": "接受",
+      "decline": "拒绝",
+      "status": {
+        "pending": "这次转移还在等待处理。",
+        "executing": "正在转移，请稍候刷新。",
+        "completed": "转移已完成。",
+        "declined": "接收方已拒绝这次转移。",
+        "cancelled": "发起方已撤回这次转移。",
+        "expired": "这次转移已过期。",
+        "failed": "这次转移没有完成。"
+      },
+      "slug": {
+        "label": "你已经有一个 slug 为 {{slug}} 的工作空间，请给它换一个 slug"
+      },
+      "provider": {
+        "label": "原来的模型供应商你无权使用，请选一个自己的",
+        "placeholder": "选择模型供应商",
+        "none": "你还没有可用的模型供应商，请先创建一个。"
+      },
+      "toasts": {
+        "accepted": "工作空间已归你所有",
+        "declined": "已拒绝"
+      },
+      "errors": {
+        "notFound": "找不到这次转移，或者你无权查看。",
+        "accept": "接受失败",
+        "decline": "拒绝失败"
+      }
     }
   },
   "components": {
@@ -3341,7 +3375,8 @@
         "filterByOwner": "按该 owner 过滤",
         "actions": {
           "stop": "停止工作空间",
-          "delete": "删除工作空间"
+          "delete": "删除工作空间",
+          "transfer": "转移"
         },
         "stopDialog": {
           "title": "停止工作空间",
@@ -3356,7 +3391,8 @@
         },
         "toasts": {
           "stopped": "已停止工作空间 {{name}}",
-          "deleted": "已删除工作空间 {{name}}"
+          "deleted": "已删除工作空间 {{name}}",
+          "transferred": "已把 {{name}} 转给 {{user}}"
         },
         "pagination": {
           "total": "共 {{count}} 个工作空间",
@@ -3364,6 +3400,14 @@
         },
         "empty": {
           "noWorkspaces": "暂无工作空间"
+        },
+        "transferDialog": {
+          "title": "转移 {{name}}",
+          "description": "直接把工作空间转给另一位用户，不需要对方接受。适用于原所有者已离开或联系不上的情况。",
+          "change": "更换",
+          "searchUser": "搜索用户名或姓名",
+          "noProvider": "接收方无权使用原来的模型供应商。转移后工作空间没有供应商，接收方首次使用时需要自己选一个。",
+          "confirm": "立即转移"
         }
       },
       "createUser": {
@@ -4098,6 +4142,80 @@
       },
       "errors": {
         "createFailed": "注册运行环境失败"
+      }
+    },
+    "workspaceTransfer": {
+      "title": "转移所有权",
+      "description": "把这个工作空间整个交给另一位用户。对方接受后，你将失去全部访问。",
+      "open": "转移",
+      "cancel": "撤回",
+      "pending": "已发给 {{name}}，等待对方接受（{{date}} 前有效）。",
+      "submit": "发起转移",
+      "summary": "把 {{workspace}} 转给 {{name}}（{{username}}）。对方接受后生效：",
+      "acknowledge": "我已了解上述风险，工作目录里的文件和对话历史会原样交给对方。",
+      "copyToRecipient": "复制给对方",
+      "recipient": {
+        "label": "接收方用户名",
+        "placeholder": "输入对方的用户名",
+        "hint": "需要输入完整的用户名，不支持搜索。",
+        "review": "查看清单"
+      },
+      "risks": {
+        "files": "工作目录下的文件会原样交给对方，包括 agent home（.home）里的凭据文件、SSH 密钥和各种 CLI 的登录态。平台不会清理这些文件，需要的话请在转移前自行删除。",
+        "history": "对方能看到这个工作空间的全部对话历史。",
+        "access": "转移后你将完全失去访问，不能保留。"
+      },
+      "groups": {
+        "moves": "交给对方",
+        "drops": "断开或移除",
+        "keeps": "保持不变",
+        "notices": "需要留意"
+      },
+      "actions": {
+        "move": "随迁",
+        "copy": "复制",
+        "eject": "固化",
+        "keep": "保留",
+        "detach": "断开",
+        "replace": "需替换",
+        "remove": "移除",
+        "revoke": "撤销",
+        "block": "无法转移",
+        "notice": "注意"
+      },
+      "items": {
+        "files": "工作目录下的全部文件",
+        "sessions": "对话历史（{{count}} 个会话）",
+        "schedules": "定时任务（{{count}} 个），之后以接收方身份运行",
+        "mcp_config": "MCP 配置，包括其中手填的 header 和密钥",
+        "inline_api_key": "工作空间里手填的 API Key",
+        "memory_store": "记忆库 {{name}}",
+        "provider": "模型供应商 {{name}}",
+        "prompt": "Prompt {{name}}",
+        "skill": "技能 {{name}}",
+        "template": "模板 {{name}}（私有模板的配置会直接写进工作空间）",
+        "environment": "运行环境 {{name}}",
+        "afs_share": "和其他工作空间共享的目录 {{name}}",
+        "teamwork_task": "协作任务 {{name}}",
+        "tag": "原所有者打的标签（{{count}} 个）",
+        "credential_binding": "原所有者绑定到这个工作空间的凭据（{{count}} 个）",
+        "export_link": "已发出的公开文件和会话链接（{{count}} 个）",
+        "channel_route": "指向这个工作空间的 Slack、企业微信和 Webhook 入口会失效，需要接收方重新配置",
+        "recipient_credentials": "接收方的全局凭据会注入这个工作空间",
+        "mcp_oauth": "需要 OAuth 授权的 MCP 服务，接收方要重新连接",
+        "slug_reference": "别处用「用户名/{{name}}」调用这个 agent 的地方会失效"
+      },
+      "blocked": {
+        "environment": "这个工作空间跑在原所有者的私有运行环境 {{name}} 上，接收方无权使用，暂不支持转移。"
+      },
+      "toasts": {
+        "offered": "已发给 {{name}}，等待对方接受",
+        "cancelled": "已撤回转移"
+      },
+      "errors": {
+        "plan": "无法生成转移清单",
+        "create": "发起转移失败",
+        "cancel": "撤回失败"
       }
     }
   }

@@ -28,15 +28,14 @@ async function awaitQuiescent(since: number): Promise<void> {
   if (remaining > 0) await new Promise((r) => setTimeout(r, remaining))
 }
 
-/** Thrown when a teardown cannot account for what the workspace spent. */
+/** Thrown when a teardown or transfer cannot account for what the workspace spent. */
 export class UsageNotDrained extends Error {
   constructor(
     readonly workspaceId: string,
     readonly stop: string,
+    message = `Could not collect usage for workspace ${workspaceId} before deleting it (${stop}). Its unread records would be destroyed with the volume. Retry, or pass force=true to delete anyway.`,
   ) {
-    super(
-      `Could not collect usage for workspace ${workspaceId} before deleting it (${stop}). Its unread records would be destroyed with the volume. Retry, or pass force=true to delete anyway.`,
-    )
+    super(message)
     this.name = 'UsageNotDrained'
   }
 }
@@ -93,5 +92,41 @@ export async function drainBeforeDelete(
   if (!force) throw new UsageNotDrained(workspace.id, outcome.stop)
   console.warn(
     `[usage] forced delete ws=${workspace.id} with usage undrained (${outcome.stop}) — records not yet collected are lost`,
+  )
+}
+
+/**
+ * Collect before a workspace changes owner, blocking until it is done.
+ *
+ * The ledger stamps each record with whoever owns the workspace when it is
+ * pulled, so anything still on the transcripts at the handover would be billed
+ * to the new owner. Nothing is destroyed by a transfer, so unlike a delete the
+ * failure mode is misattribution rather than loss — still worth refusing over,
+ * since the transfer can simply be retried. `force` (admin only) accepts the
+ * misattribution for a workspace whose agent is wedged.
+ *
+ * A workspace that is not running has had everything it ran pulled by the
+ * stop drain, or will have it pulled — under the new owner — on its next start.
+ */
+export async function drainBeforeTransfer(
+  workspace: { id: string; user_id: string; status: string },
+  settleFrom: number,
+  force: boolean,
+): Promise<void> {
+  if (workspace.status !== 'running') return
+
+  await awaitQuiescent(settleFrom)
+  const outcome = await pullWorkspaceUsage(workspace.id, workspace.user_id)
+  if (outcome.drained) return
+
+  if (!force) {
+    throw new UsageNotDrained(
+      workspace.id,
+      outcome.stop,
+      `Could not collect usage for workspace ${workspace.id} before transferring it (${outcome.stop}). Records not yet collected would be billed to the new owner. Retry the transfer.`,
+    )
+  }
+  console.warn(
+    `[usage] forced transfer ws=${workspace.id} with usage undrained (${outcome.stop}) — records not yet collected go to the new owner`,
   )
 }

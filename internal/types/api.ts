@@ -2271,3 +2271,154 @@ export const CreatedEnvironmentTokenSchema = z.object({
   created_at: z.string(),
 })
 export type CreatedEnvironmentToken = z.infer<typeof CreatedEnvironmentTokenSchema>
+
+// ── Workspace transfer ──────────────────────────────────────────────────────
+
+export const TransferUserSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  display_name: z.string(),
+})
+export type TransferUser = z.infer<typeof TransferUserSchema>
+
+/**
+ * What a transfer does to one thing the workspace has or points at.
+ *
+ * move    — changes hands with the workspace
+ * keep    — stays as is; the recipient can already use it
+ * copy    — the sender's private copy is duplicated into the recipient's account
+ * detach  — the reference is dropped; the recipient re-adds their own
+ * eject   — a private template's configuration is baked into the workspace
+ * replace — the recipient must pick their own (the model provider)
+ * remove  — the link is deleted (tags, cross-workspace shares, bindings)
+ * revoke  — outstanding public links stop working
+ * block   — the transfer cannot proceed while this holds
+ * notice  — nothing is changed, but the parties should know
+ */
+export const TransferActionSchema = z.enum([
+  'move',
+  'keep',
+  'copy',
+  'detach',
+  'eject',
+  'replace',
+  'remove',
+  'revoke',
+  'block',
+  'notice',
+])
+export type TransferAction = z.infer<typeof TransferActionSchema>
+
+export const TransferItemKindSchema = z.enum([
+  'files',
+  'sessions',
+  'schedules',
+  'mcp_config',
+  'inline_api_key',
+  'memory_store',
+  'provider',
+  'prompt',
+  'skill',
+  'template',
+  'environment',
+  'afs_share',
+  'teamwork_task',
+  'tag',
+  'credential_binding',
+  'export_link',
+  'channel_route',
+  'recipient_credentials',
+  'mcp_oauth',
+  'slug_reference',
+])
+export type TransferItemKind = z.infer<typeof TransferItemKindSchema>
+
+export const TransferItemSchema = z.object({
+  kind: TransferItemKindSchema,
+  action: TransferActionSchema,
+  /** The referenced resource, when the item is about one specific resource. */
+  id: z.string().nullable(),
+  name: z.string().nullable(),
+  /** For aggregate items (e.g. "3 tags"). */
+  count: z.number().int().nullable(),
+})
+export type TransferItem = z.infer<typeof TransferItemSchema>
+
+export const TransferCopySelectionSchema = z.object({
+  prompts: z.array(z.string()),
+  skills: z.array(z.string()),
+})
+export type TransferCopySelection = z.infer<typeof TransferCopySelectionSchema>
+
+export const ApiTransferPlanSchema = z.object({
+  workspace: z.object({ id: z.string(), name: z.string(), slug: z.string().nullable() }),
+  from_user: TransferUserSchema,
+  to_user: TransferUserSchema,
+  items: z.array(TransferItemSchema),
+  /** The sender's private prompts / skills the recipient cannot see, offered for copying. */
+  copyable: z.object({
+    prompts: z.array(z.object({ id: z.string(), name: z.string() })),
+    skills: z.array(z.object({ id: z.string(), name: z.string() })),
+  }),
+  /** Some item has action `block`: the transfer cannot proceed. */
+  blocked: z.boolean(),
+  /** The recipient already has a workspace with this slug; a new one is required. */
+  slug_conflict: z.boolean(),
+  /** A free slug for the recipient, offered when `slug_conflict`. */
+  suggested_slug: z.string().nullable(),
+  /** The workspace's provider is not usable by the recipient; one must be chosen. */
+  provider_required: z.boolean(),
+})
+export type ApiTransferPlan = z.infer<typeof ApiTransferPlanSchema>
+
+export const TransferStatusSchema = z.enum([
+  'pending',
+  'executing',
+  'completed',
+  'declined',
+  'cancelled',
+  'expired',
+  'failed',
+])
+export type TransferStatus = z.infer<typeof TransferStatusSchema>
+
+export const ApiWorkspaceTransferSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  workspace_name: z.string(),
+  from_user: TransferUserSchema,
+  to_user: TransferUserSchema,
+  initiated_by: z.string(),
+  status: TransferStatusSchema,
+  copy: TransferCopySelectionSchema,
+  error: z.string().nullable(),
+  created_at: z.string(),
+  expires_at: z.string(),
+  resolved_at: z.string().nullable(),
+})
+export type ApiWorkspaceTransfer = z.infer<typeof ApiWorkspaceTransferSchema>
+
+export const CreateTransferRequestSchema = z.object({
+  to_username: z.string().min(1),
+  copy: TransferCopySelectionSchema,
+  /** The sender has read the risk notice (files and history move as-is). */
+  acknowledge_risks: z.literal(true),
+})
+export type CreateTransferRequest = z.infer<typeof CreateTransferRequestSchema>
+
+export const AcceptTransferRequestSchema = z.object({
+  slug: SlugSchema.optional(),
+  provider_id: z.string().optional(),
+})
+export type AcceptTransferRequest = z.infer<typeof AcceptTransferRequestSchema>
+
+export const AdminTransferRequestSchema = z.object({
+  to_user_id: z.string().min(1),
+  copy: TransferCopySelectionSchema,
+  slug: SlugSchema.optional(),
+  /** Omitted when the recipient has no usable provider: the workspace is left unconfigured. */
+  provider_id: z.string().optional(),
+  /** Transfer even if outstanding usage cannot be collected first. */
+  force: z.boolean().optional(),
+})
+export type AdminTransferRequest = z.infer<typeof AdminTransferRequestSchema>

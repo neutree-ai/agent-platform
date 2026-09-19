@@ -17,6 +17,8 @@ interface MemoryStoreRow {
   last_reflected_at: string | null
   /** true = Reflect proposes changes via agent_requests instead of writing directly. */
   reflect_review_mode: boolean
+  /** The workspace this store was provisioned for; it changes hands with it. */
+  origin_workspace_id: string | null
   created_at: string
   updated_at: string
 }
@@ -108,12 +110,14 @@ export async function createStore(input: {
   ownerUserId: string
   name: string
   description?: string
+  /** Set when the store is provisioned as a workspace's own memory. */
+  originWorkspaceId?: string
 }): Promise<MemoryStoreWithCounts> {
   const id = generateId()
   await pool.query(
-    `INSERT INTO memory_stores (id, owner_user_id, name, description)
-     VALUES ($1, $2, $3, $4)`,
-    [id, input.ownerUserId, input.name, input.description ?? ''],
+    `INSERT INTO memory_stores (id, owner_user_id, name, description, origin_workspace_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, input.ownerUserId, input.name, input.description ?? '', input.originWorkspaceId ?? null],
   )
   return (await getStoreById(id))!
 }

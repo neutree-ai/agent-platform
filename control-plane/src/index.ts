@@ -57,6 +57,7 @@ import tagsRoutes from './routes/tags'
 import teamsRoutes from './routes/teams'
 import teamworkRoutes from './routes/teamwork'
 import templatesRoutes from './routes/templates'
+import transfersRoutes from './routes/transfers'
 import wecomAuthRoutes from './routes/wecom-auth'
 import workspaceProtocolRoutes from './routes/workspace'
 import workspaceLayoutsRoutes from './routes/workspace-layouts'
@@ -74,6 +75,7 @@ import workspacesSchedulesRoutes from './routes/workspaces/schedules'
 import workspacesSessionsRoutes from './routes/workspaces/sessions'
 import workspacesSkillsRoutes from './routes/workspaces/skills'
 import workspacesTemplatesRoutes from './routes/workspaces/templates'
+import workspacesTransferRoutes from './routes/workspaces/transfer'
 import workspacesUsageRoutes from './routes/workspaces/usage'
 import workspacesWriteRoutes from './routes/workspaces/write'
 import { renewToken, shouldRenewToken, verifyToken } from './services/auth'
@@ -331,6 +333,7 @@ app.route('/api/workspaces', workspacesSchedulesRoutes)
 app.route('/api/workspaces', workspacesReflectRoutes)
 app.route('/api/workspaces', workspacesAgentRequestsRoutes)
 app.route('/api/workspaces', workspacesProfileRoutes)
+app.route('/api/workspaces', workspacesTransferRoutes)
 app.route('/api/me', meProfileRoutes)
 app.route('/api/me', meRecentSessionsRoutes)
 app.route('/api/me', meActivityRoutes)
@@ -357,6 +360,7 @@ app.route('/api/tags', tagsRoutes)
 app.route('/api/teams', teamsRoutes)
 app.route('/api/teamwork', teamworkRoutes)
 app.route('/api/invites', invitesRoutes)
+app.route('/api/transfers', transfersRoutes)
 app.route('/api/batch-runs', batchRunRoutes)
 app.route('/api/notifications', notificationsRoutes)
 app.route('/api/providers', providersRoutes)

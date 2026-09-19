@@ -1,9 +1,23 @@
 import { Hono } from 'hono'
+import { AdminTransferRequestSchema } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
 import { pool } from '../../services/db/pool'
+import { getUser } from '../../services/db/users'
+import {
+  createTransfer,
+  getOpenTransferForWorkspace,
+  getTransfer,
+  transitionTransfer,
+} from '../../services/db/workspace-transfers'
 import { getWorkspace } from '../../services/db/workspaces'
 import { UsageNotDrained } from '../../services/usage/teardown'
 import { destroyWorkspace, stopWorkspace } from '../../services/workspace-lifecycle'
+import {
+  TransferRejected,
+  assertTransferable,
+  executeTransfer,
+} from '../../services/workspace-transfer'
+import { freeSlugFor, planTransfer } from '../../services/workspace-transfer-plan'
 
 const workspaces = new Hono<AppEnv>()
 
@@ -146,6 +160,95 @@ workspaces.delete('/:id', async (c) => {
     if (e instanceof UsageNotDrained) return c.json({ error: e.message }, 409)
     return c.json({ error: e instanceof Error ? e.message : 'Failed to delete workspace' }, 500)
   }
+})
+
+// Admin transfer: reassign any workspace to another user without the
+// recipient's acceptance — for owners who have left or cannot be reached. Same
+// plan and executor as the user flow. The admin stands in for the recipient's
+// inputs: a slug clash is resolved to a free slug unless one is given, and a
+// provider the recipient cannot use may be left unset, which leaves the
+// workspace unconfigured until the recipient picks one.
+workspaces.get('/:id/transfer/plan', async (c) => {
+  const workspace = await getWorkspace(c.req.param('id'))
+  if (!workspace) return c.json({ error: 'Workspace not found' }, 404)
+  const [from, to] = await Promise.all([
+    getUser(workspace.user_id),
+    getUser(c.req.query('to_user_id') ?? ''),
+  ])
+  if (!from || !to) return c.json({ error: 'User not found' }, 404)
+  try {
+    assertTransferable(workspace, to)
+  } catch (e) {
+    if (e instanceof TransferRejected) return c.json({ error: e.message }, e.status)
+    throw e
+  }
+  return c.json((await planTransfer(workspace, from, to)).plan)
+})
+
+workspaces.post('/:id/transfer', async (c) => {
+  const admin = c.get('user')
+  const workspace = await getWorkspace(c.req.param('id'))
+  if (!workspace) return c.json({ error: 'Workspace not found' }, 404)
+  const parsed = AdminTransferRequestSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success)
+    return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid body' }, 400)
+  const body = parsed.data
+  const to = await getUser(body.to_user_id)
+  if (!to) return c.json({ error: 'User not found' }, 404)
+  try {
+    assertTransferable(workspace, to)
+  } catch (e) {
+    if (e instanceof TransferRejected) return c.json({ error: e.message }, e.status)
+    throw e
+  }
+
+  // An offer the owner made is superseded.
+  const open = await getOpenTransferForWorkspace(workspace.id)
+  if (open?.status === 'executing') {
+    return c.json({ error: 'A transfer of this workspace is already running' }, 409)
+  }
+  if (open) await transitionTransfer(open.id, 'pending', 'cancelled')
+
+  const slug =
+    body.slug ??
+    (workspace.slug ? await freeSlugFor(to.id, workspace.slug, workspace.id) : undefined)
+
+  let id: string
+  try {
+    id = await createTransfer({
+      workspaceId: workspace.id,
+      fromUserId: workspace.user_id,
+      toUserId: to.id,
+      initiatedBy: admin.sub,
+      copy: body.copy,
+      status: 'executing',
+    })
+  } catch (e: any) {
+    if (e?.code === '23505')
+      return c.json({ error: 'A transfer of this workspace is already open' }, 409)
+    throw e
+  }
+
+  console.log(
+    `[Admin] Transfer workspace=${workspace.id} ${workspace.user_id} -> ${to.id} by ${admin.sub}`,
+  )
+  try {
+    await executeTransfer({
+      transferId: id,
+      workspaceId: workspace.id,
+      fromUserId: workspace.user_id,
+      toUserId: to.id,
+      inputs: { slug, providerId: body.provider_id, copy: body.copy },
+      onFailure: 'failed',
+      allowNoProvider: true,
+      force: body.force,
+    })
+  } catch (e) {
+    if (e instanceof TransferRejected) return c.json({ error: e.message }, e.status)
+    if (e instanceof UsageNotDrained) return c.json({ error: e.message }, 409)
+    return c.json({ error: e instanceof Error ? e.message : 'Failed to transfer workspace' }, 500)
+  }
+  return c.json(await getTransfer(id))
 })
 
 export default workspaces
