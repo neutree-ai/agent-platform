@@ -571,12 +571,19 @@ export function RouteForm({
   const [sessionTtlHours, setSessionTtlHours] = useState(
     ((initial?.config as Record<string, unknown>)?.session_ttl_hours as number) ?? 24,
   )
-  const [filters, setFilters] = useState<{ field: string; op: string; value: string }[]>(
-    ((initial?.config as Record<string, unknown>)?.filters as {
-      field: string
-      op: string
-      value: string
-    }[]) ?? [],
+  // Stored filter values are typed per op (string[] for `in`, boolean for
+  // `exists`); the form edits them as strings and re-types them on submit.
+  const [filters, setFilters] = useState<{ field: string; op: string; value: string }[]>(() =>
+    (
+      ((initial?.config as Record<string, unknown>)?.filters as {
+        field: string
+        op: string
+        value: unknown
+      }[]) ?? []
+    ).map((f) => ({
+      ...f,
+      value: Array.isArray(f.value) ? f.value.join(',') : String(f.value ?? ''),
+    })),
   )
   const [routeSecret, setRouteSecret] = useState(
     ((initial?.config as Record<string, unknown>)?.secret as string) ?? '',
