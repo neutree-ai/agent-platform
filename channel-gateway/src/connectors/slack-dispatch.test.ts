@@ -135,4 +135,54 @@ describe('Slack job dispatch', () => {
       error: 'control-plane unavailable',
     })
   })
+
+  describe('thread auto-follow', () => {
+    beforeEach(() => {
+      dbMocks.getRouteByExternalId.mockResolvedValue({
+        id: 'route-1',
+        connector_id: 'connector-1',
+        user_id: 'user-1',
+        workspace_id: 'workspace-1',
+        external_id: 'C1',
+        config: { require_mention: false },
+      })
+      dbMocks.getThreadSessionCursor.mockResolvedValue({ session_id: 'session-1' })
+      webMocks.conversationsReplies.mockResolvedValue({ messages: [] })
+      vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    })
+
+    async function sendMessage(event: Record<string, unknown>) {
+      const create = vi.fn().mockResolvedValue({ id: 'job-1' })
+      routeClientMocks.resolveRouteClient.mockResolvedValue({ jobs: { create } })
+      await startOne('connector-1')
+      const handler = socketMocks.handlers.get('message')
+      expect(handler).toBeDefined()
+      await handler?.({ event, ack: vi.fn().mockResolvedValue(undefined) })
+      return create
+    }
+
+    it('follows thread replies that carry attachments', async () => {
+      const create = await sendMessage({
+        channel: 'C1',
+        subtype: 'file_share',
+        text: 'see screenshot',
+        user: 'U1',
+        ts: '2.0',
+        thread_ts: '1.0',
+        files: [],
+      })
+      expect(create).toHaveBeenCalledOnce()
+    })
+
+    it('ignores non-message subtypes such as edits', async () => {
+      const create = await sendMessage({
+        channel: 'C1',
+        subtype: 'message_changed',
+        user: 'U1',
+        ts: '2.0',
+        thread_ts: '1.0',
+      })
+      expect(create).not.toHaveBeenCalled()
+    })
+  })
 })
