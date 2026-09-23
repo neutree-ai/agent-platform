@@ -725,7 +725,10 @@ Indexes are 1-based and match the attached images order.
   // --- message: auto-follow in threads when require_mention is false ---
   socket.on('message', async ({ event, ack }) => {
     await ack()
-    if (event.bot_id || event.subtype) return
+    if (event.bot_id) return
+    // Messages with attachments arrive as subtype `file_share`; every other
+    // subtype (edits, deletions, joins, ...) is not a new user turn.
+    if (event.subtype && event.subtype !== 'file_share') return
 
     // Only handle thread replies (not top-level messages)
     const threadTs = event.thread_ts as string | undefined
