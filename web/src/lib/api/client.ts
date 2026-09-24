@@ -60,10 +60,12 @@ import type {
   ApiTemplate,
   ApiTemplateGrant,
   ApiTemplateVersion,
+  ApiTransferPlan,
   ApiUsageSummary,
   ApiWorkspaceConfig,
   ApiWorkspaceLayout,
   ApiWorkspaceMemoryAttachment,
+  ApiWorkspaceTransfer,
   AskUserRequest,
   AutoScaling,
   BrowserListResponse,
@@ -98,6 +100,7 @@ import type {
   TeamworkSessionRole,
   TemplateGrant,
   TemplateVisibility,
+  TransferCopySelection,
   User,
   UserProfilePayload,
   Workspace,
@@ -1386,6 +1389,60 @@ class ApiClient {
     )
   }
 
+  // Workspace transfer — sender side
+  async getWorkspaceTransfer(workspaceId: string): Promise<ApiWorkspaceTransfer | null> {
+    return this.request<ApiWorkspaceTransfer | null>(`/workspaces/${workspaceId}/transfer`)
+  }
+
+  async planWorkspaceTransfer(workspaceId: string, toUsername: string): Promise<ApiTransferPlan> {
+    return this.request<ApiTransferPlan>(
+      `/workspaces/${workspaceId}/transfer/plan?to=${encodeURIComponent(toUsername)}`,
+    )
+  }
+
+  async createWorkspaceTransfer(
+    workspaceId: string,
+    data: { to_username: string; copy: TransferCopySelection },
+  ): Promise<ApiWorkspaceTransfer> {
+    return this.request<ApiWorkspaceTransfer>(`/workspaces/${workspaceId}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ ...data, acknowledge_risks: true }),
+    })
+  }
+
+  async cancelWorkspaceTransfer(workspaceId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/workspaces/${workspaceId}/transfer`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Workspace transfer — recipient side
+  async listIncomingTransfers(): Promise<ApiWorkspaceTransfer[]> {
+    return this.request<ApiWorkspaceTransfer[]>('/transfers')
+  }
+
+  async getTransfer(
+    id: string,
+  ): Promise<{ transfer: ApiWorkspaceTransfer; plan: ApiTransferPlan | null }> {
+    return this.request(`/transfers/${encodeURIComponent(id)}`)
+  }
+
+  async acceptTransfer(
+    id: string,
+    data: { slug?: string; provider_id?: string },
+  ): Promise<ApiWorkspaceTransfer> {
+    return this.request<ApiWorkspaceTransfer>(`/transfers/${encodeURIComponent(id)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async declineTransfer(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/transfers/${encodeURIComponent(id)}/decline`, {
+      method: 'POST',
+    })
+  }
+
   // Credentials
   async listCredentials(): Promise<ApiCredentialMeta[]> {
     return this.request<ApiCredentialMeta[]>('/credentials')
@@ -2279,6 +2336,25 @@ class ApiClient {
   }
   async deleteAdminWorkspace(id: string): Promise<void> {
     return this.request(`/admin/workspaces/${id}`, { method: 'DELETE' })
+  }
+  async planAdminWorkspaceTransfer(id: string, toUserId: string): Promise<ApiTransferPlan> {
+    return this.request(
+      `/admin/workspaces/${id}/transfer/plan?to_user_id=${encodeURIComponent(toUserId)}`,
+    )
+  }
+  async adminTransferWorkspace(
+    id: string,
+    data: {
+      to_user_id: string
+      copy: TransferCopySelection
+      slug?: string
+      provider_id?: string
+    },
+  ): Promise<ApiWorkspaceTransfer> {
+    return this.request(`/admin/workspaces/${id}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   }
 
   // Sandboxes

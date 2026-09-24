@@ -26,6 +26,7 @@ function steady(over: Partial<RuntimeMeterRow> = {}): RuntimeMeterRow {
     spec_version: 3,
     observed_template_version: 3,
     env_offline: false,
+    last_user_id: 'u1',
     last_environment_id: 'builtin',
     last_phase: 'running',
     last_ready_replicas: 1,
@@ -48,6 +49,7 @@ describe('stateChanged', () => {
     expect(
       stateChanged(
         steady({
+          last_user_id: null,
           last_environment_id: null,
           last_phase: null,
           last_ready_replicas: null,
@@ -80,6 +82,10 @@ describe('stateChanged', () => {
 
   it('is true when the workspace moved to another environment — it changes who is billed', () => {
     expect(stateChanged(steady({ environment_id: 'byoi-1', is_builtin: false }))).toBe(true)
+  })
+
+  it('is true when the workspace was transferred to another owner — it changes who is billed', () => {
+    expect(stateChanged(steady({ user_id: 'u2' }))).toBe(true)
   })
 
   it('distinguishes "no ready set reported" from "an empty ready set"', () => {
