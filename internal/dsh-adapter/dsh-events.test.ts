@@ -2,27 +2,35 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createTurnAccumulator, DshEventTranslator } from './dsh-events.js'
-import type { DshSessionEvent } from './types.js'
+import type { DshNotification } from './types.js'
 
 /**
- * Recorded from a real dsh runtime (deepseek-v4-flash, three tool calls):
- * every event type the turn produced, with the repetitive stream chunks
- * sampled and bulk payloads trimmed. Replaying it is what catches the wire
- * shape drifting under us — a hand-written event would only ever agree with
- * whatever this file already believes.
+ * Recorded from a real dsh runtime driven through the platform's composition
+ * and server plugin: one turn with reasoning, a `write` call, a `bash` call,
+ * and a final answer — three model requests. Every notification the turn
+ * produced is here, log events and stream frames interleaved as they arrived.
+ * Replaying it is what catches the wire shape drifting under us — a
+ * hand-written event would only ever agree with whatever this file already
+ * believes.
  */
-function fixtureEvents(): DshSessionEvent[] {
-  const path = join(import.meta.dirname, 'fixtures', 'session-events.jsonl')
+function fixtureNotifications(): DshNotification[] {
+  const path = join(import.meta.dirname, 'fixtures', 'sdk-notifications.jsonl')
   return readFileSync(path, 'utf-8')
     .split('\n')
     .filter(Boolean)
-    .map(line => JSON.parse(line) as DshSessionEvent)
+    .map(line => JSON.parse(line) as DshNotification)
 }
 
 function translateAll() {
   const turn = createTurnAccumulator()
   const translator = new DshEventTranslator(turn)
-  const updates = fixtureEvents().flatMap(event => translator.translate(event))
+  const updates = fixtureNotifications().flatMap(n =>
+    n.method === 'session.event'
+      ? translator.translate(n.params.event)
+      : n.method === 'session.stream'
+        ? translator.translateStream(n.params.frame)
+        : [],
+  )
   return { turn, updates }
 }
 
@@ -30,10 +38,8 @@ describe('DshEventTranslator', () => {
   it('streams assistant text as message chunks', () => {
     const { updates } = translateAll()
     const chunks = updates.filter(u => u.sessionUpdate === 'agent_message_chunk')
-    expect(chunks.length).toBeGreaterThan(0)
-    for (const chunk of chunks) {
-      expect((chunk as { content: { type: string } }).content.type).toBe('text')
-    }
+    const text = chunks.map(c => (c as { content: { text: string } }).content.text).join('')
+    expect(text).toBe('Hello from fake model.')
   })
 
   it('carries reasoning separately from the answer', () => {
@@ -45,57 +51,55 @@ describe('DshEventTranslator', () => {
   it('opens a tool call with its arguments parsed', () => {
     const { updates } = translateAll()
     const calls = updates.filter(u => u.sessionUpdate === 'tool_call')
-    expect(calls.length).toBe(3)
-    const write = calls[0] as unknown as { title: string; rawInput: Record<string, unknown> }
-    expect(write.title).toBe('write')
+    expect(calls.map(c => (c as { title: string }).title)).toEqual(['write', 'bash'])
+    const write = calls[0] as unknown as { rawInput: Record<string, unknown> }
     // dsh reports arguments as a JSON string; the pipeline renders a value.
     expect(write.rawInput.file_path).toBe('notes.txt')
   })
 
   it('closes each tool call with its output and keeps the name', () => {
     const { updates } = translateAll()
-    const results = updates.filter(u => u.sessionUpdate === 'tool_call_update')
-    expect(results.length).toBe(3)
-    const first = results[0] as unknown as {
+    const calls = updates.filter(u => u.sessionUpdate === 'tool_call')
+    const results = updates.filter(u => u.sessionUpdate === 'tool_call_update') as unknown as {
       status: string
       title: string
       rawOutput: string
       toolCallId: string
-    }
-    expect(first.status).toBe('completed')
+    }[]
+    expect(results.length).toBe(2)
     // The name arrives on tool/call and must survive onto the result, which
     // carries only the call id.
-    expect(first.title).toBe('write')
-    expect(first.rawOutput).toContain('notes.txt')
-    const calls = updates.filter(u => u.sessionUpdate === 'tool_call')
-    expect(first.toolCallId).toBe((calls[0] as unknown as { toolCallId: string }).toolCallId)
+    expect(results.map(r => r.title)).toEqual(['write', 'bash'])
+    expect(results.every(r => r.status === 'completed')).toBe(true)
+    expect(results[0].toolCallId).toBe((calls[0] as unknown as { toolCallId: string }).toolCallId)
+    expect(results[0].rawOutput).toContain('notes.txt')
+    expect(results[1].rawOutput).toContain('hello from dsh')
   })
 
-  it('sums usage across every model request in the turn', () => {
+  it('sums usage across every model request in the turn, once each', () => {
     const { turn } = translateAll()
-    // The fixture samples two of the turn's usage records.
-    expect(turn.inputTokens).toBeGreaterThan(0)
+    // Three requests settle three `assistant/message` events. The stream's own
+    // usage chunks repeat the same figures and must not be counted again.
+    expect(turn.inputTokens).toBe(3 * turn.lastInputTokens)
     expect(turn.outputTokens).toBeGreaterThan(0)
-    // Summed, not last-wins: a single request cannot account for the total.
-    const lastRequestOnly = turn.lastInputTokens
-    expect(turn.inputTokens).toBeGreaterThan(lastRequestOnly)
+    expect(turn.cacheReadTokens).toBeGreaterThan(0)
   })
 
   it('reports the turn outcome and the context gauge', () => {
     const { turn, updates } = translateAll()
     expect(turn.end?.kind).toBe('completed')
-    expect(turn.contextWindow).toBe(1_000_000)
+    expect(turn.contextWindow).toBe(128_000)
     const gauges = updates.filter(u => u.sessionUpdate === 'usage_update')
     expect(gauges.length).toBeGreaterThan(0)
     const last = gauges.at(-1) as unknown as { used: number; size: number }
-    expect(last.size).toBe(1_000_000)
+    expect(last.size).toBe(128_000)
     expect(last.used).toBe(turn.lastInputTokens)
   })
 
   it('ignores bookkeeping events rather than inventing updates for them', () => {
     const turn = createTurnAccumulator()
     const translator = new DshEventTranslator(turn)
-    for (const type of ['step/start', 'step/end', 'user/message', 'session/title']) {
+    for (const type of ['step/start', 'step/end', 'user/message', 'session/title', 'request/header']) {
       expect(translator.translate({ type, seq: 1, time: 0, data: {} })).toEqual([])
     }
   })
@@ -115,14 +119,10 @@ describe('DshEventTranslator', () => {
       time: 0,
       data: {
         message: {
-          content: [
-            {
-              type: 'tool-result',
-              toolCallId: 'c1',
-              content: [{ type: 'text', text: '[exit code: 1]' }],
-              isError: true,
-            },
-          ],
+          role: 'tool',
+          toolCallId: 'c1',
+          content: [{ type: 'text', text: '[exit code: 1]' }],
+          isError: true,
         },
       },
     })

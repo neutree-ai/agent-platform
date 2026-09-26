@@ -1,22 +1,26 @@
 /**
- * Translation layer: DeepSeek Harness `session.event` → ACP `SessionUpdate`.
+ * Translation layer: DeepSeek Harness SDK notifications → ACP `SessionUpdate`.
  *
  * The platform's event pipeline (`AcpEventTranslator` → UniversalEvent → cp)
- * speaks ACP. dsh speaks its own session log, which is strictly richer — it
- * streams token-level text and reasoning deltas, tool calls with their
- * arguments, per-step usage, and turn boundaries. Everything the pipeline can
- * carry has a home in that vocabulary, so this file is a pure mapping and the
- * rest of the adapter stack is reused unchanged.
+ * speaks ACP. dsh speaks two things, and between them everything the pipeline
+ * can carry has a home, so this file is a pure mapping and the rest of the
+ * adapter stack is reused unchanged:
+ *
+ *  - the durable session log (`session.event`): tool calls with their
+ *    arguments, tool results, per-request usage, turn boundaries;
+ *  - live stream frames (`session.stream`): token-level text and reasoning
+ *    deltas, which the log does not keep.
  *
  * What is deliberately dropped: `tool-call-delta` (the pipeline has no partial
  * -argument delta; the complete `tool/call` event carries the same arguments a
- * moment later), and the bookkeeping events (`step/*`, `request/*`,
- * `agent/inbox/*`, `assistant/message`, `session/title`) whose content either
- * duplicates the streamed deltas or belongs to another subsystem.
+ * moment later), the stream's `usage` chunk (the same figures settle durably
+ * on `assistant/message`, which is what gets counted), and the bookkeeping
+ * events (`step/*`, `request/header`, `agent/inbox/*`, `session/title`) that
+ * belong to another subsystem.
  */
 
 import type { SessionUpdate } from '@agentclientprotocol/sdk'
-import type { DshSessionEvent, DshStreamChunk, DshToolResultBlock, DshUsage } from './types.js'
+import type { DshSessionEvent, DshStreamChunk, DshStreamFrame, DshToolMessage, DshUsage } from './types.js'
 
 /** Accumulated turn facts the bridge reports back on the prompt result. */
 export interface DshTurnAccumulator {
@@ -59,25 +63,18 @@ function parseArguments(raw: unknown): unknown {
 }
 
 /** Flatten a `tool/result` message into the text the model itself received. */
-function toolResultText(blocks: DshToolResultBlock[]): string {
+function toolResultText(message: DshToolMessage): string {
   const parts: string[] = []
-  for (const block of blocks) {
-    for (const inner of block.content ?? []) {
-      if (inner?.type === 'text' && typeof inner.text === 'string') parts.push(inner.text)
-    }
+  for (const block of message.content ?? []) {
+    if (block?.type === 'text' && typeof block.text === 'string') parts.push(block.text)
   }
   return parts.join('\n')
 }
 
-function toolResultBlocks(event: DshSessionEvent): DshToolResultBlock[] {
-  const message = event.data?.message as { content?: unknown } | undefined
-  const content = Array.isArray(message?.content) ? message.content : []
-  return content.filter((b): b is DshToolResultBlock => (b as DshToolResultBlock)?.type === 'tool-result')
-}
-
 /**
  * Stateful per-session translator. One instance per bridge session; the caller
- * feeds it every `session.event` and forwards the returned updates.
+ * feeds it every log event and stream frame of that session and forwards the
+ * returned updates.
  */
 export class DshEventTranslator {
   /**
@@ -90,8 +87,11 @@ export class DshEventTranslator {
 
   translate(event: DshSessionEvent): SessionUpdate[] {
     switch (event.type) {
-      case 'assistant/chunk':
-        return this.translateChunk(event.data?.chunk as DshStreamChunk | undefined)
+      // Each model request settles as exactly one of these, carrying its usage.
+      case 'assistant/message':
+      case 'assistant/attempt':
+        this.accumulate(event.data?.usage as DshUsage | undefined)
+        return this.usageUpdate()
 
       case 'request/context': {
         const window = num(event.data?.contextWindow)
@@ -121,19 +121,18 @@ export class DshEventTranslator {
       }
 
       case 'tool/result': {
-        const blocks = toolResultBlocks(event)
-        const callId = str(event.data?.callId) ?? blocks.map(b => b.toolCallId).find(id => id !== undefined)
+        const message = (event.data?.message ?? {}) as DshToolMessage
+        const callId = str(event.data?.callId) ?? str(message.toolCallId)
         if (callId === undefined) return []
-        const isError = blocks.some(block => block.isError === true)
         const name = this.toolNames.get(callId)
         this.toolNames.delete(callId)
         return [
           {
             sessionUpdate: 'tool_call_update',
             toolCallId: callId,
-            status: isError ? 'failed' : 'completed',
+            status: message.isError === true ? 'failed' : 'completed',
             ...(name === undefined ? {} : { title: name }),
-            rawOutput: toolResultText(blocks),
+            rawOutput: toolResultText(message),
           } as SessionUpdate,
         ]
       }
@@ -152,8 +151,10 @@ export class DshEventTranslator {
     }
   }
 
-  private translateChunk(chunk: DshStreamChunk | undefined): SessionUpdate[] {
-    if (chunk === undefined) return []
+  /** Live token deltas. Only text and reasoning have a home in the pipeline. */
+  translateStream(frame: DshStreamFrame): SessionUpdate[] {
+    if (frame.type !== 'chunk') return []
+    const chunk: DshStreamChunk = frame.chunk
     switch (chunk.type) {
       case 'text-delta':
         return [
@@ -167,19 +168,15 @@ export class DshEventTranslator {
           { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: chunk.text } } as SessionUpdate,
         ]
 
-      case 'usage':
-        this.accumulate(chunk.usage)
-        return this.usageUpdate()
-
       default:
         return []
     }
   }
 
   /**
-   * dsh emits one usage chunk per model request, so a tool-loop turn produces
-   * several. Summing them is the accurate turn total; taking only the last
-   * would undercount exactly the way goose's `PromptResponse.usage` does.
+   * dsh settles one usage record per model request, so a tool-loop turn
+   * produces several. Summing them is the accurate turn total; taking only the
+   * last would undercount exactly the way goose's `PromptResponse.usage` does.
    */
   private accumulate(usage: DshUsage | undefined): void {
     if (usage === undefined) return

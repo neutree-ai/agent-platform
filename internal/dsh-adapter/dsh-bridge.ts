@@ -3,42 +3,28 @@
  *
  * Implements the same `AgentBridge` contract the ACP bridge does, so the shared
  * server skeleton — SSE sinks, reconnect, LRU eviction, config reload — serves
- * dsh unchanged. Everything dsh-specific is confined to this file and
- * `dsh-events.ts`.
+ * dsh unchanged. Everything dsh-specific is confined to this file,
+ * `dsh-runtime.ts`, and `dsh-events.ts`.
  *
- * Three things differ from an ACP agent and shape the design:
+ * Two things differ from an ACP agent and shape the design:
  *
  *  - **Sessions are implicit.** dsh has no create/load call; a prompt names its
- *    session and the runtime creates or resumes it. `createSession`/
- *    `loadSession` therefore only fix the id this bridge serves.
- *  - **There is no cancel on the wire.** Abandoning a turn means ending the
- *    runtime process, which is safe here because one process serves exactly one
- *    session, and lossless because the patched server plugin resumes the
- *    session from its persisted log on the next prompt.
+ *    session and the runtime creates it, or the platform's server plugin
+ *    resumes it from its persisted log. `createSession`/`loadSession`
+ *    therefore only fix the id this bridge serves.
  *  - **MCP servers are composed, not negotiated.** They come from the generated
- *    cordis config the runtime boots with, so the MCP arguments are ignored and
+ *    composition the runtime boots with, so the MCP arguments are ignored and
  *    readiness is settled before the first prompt.
  */
 
 import type { McpServer, PromptResponse, SessionUpdate } from '@agentclientprotocol/sdk'
 import type { ChatImageAttachment } from '../types/events.js'
-import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
 import { formatAttachmentNote, writeInputAttachments } from '../types/attachments.js'
 import type { AcpSessionHandler } from '../acp-adapter/acp-bridge.js'
 import { createTurnAccumulator, DshEventTranslator } from './dsh-events.js'
-import type { DshSessionEvent } from './types.js'
+import { type DshLaunchSpec, DshRuntime, DshRuntimeDiedError } from './dsh-runtime.js'
 
-/** Everything needed to spawn one runtime, resolved at launch time. */
-export interface DshLaunchSpec {
-  /** Runtime executable and arguments — `dsh-jsonrpc-agent`, or node + its bin. */
-  command: string
-  args: string[]
-  /** Complete child environment, including `DSH_CORDIS_CONFIG`. */
-  env: Record<string, string>
-  provider: string
-  model: string
-  maxTokens?: number
-}
+export { type DshLaunchSpec, DshRuntimeDiedError }
 
 export interface DshBridgeOptions {
   /** Workspace directory; the session's cwd and the runtime's own cwd. */
@@ -58,26 +44,16 @@ export interface DshBridgeOptions {
    * plumbing.
    */
   resolveLaunch: (sessionId: string) => Promise<DshLaunchSpec>
-  /** Bounds one model turn, mirroring the ACP bridge's prompt timeout. */
-  requestTimeoutMs?: number
-}
-
-/** Thrown when the runtime dies while a prompt is in flight and no cancel asked for it. */
-export class DshRuntimeDiedError extends Error {
-  constructor(message: string) {
-    super(`dsh runtime exited unexpectedly: ${message}`)
-    this.name = 'DshRuntimeDiedError'
-  }
 }
 
 export class DshBridge {
-  private harness: DeepSeekHarness | undefined
+  private runtime: DshRuntime | undefined
   private handler: AcpSessionHandler | undefined
   private sessionId: string | undefined
   private destroyed = false
-  /** Set by `cancel`, read by the in-flight prompt so a kill reads as cancellation. */
-  private cancelling = false
   private started = false
+  /** Set when the user stops the turn, so a runtime ended for it reads as a cancel. */
+  private cancelRequested = false
 
   constructor(private readonly options: DshBridgeOptions) {}
 
@@ -88,27 +64,18 @@ export class DshBridge {
   }
 
   /** Spawn the runtime and complete the handshake, once per bridge. */
-  private async ensureHarness(sessionId: string): Promise<DeepSeekHarness> {
-    if (this.harness !== undefined) return this.harness
+  private async ensureRuntime(sessionId: string): Promise<DshRuntime> {
+    if (this.runtime !== undefined) return this.runtime
     const spec = await this.options.resolveLaunch(sessionId)
-    const harness = new DeepSeekHarness({
-      launch: {
-        command: spec.command,
-        args: spec.args,
-        cwd: this.options.cwd,
-        env: spec.env,
-        ...(this.options.requestTimeoutMs === undefined
-          ? {}
-          : { requestTimeoutMs: this.options.requestTimeoutMs }),
-      },
-      cwd: this.options.cwd,
-      provider: spec.provider,
-      model: spec.model,
-      ...(spec.maxTokens === undefined ? {} : { maxTokens: spec.maxTokens }),
-    })
-    await harness.start()
-    this.harness = harness
-    return harness
+    const runtime = new DshRuntime(spec, this.options.cwd)
+    try {
+      await runtime.start()
+    } catch (error) {
+      await runtime.close()
+      throw error
+    }
+    this.runtime = runtime
+    return runtime
   }
 
   /**
@@ -121,10 +88,10 @@ export class DshBridge {
   }
 
   /**
-   * Bind this bridge to an existing session. The runtime resolves
-   * create-vs-resume itself when the first prompt arrives, so loading is the
+   * Bind this bridge to an existing session. The runtime's server plugin
+   * resolves create-vs-resume when the first prompt arrives, so loading is the
    * same call as creating — the difference is only whether a persisted log
-   * exists, which the runtime checks for us.
+   * exists, which the plugin checks for us.
    */
   async loadSession(sessionId: string, _opts?: { cwd?: string; mcpServers?: McpServer[] }): Promise<string> {
     this.sessionId = sessionId
@@ -166,26 +133,25 @@ export class DshBridge {
 
     const turn = createTurnAccumulator()
     const translator = new DshEventTranslator(turn)
+    this.cancelRequested = false
 
     try {
-      const harness = await this.ensureHarness(sessionId)
-      await harness.run(promptText, {
-        sessionId,
-        onNotification: (notification: unknown) => {
-          const note = notification as { method?: string; params?: { event?: DshSessionEvent } }
-          if (note.method !== 'session.event') return
-          const event = note.params?.event
-          if (event === undefined) return
-          for (const update of translator.translate(event)) this.emit(update)
-        },
+      const runtime = await this.ensureRuntime(sessionId)
+      await runtime.runTurn(sessionId, promptText, (notification) => {
+        const updates =
+          notification.method === 'session.event'
+            ? translator.translate(notification.params.event)
+            : notification.method === 'session.stream'
+              ? translator.translateStream(notification.params.frame)
+              : []
+        for (const update of updates) this.emit(update)
       })
     } catch (error) {
-      // A cancel kills the runtime under the in-flight prompt; that rejection is
-      // the expected shape of "the user stopped this turn", not a failure.
-      if (this.cancelling || this.destroyed) {
-        return { stopReason: 'cancelled' } as PromptResponse
-      }
-      throw new DshRuntimeDiedError((error as Error).message)
+      if (this.destroyed || this.cancelRequested) return { stopReason: 'cancelled' } as PromptResponse
+      // A runtime that died mid-turn is gone; the next prompt spawns a fresh
+      // one, which resumes the session from its log.
+      if (error instanceof DshRuntimeDiedError) await this.closeRuntime()
+      throw error
     }
 
     return {
@@ -200,31 +166,39 @@ export class DshBridge {
   }
 
   /**
-   * End the turn by ending the runtime. The session survives on disk; the next
-   * prompt spawns a fresh bridge that resumes it.
+   * Abort the active turn; the in-flight prompt settles as cancelled and the
+   * runtime keeps serving the session. A runtime that cannot take the request
+   * is ended instead — the session survives on disk, and the next prompt's
+   * runtime resumes it.
    */
-  async cancel(_sessionId: string): Promise<void> {
-    this.cancelling = true
-    await this.closeHarness()
+  async cancel(sessionId: string): Promise<void> {
+    const runtime = this.runtime
+    if (runtime === undefined) return
+    this.cancelRequested = true
+    try {
+      await runtime.cancel(sessionId)
+    } catch (error) {
+      console.warn(`[dsh-bridge] cancel failed, ending the runtime: ${(error as Error).message}`)
+      await this.closeRuntime()
+    }
   }
 
   isAlive(): boolean {
-    return this.started && !this.destroyed && !this.cancelling
+    return this.started && !this.destroyed
   }
 
   destroy(): void {
     this.destroyed = true
     this.handler = undefined
-    void this.closeHarness()
+    void this.closeRuntime()
   }
 
-  private async closeHarness(): Promise<void> {
-    const harness = this.harness
-    if (harness === undefined) return
-    this.harness = undefined
-    this.started = false
+  private async closeRuntime(): Promise<void> {
+    const runtime = this.runtime
+    if (runtime === undefined) return
+    this.runtime = undefined
     try {
-      await harness.close()
+      await runtime.close()
     } catch (error) {
       console.warn(`[dsh-bridge] close failed: ${(error as Error).message}`)
     }
@@ -242,11 +216,12 @@ export class DshBridge {
 /** dsh turn reasons → the ACP stop reasons the server skeleton branches on. */
 function stopReasonOf(kind: string | undefined): string {
   switch (kind) {
-    case 'interrupted':
+    case 'aborted':
       return 'cancelled'
     case 'max-tokens':
       return 'max_tokens'
     case 'error':
+    case 'blocked':
       return 'refusal'
     default:
       return 'end_turn'
