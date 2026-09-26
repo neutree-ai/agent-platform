@@ -464,9 +464,6 @@ export class AcpEventTranslator {
    * Two ACP carriers feed this:
    *   - PromptResponse.usage (experimental): per-turn input/output/cache tokens
    *   - UsageUpdate event: cumulative context size + cost
-   *
-   * Codex CLI does not populate PromptResponse.usage today, so input/output
-   * remain 0 for codex; cost from usage_update.cost is still captured.
    */
   buildStats(result?: PromptResponse): TurnStats | undefined {
     const u = this.lastUsageUpdate
