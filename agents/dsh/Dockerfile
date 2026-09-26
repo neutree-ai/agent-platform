@@ -97,9 +97,10 @@ RUN case "$TARGETARCH" in amd64) AB_ARCH=x64 ;; arm64) AB_ARCH=arm64 ;; \
 
 WORKDIR /app
 
-# The dsh runtime is npm packages, not a standalone binary: the JSON-RPC bin
-# plus every plugin the generated composition names. They arrive pre-built from
-# the builder — same Debian release, so the native binding is compatible.
+# The dsh runtime is npm packages, not a standalone binary: app-boot plus every
+# plugin the generated composition names, booted by src/runtime/launcher.ts.
+# They arrive pre-built from the builder — same Debian release, so the native
+# binding is compatible.
 COPY agents/dsh/package.json agents/dsh/package-lock.json* ./
 COPY --from=builder /build/agents/dsh/node_modules ./node_modules
 # The binding is the one thing a copied tree can get wrong; fail the build here
@@ -110,14 +111,14 @@ RUN node -e "import('node-pty').then(() => console.log('node-pty ok'), (e) => { 
 COPY --from=builder /build/agents/dsh/dist/agents/ ./dist/agents/
 COPY --from=builder /build/agents/dsh/dist/internal/ ./dist/internal/
 
-# The patched SDK server, published under the bare name the generated
-# composition loads. It lives outside node_modules and is linked in, so its own
-# `@deepseek-ai/*` imports resolve against /app/node_modules like any other
-# plugin's would.
+# The platform's SDK server plugin, published under the bare name the
+# generated composition loads. It lives outside node_modules and is linked in,
+# so its own `@deepseek-ai/*` imports resolve against /app/node_modules like any
+# other plugin's would.
 RUN mkdir -p /app/dsh-plugin \
-    && printf '{"name":"dsh-resume-server","version":"0.0.0","type":"module","main":"index.js"}\n' > /app/dsh-plugin/package.json \
-    && cp /app/dist/agents/dsh/src/runtime/resume-server.js /app/dsh-plugin/index.js \
-    && ln -s /app/dsh-plugin /app/node_modules/dsh-resume-server
+    && printf '{"name":"dsh-platform-server","version":"0.0.0","type":"module","main":"index.js"}\n' > /app/dsh-plugin/package.json \
+    && cp /app/dist/agents/dsh/src/runtime/platform-server.js /app/dsh-plugin/index.js \
+    && ln -s /app/dsh-plugin /app/node_modules/dsh-platform-server
 
 # Generated per-session compositions carry MCP credentials; keep them off the
 # workspace volume and readable only by the agent.

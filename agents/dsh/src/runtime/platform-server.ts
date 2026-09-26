@@ -1,54 +1,65 @@
 /**
- * SDK JSON-RPC server plugin with session resume.
+ * The SDK JSON-RPC server plugin, extended for the platform.
  *
- * The stock `@deepseek-ai/dsh-sdk-jsonrpc-server` always calls
- * `ctx.agents.create()` for a session id it has not served, so prompting a
- * session that already has a persisted log fails the turn with an
- * `(id collision)` error and a runtime restart loses the conversation. The
- * harness can resume — `ctx.agents.resume()` over
- * `ctx.sessionPersistence.prepare()`, including crash repair for a turn that
- * was interrupted mid-flight — only this server plugin never reaches for it.
+ * The stock `@deepseek-ai/dsh-sdk-jsonrpc-server` serves `initialize`,
+ * `session/prompt`, and `shutdown`, and forwards the durable session log. Three
+ * things the platform needs are missing from it, and each is one step here
+ * around the stock server rather than a fork of it:
  *
- * That gap matters more here than it would elsewhere: the SDK wire has no
- * cancel, so stopping a turn means ending the runtime process. Without resume,
- * every stop would also discard the session.
+ *  - **Resume.** The stock server calls `ctx.agents.create()` for any session
+ *    id it has not served in this process, so a restarted runtime would fail
+ *    the next prompt with an id collision and lose the conversation. The
+ *    harness can resume — `ctx.agents.resume()`, including crash repair for a
+ *    turn interrupted mid-flight — so on a prompt for an unserved id that
+ *    persistence knows, resume it and hand the agent to the stock server.
+ *  - **Token streaming.** Text and reasoning deltas are published only as the
+ *    process-local `agent/assistant-stream` event, never into the log, so they
+ *    are forwarded as `session.stream` notifications.
+ *  - **Cancel.** `session/cancel` aborts the session's active turn through
+ *    `agent.cancel()`. The turn ends as `aborted` and the agent keeps serving.
  *
- * This plugin keeps the stock server for every protocol method and inserts one
- * step ahead of it: on a prompt for a session this process has not served whose
- * id IS present in persistence, resume the agent and hand the record over
- * before delegating. Event fan-out, subagent notifications, and the shutdown
- * ladder stay the stock implementation.
+ * Event fan-out, subagent notifications, and the shutdown ladder stay the
+ * stock implementation.
  */
 
 import type { Readable, Writable } from 'node:stream'
 import type { Context } from '@deepseek-ai/cordis'
-import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { HarnessSdkJsonRpcServer } from '@deepseek-ai/dsh-sdk-jsonrpc-server'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Schema from '@deepseek-ai/schemastery'
 
-export const name = 'sdk-jsonrpc-server-resume'
+export const name = 'sdk-jsonrpc-server-platform'
 export const inject = ['agents', 'sessionPersistence']
 
-export interface ResumeJsonRpcConfig {
+export interface PlatformJsonRpcConfig {
   maxTokensAsSuccess?: boolean
   input?: Readable
   output?: Writable
   exit?: (code: number) => void
 }
 
-export const Config: Schema<ResumeJsonRpcConfig> = Schema.object({
+export const Config: Schema<PlatformJsonRpcConfig> = Schema.object({
   maxTokensAsSuccess: Schema.boolean().default(false),
 })
 
+/** The slice of a live agent this plugin touches. */
+interface LiveAgent {
+  session: { id: unknown }
+  cancel(cause: { kind: 'user' }): void
+}
+
+interface AgentHandle {
+  agent: LiveAgent
+}
+
 /**
- * The two harness services this plugin calls.
+ * The harness services and event this plugin uses.
  *
  * dsh publishes these by augmenting cordis's `Context`, but an augmentation
  * only reaches the copy of cordis its own package resolves, and the agent image
- * installs more than one. Declaring the calls locally keeps the plugin honest
- * about its surface and independent of how the tree happens to hoist.
+ * installs more than one. Declaring them locally keeps the plugin honest about
+ * its surface and independent of how the tree happens to hoist.
  */
 interface HarnessServices {
   agents: {
@@ -58,8 +69,12 @@ interface HarnessServices {
     }): Promise<AgentHandle>
   }
   sessionPersistence: {
-    list(signal?: AbortSignal): Promise<{ id: unknown }[]>
+    stat(id: unknown): Promise<unknown | undefined>
   }
+  on(
+    event: 'agent/assistant-stream',
+    listener: (payload: { agent: LiveAgent; frame: unknown }) => void,
+  ): () => void
 }
 
 /** The stock server's private session table — the one internal we depend on. */
@@ -74,8 +89,8 @@ interface RouteFacts {
   maxTokens?: number
 }
 
-export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfig): void {
-  const resolved = config as ResumeJsonRpcConfig & { maxTokensAsSuccess: boolean }
+export function apply(ctx: Context & HarnessServices, config: PlatformJsonRpcConfig): void {
+  const resolved = config as PlatformJsonRpcConfig & { maxTokensAsSuccess: boolean }
   const rootFiber = ctx.root.fiber
   const input = config.input ?? process.stdin
   const output = config.output ?? process.stdout
@@ -95,7 +110,7 @@ export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfi
   const internals = server as unknown as ServerInternals
   if (!(internals.sessions instanceof Map)) {
     throw new Error(
-      'dsh-resume-server: HarnessSdkJsonRpcServer no longer exposes a `sessions` Map; ' +
+      'dsh-platform-server: HarnessSdkJsonRpcServer no longer exposes a `sessions` Map; ' +
         'the resume hook needs updating for this dsh version',
     )
   }
@@ -107,16 +122,11 @@ export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfi
     if (internals.sessions.has(sessionId)) return
     // No handshake yet: let the stock server raise its own protocol error.
     if (route === undefined) return
-    const headers = await ctx.sessionPersistence.list()
     // Genuinely new session — the stock create path is the correct one.
-    if (!headers.some((header) => String(header.id) === sessionId)) return
+    if ((await ctx.sessionPersistence.stat(SessionId(sessionId))) === undefined) return
     const handle = await ctx.agents.resume({
       resumeSessionId: SessionId(sessionId),
-      agentOptions: {
-        provider: route.provider,
-        model: route.model,
-        ...(route.maxTokens === undefined ? {} : { maxTokens: route.maxTokens }),
-      },
+      agentOptions: route,
     })
     internals.sessions.set(sessionId, { handle })
   }
@@ -134,6 +144,16 @@ export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfi
     return task
   }
 
+  function cancel(sessionId: string): { cancelled: boolean } {
+    const record = internals.sessions.get(sessionId)
+    record?.handle.agent.cancel({ kind: 'user' })
+    return { cancelled: record !== undefined }
+  }
+
+  const stopStreaming = ctx.on('agent/assistant-stream', ({ agent, frame }) => {
+    transport.notify('session.stream', { sessionId: String(agent.session.id), frame })
+  })
+
   let exitTask: Promise<void> | undefined
   const disposeAndExit = (): Promise<void> => {
     exitTask ??= (async () => {
@@ -145,10 +165,10 @@ export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfi
   }
 
   transport.onRequest(async (method, params) => {
+    const sessionId = String((params as { sessionId?: unknown } | undefined)?.sessionId)
     if (method === 'initialize') {
       // The composition loads asynchronously, so a handshake can arrive before
-      // every plugin is up. Stock behaviour since rc.8; matters most here,
-      // where MCP servers are part of the tree.
+      // every plugin is up — MCP servers included.
       await ctx.get('loader')?.await()
       const p = params as unknown as RouteFacts
       route = {
@@ -157,9 +177,8 @@ export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfi
         ...(p.maxTokens === undefined ? {} : { maxTokens: p.maxTokens }),
       }
     }
-    if (method === 'session/prompt') {
-      await resumeOnce(String((params as { sessionId?: unknown } | undefined)?.sessionId))
-    }
+    if (method === 'session/prompt') await resumeOnce(sessionId)
+    if (method === 'session/cancel') return cancel(sessionId)
     const result = await server.handleRequest(method, params)
     if (method === 'shutdown') {
       setImmediate(() => {
@@ -172,8 +191,9 @@ export function apply(ctx: Context & HarnessServices, config: ResumeJsonRpcConfi
   ctx.effect(() => {
     transport.start()
     return async () => {
+      stopStreaming()
       await server.shutdown()
       transport.close()
     }
-  }, 'jsonrpc.serve.resume')
+  }, 'jsonrpc.serve.platform')
 }
