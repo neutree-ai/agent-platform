@@ -173,9 +173,14 @@ export async function loadConfig(): Promise<boolean> {
 
   // Write ~/.config/goose/config.yaml. Provider/model/mode ride env vars
   // (applyProviderEnv); the config file carries extension toggles and
-  // user agent_settings. Platform-enforced: no native memory-like features —
-  // memory extension stays unenabled, chat recall ("Chat Recall" platform
-  // extension searches past conversations) is explicitly off.
+  // user agent_settings. goose merges every extension enabled here into each
+  // session on top of the CLI-pinned builtins, and platform extensions absent
+  // from this file fall back to their default (mostly on). So each one the
+  // platform does not want is listed off explicitly:
+  //   - memory / chatrecall: no native memory-like features
+  //   - extensionmanager: would let the agent turn those back on itself
+  //   - analyze / apps / tom / skills / scheduler: overlap with platform
+  //     tools, skills and schedules, or have no client to drive them
   const agentSettings = (config.agent_settings || '').trim()
   // Goose settings are YAML. Skip JSON (claude-code) and TOML key=value
   // (codex) content left over from a core switch.
@@ -201,6 +206,12 @@ export async function loadConfig(): Promise<boolean> {
     '    type: builtin',
     '    name: chatrecall',
     '    enabled: false',
+    ...['extensionmanager', 'analyze', 'apps', 'tom', 'skills', 'scheduler'].flatMap((name) => [
+      `  ${name}:`,
+      '    type: platform',
+      `    name: ${name}`,
+      '    enabled: false',
+    ]),
   ]
   if (isYamlAgentSettings) {
     yamlLines.push('')
@@ -512,8 +523,6 @@ export function applyProviderEnv(rc: RuntimeConfig): void {
   delete process.env.OPENAI_HOST
   // biome-ignore lint/performance/noDelete: env vars must be removed, not set to "undefined"
   delete process.env.OPENAI_BASE_PATH
-  // biome-ignore lint/performance/noDelete: env vars must be removed, not set to "undefined"
-  delete process.env.GOOSE_FAST_MODEL
 
   process.env.GOOSE_PROVIDER = 'openai'
   process.env.GOOSE_MODEL = rc.model
@@ -528,20 +537,12 @@ export function applyProviderEnv(rc: RuntimeConfig): void {
   // config.yaml in goose, so this is platform-enforced — a user-set
   // OPENAI_CUSTOM_HEADERS in agent_settings would be shadowed.
   process.env.OPENAI_CUSTOM_HEADERS = 'User-Agent=agent-platform-goose/1.0'
-  // Goose's own UI niceties that each cost an extra LLM call: an
-  // AI-generated title per tool call and an AI-generated session name per
-  // session. The platform renders tool calls itself and cp owns session
-  // naming, so both are pure waste here.
-  process.env.GOOSE_DISABLE_TOOL_CALL_SUMMARY = '1'
+  // Goose would otherwise spend an extra LLM call per session naming it;
+  // cp owns session naming, so it is pure waste here.
   process.env.GOOSE_DISABLE_SESSION_NAMING = '1'
 
   if (rc.api_key) {
     process.env.OPENAI_API_KEY = rc.api_key
-  }
-  if (rc.small_model) {
-    // Route goose's auxiliary calls (classification, summaries it still
-    // makes) to the provider's configured small model instead of the main one.
-    process.env.GOOSE_FAST_MODEL = rc.small_model
   }
   if (rc.base_url) {
     // Goose splits the endpoint into host + path: OPENAI_HOST is the origin,
