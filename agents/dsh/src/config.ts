@@ -9,6 +9,7 @@
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { SkillManager } from '../../../internal/agent-skills/src/index.js'
 import { nodeFetch, nodeFs, nodeShell } from '../../../internal/agent-skills/src/node.js'
 import { renderPlatformSkillFiles } from '../../../internal/agent-skills/src/platform.js'
@@ -18,7 +19,7 @@ import {
   writePlatformPrompt,
 } from '../../../internal/platform-prompt/src/index.js'
 import { captureWorkspaceToken } from '../../../internal/types/workspace-token.js'
-import { APP_DIR, type McpServerSpec, writeCordisConfig } from './cordis.js'
+import { type McpServerSpec, writeCordisConfig } from './cordis.js'
 
 export const CP_URL = process.env.CP_URL
 export const WORKSPACE_ID = process.env.WORKSPACE_ID
@@ -384,6 +385,9 @@ function buildMcpServers(): McpServerSpec[] {
   return servers
 }
 
+/** The runtime entry point, compiled next to this module. */
+const RUNTIME_LAUNCHER = fileURLToPath(new URL('./runtime/launcher.js', import.meta.url))
+
 /**
  * Everything one runtime process needs, resolved at spawn time so a reloaded
  * config and a freshly minted session token both land on the next turn.
@@ -407,14 +411,11 @@ export function buildLaunchSpec(sessionId: string): DshLaunchSpec {
 
   return {
     command: process.execPath,
-    args: [join(APP_DIR, 'node_modules', '@deepseek-ai', 'dsh-sdk-jsonrpc-demo', 'lib', 'bin.js')],
+    args: [RUNTIME_LAUNCHER, configPath],
     env: {
       ...(Object.fromEntries(
         Object.entries(process.env).filter(([, v]) => v !== undefined),
       ) as Record<string, string>),
-      DSH_CORDIS_CONFIG: configPath,
-      DSH_CWD: WORKSPACE_DIR,
-      DSH_SESSION_ROOT: SESSION_ROOT,
       DSH_SYSTEM_PROMPT: _systemPrompt,
       [PROVIDER_KEY_ENV]: rc.api_key ?? '',
     },
