@@ -289,6 +289,11 @@ export async function loadConfig(): Promise<boolean> {
     tomlLines.push('name = "custom"')
     tomlLines.push(`base_url = "${config.base_url}"`)
     tomlLines.push(`wire_api = "${profile.wireApi ?? 'responses'}"`)
+    // A custom provider sends no credentials unless it names them: codex does
+    // not fall back to auth.json or OPENAI_API_KEY for it. applyProviderEnv
+    // sets OPENAI_API_KEY whenever there is a key; a keyless endpoint must not
+    // get env_key, since codex fails every turn when the named var is unset.
+    if (_apiKey) tomlLines.push('env_key = "OPENAI_API_KEY"')
   }
   // MCP servers in config.toml format. HTTP entries skip this path: they are
   // wired through `loadAcpMcpServers` instead so per-session headers (notably

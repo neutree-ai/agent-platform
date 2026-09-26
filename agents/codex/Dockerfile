@@ -99,7 +99,7 @@ RUN case "$TARGETARCH" in amd64) AB_ARCH=x64 ;; arm64) AB_ARCH=arm64 ;; \
 # ItemStarted/ItemCompleted lifecycle (collabAgentToolCall / imageGeneration
 # items), so they no longer need to be carried here. bin name `codex-acp`
 # and no-arg stdio-server invocation match the bridge's BRIDGE_OPTS.
-RUN npm install -g --registry=https://registry.npmjs.org @agentclientprotocol/codex-acp@1.1.2
+RUN npm install -g --registry=https://registry.npmjs.org @agentclientprotocol/codex-acp@1.13.1
 
 WORKDIR /app
 

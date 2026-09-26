@@ -83,7 +83,7 @@ if (rc) {
 
 // ── ACP bridge factory (1 bridge per session to avoid SQLite contention) ──
 
-// codex-acp (1.1.x) picks the sandbox from the INITIAL_AGENT_MODE env var
+// codex-acp picks the sandbox from the INITIAL_AGENT_MODE env var
 // (`read-only` | `agent` | `agent-full-access`) — NOT from config.toml's
 // `sandbox_mode`, which it ignores. Unset, it defaults to `agent` =
 // workspace-write, whose writable roots are only /workspace + /tmp; writes to
