@@ -28,8 +28,15 @@ export const nodeFs: Fs = {
   rename: (from, to) => rename(from, to),
 }
 
+// Default execFile maxBuffer is 1MB per stream; skills with many files can
+// push tar/cp/chmod stderr past that, which fails execFile before the child's
+// exit code is even known ("stderr maxBuffer length exceeded"). We only care
+// about the exit code, so give the buffers plenty of headroom.
+const EXEC_MAX_BUFFER = 64 * 1024 * 1024
+
 export const nodeShell: Shell = {
-  exec: (cmd, args) => execFile(cmd, args).then(() => {}),
+  exec: (cmd, args) =>
+    execFile(cmd, args, { maxBuffer: EXEC_MAX_BUFFER }).then(() => {}),
 }
 
 export const nodeFetch: Fetcher = (url, init) => fetch(url, init)
