@@ -4,9 +4,9 @@ import {
   WorkspaceProfilePayloadSchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { getWorkspaceProfile, patchWorkspaceProfile } from '../../services/db/workspace-profile'
 import { getWorkspace } from '../../services/db/workspaces'
-import { canManage } from './_shared'
 
 const profile = new OpenAPIHono<AppEnv>()
 
@@ -39,7 +39,8 @@ profile.openapi(getProfileRoute, async (c) => {
   const user = c.get('user')
   const id = c.req.param('id')
   const ws = await getWorkspace(id)
-  if (!ws || !canManage(ws, user)) return c.json({ error: 'Workspace not found' }, 404)
+  if (!ws || !(await canAccessWorkspace(ws, user)))
+    return c.json({ error: 'Workspace not found' }, 404)
   const payload = await getWorkspaceProfile(id)
   return c.json({ payload }, 200)
 })
@@ -70,7 +71,8 @@ profile.openapi(patchProfileRoute, async (c) => {
   const user = c.get('user')
   const id = c.req.param('id')
   const ws = await getWorkspace(id)
-  if (!ws || !canManage(ws, user)) return c.json({ error: 'Workspace not found' }, 404)
+  if (!ws || !(await canAccessWorkspace(ws, user)))
+    return c.json({ error: 'Workspace not found' }, 404)
   const patch = c.req.valid('json')
   const payload = await patchWorkspaceProfile(id, patch)
   return c.json({ payload }, 200)

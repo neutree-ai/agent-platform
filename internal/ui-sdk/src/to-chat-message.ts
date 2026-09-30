@@ -56,5 +56,6 @@ export function toChatMessage(message: ApiMessage): ChatMessage {
     content: message.content,
     blocks,
     created_at: message.created_at,
+    author: message.author ?? null,
   }
 }

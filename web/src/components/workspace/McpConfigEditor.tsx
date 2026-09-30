@@ -420,9 +420,19 @@ interface McpConfigEditorProps {
   value: string
   onChange: (value: string) => void
   workspaceId?: string
+  /**
+   * The agent uses the workspace owner's OAuth tokens, so only the owner can
+   * connect or disconnect. Set for a team member the workspace is shared with.
+   */
+  oauthOwnerOnly?: boolean
 }
 
-export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEditorProps) {
+export function McpConfigEditor({
+  value,
+  onChange,
+  workspaceId,
+  oauthOwnerOnly,
+}: McpConfigEditorProps) {
   const { t } = useTranslation()
   const catalogQuery = useQuery({
     queryKey: ['mcp-catalog'],
@@ -527,6 +537,16 @@ export function McpConfigEditor({ value, onChange, workspaceId }: McpConfigEdito
         >
           <AlertCircle className="h-2.5 w-2.5" />
           {t('components.mcpConfigEditor.oauth.unreachable')}
+        </span>
+      )
+    }
+    if (oauthOwnerOnly) {
+      return (
+        <span
+          className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-mini text-muted-foreground bg-muted/50 ${className ?? ''}`}
+        >
+          <Link className="h-2.5 w-2.5" />
+          {t('components.mcpConfigEditor.oauth.ownerOnly')}
         </span>
       )
     }

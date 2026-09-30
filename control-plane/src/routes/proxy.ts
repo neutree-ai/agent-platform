@@ -1,14 +1,10 @@
 import { Hono } from 'hono'
 import { createInterceptedSSEResponse, createReconnectSSEResponse } from '../lib/sse'
 import type { AppEnv } from '../lib/types'
+import { canAccessWorkspace } from '../lib/workspace-access'
 import { resolveAgentAddress } from '../lib/workspace-address'
 import { transitionSessionStatus } from '../services/db/sessions'
-import type { Workspace } from '../services/db/types'
 import { getWorkspace } from '../services/db/workspaces'
-
-function canAccessProxy(workspace: Workspace, user: { sub: string; role: string }): boolean {
-  return workspace.user_id === user.sub || (workspace.is_system && user.role === 'admin')
-}
 
 /**
  * How long the agent pod gets to start responding. A container that has
@@ -55,7 +51,7 @@ export function createProxyRoutes() {
     const sessionId = c.req.query('session_id')
     const currentUser = c.get('user')
     const workspace = await getWorkspace(workspaceId)
-    if (!workspace || !canAccessProxy(workspace, currentUser)) {
+    if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
       return c.json({ error: 'Workspace not found' }, 404)
     }
 
@@ -77,7 +73,7 @@ export function createProxyRoutes() {
 
     const currentUser = c.get('user')
     const workspace = await getWorkspace(workspaceId)
-    if (!workspace || !canAccessProxy(workspace, currentUser)) {
+    if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
       return c.json({ error: 'Workspace not found' }, 404)
     }
     if (workspace.status !== 'running') {

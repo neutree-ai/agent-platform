@@ -36,6 +36,7 @@ import { PromptSection } from '@/components/workspace/agent-config/PromptSection
 import { ResourcesSection } from '@/components/workspace/agent-config/ResourcesSection'
 import { SettingsSection } from '@/components/workspace/agent-config/SettingsSection'
 import { SkillsSection } from '@/components/workspace/agent-config/SkillsSection'
+import { ShareWithTeamsRow } from '@/components/workspace/share/ShareWithTeamsRow'
 import { TransferOwnershipRow } from '@/components/workspace/transfer/TransferOwnershipRow'
 import { getAgentConfigDoc } from '@/docs/inline-help/agent-config-docs'
 import { getWorkspaceSettingsDoc } from '@/docs/inline-help/misc-docs'
@@ -153,6 +154,9 @@ function GeneralSection({
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false)
   const [idCopied, setIdCopied] = useState(false)
+  // Delete, transfer, visibility, save-as-template, sharing and tags stay with
+  // the owner; a team member the workspace is shared with manages the rest.
+  const isOwner = workspace.access === 'owner'
 
   const copyId = async () => {
     await navigator.clipboard.writeText(workspace.id)
@@ -190,7 +194,11 @@ function GeneralSection({
         <Label className="text-xs text-muted-foreground">
           {t('components.workspaceSettings.fields.visibility')}
         </Label>
-        <Select value={draft.visibility} onValueChange={(v) => onChange({ visibility: v })}>
+        <Select
+          value={draft.visibility}
+          onValueChange={(v) => onChange({ visibility: v })}
+          disabled={!isOwner}
+        >
           <SelectTrigger className="text-sm">
             <SelectValue />
           </SelectTrigger>
@@ -207,7 +215,7 @@ function GeneralSection({
           </SelectContent>
         </Select>
       </div>
-      {tags && tags.length > 0 && (
+      {isOwner && tags && tags.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             {t('components.workspaceSettings.fields.tags')}
@@ -261,26 +269,34 @@ function GeneralSection({
         <Switch checked={muted} onCheckedChange={onMutedChange} className="mt-0.5 shrink-0" />
       </div>
 
-      {/* Save as template */}
-      <div className="mt-4 flex items-start justify-between gap-3 border-t border-border/60 pt-4">
-        <div className="min-w-0">
-          <div className="text-xs font-medium text-foreground">
-            {t('components.workspaceActions.actions.saveAsTemplate')}
-          </div>
-          <p className="mt-1 text-mini text-muted-foreground">
-            {t('components.settings.saveAsTemplate.description')}
-          </p>
+      {!workspace.is_system && (
+        <div className="mt-4 border-t border-border/60 pt-4">
+          <ShareWithTeamsRow workspace={workspace} />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
-          onClick={() => setSaveAsTemplateOpen(true)}
-        >
-          <BookCopy className="h-3 w-3" strokeWidth={2} />
-          {t('components.settings.saveAsTemplate.action')}
-        </Button>
-      </div>
+      )}
+
+      {/* Save as template */}
+      {isOwner && (
+        <div className="mt-4 flex items-start justify-between gap-3 border-t border-border/60 pt-4">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-foreground">
+              {t('components.workspaceActions.actions.saveAsTemplate')}
+            </div>
+            <p className="mt-1 text-mini text-muted-foreground">
+              {t('components.settings.saveAsTemplate.description')}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
+            onClick={() => setSaveAsTemplateOpen(true)}
+          >
+            <BookCopy className="h-3 w-3" strokeWidth={2} />
+            {t('components.settings.saveAsTemplate.action')}
+          </Button>
+        </div>
+      )}
       <SaveAsTemplateDialog
         workspace={workspace}
         open={saveAsTemplateOpen}
@@ -312,31 +328,33 @@ function GeneralSection({
       </div>
 
       {/* Danger zone — inline at the bottom of General */}
-      <div className="mt-4 flex flex-col gap-4 border-t border-border/60 pt-4">
-        {!workspace.is_system && <TransferOwnershipRow workspace={workspace} />}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-              {t('components.deleteWorkspace.title')}
+      {isOwner && (
+        <div className="mt-4 flex flex-col gap-4 border-t border-border/60 pt-4">
+          {!workspace.is_system && <TransferOwnershipRow workspace={workspace} />}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                {t('components.deleteWorkspace.title')}
+              </div>
+              <p className="mt-1 text-mini text-muted-foreground">
+                {t('components.deleteWorkspace.description.prefix')}
+                <span className="font-medium text-foreground">{workspace.name}</span>
+                {t('components.deleteWorkspace.description.suffix')}
+              </p>
             </div>
-            <p className="mt-1 text-mini text-muted-foreground">
-              {t('components.deleteWorkspace.description.prefix')}
-              <span className="font-medium text-foreground">{workspace.name}</span>
-              {t('components.deleteWorkspace.description.suffix')}
-            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 gap-1.5 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="h-3 w-3" strokeWidth={2} />
+              {t('components.deleteWorkspace.actions.delete')}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 shrink-0 gap-1.5 border-destructive/40 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => setDeleteOpen(true)}
-          >
-            <Trash2 className="h-3 w-3" strokeWidth={2} />
-            {t('components.deleteWorkspace.actions.delete')}
-          </Button>
         </div>
-      </div>
+      )}
 
       <DeleteWorkspaceDialog workspace={workspace} open={deleteOpen} onOpenChange={setDeleteOpen} />
     </div>
@@ -972,6 +990,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
               )
             }
             templateConfig={tplModel}
+            workspaceId={workspaceId}
           />
         )
       case 'prompt':
@@ -997,6 +1016,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
               )
             }
             templateConfig={tplPrompt}
+            workspaceId={workspaceId}
           />
         )
       case 'mcp':
@@ -1010,6 +1030,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
             }}
             templateConfig={tplMcp}
             workspaceId={workspaceId}
+            oauthOwnerOnly={workspace?.access === 'shared'}
           />
         )
       case 'settings':

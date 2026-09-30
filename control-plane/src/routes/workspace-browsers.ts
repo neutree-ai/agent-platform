@@ -1,15 +1,11 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../lib/types'
+import { canAccessWorkspace } from '../lib/workspace-access'
 import * as browserService from '../services/browser'
 import { getPlatformToken } from '../services/db/shares'
-import type { Workspace } from '../services/db/types'
 import { getWorkspace } from '../services/db/workspaces'
 
 const BROWSER_PUBLIC_URL = process.env.BROWSER_PUBLIC_URL || ''
-
-function canManage(workspace: Workspace, user: { sub: string; role: string }): boolean {
-  return workspace.user_id === user.sub || (workspace.is_system && user.role === 'admin')
-}
 
 async function getOwnerToken(workspace: { user_id: string }): Promise<string> {
   const token = await getPlatformToken(workspace.user_id)
@@ -34,7 +30,7 @@ workspaceBrowsers.post('/:id/browsers', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -58,7 +54,7 @@ workspaceBrowsers.get('/:id/browsers', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -82,7 +78,7 @@ workspaceBrowsers.get('/:id/browsers/:browserId', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -102,7 +98,7 @@ workspaceBrowsers.post('/:id/browsers/:browserId/renew', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -129,7 +125,7 @@ workspaceBrowsers.delete('/:id/browsers/:browserId', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

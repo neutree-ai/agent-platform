@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../lib/types'
+import { canOwn } from '../lib/workspace-access'
 import { notifyAgentReload } from '../lib/workspace-address'
 import { getWorkspace } from '../services/db/workspaces'
 import * as mcpOAuth from '../services/mcp-oauth'
@@ -53,6 +54,14 @@ mcpOAuthRoutes.get('/authorize', async (c) => {
   const workspaceId = c.req.query('workspace_id')
   if (!serverOrigin || !workspaceId) {
     return c.html(errorPage('server_origin and workspace_id are required'), 400)
+  }
+
+  // The agent's MCP proxy looks tokens up under the workspace owner, so only
+  // the owner's connection is ever used. A team member connecting from a
+  // shared workspace would store a token nothing reads.
+  const workspace = await getWorkspace(workspaceId)
+  if (!workspace || !canOwn(workspace, c.get('user'))) {
+    return c.html(errorPage('Only the workspace owner can connect this server'), 403)
   }
 
   // Discover metadata (or use cached client)

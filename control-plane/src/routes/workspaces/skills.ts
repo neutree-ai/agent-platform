@@ -5,10 +5,10 @@
 
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { getWorkspace } from '../../services/db/workspaces'
 import { toWorkspaceSkillDtos } from '../../services/skill-repository'
 import { skillRepo, skillsService } from '../../services/skills-composition'
-import { canManage } from './_shared'
 
 const workspaceSkills = new OpenAPIHono<AppEnv>()
 
@@ -51,7 +51,7 @@ workspaceSkills.openapi(listRoute, async (c) => {
   const { id } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, user)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -98,7 +98,7 @@ workspaceSkills.openapi(replaceRoute, async (c) => {
   const body = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, user)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

@@ -11,6 +11,7 @@ import {
   EnvironmentUpdateBodySchema,
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
+import { resolveResourceViewer } from '../lib/workspace-access'
 import {
   createEnvironmentToken,
   listEnvironmentTokens,
@@ -77,17 +78,29 @@ const listRoute = createRoute({
   tags: ['environments'],
   summary: 'List environments visible to the user (own + public + team-shared)',
   security: [{ bearerAuth: [] }],
+  request: {
+    query: z.object({
+      workspace_id: z.string().optional().openapi({
+        description: "List as this workspace's owner — for picking resources to attach to it.",
+      }),
+    }),
+  },
   responses: {
     200: {
       description: 'Environment list',
       content: { 'application/json': { schema: z.array(ApiEnvironmentSchema) } },
     },
+    404: {
+      description: 'Workspace not found',
+      content: { 'application/json': { schema: z.object({ error: z.string() }) } },
+    },
   },
 })
 
 environments.openapi(listRoute, async (c) => {
-  const user = c.get('user')
-  const list = await listVisibleToUser(user.sub)
+  const viewer = await resolveResourceViewer(c.get('user'), c.req.valid('query').workspace_id)
+  if (!viewer) return c.json({ error: 'Workspace not found' }, 404)
+  const list = await listVisibleToUser(viewer)
   return c.json(list.map(toApi), 200)
 })
 

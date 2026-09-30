@@ -380,6 +380,10 @@ async function rewriteReferences(
     [ws, ctx.to.id],
   )
 
+  // Team shares. They were the sender's grants to the sender's teams; the
+  // recipient starts unshared.
+  await client.query('DELETE FROM workspace_team_shares WHERE workspace_id = $1', [ws])
+
   // Filesystem shares with other workspaces, in both directions.
   await client.query(
     `DELETE FROM afs_share_members m

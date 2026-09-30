@@ -1,4 +1,5 @@
 import { generateId, pool } from './pool'
+import { removeOwnerSharesForTeam } from './workspace-shares'
 
 export interface Team {
   id: string
@@ -154,5 +155,8 @@ export async function removeTeamMember(teamId: string, userId: string): Promise<
     teamId,
     userId,
   ])
+  // A workspace may only be shared with a team its owner is in, so the
+  // leaving member's workspaces stop being shared with this team.
+  await removeOwnerSharesForTeam(teamId, userId)
   return (r.rowCount ?? 0) > 0
 }

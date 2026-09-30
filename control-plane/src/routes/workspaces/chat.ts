@@ -1,10 +1,10 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { ChatBodySchema } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { UniversalEventSchema } from '../../openapi/events.schema'
 import { dispatchChatTurn } from '../../services/chat/dispatchChatTurn'
 import { getWorkspace } from '../../services/db/workspaces'
-import { canManage } from './_shared'
 
 /**
  * Chat entry point — mounts `POST /api/workspaces/:id/chat`. Mode selection
@@ -121,7 +121,7 @@ chat.openapi(chatRoute, async (c) => {
   const { id } = c.req.valid('param')
   const user = c.get('user')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, user)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   // A stopped workspace is auto-started inside executeChat (which also returns

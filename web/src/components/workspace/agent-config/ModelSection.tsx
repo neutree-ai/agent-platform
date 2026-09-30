@@ -23,6 +23,7 @@ interface ModelSectionProps {
     model: string
     small_model: string
   } | null
+  workspaceId?: string
 }
 
 function normalize(v: unknown): string {
@@ -39,6 +40,7 @@ export function ModelSection({
   onChange,
   onRevert,
   templateConfig,
+  workspaceId,
 }: ModelSectionProps) {
   const { t } = useTranslation()
   const agentTypeChanged = agentType !== originalAgentType
@@ -83,6 +85,7 @@ export function ModelSection({
         model={model}
         smallModel={smallModel}
         onChange={onChange}
+        workspaceId={workspaceId}
       />
       {agentTypeChanged && (
         <Alert

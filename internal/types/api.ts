@@ -13,6 +13,13 @@ export interface ApiUser {
   auto_evolution: boolean
 }
 
+export const ApiWorkspaceTeamShareSchema = z.object({
+  team_id: z.string(),
+  team_name: z.string(),
+  created_at: z.string(),
+})
+export type ApiWorkspaceTeamShare = z.infer<typeof ApiWorkspaceTeamShareSchema>
+
 export const ApiWorkspaceSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -20,6 +27,11 @@ export const ApiWorkspaceSchema = z.object({
   visibility: z.string(),
   is_system: z.boolean(),
   owner: z.string(),
+  // 'owner' when the caller owns the workspace, 'shared' when they reach it
+  // through a team the owner shared it with.
+  access: z.enum(['owner', 'shared']),
+  // Whether the workspace is shared with at least one team.
+  is_shared: z.boolean(),
   status: z.string(),
   created_at: z.string(),
   tag_ids: z.array(z.string()),
@@ -196,6 +208,8 @@ export const ApiMessageSchema = z.object({
   ended_at: z.string().nullable(),
   /** ended_at - started_at in milliseconds; null when ended_at is null. */
   duration_ms: z.number().nullable(),
+  /** Author of a user message (a shared workspace has several); null when unknown. */
+  author: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
 })
 
 export type ApiMessage = z.infer<typeof ApiMessageSchema>

@@ -2799,7 +2799,8 @@
         "checking": "Checking...",
         "unreachable": "Unreachable",
         "connected": "Connected",
-        "connect": "Connect"
+        "connect": "Connect",
+        "ownerOnly": "Connected by owner"
       },
       "states": {
         "loadingCatalog": "Loading MCP catalog..."
@@ -4192,6 +4193,17 @@
         "plan": "Could not build the transfer plan",
         "create": "Failed to start the transfer",
         "cancel": "Failed to withdraw the transfer"
+      }
+    },
+    "workspaceShare": {
+      "title": "Share with teams",
+      "ownerDescription": "Members of a shared team can chat in this workspace, see all of its sessions and manage its configuration. The agent always runs with your identity and credentials, and members can reach its files, memory and credentials. Only you can delete, transfer or change sharing.",
+      "memberDescription": "{{owner}} shares this workspace with you through these teams. The agent runs with {{owner}}'s identity and credentials.",
+      "noTeams": "You are not in any team yet. Join a team to share this workspace.",
+      "sharedWithYou": "Shared with you",
+      "sharedBy": "Shared by {{owner}}",
+      "errors": {
+        "update": "Failed to update sharing"
       }
     }
   }

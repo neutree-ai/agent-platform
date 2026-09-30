@@ -3,10 +3,11 @@ import { i18n } from '@/lib/i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-export function useProviders() {
+/** Providers visible to the user; with `workspaceId`, to that workspace's owner. */
+export function useProviders(workspaceId?: string) {
   return useQuery({
-    queryKey: ['providers'],
-    queryFn: () => api.listProviders(),
+    queryKey: workspaceId ? ['providers', { workspaceId }] : ['providers'],
+    queryFn: () => api.listProviders(workspaceId),
     staleTime: 30_000,
   })
 }

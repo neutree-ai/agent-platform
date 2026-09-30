@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import * as jobs from '../lib/jobs'
 import type { AppEnv } from '../lib/types'
+import { canAccessWorkspace } from '../lib/workspace-access'
 import { getPlatformToken } from '../services/db/shares'
 import { getWorkspace } from '../services/db/workspaces'
 
@@ -12,7 +13,7 @@ jobRoutes.post('/:id/jobs', async (c) => {
   const currentUser = c.get('user')
 
   const workspace = await getWorkspace(workspaceId)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -56,7 +57,7 @@ jobRoutes.get('/:id/jobs', async (c) => {
   const currentUser = c.get('user')
 
   const workspace = await getWorkspace(workspaceId)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -74,7 +75,7 @@ jobRoutes.get('/:id/jobs/:jobId', async (c) => {
   const currentUser = c.get('user')
 
   const workspace = await getWorkspace(workspaceId)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

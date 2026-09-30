@@ -36,6 +36,7 @@ export interface ApiMessage {
   started_at?: string
   ended_at?: string | null
   duration_ms?: number | null
+  author?: { id: string; name: string } | null
 }
 
 // ── Render-ready shapes (what the components consume) ──
@@ -65,4 +66,6 @@ export interface ChatMessage {
   blocks: ContentBlock[]
   isStreaming?: boolean
   created_at?: string
+  /** Who wrote a user message, when known — several people can share a workspace. */
+  author?: { id: string; name: string } | null
 }

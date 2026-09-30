@@ -6,6 +6,7 @@ import {
   ApiSessionUsageSchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { resolveAgentAddress } from '../../lib/workspace-address'
 import { pool } from '../../services/db/pool'
 import { listSessionToolCalls } from '../../services/db/session-tool-calls'
@@ -21,7 +22,7 @@ import { getSessionUsage, getSessionUsageOwner } from '../../services/db/workspa
 import { getWorkspace } from '../../services/db/workspaces'
 import { summarizeToolActivity } from '../../services/session-tool-activity'
 import { settleSessionUsage } from '../../services/usage/settle'
-import { canManage, interruptAgentSession } from './_shared'
+import { interruptAgentSession } from './_shared'
 
 const sessions = new OpenAPIHono<AppEnv>()
 
@@ -64,7 +65,7 @@ sessions.openapi(getSessionRoute, async (c) => {
   const { id, sessionId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -125,7 +126,7 @@ sessions.openapi(renameSessionRoute, async (c) => {
   const { name } = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -166,7 +167,7 @@ sessions.openapi(deleteSessionRoute, async (c) => {
   const { id, sessionId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -215,7 +216,7 @@ sessions.openapi(setStarredRoute, async (c) => {
   const { starred } = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const session = await getSession(sessionId)
@@ -255,7 +256,7 @@ sessions.openapi(interruptSessionRoute, async (c) => {
   const currentUser = c.get('user')
   const { id, sessionId } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -297,7 +298,7 @@ sessions.openapi(putPendingRoute, async (c) => {
   const body = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const session = await getSession(sessionId)
@@ -305,7 +306,7 @@ sessions.openapi(putPendingRoute, async (c) => {
     return c.json({ error: 'Session not found' }, 404)
   }
 
-  await setPendingMessage(sessionId, body)
+  await setPendingMessage(sessionId, { ...body, author_user_id: currentUser.sub })
   return c.json({ success: true }, 200)
 })
 
@@ -331,7 +332,7 @@ sessions.openapi(deletePendingRoute, async (c) => {
   const { id, sessionId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const session = await getSession(sessionId)
@@ -388,7 +389,8 @@ sessions.openapi(getSessionUsageRoute, async (c) => {
   const workspace = await getWorkspace(id)
   const ledgerOwner = await getSessionUsageOwner(id, sessionId)
   if (workspace) {
-    if (!canManage(workspace, currentUser)) return c.json({ error: 'Workspace not found' }, 404)
+    if (!(await canAccessWorkspace(workspace, currentUser)))
+      return c.json({ error: 'Workspace not found' }, 404)
   } else if (!ledgerOwner || ledgerOwner !== currentUser.sub) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
@@ -445,7 +447,7 @@ sessions.openapi(getToolActivityRoute, async (c) => {
   // is nothing here to read once the workspace is gone — the workspace row is
   // the only authorisation anchor this needs.
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const session = await getSession(sessionId)

@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { getStoreById, setStoreLastReflectedAt } from '../../services/db/memory'
 import { getSession } from '../../services/db/sessions'
 import { getWorkspace } from '../../services/db/workspaces'
@@ -61,7 +62,7 @@ reflect.openapi(endRouteDef, async (c) => {
   const { store_id, session_id, success } = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

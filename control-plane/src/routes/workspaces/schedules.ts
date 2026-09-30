@@ -6,6 +6,7 @@ import {
 } from '../../../../internal/types/api'
 import * as jobs from '../../lib/jobs'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import {
   createSchedule,
   deleteSchedule,
@@ -59,7 +60,7 @@ schedules.openapi(createRouteDef, async (c) => {
   const { id } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -73,7 +74,9 @@ schedules.openapi(createRouteDef, async (c) => {
 
   const schedule = await createSchedule({
     workspace_id: id,
-    user_id: currentUser.sub,
+    // The scheduler dispatches with this user's platform token, and the agent
+    // runs as the owner — also when a team member sets the schedule up.
+    user_id: workspace.user_id,
     name: body.name,
     cron: body.cron ?? null,
     run_at: body.run_at ?? null,
@@ -123,7 +126,7 @@ schedules.openapi(listRoute, async (c) => {
   const { id } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -161,7 +164,7 @@ schedules.openapi(patchRoute, async (c) => {
   const { id, scheduleId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -249,7 +252,7 @@ schedules.openapi(deleteRouteDef, async (c) => {
   const { id, scheduleId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -305,7 +308,7 @@ schedules.openapi(runRouteDef, async (c) => {
   const { id, scheduleId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
