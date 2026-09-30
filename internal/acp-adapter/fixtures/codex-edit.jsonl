@@ -1,0 +1,8 @@
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"content":[{"_meta":{"kind":"add"},"newText":"hello\n","oldText":null,"path":"/tmp/ws/notes.txt","type":"diff"}],"kind":"edit","status":"in_progress","title":"Editing files","toolCallId":"call_00_ET_6dEVNvJz9zIUO6TTydVj6075","sessionUpdate":"tool_call"}}
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"status":"completed","toolCallId":"call_00_ET_6dEVNvJz9zIUO6TTydVj6075","sessionUpdate":"tool_call_update"}}
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"size":258400,"used":9065,"sessionUpdate":"usage_update"}}
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"content":[{"_meta":{"kind":"update"},"newText":"hello world\n","oldText":"hello\n","path":"/tmp/ws/notes.txt","type":"diff"}],"kind":"edit","status":"in_progress","title":"Editing files","toolCallId":"call_00_zST9OYodZThjVxjkkeZi2478","sessionUpdate":"tool_call"}}
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"status":"completed","toolCallId":"call_00_zST9OYodZThjVxjkkeZi2478","sessionUpdate":"tool_call_update"}}
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"size":258400,"used":9647,"sessionUpdate":"usage_update"}}
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"content":{"text":"done","type":"text"},"sessionUpdate":"agent_message_chunk"}}
+{"sessionId":"01a0f10f-4027-7202-8a2d-c194eae558a9","update":{"size":258400,"used":9699,"sessionUpdate":"usage_update"}}
