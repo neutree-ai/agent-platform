@@ -5,7 +5,7 @@ import { useUnreadCount } from '@/hooks/useUnread'
 import { useWorkspaces } from '@/hooks/useWorkspaces'
 import { getTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
-import { Activity, Bell, ChevronsUpDown, LayoutGrid, Plus, Search } from 'lucide-react'
+import { Activity, Bell, ChevronsUpDown, LayoutGrid, Plus, Search, Users } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -301,6 +301,13 @@ export function WsSwitcher({ workspaceId }: WsSwitcherProps) {
                       )}
                     />
                     <span className="truncate">{ws.name}</span>
+                    {ws.access === 'shared' && (
+                      <Users
+                        aria-label={t('components.workspaceShare.sharedWithYou')}
+                        className="h-3 w-3 shrink-0 text-muted-foreground"
+                        strokeWidth={2}
+                      />
+                    )}
                   </span>
                   {(human > 0 || agent > 0) && (
                     <span className="inline-flex shrink-0 items-center gap-1">

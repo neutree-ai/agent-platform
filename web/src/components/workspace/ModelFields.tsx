@@ -66,6 +66,11 @@ interface ModelFieldsProps {
     model?: string
     smallModel?: string
   }) => void
+  /**
+   * Workspace being configured. Candidates are listed as its owner, who the
+   * agent runs as — they differ from the caller's own when it is shared.
+   */
+  workspaceId?: string
 }
 
 export function ModelFields({
@@ -74,6 +79,7 @@ export function ModelFields({
   model,
   smallModel,
   onChange,
+  workspaceId,
 }: ModelFieldsProps) {
   const { t } = useTranslation()
   const [providers, setProviders] = useState<ApiModelProvider[]>([])
@@ -82,10 +88,10 @@ export function ModelFields({
 
   useEffect(() => {
     api
-      .listProviders()
+      .listProviders(workspaceId)
       .then(setProviders)
       .catch(() => {})
-  }, [])
+  }, [workspaceId])
 
   // Default small model to match main model whenever it's empty. The backend
   // already falls back to the main model when small model is empty, so this

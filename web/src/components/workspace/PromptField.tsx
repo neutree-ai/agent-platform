@@ -88,6 +88,11 @@ interface PromptFieldProps {
   /** Template prompt id for FieldHint diff (agent config only) */
   templatePromptId?: string | null
   onRevert?: () => void
+  /**
+   * Workspace being configured. Candidates are listed as its owner, who the
+   * agent runs as — they differ from the caller's own when it is shared.
+   */
+  workspaceId?: string
 }
 
 function excerpt(content: string, max = 120): string {
@@ -115,9 +120,10 @@ export function PromptField({
   textareaRows = 4,
   templatePromptId,
   onRevert,
+  workspaceId,
 }: PromptFieldProps) {
   const { t } = useTranslation()
-  const { prompts: allPrompts, isLoading } = usePrompts()
+  const { prompts: allPrompts, isLoading } = usePrompts(workspaceId)
   const queryClient = useQueryClient()
   const [editorOpen, setEditorOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)

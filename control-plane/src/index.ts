@@ -74,6 +74,7 @@ import workspacesReflectRoutes from './routes/workspaces/reflect'
 import workspacesSchedulesRoutes from './routes/workspaces/schedules'
 import workspacesSessionsRoutes from './routes/workspaces/sessions'
 import workspacesSkillsRoutes from './routes/workspaces/skills'
+import workspacesTeamSharesRoutes from './routes/workspaces/team-shares'
 import workspacesTemplatesRoutes from './routes/workspaces/templates'
 import workspacesTransferRoutes from './routes/workspaces/transfer'
 import workspacesUsageRoutes from './routes/workspaces/usage'
@@ -334,6 +335,7 @@ app.route('/api/workspaces', workspacesReflectRoutes)
 app.route('/api/workspaces', workspacesAgentRequestsRoutes)
 app.route('/api/workspaces', workspacesProfileRoutes)
 app.route('/api/workspaces', workspacesTransferRoutes)
+app.route('/api/workspaces', workspacesTeamSharesRoutes)
 app.route('/api/me', meProfileRoutes)
 app.route('/api/me', meRecentSessionsRoutes)
 app.route('/api/me', meActivityRoutes)

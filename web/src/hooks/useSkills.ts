@@ -16,6 +16,8 @@ interface SkillsListFilters {
   /** OR-composed list; include sentinel `"uncategorized"` for category IS NULL. */
   categories?: string[]
   visibility?: SkillVisibility
+  /** List as this workspace's owner — the candidates for attaching to it. */
+  workspaceId?: string
 }
 
 export function useSkills(filters: SkillsListFilters = {}) {
@@ -25,9 +27,10 @@ export function useSkills(filters: SkillsListFilters = {}) {
   const categories =
     filters.categories && filters.categories.length > 0 ? [...filters.categories].sort() : undefined
   const visibility = filters.visibility
+  const workspaceId = filters.workspaceId
   return useQuery({
-    queryKey: [...skillsQueryKey, { q, categories, visibility }],
-    queryFn: () => api.listSkills({ q, categories, visibility }),
+    queryKey: [...skillsQueryKey, { q, categories, visibility, workspaceId }],
+    queryFn: () => api.listSkills({ q, categories, visibility, workspaceId }),
     staleTime: 30_000,
   })
 }

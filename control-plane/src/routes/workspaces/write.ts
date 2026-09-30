@@ -6,8 +6,11 @@ import {
   WorkspacePatchBodySchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace, canOwn } from '../../lib/workspace-access'
 import { attachStore, createStore } from '../../services/db/memory'
 import { getTemplateForUser, getTemplateVersion } from '../../services/db/templates'
+import { getUser } from '../../services/db/users'
+import { listSharedWorkspaceIds } from '../../services/db/workspace-shares'
 import {
   createWorkspace,
   getWorkspace,
@@ -24,7 +27,7 @@ import { materializeTemplateSchedules } from '../../services/template-schedules'
 import { UsageNotDrained } from '../../services/usage/teardown'
 import { applyWorkspaceConfigUpdate } from '../../services/workspace-config'
 import { destroyWorkspace } from '../../services/workspace-lifecycle'
-import { canManage, toApiWorkspace } from './_shared'
+import { toApiWorkspace } from './_shared'
 
 const write = new OpenAPIHono<AppEnv>()
 
@@ -238,7 +241,7 @@ write.openapi(createRouteDef, async (c) => {
     await updateWorkspace(workspace.id, { status: 'starting' })
 
     const updated = (await getWorkspace(workspace.id))!
-    return c.json(toApiWorkspace(updated, currentUser.username), 201)
+    return c.json(toApiWorkspace(updated, currentUser.username, currentUser.sub), 201)
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
   }
@@ -261,6 +264,7 @@ const patchRoute = createRoute({
       content: { 'application/json': { schema: ApiWorkspaceSchema } },
     },
     400: { description: 'Invalid input', content: { 'application/json': { schema: ErrorSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
     404: {
       description: 'Workspace not found',
       content: { 'application/json': { schema: ErrorSchema } },
@@ -278,7 +282,7 @@ write.openapi(patchRoute, async (c) => {
   const body = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -288,7 +292,14 @@ write.openapi(patchRoute, async (c) => {
     patch.name = body.name.trim()
   }
   if (body.slug !== undefined) patch.slug = body.slug
-  if (body.visibility !== undefined) patch.visibility = body.visibility
+  if (body.visibility !== undefined) {
+    // Visibility decides who outside the shared teams can call the agent — and
+    // it runs as the owner — so widening it is the owner's call.
+    if (!canOwn(workspace, currentUser)) {
+      return c.json({ error: 'Only the owner can change visibility' }, 403)
+    }
+    patch.visibility = body.visibility
+  }
 
   if (Object.keys(patch).length === 0) {
     return c.json({ error: 'No fields to update' }, 400)
@@ -303,7 +314,16 @@ write.openapi(patchRoute, async (c) => {
     throw e
   }
   const updated = (await getWorkspace(id))!
-  return c.json(toApiWorkspace(updated, currentUser.username), 200)
+  const owner = updated.user_id === currentUser.sub ? currentUser : await getUser(updated.user_id)
+  const sharedIds = await listSharedWorkspaceIds([id])
+  return c.json(
+    toApiWorkspace(
+      { ...updated, is_shared: sharedIds.has(id) },
+      owner?.username ?? '',
+      currentUser.sub,
+    ),
+    200,
+  )
 })
 
 // ── DELETE /:id ────────────────────────────────────────────────────────────
@@ -334,6 +354,7 @@ const deleteRouteDef = createRoute({
   },
   responses: {
     200: { description: 'Deleted', content: { 'application/json': { schema: SuccessSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
     404: {
       description: 'Workspace not found',
       content: { 'application/json': { schema: ErrorSchema } },
@@ -350,8 +371,11 @@ write.openapi(deleteRouteDef, async (c) => {
   const { id } = c.req.valid('param')
   const { force } = c.req.valid('query')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
+  }
+  if (!canOwn(workspace, currentUser)) {
+    return c.json({ error: 'Only the owner can delete a workspace' }, 403)
   }
 
   try {
@@ -406,7 +430,7 @@ write.openapi(putConfigRoute, async (c) => {
   const body = { ...c.req.valid('json') }
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

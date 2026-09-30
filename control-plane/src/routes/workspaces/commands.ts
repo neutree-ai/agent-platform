@@ -5,6 +5,7 @@ import {
   WorkspaceCommandPatchBodySchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import {
   createWorkspaceCommand,
   deleteWorkspaceCommand,
@@ -57,7 +58,7 @@ commands.openapi(listRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const list = await listWorkspaceCommands(id)
@@ -96,7 +97,7 @@ commands.openapi(createRouteDef, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -149,7 +150,7 @@ commands.openapi(patchRoute, async (c) => {
   const { id, cmdId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -186,7 +187,7 @@ commands.openapi(deleteRouteDef, async (c) => {
   const { id, cmdId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -232,7 +233,7 @@ commands.openapi(setDisabledRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== currentUser.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const { name, disabled } = c.req.valid('json')

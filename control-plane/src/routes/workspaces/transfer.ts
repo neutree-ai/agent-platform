@@ -5,6 +5,7 @@ import {
   CreateTransferRequestSchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { isWorkspaceOwner } from '../../lib/workspace-access'
 import { getUser, getUserByUsername } from '../../services/db/users'
 import {
   createTransfer,
@@ -16,7 +17,6 @@ import { getWorkspace } from '../../services/db/workspaces'
 import { notify } from '../../services/notifications'
 import { TransferRejected, assertTransferable } from '../../services/workspace-transfer'
 import { planTransfer } from '../../services/workspace-transfer-plan'
-import { canManage } from './_shared'
 
 // The sender's side of a workspace transfer: preview the plan for a recipient,
 // start the transfer, and cancel it while it is pending. The recipient's side
@@ -39,9 +39,7 @@ const errors = {
 
 async function loadOwned(id: string, user: { sub: string; role: string }) {
   const workspace = await getWorkspace(id)
-  // canManage also admits admins on system workspaces, which cannot be
-  // transferred anyway; the owner check here is the one that matters.
-  if (!workspace || !canManage(workspace, user) || workspace.user_id !== user.sub) return null
+  if (!workspace || !isWorkspaceOwner(workspace, user)) return null
   return workspace
 }
 

@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../../services/db/workspaces', () => ({ getWorkspace: mocks.getWorkspace }))
+vi.mock('../../services/db/workspace-shares', () => ({
+  isWorkspaceSharedWithUser: async () => false,
+}))
 vi.mock('../../services/db/workspace-usage', () => ({
   getSessionUsage: mocks.getSessionUsage,
   getSessionUsageOwner: mocks.getSessionUsageOwner,

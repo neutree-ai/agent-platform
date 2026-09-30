@@ -65,6 +65,7 @@ import type {
   ApiWorkspaceConfig,
   ApiWorkspaceLayout,
   ApiWorkspaceMemoryAttachment,
+  ApiWorkspaceTeamShare,
   ApiWorkspaceTransfer,
   AskUserRequest,
   AutoScaling,
@@ -434,6 +435,7 @@ class ApiClient {
     name: string
     chat_status: string
     status: string
+    last_active_at: string
     preview: string
     pending_message: PendingMessage | null
   }> {
@@ -532,9 +534,18 @@ class ApiClient {
 
   // ── Memory stores (P1: user-level, agent doesn't read yet) ────────────────
 
-  async listMemoryStores(opts?: { includeArchived?: boolean }): Promise<ApiMemoryStore[]> {
-    const q = opts?.includeArchived ? '?include_archived=true' : ''
-    const res = await this.request<{ stores: ApiMemoryStore[] }>(`/memory-stores${q}`)
+  async listMemoryStores(opts?: {
+    includeArchived?: boolean
+    /** List the stores of this workspace's owner — for attaching to it. */
+    workspaceId?: string
+  }): Promise<ApiMemoryStore[]> {
+    const params = new URLSearchParams()
+    if (opts?.includeArchived) params.set('include_archived', 'true')
+    if (opts?.workspaceId) params.set('workspace_id', opts.workspaceId)
+    const qs = params.toString()
+    const res = await this.request<{ stores: ApiMemoryStore[] }>(
+      qs ? `/memory-stores?${qs}` : '/memory-stores',
+    )
     return res.stores ?? []
   }
 
@@ -807,8 +818,11 @@ class ApiClient {
      */
     categories?: string[]
     visibility?: SkillVisibility
+    /** List as this workspace's owner — for attaching skills to it. */
+    workspaceId?: string
   }): Promise<ApiSkill[]> {
     const params = new URLSearchParams()
+    if (filters?.workspaceId) params.set('workspace_id', filters.workspaceId)
     if (filters?.q) params.set('q', filters.q)
     if (filters?.owner) params.set('owner', filters.owner)
     if (filters?.categories && filters.categories.length > 0) {
@@ -1389,6 +1403,19 @@ class ApiClient {
     )
   }
 
+  // Workspace team shares
+  async listWorkspaceTeamShares(workspaceId: string): Promise<ApiWorkspaceTeamShare[]> {
+    return this.request<ApiWorkspaceTeamShare[]>(`/workspaces/${workspaceId}/team-shares`)
+  }
+
+  async shareWorkspaceWithTeam(workspaceId: string, teamId: string): Promise<void> {
+    await this.request(`/workspaces/${workspaceId}/team-shares/${teamId}`, { method: 'PUT' })
+  }
+
+  async revokeWorkspaceTeamShare(workspaceId: string, teamId: string): Promise<void> {
+    await this.request(`/workspaces/${workspaceId}/team-shares/${teamId}`, { method: 'DELETE' })
+  }
+
   // Workspace transfer — sender side
   async getWorkspaceTransfer(workspaceId: string): Promise<ApiWorkspaceTransfer | null> {
     return this.request<ApiWorkspaceTransfer | null>(`/workspaces/${workspaceId}/transfer`)
@@ -1473,8 +1500,11 @@ class ApiClient {
   }
 
   // Providers
-  async listProviders(): Promise<ApiModelProvider[]> {
-    return this.request<ApiModelProvider[]>('/providers')
+  /** With `workspaceId`, lists as that workspace's owner — for attaching to it. */
+  async listProviders(workspaceId?: string): Promise<ApiModelProvider[]> {
+    return this.request<ApiModelProvider[]>(
+      workspaceId ? `/providers?workspace_id=${encodeURIComponent(workspaceId)}` : '/providers',
+    )
   }
 
   async createProvider(data: {
@@ -1531,8 +1561,13 @@ class ApiClient {
   }
 
   // Environments (BYOI)
-  async listEnvironments(): Promise<ApiEnvironment[]> {
-    return this.request<ApiEnvironment[]>('/environments')
+  /** With `workspaceId`, lists as that workspace's owner — for attaching to it. */
+  async listEnvironments(workspaceId?: string): Promise<ApiEnvironment[]> {
+    return this.request<ApiEnvironment[]>(
+      workspaceId
+        ? `/environments?workspace_id=${encodeURIComponent(workspaceId)}`
+        : '/environments',
+    )
   }
 
   async createEnvironment(data: {
@@ -1784,8 +1819,11 @@ class ApiClient {
   }
 
   // Prompts
-  async listPrompts(): Promise<ApiPrompt[]> {
-    return this.request<ApiPrompt[]>('/prompts')
+  /** With `workspaceId`, lists as that workspace's owner — for attaching to it. */
+  async listPrompts(workspaceId?: string): Promise<ApiPrompt[]> {
+    return this.request<ApiPrompt[]>(
+      workspaceId ? `/prompts?workspace_id=${encodeURIComponent(workspaceId)}` : '/prompts',
+    )
   }
 
   async listPublicPrompts(): Promise<ApiPrompt[]> {

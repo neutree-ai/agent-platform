@@ -6,6 +6,7 @@ import {
   AgentMoveBodySchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { getWorkspaceAddress } from '../../lib/workspace-address'
 import {
   createExportToken,
@@ -15,7 +16,6 @@ import {
 import type { Workspace } from '../../services/db/types'
 import { getWorkspace } from '../../services/db/workspaces'
 import { WorkspaceStartError, ensureWorkspaceRunning } from '../../services/workspace-autostart'
-import { canManage } from './_shared'
 
 type UpgradeWebSocket = ReturnType<typeof createNodeWebSocket>['upgradeWebSocket']
 
@@ -78,7 +78,7 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
     user: { sub: string; role: string },
   ): Promise<{ workspace: Workspace; address: string } | { error: 'not-found' | 'not-running' }> {
     const workspace = await getWorkspace(id)
-    if (!workspace || !canManage(workspace, user)) return { error: 'not-found' }
+    if (!workspace || !(await canAccessWorkspace(workspace, user))) return { error: 'not-found' }
     if (workspace.status !== 'running') return { error: 'not-running' }
     return { workspace, address: getWorkspaceAddress(workspace.id) }
   }
@@ -336,7 +336,7 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
       let resolved = await resolveWorkspace(id, c.get('user'))
       if ('error' in resolved && resolved.error === 'not-running' && routeNoun === 'files') {
         const workspace = await getWorkspace(id)
-        if (!workspace || !canManage(workspace, c.get('user'))) {
+        if (!workspace || !(await canAccessWorkspace(workspace, c.get('user')))) {
           return c.json({ error: 'Workspace not found' }, 404)
         }
         try {
@@ -776,7 +776,7 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
   agent.openapi(listExportTokensRoute, async (c) => {
     const { id } = c.req.valid('param')
     const workspace = await getWorkspace(id)
-    if (!workspace || !canManage(workspace, c.get('user'))) {
+    if (!workspace || !(await canAccessWorkspace(workspace, c.get('user')))) {
       return c.json({ error: 'Workspace not found' }, 404)
     }
     const publicUrl = process.env.FILES_PUBLIC_URL ?? ''
@@ -818,7 +818,7 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
   agent.openapi(revokeExportTokenRoute, async (c) => {
     const { id, token } = c.req.valid('param')
     const workspace = await getWorkspace(id)
-    if (!workspace || !canManage(workspace, c.get('user'))) {
+    if (!workspace || !(await canAccessWorkspace(workspace, c.get('user')))) {
       return c.json({ error: 'Workspace not found' }, 404)
     }
     const removed = await deleteExportToken(workspace.id, token)
@@ -855,7 +855,7 @@ export function createAgentRoutes(deps: { upgradeWebSocket: UpgradeWebSocket }) 
             const workspace = await getWorkspace(workspaceId)
             if (
               !workspace ||
-              !canManage(workspace, currentUser) ||
+              !(await canAccessWorkspace(workspace, currentUser)) ||
               workspace.status !== 'running'
             ) {
               ws.close(1008, 'Workspace not available')

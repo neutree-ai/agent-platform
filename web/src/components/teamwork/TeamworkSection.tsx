@@ -1355,6 +1355,8 @@ function resolveMemberWorkspace(
     visibility: candidate.visibility,
     is_system: false,
     owner: candidate.owner,
+    access: 'shared',
+    is_shared: false,
     status: candidate.status,
     created_at: '',
     tag_ids: [],

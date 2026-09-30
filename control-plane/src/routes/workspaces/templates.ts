@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { ApiTemplateSchema } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace, canOwn } from '../../lib/workspace-access'
 import { notifyAgentReload } from '../../lib/workspace-address'
 import {
   createTemplate,
@@ -17,7 +18,6 @@ import {
 import { skillRepo } from '../../services/skills-composition'
 import { reconcileTemplateLayout } from '../../services/template-layout'
 import { reconcileTemplateSchedules } from '../../services/template-schedules'
-import { canManage } from './_shared'
 
 const templates = new OpenAPIHono<AppEnv>()
 
@@ -57,6 +57,7 @@ const saveAsTemplateRoute = createRoute({
       content: { 'application/json': { schema: ApiTemplateSchema } },
     },
     400: { description: 'Invalid input', content: { 'application/json': { schema: ErrorSchema } } },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
     404: {
       description: 'Workspace or config not found',
       content: { 'application/json': { schema: ErrorSchema } },
@@ -70,8 +71,13 @@ templates.openapi(saveAsTemplateRoute, async (c) => {
   const body = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
+  }
+  // A template pins the workspace's provider and prompts and belongs to whoever
+  // saves it — from a member, that would hand them the owner's resources.
+  if (!canOwn(workspace, currentUser)) {
+    return c.json({ error: 'Only the owner can save a workspace as a template' }, 403)
   }
 
   const config = await getWorkspaceConfig(id)
@@ -182,7 +188,7 @@ templates.openapi(syncTemplateRoute, async (c) => {
   const { id } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

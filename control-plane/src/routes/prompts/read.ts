@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { ApiPromptSchema, ApiPromptVersionSchema } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { resolveResourceViewer } from '../../lib/workspace-access'
 import { getPromptForUser, listPromptVersions, listVisibleToUser } from '../../services/db/prompts'
 import { toApi, toVersionApi } from './_shared'
 
@@ -19,17 +20,29 @@ const listVisibleRoute = createRoute({
   tags: ['prompts'],
   summary: 'List prompts visible to the user (own + public + team-shared)',
   security: [{ bearerAuth: [] }],
+  request: {
+    query: z.object({
+      workspace_id: z.string().optional().openapi({
+        description: "List as this workspace's owner — for picking resources to attach to it.",
+      }),
+    }),
+  },
   responses: {
     200: {
       description: 'Prompt list',
       content: { 'application/json': { schema: z.array(ApiPromptSchema) } },
     },
+    404: {
+      description: 'Workspace not found',
+      content: { 'application/json': { schema: z.object({ error: z.string() }) } },
+    },
   },
 })
 
 read.openapi(listVisibleRoute, async (c) => {
-  const user = c.get('user')
-  const list = await listVisibleToUser(user.sub)
+  const viewer = await resolveResourceViewer(c.get('user'), c.req.valid('query').workspace_id)
+  if (!viewer) return c.json({ error: 'Workspace not found' }, 404)
+  const list = await listVisibleToUser(viewer)
   return c.json(list.map(toApi), 200)
 })
 

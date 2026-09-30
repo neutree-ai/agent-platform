@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../lib/types'
+import { canAccessWorkspace } from '../lib/workspace-access'
 import {
   getWorkspace,
   listCallableWorkspaces,
@@ -8,7 +9,7 @@ import {
 } from '../services/db/workspaces'
 import workspaceBrowsers from './workspace-browsers'
 import workspaceSandboxes from './workspace-sandboxes'
-import { canManage } from './workspaces/_shared'
+import {} from './workspaces/_shared'
 
 const workspaces = new Hono<AppEnv>()
 
@@ -35,7 +36,7 @@ workspaces.post('/:id/seen', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

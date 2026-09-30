@@ -56,11 +56,18 @@ export async function getWorkspace(id: string): Promise<Workspace | null> {
 
 export async function listWorkspaces(
   userId: string,
-  opts?: { search?: string; limit?: number; includeSystem?: boolean },
+  opts?: { search?: string; limit?: number; includeSystem?: boolean; includeShared?: boolean },
 ): Promise<WorkspaceWithSessionCounts[]> {
-  const conditions: string[] = opts?.includeSystem
-    ? ['(w.user_id = $1 OR w.is_system = true)']
-    : ['w.user_id = $1', 'w.is_system = false']
+  const reach = ['w.user_id = $1']
+  if (opts?.includeSystem) reach.push('w.is_system = true')
+  if (opts?.includeShared) {
+    reach.push(`EXISTS (
+       SELECT 1 FROM workspace_team_shares ts
+       JOIN team_members tm ON tm.team_id = ts.team_id
+       WHERE ts.workspace_id = w.id AND tm.user_id = $1)`)
+  }
+  const conditions: string[] = [`(${reach.join(' OR ')})`]
+  if (!opts?.includeSystem) conditions.push('w.is_system = false')
   const values: any[] = [userId]
   let paramIndex = 2
 
@@ -74,10 +81,13 @@ export async function listWorkspaces(
 
   const { rows } = await pool.query(
     `SELECT w.*,
+       ou.username AS owner_name,
+       EXISTS (SELECT 1 FROM workspace_team_shares ts WHERE ts.workspace_id = w.id) AS is_shared,
        COALESCE(sa.agent_count, 0)::int AS active_agent_sessions,
        COALESCE(sa.human_count, 0)::int AS active_human_sessions,
        COALESCE(sa.details, '[]'::json) AS active_sessions
      FROM workspaces w
+     JOIN users ou ON ou.id = w.user_id
      LEFT JOIN LATERAL (
        SELECT
          COUNT(*) FILTER (WHERE s.chat_status = 'agent') AS agent_count,

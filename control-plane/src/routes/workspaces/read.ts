@@ -8,6 +8,7 @@ import {
   ApiWorkspaceSchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { getWorkspaceReplicaStatus } from '../../services/db/env-placements'
 import { listAttachmentsForWorkspace } from '../../services/db/memory'
 import { getMessageBlock, getMessagesWithBlocks } from '../../services/db/messages'
@@ -17,7 +18,7 @@ import type { SessionWithPreview } from '../../services/db/types'
 import { getWorkspace, getWorkspaceConfig, listWorkspaces } from '../../services/db/workspaces'
 import * as k8s from '../../services/k8s'
 import { withImageUrls } from './_image-blocks'
-import { canManage, toApiWorkspace } from './_shared'
+import { toApiWorkspace } from './_shared'
 
 function toApiSession(s: SessionWithPreview) {
   return {
@@ -115,10 +116,15 @@ read.openapi(listWorkspacesRoute, async (c) => {
   const currentUser = c.get('user')
   const { search, limit } = c.req.valid('query')
   const includeSystem = currentUser.role === 'admin'
-  const wsList = await listWorkspaces(currentUser.sub, { search, limit, includeSystem })
+  const wsList = await listWorkspaces(currentUser.sub, {
+    search,
+    limit,
+    includeSystem,
+    includeShared: true,
+  })
   const tagAssignments = await getTagAssignmentsForUser(currentUser.sub)
   return c.json(
-    wsList.map((w) => toApiWorkspace(w, currentUser.username, tagAssignments[w.id] || [])),
+    wsList.map((w) => toApiWorkspace(w, w.owner_name, currentUser.sub, tagAssignments[w.id] || [])),
     200,
   )
 })
@@ -214,7 +220,7 @@ read.openapi(listMessagesRoute, async (c) => {
   const { id } = c.req.valid('param')
   const { session_id, limit, offset } = c.req.valid('query')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const messages = await getMessagesWithBlocks(id, session_id, { limit, offset })
@@ -228,6 +234,7 @@ read.openapi(listMessagesRoute, async (c) => {
       started_at: m.started_at,
       ended_at: m.ended_at,
       duration_ms: m.duration_ms,
+      author: m.author_user_id ? { id: m.author_user_id, name: m.author_name ?? '' } : null,
     })),
     200,
   )
@@ -255,7 +262,7 @@ read.openapi(listSessionsRoute, async (c) => {
     active_after,
   } = c.req.valid('query')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const { items, total } = await listSessions(id, {
@@ -292,7 +299,7 @@ read.openapi(sessionFacetsRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   return c.json(await getSessionFacets(id), 200)
@@ -302,7 +309,7 @@ read.openapi(getConfigRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const config = await getWorkspaceConfig(id)
@@ -357,7 +364,7 @@ read.openapi(getStatusRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   try {
@@ -394,7 +401,7 @@ read.openapi(messageBlockImageRoute, async (c) => {
   const currentUser = c.get('user')
   const { id, messageId, ordinal } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const block = await getMessageBlock(id, messageId, ordinal)

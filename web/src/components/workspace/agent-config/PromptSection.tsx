@@ -14,6 +14,7 @@ interface PromptSectionProps {
     prompt_name: string | null
     prompt_content: string | null
   } | null
+  workspaceId?: string
 }
 
 export function PromptSection({
@@ -24,6 +25,7 @@ export function PromptSection({
   onChange,
   onRevert,
   templateConfig,
+  workspaceId,
 }: PromptSectionProps) {
   const { t } = useTranslation()
   return (
@@ -43,6 +45,7 @@ export function PromptSection({
       textareaRows={12}
       templatePromptId={templateConfig?.prompt_id}
       onRevert={onRevert}
+      workspaceId={workspaceId}
     />
   )
 }

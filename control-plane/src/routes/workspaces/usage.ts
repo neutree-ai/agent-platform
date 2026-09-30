@@ -1,13 +1,13 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { ApiRuntimeTimelineSchema, ApiSessionUsageListSchema } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { getWorkspaceTimeline } from '../../services/db/resource-usage'
 import {
   getWorkspaceUsageTotals,
   listWorkspaceSessionUsage,
 } from '../../services/db/workspace-usage'
 import { getWorkspace } from '../../services/db/workspaces'
-import { canManage } from './_shared'
 
 /** Sessions shown per workspace before the list stops being readable. */
 const SESSION_LIMIT = 12
@@ -58,7 +58,7 @@ usage.openapi(getUsageRoute, async (c) => {
   const user = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, user)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   const totals = await getWorkspaceUsageTotals(id)
@@ -87,7 +87,7 @@ usage.openapi(timelineRoute, async (c) => {
   const { id } = c.req.valid('param')
   const { days } = c.req.valid('query')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, user)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   return c.json({ segments: await getWorkspaceTimeline(id, days) }, 200)
@@ -115,7 +115,7 @@ usage.openapi(sessionUsageRoute, async (c) => {
   const { id } = c.req.valid('param')
   const { days } = c.req.valid('query')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, user)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
   return c.json({ sessions: await listWorkspaceSessionUsage(id, days, SESSION_LIMIT) }, 200)

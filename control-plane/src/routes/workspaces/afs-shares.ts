@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import {
   afsEnvForWorkspace,
   createDir,
@@ -19,7 +20,6 @@ import {
   removeAfsShareMember,
 } from '../../services/db/afs-shares'
 import { getWorkspace } from '../../services/db/workspaces'
-import { canManage } from './_shared'
 
 const afsShares = new OpenAPIHono<AppEnv>()
 
@@ -71,7 +71,7 @@ async function resolveCallerWorkspace(
   { ok: true; workspace: Awaited<ReturnType<typeof getWorkspace>> & object } | { ok: false }
 > {
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, user)) return { ok: false }
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) return { ok: false }
   return { ok: true, workspace }
 }
 
