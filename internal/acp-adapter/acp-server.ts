@@ -22,6 +22,9 @@ import type { AcpSessionHandler, AgentBridge } from './acp-bridge.js'
 import type { ChatRequest } from './types.js'
 import { AcpEventTranslator } from './universal-events.js'
 
+/** JSON-RPC code of ACP's `authRequired` error. */
+const ACP_AUTH_REQUIRED = -32000
+
 // ── Config interface ──
 
 export interface AcpAgentServerConfig {
@@ -41,7 +44,7 @@ export interface AcpAgentServerConfig {
   restartBridge?: () => Promise<void>
   /**
    * Called once per completed prompt turn with `PromptResponse.usage` (may be
-   * undefined — codex never populates it). Agents whose transcripts the
+   * undefined when the agent does not report it). Agents whose transcripts the
    * agent-usage sweeper can't parse (goose persists sessions in SQLite)
    * implement this to append their own usage records for the `POST /usage`
    * pull. Must not throw; failures are logged and swallowed.
@@ -556,9 +559,18 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         // cause (e.g. OpenAI content-policy reason, rate-limit detail) sits
         // in err.data.message. Prefer that, append a short code tag if we
         // have one (e.g. "cyber_policy"), otherwise fall back.
+        // ACP authRequired (-32000) arrives bare, without the provider's
+        // response, so name the likely fix instead of echoing it.
         const cause = err.data?.message
         const tag = err.data?.codex_error_info ?? err.data?.error_code
-        const msg = cause ? (tag ? `${cause} (${tag})` : cause) : err.message || JSON.stringify(err)
+        const msg =
+          err.code === ACP_AUTH_REQUIRED
+            ? 'The model provider rejected the credentials (authentication required). Check the API key configured for this provider.'
+            : cause
+              ? tag
+                ? `${cause} (${tag})`
+                : cause
+              : err.message || JSON.stringify(err)
         console.error(`[agent] Chat error session=${currentSessionId}:`, msg)
         await sink.write('message', JSON.stringify(translator.error(msg)))
         await sink.write('message', JSON.stringify(translator.sessionEnded('error')))

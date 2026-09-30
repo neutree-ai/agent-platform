@@ -12,6 +12,10 @@
     "@types/node": "^22.0.0",
     "@types/ws": "^8.18.1",
     "hono": "^4.6.0",
+    "vitest": "^2.1.9",
     "ws": "^8.19.0"
+  },
+  "scripts": {
+    "test": "vitest run"
   }
 }

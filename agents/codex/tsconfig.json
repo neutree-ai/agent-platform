@@ -23,6 +23,7 @@
   "exclude": [
     "node_modules",
     "dist",
+    "../../internal/acp-adapter/*.test.ts",
     "../../internal/agent-skills/src/*.test.ts",
     "../../internal/agent-usage/src/*.test.ts"
   ]

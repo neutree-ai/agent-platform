@@ -5,7 +5,12 @@
  * correct field access across all session update variants.
  */
 
-import type { PromptResponse, SessionUpdate, UsageUpdate } from '@agentclientprotocol/sdk'
+import type {
+  PromptResponse,
+  SessionUpdate,
+  ToolCallContent,
+  UsageUpdate,
+} from '@agentclientprotocol/sdk'
 import type {
   AskUserRequest,
   ContentPart,
@@ -37,6 +42,52 @@ function gooseToolName(update: { _meta?: unknown }): string | undefined {
   return typeof name === 'string' && name.length > 0 ? name : undefined
 }
 
+/**
+ * Collect a command's output and exit code from codex-acp's terminal
+ * extension: `_meta.terminal_output_delta.data` chunks and
+ * `_meta.terminal_exit.exit_code`.
+ */
+function absorbTerminalMeta(
+  tracked: { terminalOutput: string | undefined; terminalExitCode: number | null | undefined },
+  meta: unknown,
+): void {
+  const m = meta as
+    | {
+        terminal_output_delta?: { data?: unknown }
+        terminal_exit?: { exit_code?: unknown }
+      }
+    | null
+    | undefined
+  const data = m?.terminal_output_delta?.data
+  if (typeof data === 'string') tracked.terminalOutput = (tracked.terminalOutput ?? '') + data
+  const exit = m?.terminal_exit
+  if (exit) {
+    tracked.terminalOutput ??= ''
+    tracked.terminalExitCode = typeof exit.exit_code === 'number' ? exit.exit_code : null
+  }
+}
+
+/**
+ * A command's output may exist only as terminal deltas in `_meta`: codex-acp
+ * 2.x sends no rawOutput for a plain exec, and only `{exit_code}` for a
+ * classified command (a `read` or `search`). Fill in the
+ * `{formatted_output, exit_code}` shape the exec renderer reads, keeping any
+ * rawOutput field the agent did send.
+ */
+function withTerminalOutput(
+  rawOutput: unknown,
+  tracked: { terminalOutput: string | undefined; terminalExitCode: number | null | undefined } | undefined,
+): unknown {
+  if (tracked?.terminalOutput === undefined) return rawOutput
+  if (rawOutput === undefined || rawOutput === null) {
+    return { formatted_output: tracked.terminalOutput, exit_code: tracked.terminalExitCode ?? null }
+  }
+  if (typeof rawOutput === 'object' && !Array.isArray(rawOutput) && !('formatted_output' in rawOutput)) {
+    return { formatted_output: tracked.terminalOutput, ...rawOutput }
+  }
+  return rawOutput
+}
+
 /** Serialize unknown rawInput/rawOutput to a display string. */
 function stringifyRaw(raw: unknown): string {
   if (raw == null) return ''
@@ -64,7 +115,9 @@ export class AcpEventTranslator {
    * Track active tool calls by their toolCallId for completing them.
    * `lastStatus` mirrors ACP's `ToolCallStatus`: pending/in_progress/completed/failed.
    * Per ACP spec (`ToolCallUpdate`), fields omitted on an update mean "unchanged",
-   * so we inherit the previous status rather than defaulting to "completed".
+   * so every field is merged into this record and the terminal update reads the
+   * merged state: an agent may report the final status alone, having already
+   * sent the output on an earlier update.
    */
   private activeToolCalls = new Map<
     string,
@@ -72,6 +125,12 @@ export class AcpEventTranslator {
       itemId: string
       title: string
       rawInput: unknown
+      rawOutput: unknown
+      content: ToolCallContent[] | undefined
+      /** Command output from `_meta.terminal_output_delta` chunks, in order. */
+      terminalOutput: string | undefined
+      /** Exit code from `_meta.terminal_exit`. */
+      terminalExitCode: number | null | undefined
       lastStatus: 'pending' | 'in_progress' | 'completed' | 'failed'
       terminalEmitted: boolean
       isImageGen: boolean
@@ -229,10 +288,20 @@ export class AcpEventTranslator {
           itemId,
           title: stableName,
           rawInput: update.rawInput,
+          rawOutput: update.rawOutput,
+          content: update.content,
+          terminalOutput: undefined,
+          terminalExitCode: undefined,
           lastStatus: update.status ?? 'pending',
           terminalEmitted: false,
           isImageGen,
         })
+        // A start that is already terminal replays through the update path
+        // below, which absorbs its `_meta`.
+        const startedTracked = this.activeToolCalls.get(update.toolCallId)
+        if (startedTracked && update.status !== 'completed' && update.status !== 'failed') {
+          absorbTerminalMeta(startedTracked, update._meta)
+        }
 
         const toolItem: UniversalItem = {
           item_id: itemId,
@@ -297,7 +366,7 @@ export class AcpEventTranslator {
         if (
           tracked?.isImageGen &&
           effectiveStatus !== 'failed' &&
-          ((update as any).content ?? []).some(
+          (update.content ?? tracked.content ?? []).some(
             (tc: any) => tc?.type === 'image' || tc?.content?.type === 'image',
           )
         ) {
@@ -306,6 +375,9 @@ export class AcpEventTranslator {
 
         if (tracked) {
           if (update.rawInput !== undefined) tracked.rawInput = update.rawInput
+          if (update.rawOutput !== undefined) tracked.rawOutput = update.rawOutput
+          if (update.content != null) tracked.content = update.content
+          absorbTerminalMeta(tracked, update._meta)
           // Mirror the started-side preference: goose structured identity,
           // then kind; only accept `title` as a last-resort fallback.
           const updatedName = gooseToolName(update) ?? update.kind ?? update.title
@@ -324,6 +396,8 @@ export class AcpEventTranslator {
 
         // Emit item.completed for the tool_call itself (fills in input in the UI)
         const finalInput = update.rawInput ?? tracked?.rawInput
+        const finalRawOutput = withTerminalOutput(update.rawOutput ?? tracked?.rawOutput, tracked)
+        const finalContent = update.content ?? tracked?.content
         const toolName = update.kind ?? update.title ?? tracked?.title ?? ''
         events.push({
           type: 'item.completed',
@@ -346,13 +420,13 @@ export class AcpEventTranslator {
         })
 
         console.log(
-          `[acp-events] tool_call_update terminal call=${update.toolCallId} title=${toolName} status=${effectiveStatus} rawOutputType=${typeof update.rawOutput} contentTypes=${(update.content ?? []).map((tc: any) => tc?.type + (tc?.content?.type ? `(${tc.content.type})` : '')).join('|')}`,
+          `[acp-events] tool_call_update terminal call=${update.toolCallId} title=${toolName} status=${effectiveStatus} rawOutputType=${typeof finalRawOutput} contentTypes=${(finalContent ?? []).map((tc: any) => tc?.type + (tc?.content?.type ? `(${tc.content.type})` : '')).join('|')}`,
         )
 
         // Extract output: prefer rawOutput, fall back to content blocks
-        let output = stringifyRaw(update.rawOutput)
-        if (!output && update.content) {
-          output = update.content
+        let output = stringifyRaw(finalRawOutput)
+        if (!output && finalContent) {
+          output = finalContent
             .map((tc: any) => {
               if (tc.type === 'content' && tc.content) {
                 const inner = tc.content
@@ -389,7 +463,7 @@ export class AcpEventTranslator {
         // `data`, so showing the image in-chat would mean persisting MBs per
         // generation — that needs a uri-based design + cp/UI work.)
         if (tracked?.isImageGen) {
-          const ro = (update.rawOutput ?? {}) as Record<string, unknown>
+          const ro = (finalRawOutput ?? {}) as Record<string, unknown>
           const saved = typeof ro.savedPath === 'string' ? ro.savedPath : undefined
           const revised = typeof ro.revisedPrompt === 'string' ? ro.revisedPrompt : undefined
           output = [
