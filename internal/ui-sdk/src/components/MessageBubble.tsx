@@ -65,7 +65,14 @@ function formatTimestamp(iso: string, locale: string): { short: string; full: st
   return { short, full }
 }
 
-function MessageBubbleImpl({ message }: { message: ChatMessage }) {
+function MessageBubbleImpl({
+  message,
+  showAuthor = false,
+}: {
+  message: ChatMessage
+  /** Label a user message with its author — for sessions several people speak in. */
+  showAuthor?: boolean
+}) {
   const { t, i18n } = useTranslation()
   const isUser = message.role === 'user'
   // Auto-emitted system messages (see `<agent-sys>` convention in
@@ -103,6 +110,10 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
           <Markdown>{message.content as string}</Markdown>
         </div>
       ) : isUser ? (
+        <>
+        {showAuthor && message.author && (
+          <div className="mb-1 px-1 text-mini text-muted-foreground">{message.author.name}</div>
+        )}
         <div className="max-w-[70%] overflow-hidden break-words rounded-2xl rounded-tr-md bg-primary/90 px-3.5 py-2 text-primary-foreground shadow-sm">
           <div className="whitespace-pre-wrap break-words text-[1em]">{message.content}</div>
           {message.blocks
@@ -120,6 +131,7 @@ function MessageBubbleImpl({ message }: { message: ChatMessage }) {
               ) : null,
             )}
         </div>
+        </>
       ) : (
         <div className="w-full min-w-0 break-words">
           {message.blocks.map((block, idx) =>

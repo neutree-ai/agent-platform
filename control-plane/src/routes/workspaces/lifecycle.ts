@@ -1,11 +1,12 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { resetAllSessionsIdle } from '../../services/db/sessions'
 import { getWorkspace, updateWorkspace } from '../../services/db/workspaces'
 import { bumpWorkspaceSpec, setDesiredPhase } from '../../services/placement'
 import { stopWorkspace } from '../../services/workspace-lifecycle'
 import { reconcileWorkspacePod, startWorkspaceInstance } from '../../services/workspace-reconcile'
-import { canManage, interruptAllSessions } from './_shared'
+import { interruptAllSessions } from './_shared'
 
 const lifecycle = new OpenAPIHono<AppEnv>()
 
@@ -59,7 +60,7 @@ lifecycle.openapi(startRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -103,7 +104,7 @@ lifecycle.openapi(stopRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -151,7 +152,7 @@ lifecycle.openapi(restartRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -208,7 +209,7 @@ lifecycle.openapi(rebuildRoute, async (c) => {
   const currentUser = c.get('user')
   const { id } = c.req.valid('param')
   const workspace = await getWorkspace(id)
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

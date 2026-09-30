@@ -35,6 +35,7 @@ import { AskUserQuestionPanel } from '@/components/workspace/AskUserQuestionPane
 import { useAgentMention, useSlashCommands } from '@/components/workspace/CommandTrigger'
 import { useFileMention } from '@/components/workspace/FileMention'
 import { ShareSessionButton } from '@/components/workspace/ShareSessionButton'
+import { useAuth } from '@/contexts/AuthContext'
 import { useSlotContext } from '@/contexts/SlotContext'
 import { useAgentInfo } from '@/hooks/useAgentInfo'
 import { useAutoScroll } from '@/hooks/useAutoScroll'
@@ -250,6 +251,9 @@ interface WorkspaceChatPanelProps {
   onMessages?: (messages: ChatMessageType[]) => void
 }
 
+/** How often a shared workspace's open session checks for turns started elsewhere. */
+const REMOTE_TURN_POLL_MS = 5000
+
 export function WorkspaceChatPanel({
   workspace,
   transformFirstMessage,
@@ -257,6 +261,12 @@ export function WorkspaceChatPanel({
   onMessages,
 }: WorkspaceChatPanelProps) {
   const { t, i18n } = useTranslation()
+  const { user } = useAuth()
+  // Several people speak in a shared workspace's sessions: label the user
+  // messages that are not the viewer's own with their author.
+  const multiAuthor = workspace.is_shared || workspace.access === 'shared'
+  const showAuthorOf = (msg: ChatMessageType) =>
+    multiAuthor && !!msg.author && msg.author.id !== user?.id
   const { mode: chatSendKeyMode } = useChatSendKey()
   const hints = useMemo(
     () => [
@@ -283,6 +293,16 @@ export function WorkspaceChatPanel({
   const pendingMessage = useAgentSessionStore((s) => s.pendingMessage)
   const lastTurnStats = useAgentSessionStore((s) => s.lastTurnStats)
   const actions = useAgentSessionActions()
+
+  // Other people's turns in a shared workspace don't reach this tab's stream;
+  // poll the active session to pick them up while the tab is visible.
+  useEffect(() => {
+    if (!multiAuthor || readonly) return
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void actions.syncRemoteTurn()
+    }, REMOTE_TURN_POLL_MS)
+    return () => clearInterval(timer)
+  }, [multiAuthor, readonly, actions])
 
   const isChatBusy = isLoading || isDeleting
   const isSessionLocked = isDeleting || isSwitching
@@ -881,7 +901,10 @@ export function WorkspaceChatPanel({
                       >
                         <div className="pb-3">
                           <TranscriptI18nProvider locale={i18n.language}>
-                            <MessageBubble message={messages[vi.index]} />
+                            <MessageBubble
+                              message={messages[vi.index]}
+                              showAuthor={showAuthorOf(messages[vi.index])}
+                            />
                           </TranscriptI18nProvider>
                         </div>
                       </div>
@@ -891,7 +914,10 @@ export function WorkspaceChatPanel({
                   {messages.length > 0 && (
                     <div className="pb-3">
                       <TranscriptI18nProvider locale={i18n.language}>
-                        <MessageBubble message={messages[messages.length - 1]} />
+                        <MessageBubble
+                          message={messages[messages.length - 1]}
+                          showAuthor={showAuthorOf(messages[messages.length - 1])}
+                        />
                       </TranscriptI18nProvider>
                     </div>
                   )}
@@ -905,7 +931,7 @@ export function WorkspaceChatPanel({
                 <div className="p-3 space-y-3">
                   {messages.map((msg) => (
                     <TranscriptI18nProvider key={msg.id} locale={i18n.language}>
-                      <MessageBubble message={msg} />
+                      <MessageBubble message={msg} showAuthor={showAuthorOf(msg)} />
                     </TranscriptI18nProvider>
                   ))}
                   {error && (

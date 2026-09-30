@@ -8,6 +8,7 @@ import {
 } from '../../../internal/types/api'
 import * as jobs from '../lib/jobs'
 import type { AppEnv } from '../lib/types'
+import { canAccessWorkspace } from '../lib/workspace-access'
 import { getMessagesWithBlocks } from '../services/db/messages'
 import { getSession } from '../services/db/sessions'
 import {
@@ -57,7 +58,7 @@ shares.openapi(createRouteDef, async (c) => {
   const { workspace_id, session_id, title } = c.req.valid('json')
 
   const workspace = await getWorkspace(workspace_id)
-  if (!workspace || workspace.user_id !== user.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -152,7 +153,7 @@ shares.openapi(listRoute, async (c) => {
   const { workspace_id, session_id } = c.req.valid('query')
 
   const workspace = await getWorkspace(workspace_id)
-  if (!workspace || workspace.user_id !== user.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

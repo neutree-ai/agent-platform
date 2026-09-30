@@ -105,9 +105,11 @@ export function MemoryStoresPanel({ instanceId, workspaceId }: MemoryStoresPanel
   const headerSlot = useAppHeaderSlot()
   const wsMode = !!workspaceId
 
+  // In ws mode the candidates are the workspace owner's stores — the agent
+  // reads them as the owner, also when the workspace is shared with the viewer.
   const { data: stores = [], isLoading: storesLoading } = useQuery({
-    queryKey: storesKey,
-    queryFn: () => api.listMemoryStores(),
+    queryKey: workspaceId ? [...storesKey, { workspaceId }] : storesKey,
+    queryFn: () => api.listMemoryStores({ workspaceId }),
   })
 
   // In ws mode we narrow the visible list to stores attached to this ws.

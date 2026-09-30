@@ -23,9 +23,14 @@ interface SkillPickerProps {
   onChange: (ids: string[]) => void
   /** Template baseline (UUIDs). Set when this picker is inheriting from a template. */
   templateSkills?: string[] | null
+  /**
+   * Workspace being configured. Candidates are listed as its owner, who the
+   * agent runs as — they differ from the caller's own when it is shared.
+   */
+  workspaceId?: string
 }
 
-export function SkillPicker({ value, onChange, templateSkills }: SkillPickerProps) {
+export function SkillPicker({ value, onChange, templateSkills, workspaceId }: SkillPickerProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   // Server-side text search, matching the library page. cmdk's built-in
@@ -36,7 +41,11 @@ export function SkillPicker({ value, onChange, templateSkills }: SkillPickerProp
   // Share the react-query cache with SkillsSection so the picker doesn't drift
   // out of sync after the user (or someone else) grants/revokes access while
   // the dialog is open. Plain useEffect+useState would freeze on first fetch.
-  const { data: allSkills = [], isLoading, isFetching } = useSkills({ q: debouncedSearch })
+  const {
+    data: allSkills = [],
+    isLoading,
+    isFetching,
+  } = useSkills({ q: debouncedSearch, workspaceId })
   const hasQuery = debouncedSearch.trim().length > 0
 
   const selected = useMemo(() => new Set(value), [value])

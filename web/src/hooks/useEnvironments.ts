@@ -7,10 +7,11 @@ const environmentGrantsQueryKey = (id: string) => ['environment-grants', id] as 
 const environmentTokensQueryKey = (id: string) => ['environment-tokens', id] as const
 
 /** Environments visible to the user (own + public + team-shared, incl. built-in). */
-export function useEnvironments() {
+/** With `workspaceId`, the environments visible to that workspace's owner. */
+export function useEnvironments(workspaceId?: string) {
   return useQuery<ApiEnvironment[]>({
-    queryKey: environmentsQueryKey,
-    queryFn: () => api.listEnvironments(),
+    queryKey: workspaceId ? [...environmentsQueryKey, { workspaceId }] : environmentsQueryKey,
+    queryFn: () => api.listEnvironments(workspaceId),
     // Heartbeat-driven online/offline changes out-of-band; refetch keeps the
     // list fresh while the section is open.
     refetchInterval: 15_000,

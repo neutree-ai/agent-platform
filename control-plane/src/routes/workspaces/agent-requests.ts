@@ -4,6 +4,7 @@ import {
   ApiAgentRequestSchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
+import { canAccessWorkspace } from '../../lib/workspace-access'
 import { getAgentRequest, resolveAgentRequest } from '../../services/db/agent-requests'
 import { getWorkspace } from '../../services/db/workspaces'
 
@@ -38,7 +39,7 @@ agentRequests.openapi(getRoute, async (c) => {
   const { id, reqId } = c.req.valid('param')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== user.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -79,7 +80,7 @@ agentRequests.openapi(resolveRoute, async (c) => {
   const { decision, reason } = c.req.valid('json')
 
   const workspace = await getWorkspace(id)
-  if (!workspace || workspace.user_id !== user.sub) {
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

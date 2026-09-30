@@ -43,6 +43,7 @@ import {
   SourcePatchBodySchema,
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
+import { resolveResourceViewer } from '../lib/workspace-access'
 import { getUserCredentialValue } from '../services/db/credentials'
 import type { SkillExportToken } from '../services/db/skill-export-tokens'
 import type { SkillMeta, SkillSource, SkillVersion } from '../services/db/types'
@@ -232,6 +233,13 @@ async function proxyScsBinary(
 
 // ── GET / ─────────────────────────────────────────────────────────────────
 const listQuery = z.object({
+  workspace_id: z
+    .string()
+    .optional()
+    .openapi({
+      param: { name: 'workspace_id', in: 'query' },
+      description: "List as this workspace's owner — for picking skills to attach to it.",
+    }),
   q: z
     .string()
     .optional()
@@ -275,19 +283,24 @@ const listRoute = createRoute({
       description: 'Skill list',
       content: { 'application/json': { schema: z.array(ApiSkillSchema) } },
     },
+    404: {
+      description: 'Workspace not found',
+      content: { 'application/json': { schema: z.object({ error: z.string() }) } },
+    },
   },
 })
 
 skills.openapi(listRoute, async (c) => {
-  const user = c.get('user')
-  const { q, owner, category, visibility } = c.req.valid('query')
+  const { q, owner, category, visibility, workspace_id } = c.req.valid('query')
+  const viewer = await resolveResourceViewer(c.get('user'), workspace_id)
+  if (!viewer) return c.json({ error: 'Workspace not found' }, 404)
   const categories = category
     ? category
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
     : undefined
-  const list = await skillsService.list(user.sub, {
+  const list = await skillsService.list(viewer, {
     query: q,
     ownerId: owner,
     categories,

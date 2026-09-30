@@ -11,7 +11,7 @@ import type { Tag } from '@/lib/api/types'
 import type { AppComponentProps } from '@/lib/app-registry'
 import { getTagColor } from '@/lib/tag-colors'
 import { cn } from '@/lib/utils'
-import { Plus } from 'lucide-react'
+import { Plus, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -21,6 +21,8 @@ interface WsCardData {
   id: string
   name: string
   visibility: string
+  owner: string
+  access: 'owner' | 'shared'
   status: string
   created_at: string
   tag_ids: string[]
@@ -190,6 +192,15 @@ function WorkspaceCard({
             aria-hidden={offline ? undefined : true}
           />
           <span className="min-w-0 truncate">{ws.name}</span>
+          {ws.access === 'shared' && (
+            <span
+              className="inline-flex shrink-0 items-center gap-1 text-mini font-normal text-muted-foreground"
+              title={t('components.workspaceShare.sharedBy', { owner: ws.owner })}
+            >
+              <Users className="h-3 w-3" strokeWidth={2} />
+              {ws.owner}
+            </span>
+          )}
           {needsReply && (
             <span
               className="ml-auto inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-warning"

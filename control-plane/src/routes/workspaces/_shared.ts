@@ -4,11 +4,6 @@ import { listActiveSessionIds } from '../../services/db/sessions'
 import type { Workspace } from '../../services/db/types'
 import { CURRENT_TEMPLATE_VERSION } from '../../services/k8s'
 
-/** Check if user can manage (edit/delete/start/stop) a workspace */
-export function canManage(workspace: Workspace, user: { sub: string; role: string }): boolean {
-  return workspace.user_id === user.sub || (workspace.is_system && user.role === 'admin')
-}
-
 /**
  * `delivered`  — the interrupt request reached the agent and got a response.
  * `interrupted` — a running turn was actually aborted. The agent answers
@@ -51,11 +46,13 @@ export async function interruptAllSessions(workspace: Workspace, tag: string): P
 
 export function toApiWorkspace(
   w: Workspace & {
+    is_shared?: boolean
     active_agent_sessions?: number
     active_human_sessions?: number
     active_sessions?: { id: string; chat_status: string; preview: string; name?: string }[]
   },
   owner: string,
+  viewerId: string,
   tagIds: string[] = [],
 ): ApiWorkspace {
   return {
@@ -65,6 +62,8 @@ export function toApiWorkspace(
     visibility: w.visibility,
     is_system: w.is_system ?? false,
     owner,
+    access: w.user_id === viewerId || w.is_system ? 'owner' : 'shared',
+    is_shared: w.is_shared ?? false,
     status: w.status,
     created_at: w.created_at,
     tag_ids: tagIds,

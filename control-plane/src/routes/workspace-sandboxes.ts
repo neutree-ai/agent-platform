@@ -1,13 +1,9 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../lib/types'
+import { canAccessWorkspace } from '../lib/workspace-access'
 import { getPlatformToken } from '../services/db/shares'
-import type { Workspace } from '../services/db/types'
 import { getWorkspace } from '../services/db/workspaces'
 import * as sandbox from '../services/sandbox'
-
-function canManage(workspace: Workspace, user: { sub: string; role: string }): boolean {
-  return workspace.user_id === user.sub || (workspace.is_system && user.role === 'admin')
-}
 
 // Look up (or lazy-mint) the workspace owner's platform service token, the
 // same mechanism browser-routes use. Lets us forward a real per-user
@@ -28,7 +24,7 @@ workspaceSandboxes.post('/:id/sandboxes', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -60,7 +56,7 @@ workspaceSandboxes.get('/:id/sandboxes', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -82,7 +78,7 @@ workspaceSandboxes.get('/:id/sandboxes/:sandboxId/endpoint/:port', async (c) => 
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 
@@ -107,7 +103,7 @@ workspaceSandboxes.delete('/:id/sandboxes/:sandboxId', async (c) => {
   const id = c.req.param('id')
   const workspace = await getWorkspace(id)
 
-  if (!workspace || !canManage(workspace, currentUser)) {
+  if (!workspace || !(await canAccessWorkspace(workspace, currentUser))) {
     return c.json({ error: 'Workspace not found' }, 404)
   }
 

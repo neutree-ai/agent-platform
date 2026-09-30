@@ -5,10 +5,15 @@ export const promptsQueryKey = ['prompts'] as const
 export const myPromptsQueryKey = ['prompts', 'mine'] as const
 const publicPromptsQueryKey = ['prompts', 'public'] as const
 
-export function usePrompts() {
+/**
+ * Prompts visible to the user. With `workspaceId`, those visible to that
+ * workspace's owner instead — the candidates for attaching to it, which differ
+ * from the user's own when the workspace is shared with them.
+ */
+export function usePrompts(workspaceId?: string) {
   const query = useQuery({
-    queryKey: myPromptsQueryKey,
-    queryFn: () => api.listPrompts(),
+    queryKey: workspaceId ? [...myPromptsQueryKey, { workspaceId }] : myPromptsQueryKey,
+    queryFn: () => api.listPrompts(workspaceId),
   })
   return { prompts: query.data ?? [], isLoading: query.isLoading }
 }

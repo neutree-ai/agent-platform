@@ -6,14 +6,16 @@ export async function addMessage(
   sessionId: string | null,
   role: string,
   content: string,
+  authorUserId?: string | null,
 ): Promise<Message> {
   const id = generateId()
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     await client.query(
-      'INSERT INTO messages (id, workspace_id, session_id, role, content) VALUES ($1, $2, $3, $4, $5)',
-      [id, workspaceId, sessionId, role, content],
+      `INSERT INTO messages (id, workspace_id, session_id, role, content, author_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, workspaceId, sessionId, role, content, authorUserId ?? null],
     )
     if (sessionId) {
       await client.query('UPDATE sessions SET last_active_at = NOW() WHERE id = $1', [sessionId])
@@ -43,8 +45,11 @@ export async function getMessages(
   pagination?: { limit?: number; offset?: number },
 ): Promise<Message[]> {
   const params: unknown[] = [workspaceId, sessionId]
-  let query =
-    'SELECT * FROM messages WHERE workspace_id = $1 AND session_id = $2 ORDER BY created_at ASC'
+  let query = `SELECT m.*, COALESCE(u.display_name, u.username) AS author_name
+       FROM messages m
+       LEFT JOIN users u ON u.id = m.author_user_id
+      WHERE m.workspace_id = $1 AND m.session_id = $2
+      ORDER BY m.created_at ASC`
   if (pagination?.limit !== undefined) {
     params.push(pagination.limit)
     query += ` LIMIT $${params.length}`

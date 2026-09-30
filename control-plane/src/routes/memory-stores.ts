@@ -16,6 +16,7 @@ import {
   WorkspaceMemoryAttachmentPatchBodySchema,
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
+import { canAccessWorkspace, resolveResourceViewer } from '../lib/workspace-access'
 import { notifyAgentReload } from '../lib/workspace-address'
 import {
   PathConflictError,
@@ -78,6 +79,9 @@ stores.openapi(
     request: {
       query: z.object({
         include_archived: z.coerce.boolean().optional(),
+        workspace_id: z.string().optional().openapi({
+          description: "List as this workspace's owner — for picking stores to attach to it.",
+        }),
       }),
     },
     responses: {
@@ -87,12 +91,14 @@ stores.openapi(
           'application/json': { schema: z.object({ stores: z.array(ApiMemoryStoreSchema) }) },
         },
       },
+      404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
     },
   }),
   async (c) => {
-    const user = c.get('user')
-    const { include_archived } = c.req.valid('query')
-    const rows = await listStoresForUser(user.sub, !!include_archived)
+    const { include_archived, workspace_id } = c.req.valid('query')
+    const viewer = await resolveResourceViewer(c.get('user'), workspace_id)
+    if (!viewer) return c.json({ error: 'Workspace not found' }, 404)
+    const rows = await listStoresForUser(viewer, !!include_archived)
     return c.json({ stores: rows }, 200)
   },
 )
@@ -517,14 +523,14 @@ const WsAttachmentParam = WorkspaceIdParam.extend({
   storeId: z.string().openapi({ param: { name: 'storeId', in: 'path' } }),
 })
 
-async function assertWorkspaceOwner(
+async function assertWorkspaceAccess(
   workspaceId: string,
-  userId: string,
-): Promise<{ ok: true } | { ok: false; status: 403 | 404; error: string }> {
+  user: { sub: string; role: string },
+): Promise<{ ok: true; ownerId: string } | { ok: false; status: 403 | 404; error: string }> {
   const ws = await getWorkspace(workspaceId)
   if (!ws) return { ok: false, status: 404, error: 'workspace not found' }
-  if (ws.user_id !== userId) return { ok: false, status: 403, error: 'forbidden' }
-  return { ok: true }
+  if (!(await canAccessWorkspace(ws, user))) return { ok: false, status: 403, error: 'forbidden' }
+  return { ok: true, ownerId: ws.user_id }
 }
 
 attachments.openapi(
@@ -550,7 +556,7 @@ attachments.openapi(
   async (c) => {
     const user = c.get('user')
     const { workspaceId } = c.req.valid('param')
-    const access = await assertWorkspaceOwner(workspaceId, user.sub)
+    const access = await assertWorkspaceAccess(workspaceId, user)
     if (!access.ok) {
       if (access.status === 403) return c.json({ error: access.error }, 403)
       return c.json({ error: access.error }, 404)
@@ -591,12 +597,14 @@ attachments.openapi(
     if (!isMemoryFuseAvailable()) {
       return c.json({ error: 'memory-fuse is not configured on this cluster' }, 400)
     }
-    const wsAccess = await assertWorkspaceOwner(workspaceId, user.sub)
+    const wsAccess = await assertWorkspaceAccess(workspaceId, user)
     if (!wsAccess.ok) {
       if (wsAccess.status === 403) return c.json({ error: wsAccess.error }, 403)
       return c.json({ error: wsAccess.error }, 404)
     }
-    const storeAccess = await assertStoreOwner(body.store_id, user.sub)
+    // The agent reads the store as the workspace owner, so only the owner's
+    // stores can be attached — also when a team member does the attaching.
+    const storeAccess = await assertStoreOwner(body.store_id, wsAccess.ownerId)
     if (!storeAccess.ok) {
       if (storeAccess.status === 403) return c.json({ error: storeAccess.error }, 403)
       return c.json({ error: storeAccess.error }, 404)
@@ -654,7 +662,7 @@ attachments.openapi(
     const user = c.get('user')
     const { workspaceId, storeId } = c.req.valid('param')
     const body = c.req.valid('json')
-    const wsAccess = await assertWorkspaceOwner(workspaceId, user.sub)
+    const wsAccess = await assertWorkspaceAccess(workspaceId, user)
     if (!wsAccess.ok) {
       if (wsAccess.status === 403) return c.json({ error: wsAccess.error }, 403)
       return c.json({ error: wsAccess.error }, 404)
@@ -695,7 +703,7 @@ attachments.openapi(
   async (c) => {
     const user = c.get('user')
     const { workspaceId, storeId } = c.req.valid('param')
-    const wsAccess = await assertWorkspaceOwner(workspaceId, user.sub)
+    const wsAccess = await assertWorkspaceAccess(workspaceId, user)
     if (!wsAccess.ok) {
       if (wsAccess.status === 403) return c.json({ error: wsAccess.error }, 403)
       return c.json({ error: wsAccess.error }, 404)

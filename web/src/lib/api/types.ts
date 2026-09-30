@@ -123,6 +123,8 @@ export type {
   TeamRole,
 } from '@neutree-ai/types'
 
+export type { ApiWorkspaceTeamShare } from '@neutree-ai/types'
+
 export type {
   ApiTransferPlan,
   ApiWorkspaceTransfer,

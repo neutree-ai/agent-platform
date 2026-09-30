@@ -7,6 +7,8 @@ interface McpSectionProps {
   onRevert?: () => void
   templateConfig?: { mcp_config: string } | null
   workspaceId?: string
+  /** MCP OAuth connects as the workspace owner; set for team members. */
+  oauthOwnerOnly?: boolean
 }
 
 export function McpSection({
@@ -15,10 +17,16 @@ export function McpSection({
   onRevert,
   templateConfig,
   workspaceId,
+  oauthOwnerOnly,
 }: McpSectionProps) {
   return (
     <div className="space-y-3">
-      <McpConfigEditor value={mcpConfig} onChange={onChange} workspaceId={workspaceId} />
+      <McpConfigEditor
+        value={mcpConfig}
+        onChange={onChange}
+        workspaceId={workspaceId}
+        oauthOwnerOnly={oauthOwnerOnly}
+      />
       <FieldHint
         current={mcpConfig}
         template={templateConfig?.mcp_config}

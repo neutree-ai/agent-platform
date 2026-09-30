@@ -9,7 +9,12 @@ interface SkillsSectionProps {
   templateConfig?: { skill_ids: string[] } | null
 }
 
-export function SkillsSection({ enabledSkills, onToggle, templateConfig }: SkillsSectionProps) {
+export function SkillsSection({
+  workspaceId,
+  enabledSkills,
+  onToggle,
+  templateConfig,
+}: SkillsSectionProps) {
   const value = [...enabledSkills]
 
   function handleChange(ids: string[]) {
@@ -25,6 +30,11 @@ export function SkillsSection({ enabledSkills, onToggle, templateConfig }: Skill
   }
 
   return (
-    <SkillPicker value={value} onChange={handleChange} templateSkills={templateConfig?.skill_ids} />
+    <SkillPicker
+      value={value}
+      onChange={handleChange}
+      templateSkills={templateConfig?.skill_ids}
+      workspaceId={workspaceId}
+    />
   )
 }

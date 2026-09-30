@@ -47,6 +47,8 @@ export interface SessionTurnStats {
 export interface SessionPendingMessage {
   content: string
   images: { data: string; media_type: string }[]
+  /** Who last edited the draft; becomes the author of the turn it drains into. */
+  author_user_id?: string
 }
 
 export interface Session {
@@ -83,6 +85,10 @@ export interface Message {
   role: string
   content: string
   created_at: string
+  /** Who wrote a user message; null for assistant messages and older rows. */
+  author_user_id: string | null
+  /** Author's display name, joined in by session message listings. */
+  author_name?: string | null
 }
 
 export interface MessageWithBlocks extends Message {
@@ -231,6 +237,8 @@ interface ActiveSessionSummary {
 }
 
 export interface WorkspaceWithSessionCounts extends Workspace {
+  owner_name: string
+  is_shared: boolean
   active_agent_sessions: number
   active_human_sessions: number
   active_sessions: ActiveSessionSummary[]
