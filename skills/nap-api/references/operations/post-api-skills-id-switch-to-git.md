@@ -1,8 +1,8 @@
-# PUT /api/providers/{id}
+# POST /api/skills/{id}/switch-to-git
 
-**Resource:** [providers](../resources/providers.md)
-**Update a model provider (owner only; empty api_key keeps existing value)**
-**Operation ID:** `put--api-providers-{id}`
+**Resource:** [skills](../resources/skills.md)
+**Switch a native skill to a git source in place (wipes native history)**
+**Operation ID:** `post--api-skills-{id}-switch-to-git`
 
 ## Parameters
 
@@ -18,50 +18,42 @@
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | No |  |
-| `description` | string | No |  |
-| `provider_type` | string | No |  |
-| `base_url` | string | No |  |
-| `api_key` | string | No |  |
-| `model_profile` | object,null | No |  |
-| `is_public` | boolean | No |  |
-| `visibility` | enum: private, team, public | No |  |
-| `grants` | object[] | No |  |
-
-**`grants` fields:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `team_id` | string | Yes |  |
-| `permission` | enum: viewer, editor | Yes |  |
+| `url` | string | Yes |  |
+| `type` | string | No |  |
+| `ref` | string | No |  |
+| `token` | string | No |  |
+| `credential_name` | string | No |  |
+| `subpath` | string | Yes |  |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
-| 200 | Updated provider |
-| 400 | Invalid grants for visibility |
-| 403 | Forbidden |
-| 404 | Provider not found |
+| 200 | Skill switched to git source |
+| 400 | Invalid input — bad repo / subpath / no SKILL.md |
+| 404 | Skill or credential not found |
+| 409 | Skill is not native, or subpath is taken by another skill |
+| 502 | Upstream fetch failed |
 
 **Success Response Schema** (inline):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes |  |
+| `source_id` | string | Yes |  |
+| `source_kind` | enum: git, native | Yes |  |
+| `active_version_id` | string,null | Yes |  |
 | `name` | string | Yes |  |
+| `subpath` | string | Yes |  |
 | `description` | string | Yes |  |
-| `provider_type` | string | Yes |  |
-| `base_url` | string | Yes |  |
-| `api_key` | string | Yes |  |
-| `model_profile` | object,null | Yes |  |
 | `user_id` | string | Yes |  |
-| `owner_name` | string | Yes |  |
-| `is_owner` | boolean | Yes |  |
 | `is_public` | boolean | Yes |  |
 | `visibility` | enum: private, team, public | Yes |  |
 | `my_permission` | enum: owner, editor, viewer... | Yes |  |
 | `shared_via_teams` | object[] | Yes |  |
+| `owner_name` | string | Yes |  |
+| `is_own` | boolean | Yes |  |
+| `category` | string,null | Yes |  |
 | `created_at` | string | Yes |  |
 | `updated_at` | string | Yes |  |
 

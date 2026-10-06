@@ -45,6 +45,7 @@ single `data: <json>\n\n` line.
 | `source` | enum: api, web, slack... | No |  |
 | `mode` | enum: stream, sync, async | No |  |
 | `stream` | boolean | No |  |
+| `reflect_store_id` | string | No |  |
 
 **`images` fields:**
 

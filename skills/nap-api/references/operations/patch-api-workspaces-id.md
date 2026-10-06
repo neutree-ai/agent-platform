@@ -47,6 +47,7 @@
 | `active_agent_sessions` | integer | Yes |  |
 | `active_human_sessions` | integer | Yes |  |
 | `active_sessions` | object[] | Yes |  |
+| `rebuild_available` | boolean | Yes |  |
 
 **`active_sessions` fields:**
 

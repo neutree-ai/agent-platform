@@ -12,6 +12,9 @@
 | `limit` | query | integer | No |  |
 | `offset` | query | integer,null | No |  |
 | `starred` | query | enum: true, false | No |  |
+| `exclude_sources` | query | string | No |  |
+| `status` | query | string | No |  |
+| `active_after` | query | string (date-time) | No |  |
 
 ## Responses
 
@@ -36,12 +39,14 @@
 | `name` | string | Yes |  |
 | `status` | string | Yes |  |
 | `chat_status` | string | Yes |  |
+| `source` | string | Yes |  |
 | `created_at` | string | Yes |  |
 | `last_active_at` | string | Yes |  |
 | `message_count` | integer | Yes |  |
 | `preview` | string | Yes |  |
 | `last_turn_stats` | object,null | Yes |  |
 | `starred_at` | string,null | Yes |  |
+| `caller_agent` | object,null | Yes |  |
 
 ## Security
 

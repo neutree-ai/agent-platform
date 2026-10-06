@@ -1,14 +1,8 @@
-# PUT /api/providers/{id}
+# POST /api/environments
 
-**Resource:** [providers](../resources/providers.md)
-**Update a model provider (owner only; empty api_key keeps existing value)**
-**Operation ID:** `put--api-providers-{id}`
-
-## Parameters
-
-| Name | In | Type | Required | Description |
-|------|------|------|----------|-------------|
-| `id` | path | string | Yes |  |
+**Resource:** [environments](../resources/environments.md)
+**Register a remote environment**
+**Operation ID:** `post--api-environments`
 
 ## Request Body
 
@@ -18,14 +12,10 @@
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | No |  |
-| `description` | string | No |  |
-| `provider_type` | string | No |  |
-| `base_url` | string | No |  |
-| `api_key` | string | No |  |
-| `model_profile` | object,null | No |  |
-| `is_public` | boolean | No |  |
+| `name` | string | Yes |  |
+| `kind` | string | No |  |
 | `visibility` | enum: private, team, public | No |  |
+| `placement` | object | No |  |
 | `grants` | object[] | No |  |
 
 **`grants` fields:**
@@ -39,10 +29,10 @@
 
 | Status | Description |
 |--------|-------------|
-| 200 | Updated provider |
+| 201 | Created |
 | 400 | Invalid grants for visibility |
-| 403 | Forbidden |
-| 404 | Provider not found |
+| 403 | Non-admin attempting to create a public environment |
+| 409 | Name already in use |
 
 **Success Response Schema** (inline):
 
@@ -50,20 +40,17 @@
 |-------|------|----------|-------------|
 | `id` | string | Yes |  |
 | `name` | string | Yes |  |
-| `description` | string | Yes |  |
-| `provider_type` | string | Yes |  |
-| `base_url` | string | Yes |  |
-| `api_key` | string | Yes |  |
-| `model_profile` | object,null | Yes |  |
-| `user_id` | string | Yes |  |
-| `owner_name` | string | Yes |  |
-| `is_owner` | boolean | Yes |  |
-| `is_public` | boolean | Yes |  |
 | `visibility` | enum: private, team, public | Yes |  |
+| `kind` | string | Yes |  |
+| `status` | string | Yes |  |
+| `capabilities` | object | Yes |  |
+| `is_builtin` | boolean | Yes |  |
+| `last_heartbeat_at` | string,null | Yes |  |
+| `owner_name` | string | Yes |  |
+| `is_own` | boolean | Yes |  |
 | `my_permission` | enum: owner, editor, viewer... | Yes |  |
 | `shared_via_teams` | object[] | Yes |  |
 | `created_at` | string | Yes |  |
-| `updated_at` | string | Yes |  |
 
 **`shared_via_teams` fields:**
 

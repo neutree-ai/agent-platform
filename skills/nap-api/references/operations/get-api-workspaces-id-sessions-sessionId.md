@@ -4,7 +4,7 @@
 **Get a single session (lightweight, sidebar shape)**
 **Operation ID:** `get--api-workspaces-{id}-sessions-{sessionId}`
 
-Returns a lite shape with id, name, chat_status, status, and a 40-char preview of the first user message. Use GET /workspaces/:id/sessions for the full ApiSession list.
+Returns a lite shape with id, name, chat_status, status, last_active_at, and a 40-char preview of the first user message. Use GET /workspaces/:id/sessions for the full ApiSession list.
 
 ## Parameters
 
@@ -28,6 +28,7 @@ Returns a lite shape with id, name, chat_status, status, and a 40-char preview o
 | `name` | string | Yes |  |
 | `chat_status` | string | Yes |  |
 | `status` | string | Yes |  |
+| `last_active_at` | string | Yes |  |
 | `preview` | string | Yes |  |
 | `pending_message` | object,null | Yes |  |
 

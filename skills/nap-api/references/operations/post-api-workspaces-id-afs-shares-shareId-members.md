@@ -27,6 +27,7 @@
 | Status | Description |
 |--------|-------------|
 | 201 | Granted |
+| 400 | Target on a different environment |
 | 403 | Not owner |
 | 404 | Not found |
 | 502 | afs mount failed |

@@ -7,10 +7,11 @@ Reusable agent Skills — import (git or upload), version, share by visibility /
 | Method | Path | Summary | Details |
 |--------|------|---------|----------|
 | GET | `/api/skills` | List skills visible to the user (own + public + team-shared) | [View](../operations/get-api-skills.md) |
-| POST | `/api/skills` | Upload a skill package (tar.gz). Metadata goes in query params. | [View](../operations/post-api-skills.md) |
+| POST | `/api/skills` | Upload a skill package (tar.gz or zip). Metadata goes in query params. | [View](../operations/post-api-skills.md) |
 | POST | `/api/skills/scan-git` | List skill candidates in a git repo without persisting | [View](../operations/post-api-skills-scan-git.md) |
-| POST | `/api/skills/scan-tarball` | List skill candidates inside an uploaded tarball without persisting | [View](../operations/post-api-skills-scan-tarball.md) |
+| POST | `/api/skills/scan-tarball` | List skill candidates inside an uploaded archive (tar.gz or zip) without persisting | [View](../operations/post-api-skills-scan-tarball.md) |
 | POST | `/api/skills/from-git` | Import a single subpath from a git repo as a new skill | [View](../operations/post-api-skills-from-git.md) |
+| POST | `/api/skills/{id}/switch-to-git` | Switch a native skill to a git source in place (wipes native history) | [View](../operations/post-api-skills-id-switch-to-git.md) |
 | POST | `/api/skills/sources/native` | Create a native (in-NAP authored) source + initial empty skill | [View](../operations/post-api-skills-sources-native.md) |
 | GET | `/api/skills/sources` | List sources owned by the caller | [View](../operations/get-api-skills-sources.md) |
 | GET | `/api/skills/sources/{id}` | Read one source by id | [View](../operations/get-api-skills-sources-id.md) |
@@ -38,3 +39,6 @@ Reusable agent Skills — import (git or upload), version, share by visibility /
 | PUT | `/api/skills/{id}/active-version` | Switch the active version pointer (owner only) | [View](../operations/put-api-skills-id-active-version.md) |
 | GET | `/api/skills/{id}/grants` | List team grants for a skill (owner only) | [View](../operations/get-api-skills-id-grants.md) |
 | PUT | `/api/skills/{id}/grants` | Replace team grants for a skill (owner only) | [View](../operations/put-api-skills-id-grants.md) |
+| GET | `/api/skills/{id}/exports` | List active public shares for a skill (owner only) | [View](../operations/get-api-skills-id-exports.md) |
+| POST | `/api/skills/{id}/exports` | Mint a public share URL for a skill (owner only) | [View](../operations/post-api-skills-id-exports.md) |
+| DELETE | `/api/skills/{id}/exports/{token}` | Revoke a public share (owner only) | [View](../operations/delete-api-skills-id-exports-token.md) |

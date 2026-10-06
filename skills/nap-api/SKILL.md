@@ -16,8 +16,8 @@ This API documentation is split into multiple files for on-demand loading.
 **Directory structure:**
 ```
 references/
-├── resources/      # 15 resource index files
-├── operations/     # 158 operation detail files
+├── resources/      # 17 resource index files
+├── operations/     # 191 operation detail files
 └── schemas/        # 7 schema groups, 12 schema files
 ```
 
@@ -106,11 +106,12 @@ The poll loop treats any non-`agent` `chat_status` as the turn handing back (idl
 
 ## Resources
 
-- **workspaces** → `references/resources/workspaces.md` (33 ops)
-- **skills** → `references/resources/skills.md` (32 ops)
+- **workspaces** → `references/resources/workspaces.md` (48 ops)
+- **skills** → `references/resources/skills.md` (36 ops)
 - **teams** → `references/resources/teams.md` (12 ops)
 - **agent-files** → `references/resources/agent-files.md` (11 ops)
 - **templates** → `references/resources/templates.md` (11 ops)
+- **environments** → `references/resources/environments.md` (10 ops)
 - **prompts** → `references/resources/prompts.md` (10 ops)
 - **memory-stores** → `references/resources/memory-stores.md` (9 ops)
 - **agent-afs-files** → `references/resources/agent-afs-files.md` (8 ops)
@@ -118,6 +119,7 @@ The poll loop treats any non-`agent` `chat_status` as the turn handing back (idl
 - **afs** → `references/resources/afs.md` (6 ops)
 - **shares** → `references/resources/shares.md` (5 ops)
 - **tags** → `references/resources/tags.md` (5 ops)
+- **transfers** → `references/resources/transfers.md` (4 ops)
 - **workspace-memory** → `references/resources/workspace-memory.md` (4 ops)
 - **credentials** → `references/resources/credentials.md` (3 ops)
 - **chat** → `references/resources/chat.md` (1 ops)

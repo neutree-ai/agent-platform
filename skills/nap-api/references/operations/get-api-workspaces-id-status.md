@@ -27,6 +27,7 @@
 | `pods` | object,null | Yes |  |
 | `warnings` | object[] | Yes |  |
 | `conditions` | object[] | Yes |  |
+| `replicas` | object,null | No |  |
 
 **`warnings` fields:**
 

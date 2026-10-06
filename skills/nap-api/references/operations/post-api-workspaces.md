@@ -15,6 +15,7 @@
 | `name` | string | Yes |  |
 | `template_id` | string | No |  |
 | `is_system` | boolean | No |  |
+| `environment_id` | string | No |  |
 | `agent_type` | string | No |  |
 | `compute_resources` | object | No |  |
 | `provider_id` | string | No |  |
@@ -30,6 +31,15 @@
 | `skill_ids` | string[] | No |  |
 | `skill_names` | string[] | No |  |
 | `schedule_overrides` | object | No |  |
+| `auto_scaling` | object | No |  |
+
+**`auto_scaling` fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `min_replicas` | integer | Yes |  |
+| `max_replicas` | integer | Yes |  |
+| `scale_to_zero_idle_seconds` | integer,null | No |  |
 
 ## Responses
 
@@ -57,6 +67,7 @@
 | `active_agent_sessions` | integer | Yes |  |
 | `active_human_sessions` | integer | Yes |  |
 | `active_sessions` | object[] | Yes |  |
+| `rebuild_available` | boolean | Yes |  |
 
 **`active_sessions` fields:**
 

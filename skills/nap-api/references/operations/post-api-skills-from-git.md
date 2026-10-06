@@ -22,6 +22,7 @@
 | `description` | string | No |  |
 | `visibility` | enum: private, team, public | No |  |
 | `category` | string,null | No |  |
+| `skill_id` | string | No |  |
 
 ## Responses
 

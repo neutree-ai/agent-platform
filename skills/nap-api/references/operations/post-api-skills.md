@@ -1,7 +1,7 @@
 # POST /api/skills
 
 **Resource:** [skills](../resources/skills.md)
-**Upload a skill package (tar.gz). Metadata goes in query params.**
+**Upload a skill package (tar.gz or zip). Metadata goes in query params.**
 **Operation ID:** `post--api-skills`
 
 ## Parameters
