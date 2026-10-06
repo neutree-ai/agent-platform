@@ -18,7 +18,8 @@ import { pool } from './pool'
 function intervals(where: string): string {
   return `
   SELECT workspace_id, resources, phase, ready_replicas, spec_version, ts AS started,
-         COALESCE(LEAD(ts) OVER (PARTITION BY workspace_id ORDER BY ts, id), now()) AS ended
+         COALESCE(LEAD(ts) OVER (PARTITION BY workspace_id ORDER BY ts, id), now()) AS ended,
+         LEAD(ts) OVER (PARTITION BY workspace_id ORDER BY ts, id) IS NULL AS is_open
     FROM workspace_runtime_events
    WHERE ${where}`
 }
@@ -57,6 +58,11 @@ function toCoreHours(milliSeconds: number): number {
 /** A workspace's requested CPU, resolved through the same defaults the pod gets. */
 function cpuMillisOf(resources: ComputeResources): number {
   return parseCpuMillis(resources.cpu_request || DEFAULT_WORKSPACE_RESOURCES.cpu_request)
+}
+
+/** A workspace's requested memory in GiB, resolved through the same defaults the pod gets. */
+function memoryGibOf(resources: ComputeResources): number {
+  return parseMemMi(resources.memory_request || DEFAULT_WORKSPACE_RESOURCES.memory_request) / 1024
 }
 
 /** A workspace's disk in GiB, resolved through the cluster's default volume size. */
@@ -245,28 +251,60 @@ export interface RuntimeSegment {
   /** Replicas held over the segment; 0 while the workspace was not up. */
   replicas: number
   coreRequest: number
+  memoryGib: number
   storageGib: number
   specVersion: number | null
+  /**
+   * True when the workspace is still in this state at query time: `endedAt` is
+   * the query instant rather than a recorded change, and moves on the next call.
+   */
+  ongoing: boolean
+}
+
+/**
+ * The stretch of wall clock a timeline covers: the last `days` calendar days,
+ * or an explicit `[since, until)` whose end defaults to now.
+ */
+type TimelineWindow = { days: number } | { since: Date; until: Date | null }
+
+/** A window as SQL bounds over `$2` / `$3`, with the values those bind to. */
+function windowBounds(window: TimelineWindow): { lower: string; upper: string; params: unknown[] } {
+  if ('days' in window) {
+    return { lower: SINCE, upper: 'now()', params: [Math.max(0, window.days - 1)] }
+  }
+  return {
+    lower: '$2::timestamptz',
+    upper: 'LEAST(COALESCE($3::timestamptz, now()), now())',
+    params: [window.since, window.until],
+  }
 }
 
 /**
  * One workspace's state log as a timeline. Unlike the summaries this does not
  * aggregate: infra time belongs to a stretch of wall clock rather than to any
  * session, so the shape of the stretch is the thing worth looking at.
+ *
+ * Segments are clipped to the window. The log is append-only, so a segment that
+ * is not `ongoing` reads the same on every later call: a caller settling
+ * incrementally asks for `since` = the instant it last settled through.
+ *
+ * The terminal 'deleted' row closes the last real segment and yields none of
+ * its own — a deleted workspace holds nothing, so its timeline simply ends.
  */
 export async function getWorkspaceTimeline(
   workspaceId: string,
-  days: number,
+  window: TimelineWindow,
 ): Promise<RuntimeSegment[]> {
-  const offset = Math.max(0, days - 1)
+  const { lower, upper, params } = windowBounds(window)
   const { rows } = await pool.query(
     `WITH iv AS (${intervals('workspace_id = $1')})
-     SELECT GREATEST(started, ${SINCE}) AS started, LEAST(ended, now()) AS ended,
-            phase, ${REPLICAS} AS replicas, resources, spec_version
+     SELECT GREATEST(started, ${lower}) AS started, LEAST(ended, ${upper}) AS ended,
+            phase, ${REPLICAS} AS replicas, resources, spec_version,
+            (is_open AND ended <= ${upper}) AS ongoing
        FROM iv
-      WHERE ended > ${SINCE}
+      WHERE ended > ${lower} AND started < ${upper} AND phase <> 'deleted'
       ORDER BY started ASC`,
-    [workspaceId, offset],
+    [workspaceId, ...params],
   )
   const segments = rows.map((r: Record<string, unknown>) => ({
     startedAt: (r.started as Date).toISOString(),
@@ -274,8 +312,10 @@ export async function getWorkspaceTimeline(
     phase: r.phase as string,
     replicas: Number(r.replicas),
     coreRequest: cpuMillisOf(r.resources as ComputeResources) / 1000,
+    memoryGib: memoryGibOf(r.resources as ComputeResources),
     storageGib: storageGibOf(r.resources as ComputeResources),
     specVersion: r.spec_version === null ? null : Number(r.spec_version),
+    ongoing: r.ongoing as boolean,
   }))
 
   // The log records every observation change, several of which leave the
@@ -294,6 +334,7 @@ export function mergeSegments(segments: RuntimeSegment[]): RuntimeSegment[] {
     const previous = merged[merged.length - 1]
     if (previous && sameState(previous, segment)) {
       previous.endedAt = segment.endedAt
+      previous.ongoing = segment.ongoing
       return merged
     }
     merged.push({ ...segment })
@@ -306,7 +347,25 @@ function sameState(a: RuntimeSegment, b: RuntimeSegment): boolean {
     a.phase === b.phase &&
     a.replicas === b.replicas &&
     a.coreRequest === b.coreRequest &&
+    a.memoryGib === b.memoryGib &&
     a.storageGib === b.storageGib &&
     a.specVersion === b.specVersion
   )
+}
+
+/**
+ * Who owned a workspace as of its newest logged row, or null when the log has
+ * never seen it. The log outlives the workspace, so this still answers once the
+ * workspace row is gone — which is what lets its last owner read the timeline
+ * of a workspace they have since deleted.
+ */
+export async function getRuntimeLogOwner(workspaceId: string): Promise<string | null> {
+  const { rows } = await pool.query(
+    `SELECT user_id FROM workspace_runtime_events
+      WHERE workspace_id = $1
+      ORDER BY ts DESC, id DESC
+      LIMIT 1`,
+    [workspaceId],
+  )
+  return rows.length > 0 ? (rows[0].user_id as string) : null
 }
