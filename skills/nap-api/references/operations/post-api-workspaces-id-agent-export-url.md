@@ -21,6 +21,7 @@
 | `path` | string | Yes |  |
 | `ttl_seconds` | integer | No |  |
 | `permanent` | boolean | No |  |
+| `is_dir` | boolean | No |  |
 
 ## Responses
 

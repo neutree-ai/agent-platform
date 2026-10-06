@@ -36,6 +36,7 @@
 |-------|------|----------|-------------|
 | `source` | object | Yes |  |
 | `results` | object[] | Yes |  |
+| `skipped` | object[] | Yes |  |
 | `commit_sha` | string,null | Yes |  |
 
 **`source` fields:**
@@ -67,6 +68,15 @@
 | `version_id` | string | Yes |  |
 | `content_hash` | string | Yes |  |
 | `changed` | boolean | Yes |  |
+
+**`skipped` fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `skill_id` | string | Yes |  |
+| `name` | string | Yes |  |
+| `subpath` | string | Yes |  |
+| `reason` | enum: subpath_not_found, too_large | Yes |  |
 
 ## Security
 

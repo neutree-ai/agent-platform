@@ -1,8 +1,8 @@
-# PUT /api/providers/{id}
+# PUT /api/environments/{id}
 
-**Resource:** [providers](../resources/providers.md)
-**Update a model provider (owner only; empty api_key keeps existing value)**
-**Operation ID:** `put--api-providers-{id}`
+**Resource:** [environments](../resources/environments.md)
+**Update a remote environment (owner only)**
+**Operation ID:** `put--api-environments-{id}`
 
 ## Parameters
 
@@ -19,13 +19,8 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | No |  |
-| `description` | string | No |  |
-| `provider_type` | string | No |  |
-| `base_url` | string | No |  |
-| `api_key` | string | No |  |
-| `model_profile` | object,null | No |  |
-| `is_public` | boolean | No |  |
 | `visibility` | enum: private, team, public | No |  |
+| `placement` | object | No |  |
 | `grants` | object[] | No |  |
 
 **`grants` fields:**
@@ -39,10 +34,10 @@
 
 | Status | Description |
 |--------|-------------|
-| 200 | Updated provider |
+| 200 | Updated |
 | 400 | Invalid grants for visibility |
-| 403 | Forbidden |
-| 404 | Provider not found |
+| 403 | Non-admin attempting to make an environment public |
+| 404 | Not found or not owner |
 
 **Success Response Schema** (inline):
 
@@ -50,20 +45,17 @@
 |-------|------|----------|-------------|
 | `id` | string | Yes |  |
 | `name` | string | Yes |  |
-| `description` | string | Yes |  |
-| `provider_type` | string | Yes |  |
-| `base_url` | string | Yes |  |
-| `api_key` | string | Yes |  |
-| `model_profile` | object,null | Yes |  |
-| `user_id` | string | Yes |  |
-| `owner_name` | string | Yes |  |
-| `is_owner` | boolean | Yes |  |
-| `is_public` | boolean | Yes |  |
 | `visibility` | enum: private, team, public | Yes |  |
+| `kind` | string | Yes |  |
+| `status` | string | Yes |  |
+| `capabilities` | object | Yes |  |
+| `is_builtin` | boolean | Yes |  |
+| `last_heartbeat_at` | string,null | Yes |  |
+| `owner_name` | string | Yes |  |
+| `is_own` | boolean | Yes |  |
 | `my_permission` | enum: owner, editor, viewer... | Yes |  |
 | `shared_via_teams` | object[] | Yes |  |
 | `created_at` | string | Yes |  |
-| `updated_at` | string | Yes |  |
 
 **`shared_via_teams` fields:**
 

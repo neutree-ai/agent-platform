@@ -17,6 +17,7 @@
 | `provider_type` | string | No |  |
 | `base_url` | string | No |  |
 | `api_key` | string | No |  |
+| `model_profile` | object,null | No |  |
 | `is_public` | boolean | No |  |
 | `visibility` | enum: private, team, public | No |  |
 | `grants` | object[] | No |  |
@@ -46,6 +47,7 @@
 | `provider_type` | string | Yes |  |
 | `base_url` | string | Yes |  |
 | `api_key` | string | Yes |  |
+| `model_profile` | object,null | Yes |  |
 | `user_id` | string | Yes |  |
 | `owner_name` | string | Yes |  |
 | `is_owner` | boolean | Yes |  |

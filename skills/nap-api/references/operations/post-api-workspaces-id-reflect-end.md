@@ -1,8 +1,8 @@
-# POST /api/providers/{id}/test
+# POST /api/workspaces/{id}/reflect/end
 
-**Resource:** [providers](../resources/providers.md)
-**Probe the provider with a minimal request**
-**Operation ID:** `post--api-providers-{id}-test`
+**Resource:** [workspaces](../resources/workspaces.md)
+**Advance (or leave) a store's Reflect checkpoint after a turn ends**
+**Operation ID:** `post--api-workspaces-{id}-reflect-end`
 
 ## Parameters
 
@@ -18,27 +18,22 @@
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `model` | string | No |  |
-| `provider_type` | string | No |  |
-| `base_url` | string | No |  |
-| `api_key` | string | No |  |
-| `model_profile` | any | No |  |
+| `store_id` | string | Yes |  |
+| `session_id` | string | Yes |  |
+| `success` | boolean | Yes |  |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
-| 200 | Probe result |
-| 404 | Provider not found |
+| 200 | OK |
+| 404 | Workspace, session, or store not found |
 
 **Success Response Schema** (inline):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `ok` | boolean | Yes |  |
-| `detail` | string | No |  |
-| `profile_ok` | boolean | No |  |
-| `profile_detail` | string | No |  |
+| `success` | boolean | Yes |  |
 
 ## Security
 

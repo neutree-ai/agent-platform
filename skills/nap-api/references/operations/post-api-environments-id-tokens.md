@@ -1,8 +1,8 @@
-# POST /api/providers/{id}/test
+# POST /api/environments/{id}/tokens
 
-**Resource:** [providers](../resources/providers.md)
-**Probe the provider with a minimal request**
-**Operation ID:** `post--api-providers-{id}-test`
+**Resource:** [environments](../resources/environments.md)
+**Issue a runner token for an environment (owner only)**
+**Operation ID:** `post--api-environments-{id}-tokens`
 
 ## Parameters
 
@@ -18,27 +18,22 @@
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `model` | string | No |  |
-| `provider_type` | string | No |  |
-| `base_url` | string | No |  |
-| `api_key` | string | No |  |
-| `model_profile` | any | No |  |
+| `name` | string | Yes |  |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
-| 200 | Probe result |
-| 404 | Provider not found |
+| 201 | Created token (plaintext shown once) |
+| 404 | Not found or not owner |
 
 **Success Response Schema** (inline):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `ok` | boolean | Yes |  |
-| `detail` | string | No |  |
-| `profile_ok` | boolean | No |  |
-| `profile_detail` | string | No |  |
+| `id` | string | Yes |  |
+| `token` | string | Yes |  |
+| `created_at` | string | Yes |  |
 
 ## Security
 

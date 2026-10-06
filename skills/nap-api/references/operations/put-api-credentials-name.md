@@ -1,7 +1,7 @@
 # PUT /api/credentials/{name}
 
 **Resource:** [credentials](../resources/credentials.md)
-**Upsert a credential. For env injection the name must be a valid env var identifier.**
+**Upsert a credential. For env injection the name must be a valid env var identifier. Omit value to update only the metadata of an existing credential.**
 **Operation ID:** `put--api-credentials-{name}`
 
 ## Parameters
@@ -18,7 +18,7 @@
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `value` | string | Yes |  |
+| `value` | string | No |  |
 | `inject` | enum: env, file | Yes |  |
 | `path` | string | No |  |
 | `mode` | string | No |  |

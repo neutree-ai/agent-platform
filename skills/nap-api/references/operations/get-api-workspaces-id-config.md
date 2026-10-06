@@ -36,12 +36,17 @@ Returns the workspace config. `api_key` is always returned as an empty string; t
 | `model` | string | Yes |  |
 | `base_url` | string | Yes |  |
 | `api_key` | string | Yes |  |
+| `model_profile` | object,null | Yes |  |
 | `small_model` | string | Yes |  |
 | `system_prompt` | string | Yes |  |
 | `mcp_config` | string | Yes |  |
 | `agent_settings` | string | Yes |  |
 | `compute_resources` | object | Yes |  |
+| `auto_scaling` | object,null | Yes |  |
+| `max_concurrency` | integer | Yes |  |
+| `max_steps` | integer,null | Yes |  |
 | `auto_start` | boolean | Yes |  |
+| `muted` | boolean | Yes |  |
 | `user_display_name` | string,null | Yes |  |
 | `memory_attachments` | object[] | No |  |
 

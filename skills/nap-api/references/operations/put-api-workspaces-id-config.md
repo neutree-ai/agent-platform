@@ -4,7 +4,7 @@
 **Update workspace agent configuration**
 **Operation ID:** `put--api-workspaces-{id}-config`
 
-Empty `api_key` is treated as "do not change". Changing `agent_type` while running rebuilds the container.
+Empty `api_key` is treated as "do not change". Changing `agent_type` while running rebuilds the container. `auto_scaling` accepts new replica bounds but cannot switch a workspace between static and auto-scaling.
 
 ## Parameters
 
@@ -33,12 +33,17 @@ Empty `api_key` is treated as "do not change". Changing `agent_type` while runni
 | `model` | string | No |  |
 | `base_url` | string | No |  |
 | `api_key` | string | No |  |
+| `model_profile` | object,null | No |  |
 | `small_model` | string | No |  |
 | `system_prompt` | string | No |  |
 | `mcp_config` | string | No |  |
 | `agent_settings` | string | No |  |
 | `compute_resources` | object | No |  |
+| `auto_scaling` | object,null | No |  |
+| `max_concurrency` | integer | No |  |
+| `max_steps` | integer,null | No |  |
 | `auto_start` | boolean | No |  |
+| `muted` | boolean | No |  |
 | `user_display_name` | string,null | No |  |
 | `memory_attachments` | object[] | No |  |
 
@@ -68,6 +73,7 @@ Empty `api_key` is treated as "do not change". Changing `agent_type` while runni
 | Status | Description |
 |--------|-------------|
 | 200 | Config applied |
+| 400 | Rejected update (e.g. a runtime-shape change) |
 | 404 | Workspace not found |
 
 **Success Response Schema** (inline):

@@ -10,6 +10,8 @@
 |------|------|------|----------|-------------|
 | `id` | path | string | Yes |  |
 | `session_id` | query | string | Yes |  |
+| `limit` | query | integer | No |  |
+| `offset` | query | integer,null | No |  |
 
 ## Responses
 

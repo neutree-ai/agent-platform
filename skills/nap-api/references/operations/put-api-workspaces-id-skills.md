@@ -1,8 +1,8 @@
-# POST /api/providers/{id}/test
+# PUT /api/workspaces/{id}/skills
 
-**Resource:** [providers](../resources/providers.md)
-**Probe the provider with a minimal request**
-**Operation ID:** `post--api-providers-{id}-test`
+**Resource:** [workspaces](../resources/workspaces.md)
+**Replace the workspace skill set and reload the agent**
+**Operation ID:** `put--api-workspaces-{id}-skills`
 
 ## Parameters
 
@@ -18,27 +18,22 @@
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `model` | string | No |  |
-| `provider_type` | string | No |  |
-| `base_url` | string | No |  |
-| `api_key` | string | No |  |
-| `model_profile` | any | No |  |
+| `skills` | string[] | Yes |  |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
-| 200 | Probe result |
-| 404 | Provider not found |
+| 200 | Updated |
+| 403 | A requested skill is not visible to this workspace |
+| 404 | Workspace not found |
 
 **Success Response Schema** (inline):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `ok` | boolean | Yes |  |
-| `detail` | string | No |  |
-| `profile_ok` | boolean | No |  |
-| `profile_detail` | string | No |  |
+| `success` | enum: true | Yes |  |
+| `reloaded` | boolean | Yes |  |
 
 ## Security
 

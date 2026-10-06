@@ -1,7 +1,7 @@
 # POST /api/skills/scan-tarball
 
 **Resource:** [skills](../resources/skills.md)
-**List skill candidates inside an uploaded tarball without persisting**
+**List skill candidates inside an uploaded archive (tar.gz or zip) without persisting**
 **Operation ID:** `post--api-skills-scan-tarball`
 
 ## Responses
@@ -9,7 +9,7 @@
 | Status | Description |
 |--------|-------------|
 | 200 | Skill candidates |
-| 400 | Empty body or invalid tarball |
+| 400 | Empty body or unreadable archive |
 | 413 | Body exceeds size limit |
 | 502 | skills-content-service unavailable |
 

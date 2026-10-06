@@ -56,7 +56,7 @@
 | `prompt_id` | string,null | Yes |  |
 | `prompt_content` | string,null | Yes |  |
 | `enabled` | boolean | Yes |  |
-| `origin` | enum: local, template | Yes |  |
+| `origin` | enum: local, template, reflect | Yes |  |
 | `last_run_at` | string,null | Yes |  |
 | `completed_at` | string,null | Yes |  |
 | `created_at` | string | Yes |  |
