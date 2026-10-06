@@ -61,6 +61,8 @@
 | `visibility` | string | Yes |  |
 | `is_system` | boolean | Yes |  |
 | `owner` | string | Yes |  |
+| `access` | enum: owner, shared | Yes |  |
+| `is_shared` | boolean | Yes |  |
 | `status` | string | Yes |  |
 | `created_at` | string | Yes |  |
 | `tag_ids` | string[] | Yes |  |

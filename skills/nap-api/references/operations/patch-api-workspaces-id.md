@@ -28,6 +28,7 @@
 |--------|-------------|
 | 200 | Updated workspace |
 | 400 | Invalid input |
+| 403 | Forbidden |
 | 404 | Workspace not found |
 | 409 | Slug already in use |
 
@@ -41,6 +42,8 @@
 | `visibility` | string | Yes |  |
 | `is_system` | boolean | Yes |  |
 | `owner` | string | Yes |  |
+| `access` | enum: owner, shared | Yes |  |
+| `is_shared` | boolean | Yes |  |
 | `status` | string | Yes |  |
 | `created_at` | string | Yes |  |
 | `tag_ids` | string[] | Yes |  |

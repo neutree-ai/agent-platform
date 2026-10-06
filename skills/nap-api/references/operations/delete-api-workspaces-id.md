@@ -25,6 +25,7 @@ wedged badly enough that waiting would never help.
 | Status | Description |
 |--------|-------------|
 | 200 | Deleted |
+| 403 | Forbidden |
 | 404 | Workspace not found |
 | 409 | Usage could not be collected before deleting |
 

@@ -9,12 +9,14 @@
 | Name | In | Type | Required | Description |
 |------|------|------|----------|-------------|
 | `include_archived` | query | boolean,null | No |  |
+| `workspace_id` | query | string | No | List as this workspace's owner — for picking stores to attach to it. |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
 | 200 | OK |
+| 404 | Not found |
 
 **Success Response Schema** (inline):
 

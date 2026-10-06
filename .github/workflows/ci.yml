@@ -8,6 +8,7 @@ name: CI
 #   - typecheck (tsc --noEmit) + unit tests: per workspace, in parallel
 #   - lint (biome): PR-diff only — the tree isn't biome-clean repo-wide yet, so
 #     we gate the files a PR actually touches (mirrors the pre-commit hook)
+#   - skills: the generated nap-api skill matches the control-plane routes
 #   - knip: repo-wide unused-export / unused-dependency check (one job)
 #
 # Each workspace installs independently (no npm workspaces at the root); internal/*
@@ -108,6 +109,50 @@ jobs:
         if: matrix.test != ''
         working-directory: ${{ matrix.ws }}
         run: ${{ matrix.test }}
+
+  # The nap-api skill is generated from the control plane's route definitions.
+  # Regenerate it here and fail when the result differs from what is committed,
+  # so an API change and its skill land in the same PR.
+  skills:
+    name: skills up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: control-plane/package-lock.json
+
+      - name: Install
+        working-directory: control-plane
+        run: npm ci
+
+      # Same reason as the check job: control-plane compiles internal/* source.
+      - name: Install shared internal deps
+        run: |
+          for d in internal/*/; do
+            [ -f "${d}package.json" ] || continue
+            if [ -f "${d}package-lock.json" ]; then
+              (cd "$d" && npm ci)
+            else
+              (cd "$d" && npm install --no-save --omit=dev --legacy-peer-deps --no-audit --no-fund)
+            fi
+          done
+
+      - name: Regenerate
+        working-directory: skills
+        run: npm run cp
+
+      - name: Fail on drift
+        run: |
+          if [ -n "$(git status --porcelain -- skills)" ]; then
+            git status --short -- skills
+            git diff --stat -- skills
+            echo "::error::skills/ is out of date with the control-plane API. Run 'npm run cp' in skills/ and commit the result."
+            exit 1
+          fi
 
   knip:
     name: knip

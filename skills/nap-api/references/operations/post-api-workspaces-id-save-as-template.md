@@ -31,6 +31,7 @@
 |--------|-------------|
 | 201 | Template created |
 | 400 | Invalid input |
+| 403 | Forbidden |
 | 404 | Workspace or config not found |
 
 **Success Response Schema** (inline):

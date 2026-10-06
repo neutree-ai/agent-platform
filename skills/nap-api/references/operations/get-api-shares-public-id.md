@@ -43,4 +43,5 @@ Auth bypass is configured via path prefix in index.ts.
 | `started_at` | string | Yes |  |
 | `ended_at` | string,null | Yes |  |
 | `duration_ms` | number,null | Yes |  |
+| `author` | object,null | No |  |
 

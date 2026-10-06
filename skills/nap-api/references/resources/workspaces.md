@@ -33,7 +33,7 @@ A workspace is an isolated agent environment — its own filesystem, config, and
 | GET | `/api/workspaces/{id}/sessions/{sessionId}/usage` | Get token usage for one session | [View](../operations/get-api-workspaces-id-sessions-sessionId-usage.md) |
 | GET | `/api/workspaces/{id}/sessions/{sessionId}/tool-activity` | Get a session's tool calls, aggregated by tool and spread over time | [View](../operations/get-api-workspaces-id-sessions-sessionId-tool-activity.md) |
 | GET | `/api/workspaces/{id}/usage` | Get aggregate token usage for a workspace | [View](../operations/get-api-workspaces-id-usage.md) |
-| GET | `/api/workspaces/{id}/runtime-timeline` | A workspace's runtime state as timeline segments over the last `days` days — what it was, for how long, and at which spec. | [View](../operations/get-api-workspaces-id-runtime-timeline.md) |
+| GET | `/api/workspaces/{id}/runtime-timeline` | A workspace's runtime state as timeline segments — what it was, for how long, and at which spec. | [View](../operations/get-api-workspaces-id-runtime-timeline.md) |
 | GET | `/api/workspaces/{id}/session-usage` | A workspace's top sessions by token spend over the last `days` days, each with its message count, tool-call count and wall-clock duration. | [View](../operations/get-api-workspaces-id-session-usage.md) |
 | GET | `/api/workspaces/{id}/commands` | List workspace commands | [View](../operations/get-api-workspaces-id-commands.md) |
 | POST | `/api/workspaces/{id}/commands` | Create a command. Either prompt_id or content must be provided. | [View](../operations/post-api-workspaces-id-commands.md) |
@@ -54,3 +54,6 @@ A workspace is an isolated agent environment — its own filesystem, config, and
 | POST | `/api/workspaces/{id}/transfer` | Offer the workspace to another user | [View](../operations/post-api-workspaces-id-transfer.md) |
 | DELETE | `/api/workspaces/{id}/transfer` | Cancel the workspace’s pending transfer | [View](../operations/delete-api-workspaces-id-transfer.md) |
 | GET | `/api/workspaces/{id}/transfer/plan` | Preview what transferring the workspace to a user would do | [View](../operations/get-api-workspaces-id-transfer-plan.md) |
+| GET | `/api/workspaces/{id}/team-shares` | List the teams a workspace is shared with | [View](../operations/get-api-workspaces-id-team-shares.md) |
+| PUT | `/api/workspaces/{id}/team-shares/{teamId}` | Share a workspace with a team (owner only). Idempotent. | [View](../operations/put-api-workspaces-id-team-shares-teamId.md) |
+| DELETE | `/api/workspaces/{id}/team-shares/{teamId}` | Stop sharing a workspace with a team (owner only). Takes effect immediately. | [View](../operations/delete-api-workspaces-id-team-shares-teamId.md) |
