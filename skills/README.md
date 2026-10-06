@@ -3,7 +3,7 @@
 NAP [Agent Skills](https://docs.claude.com/en/docs/agent-skills) shipped with the
 platform. Two kinds live here:
 
-- **Generated** from a service's live OpenAPI spec via
+- **Generated** from a service's OpenAPI spec via
   [openapi-to-skills](https://github.com/neutree-ai/openapi-to-skills) — e.g.
   `nap-api/`. Regenerable; don't hand-edit (see [Regenerate](#regenerate)).
 - **Hand-authored** — curated guidance that isn't derived from a spec, e.g.
@@ -17,26 +17,28 @@ see `<skill>/references/authentication.md`.
 
 | Skill | Kind | Source | Description |
 |-------|------|--------|-------------|
-| `nap-api/` | generated | control-plane `/api/docs/openapi.json` | NAP control plane — workspaces, prompts, templates, credentials, tokens, agent files, providers, tags, shares, schedules |
+| `nap-api/` | generated | control-plane route definitions | NAP control plane — workspaces, prompts, templates, credentials, tokens, agent files, providers, tags, shares, schedules |
 | `nap-design-system/` | hand-authored | `web` + `@neutree-ai/theme` | NAP web design system — semantic OKLCH tokens, the shadcn-based UI component library, and the conventions that keep generated UI on-brand |
 
 ## Regenerate
 
-Applies only to **generated** skills. Fetches the latest spec and rewrites the
-skill in place. Point `CP_SPEC_URL` at any running control-plane that serves the
-OpenAPI doc (local dev, a port-forward, etc.):
+Applies only to **generated** skills. Exports the spec from the control-plane
+source and rewrites the skill in place — no running server or database needed,
+only `npm ci` in `control-plane/`:
 
 ```bash
-CP_SPEC_URL=http://localhost:3000/api/docs/openapi.json npm run cp
+npm run cp
 ```
 
-`fetch:cp` snapshots the spec to `specs/control-plane.json`; `generate:cp` runs `openapi-to-skills` against it. `CP_SPEC_URL` is required — there is no default host.
+`spec:cp` writes the OpenAPI document to `specs/control-plane.json` straight from the route definitions (`control-plane/scripts/export-openapi.ts`); `generate:cp` runs `openapi-to-skills` against it.
+
+CI runs the same command and fails when the result differs from what is committed, so a control-plane API change must be committed together with its regenerated skill.
 
 ## Layout
 
 ```
 skills/
-├── specs/               # snapshotted OpenAPI specs (regenerable)
+├── specs/               # OpenAPI specs exported from source (regenerable)
 ├── templates/           # Eta template overrides applied during generation
 ├── assets/              # hand-authored static files overlaid onto generated skills
 │   └── nap-api/         # → copied into nap-api/ after generation (e.g. scripts/handoff.sh)
@@ -53,4 +55,4 @@ skills/
 
 The skill-specific blocks above are keyed by skill name (`nap-api`); other skills fall back to generic rendering.
 
-> Generated skills are currently cp-only; other services can be added back as new `fetch:`/`generate:` script pairs.
+> Generated skills are currently cp-only; other services can be added back as new `spec:`/`generate:` script pairs.

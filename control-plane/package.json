@@ -13,7 +13,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "knip": "knip"
+    "knip": "knip",
+    "export:openapi": "tsx scripts/export-openapi.ts"
   },
   "dependencies": {
     "@datadog/pprof": "^5.14.1",
