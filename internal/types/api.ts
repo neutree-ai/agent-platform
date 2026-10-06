@@ -1484,8 +1484,11 @@ export const ApiRuntimeTimelineSchema = z.object({
       phase: z.string(),
       replicas: z.number().int(),
       coreRequest: z.number(),
+      memoryGib: z.number(),
       storageGib: z.number(),
       specVersion: z.number().int().nullable(),
+      /** Still in this state at query time; `endedAt` is the query instant. */
+      ongoing: z.boolean(),
     }),
   ),
 })

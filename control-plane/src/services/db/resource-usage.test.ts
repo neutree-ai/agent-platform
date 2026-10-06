@@ -8,8 +8,10 @@ function segment(over: Partial<RuntimeSegment> = {}): RuntimeSegment {
     phase: 'running',
     replicas: 1,
     coreRequest: 1,
+    memoryGib: 2,
     storageGib: 50,
     specVersion: 11,
+    ongoing: false,
     ...over,
   }
 }
@@ -35,6 +37,17 @@ describe('mergeSegments', () => {
   it('keeps a resize apart even while the phase holds', () => {
     const merged = mergeSegments([segment(), segment({ coreRequest: 4, specVersion: 12 })])
     expect(merged).toHaveLength(2)
+  })
+
+  it('keeps a memory resize apart', () => {
+    const merged = mergeSegments([segment(), segment({ memoryGib: 4, specVersion: 12 })])
+    expect(merged).toHaveLength(2)
+  })
+
+  it('carries ongoing from the last segment it joins', () => {
+    const merged = mergeSegments([segment(), segment({ ongoing: true })])
+    expect(merged).toHaveLength(1)
+    expect(merged[0].ongoing).toBe(true)
   })
 
   it('does not mutate the segments it was given', () => {
