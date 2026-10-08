@@ -169,6 +169,16 @@ async function executeJob(job: Job<JobData>, boss: PgBoss): Promise<JobResult> {
           await db.deleteSchedule(scheduleId)
           return { session_id: '', error: 'Reflect schedule orphaned (store deleted); cleaned up' }
         }
+        // Reflect is housekeeping, not a reason to run: the chat endpoint
+        // auto-starts a stopped workspace, so dispatching here would wake one
+        // the owner stopped. Skip without touching last_run_at; the next
+        // Reflect after the workspace is started covers the missed window.
+        if ((await db.getWorkspaceStatus(schedule.workspace_id)) === 'stopped') {
+          console.log(
+            `[Scheduler] Reflect schedule=${scheduleId} skipped: workspace=${schedule.workspace_id} is stopped job=${job.id}`,
+          )
+          return { session_id: '', error: 'Reflect skipped: workspace is stopped' }
+        }
         reflectStoreId = storeId
       }
       const platformToken = await db.getPlatformToken(schedule.user_id)
