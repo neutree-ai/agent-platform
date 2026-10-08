@@ -56,6 +56,12 @@ export async function getReflectTargetStoreId(scheduleId: string): Promise<strin
   return rows[0]?.id ?? null
 }
 
+/** Lifecycle status of a workspace, or null when the row is gone. */
+export async function getWorkspaceStatus(workspaceId: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT status FROM workspaces WHERE id = $1', [workspaceId])
+  return rows[0]?.status ?? null
+}
+
 /** Delete a schedule row. Used to self-clean an orphaned `origin: 'reflect'`
  *  schedule whose store was deleted — see handler.ts. */
 export async function deleteSchedule(id: string): Promise<void> {
