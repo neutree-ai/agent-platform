@@ -58,15 +58,20 @@ export async function listWorkspaces(
   userId: string,
   opts?: { search?: string; limit?: number; includeSystem?: boolean; includeShared?: boolean },
 ): Promise<WorkspaceWithSessionCounts[]> {
-  const reach = ['w.user_id = $1']
-  if (opts?.includeSystem) reach.push('w.is_system = true')
+  // Reachable workspaces are resolved as a set of ids. An `OR EXISTS (...)` on
+  // the outer scan gets a fixed 50% selectivity estimate, which inflates the
+  // plan cost past the JIT thresholds; a semi-join on the id set keeps the row
+  // estimate at the real handful.
+  const reach = [
+    `SELECT ow.id FROM workspaces ow
+       WHERE ow.user_id = $1${opts?.includeSystem ? ' OR ow.is_system = true' : ''}`,
+  ]
   if (opts?.includeShared) {
-    reach.push(`EXISTS (
-       SELECT 1 FROM workspace_team_shares ts
+    reach.push(`SELECT ts.workspace_id FROM workspace_team_shares ts
        JOIN team_members tm ON tm.team_id = ts.team_id
-       WHERE ts.workspace_id = w.id AND tm.user_id = $1)`)
+       WHERE tm.user_id = $1`)
   }
-  const conditions: string[] = [`(${reach.join(' OR ')})`]
+  const conditions: string[] = [`w.id IN (${reach.join(' UNION ALL ')})`]
   if (!opts?.includeSystem) conditions.push('w.is_system = false')
   const values: any[] = [userId]
   let paramIndex = 2
