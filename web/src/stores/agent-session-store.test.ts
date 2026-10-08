@@ -1040,6 +1040,100 @@ describe('createAgentSessionStore', () => {
     })
   })
 
+  describe('syncRemoteTurn', () => {
+    const idleAt = (lastActiveAt: string) => ({
+      chat_status: 'idle',
+      pending_message: null,
+      last_active_at: lastActiveAt,
+    })
+
+    test('first check after a switch reloads history', async () => {
+      const getWorkspaceMessages = vi.fn().mockResolvedValue([dbMessage(1, 'user', 'mine')])
+      const deps = makeDeps({
+        api: { getWorkspaceMessages, getSession: vi.fn().mockResolvedValue(idleAt('t1')) },
+      })
+      const { s } = make('ws-1', deps)
+      await s.switchSession('session-1')
+
+      // Someone else's turn ran and finished before this tab's first check.
+      getWorkspaceMessages.mockResolvedValue([
+        dbMessage(1, 'user', 'mine'),
+        dbMessage(2, 'user', 'theirs'),
+        dbMessage(3, 'assistant', 'reply'),
+      ])
+      await s.syncRemoteTurn()
+
+      expect(s.messages).toHaveLength(3)
+    })
+
+    test('first check after this tab was busy reloads history', async () => {
+      const getWorkspaceMessages = vi.fn().mockResolvedValue([dbMessage(1, 'user', 'mine')])
+      const deps = makeDeps({
+        api: { getWorkspaceMessages, getSession: vi.fn().mockResolvedValue(idleAt('t1')) },
+      })
+      const { raw, s } = make('ws-1', deps)
+      await s.switchSession('session-1')
+      await s.syncRemoteTurn()
+
+      raw.setState({ isBusy: true })
+      await s.syncRemoteTurn()
+      raw.setState({ isBusy: false })
+
+      getWorkspaceMessages.mockResolvedValue([
+        dbMessage(1, 'user', 'mine'),
+        dbMessage(2, 'user', 'theirs'),
+      ])
+      await s.syncRemoteTurn()
+
+      expect(s.messages).toHaveLength(2)
+    })
+
+    test('an unchanged session is not reloaded again', async () => {
+      const getWorkspaceMessages = vi.fn().mockResolvedValue([dbMessage(1, 'user', 'mine')])
+      const deps = makeDeps({
+        api: { getWorkspaceMessages, getSession: vi.fn().mockResolvedValue(idleAt('t1')) },
+      })
+      const { s } = make('ws-1', deps)
+      await s.switchSession('session-1')
+      await s.syncRemoteTurn()
+      const calls = getWorkspaceMessages.mock.calls.length
+
+      await s.syncRemoteTurn()
+
+      expect(getWorkspaceMessages).toHaveBeenCalledTimes(calls)
+    })
+
+    test('a session that moved since the last check is reloaded', async () => {
+      const getWorkspaceMessages = vi.fn().mockResolvedValue([dbMessage(1, 'user', 'mine')])
+      const getSession = vi.fn().mockResolvedValue(idleAt('t1'))
+      const deps = makeDeps({ api: { getWorkspaceMessages, getSession } })
+      const { s } = make('ws-1', deps)
+      await s.switchSession('session-1')
+      await s.syncRemoteTurn()
+
+      getSession.mockResolvedValue(idleAt('t2'))
+      getWorkspaceMessages.mockResolvedValue([
+        dbMessage(1, 'user', 'mine'),
+        dbMessage(2, 'user', 'theirs'),
+      ])
+      await s.syncRemoteTurn()
+
+      expect(s.messages).toHaveLength(2)
+    })
+
+    test('a running turn is attached to', async () => {
+      const getSession = vi.fn().mockResolvedValue(idleAt('t1'))
+      const deps = makeDeps({ api: { getSession } })
+      const { s } = make('ws-1', deps)
+      await s.switchSession('session-1')
+
+      getSession.mockResolvedValue({ ...idleAt('t2'), chat_status: 'agent' })
+      await s.syncRemoteTurn()
+
+      expect(deps.sse.createCPReconnectStream).toHaveBeenCalled()
+    })
+  })
+
   describe('loadHistory / clearMessages', () => {
     test('loadHistory replaces messages', () => {
       const deps = makeDeps()

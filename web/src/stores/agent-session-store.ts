@@ -168,7 +168,8 @@ interface AgentSessionActions {
   /**
    * Catch up with turns someone else started in the active session — in a
    * shared workspace, another person. While idle: attach to a turn that is
-   * running, or reload history if the session moved since the last check.
+   * running, or reload history if the session moved since the last check or
+   * there is no last check to compare with.
    * Meant to be polled.
    */
   syncRemoteTurn(): Promise<void>
@@ -927,7 +928,10 @@ export function createAgentSessionStore(
       const previous = remoteSyncMark?.sessionId === sessionId ? remoteSyncMark : null
       remoteSyncMark = { sessionId, lastActiveAt: detail.last_active_at }
       const running = detail.chat_status === 'agent'
-      const moved = !!previous && previous.lastActiveAt !== detail.last_active_at
+      // No mark means this tab was just busy or switching: a turn someone else
+      // ran in that gap is already behind `last_active_at`, so nothing later
+      // would reveal it. Reload once rather than trust the loaded history.
+      const moved = !previous || previous.lastActiveAt !== detail.last_active_at
       if (!running && !moved) return
       try {
         const history = await deps.api.getWorkspaceMessages(workspaceId, sessionId)
