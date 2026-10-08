@@ -60,6 +60,13 @@ interface ActiveSSEStream {
    * from "does the stream object still exist".
    */
   turnActive: boolean
+  /**
+   * Called when another turn takes this stream's place under the same key.
+   * The replaced turn no longer owns the session, though its own stream may
+   * stay open for a long time, so whatever it holds on the session's behalf
+   * is given up here.
+   */
+  onReplaced?: () => void
 }
 
 // Key: "workspaceId:sessionId" for session-level isolation (supports concurrent streams)
@@ -163,6 +170,7 @@ export function setupActiveStream(
 
   const prev = activeStreams.get(activeKey)
   if (prev) {
+    prev.onReplaced?.()
     for (const c of prev.controllers) {
       try {
         c.close()
@@ -460,6 +468,14 @@ export function createInterceptedSSEResponse(
     existingSessionId,
     queue,
   )
+
+  if (onSessionSettled) {
+    activeStream.onReplaced = () => {
+      void Promise.resolve(onSessionSettled()).catch((e) =>
+        console.error(`[SSE] session settle failed on replacement ${workspaceId}:`, e),
+      )
+    }
+  }
 
   // Create client ReadableStream
   let myController: ReadableStreamDefaultController<Uint8Array> | null = null
