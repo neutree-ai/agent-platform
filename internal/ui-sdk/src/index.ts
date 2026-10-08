@@ -19,6 +19,7 @@ export { Transcript } from './components/Transcript'
 export type { TranscriptProps } from './components/Transcript'
 export { MessageBubble } from './components/MessageBubble'
 export { ToolCallBlock } from './components/ToolCallBlock'
+export { ToolCallGroup } from './components/ToolCallGroup'
 export { TurnStatsBar } from './components/TurnStatsBar'
 export { AgentTypeProvider, useAgentType } from './components/AgentTypeContext'
 export {

@@ -916,6 +916,7 @@ export function WorkspaceChatPanel({
                             <MessageBubble
                               message={messages[vi.index]}
                               showAuthor={showAuthorOf(messages[vi.index])}
+                              expandAll={searchOpen}
                             />
                           </TranscriptI18nProvider>
                         </div>
@@ -929,6 +930,8 @@ export function WorkspaceChatPanel({
                         <MessageBubble
                           message={messages[messages.length - 1]}
                           showAuthor={showAuthorOf(messages[messages.length - 1])}
+                          isLatest
+                          expandAll={searchOpen}
                         />
                       </TranscriptI18nProvider>
                     </div>
@@ -941,9 +944,14 @@ export function WorkspaceChatPanel({
                 </div>
               ) : (
                 <div className="p-3 space-y-3">
-                  {messages.map((msg) => (
+                  {messages.map((msg, idx) => (
                     <TranscriptI18nProvider key={msg.id} locale={i18n.language}>
-                      <MessageBubble message={msg} showAuthor={showAuthorOf(msg)} />
+                      <MessageBubble
+                        message={msg}
+                        showAuthor={showAuthorOf(msg)}
+                        isLatest={idx === messages.length - 1}
+                        expandAll={searchOpen}
+                      />
                     </TranscriptI18nProvider>
                   ))}
                   {error && (

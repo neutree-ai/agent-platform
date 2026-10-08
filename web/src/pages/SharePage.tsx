@@ -163,8 +163,12 @@ export function SharePage() {
             {/* Messages scroll area — full column width */}
             <div className="min-h-0 flex-1 overflow-y-auto text-xs">
               <div className="p-3 space-y-3 mx-auto w-full max-w-3xl">
-                {chatMessages.map((msg) => (
-                  <MessageBubble key={msg.id} message={msg} />
+                {chatMessages.map((msg, idx) => (
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    isLatest={idx === chatMessages.length - 1}
+                  />
                 ))}
               </div>
             </div>

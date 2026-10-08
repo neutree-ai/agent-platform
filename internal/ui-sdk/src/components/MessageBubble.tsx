@@ -1,11 +1,12 @@
 import { Markdown } from '../markdown'
 import { Spinner } from '../ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import type { ChatMessage } from '../types'
+import type { ChatMessage, ContentBlock, ToolCall } from '../types'
 import { ClipboardCheck, Copy, X } from 'lucide-react'
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ToolCallBlock } from './ToolCallBlock'
+import { Foldable } from './Foldable'
+import { ToolCallGroup } from './ToolCallGroup'
 
 /**
  * An image block carries either inline base64 (`data`, live stream) or a
@@ -65,13 +66,41 @@ function formatTimestamp(iso: string, locale: string): { short: string; full: st
   return { short, full }
 }
 
+/** A block to render on its own, or a run of consecutive tool calls to render as one group. */
+type Segment =
+  | { type: 'block'; block: Exclude<ContentBlock, { type: 'tool' }>; idx: number }
+  | { type: 'tools'; tools: ToolCall[] }
+
+function toSegments(blocks: ContentBlock[]): Segment[] {
+  const segments: Segment[] = []
+  blocks.forEach((block, idx) => {
+    if (block.type !== 'tool') {
+      segments.push({ type: 'block', block, idx })
+      return
+    }
+    const last = segments[segments.length - 1]
+    if (last?.type === 'tools') last.tools.push(block.tool)
+    else segments.push({ type: 'tools', tools: [block.tool] })
+  })
+  return segments
+}
+
 function MessageBubbleImpl({
   message,
   showAuthor = false,
+  isLatest = false,
+  expandAll = false,
 }: {
   message: ChatMessage
   /** Label a user message with its author — for sessions several people speak in. */
   showAuthor?: boolean
+  /**
+   * The transcript's last message. Its closing text is what the reader came
+   * for, so it stays whole however long it is.
+   */
+  isLatest?: boolean
+  /** Show long text and tool-call groups unfolded — e.g. while searching the transcript. */
+  expandAll?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const isUser = message.role === 'user'
@@ -87,6 +116,9 @@ function MessageBubbleImpl({
     /^\s*<agent-sys>[\s\S]*<\/agent-sys>\s*$/.test(message.content)
   const [copied, setCopied] = useState(false)
   const [zoomedSrc, setZoomedSrc] = useState<string | null>(null)
+  const segments = useMemo(() => toSegments(message.blocks), [message.blocks])
+  const wholeTextIdx =
+    isLatest || message.isStreaming ? message.blocks.map((b) => b.type).lastIndexOf('text') : -1
 
   const handleCopy = useCallback(() => {
     const textContent = message.blocks
@@ -115,7 +147,13 @@ function MessageBubbleImpl({
           <div className="mb-1 px-1 text-mini text-muted-foreground">{message.author.name}</div>
         )}
         <div className="max-w-[70%] overflow-hidden break-words rounded-2xl rounded-tr-md bg-primary/90 px-3.5 py-2 text-primary-foreground shadow-sm">
-          <div className="whitespace-pre-wrap break-words text-[1em]">{message.content}</div>
+          <Foldable
+            foldKey={`${message.id}:content`}
+            disabled={expandAll}
+            toggleClassName="text-primary-foreground/80 hover:text-primary-foreground"
+          >
+            <div className="whitespace-pre-wrap break-words text-[1em]">{message.content}</div>
+          </Foldable>
           {message.blocks
             .filter((b) => b.type === 'image')
             .map((block, idx) =>
@@ -134,8 +172,19 @@ function MessageBubbleImpl({
         </>
       ) : (
         <div className="w-full min-w-0 break-words">
-          {message.blocks.map((block, idx) =>
-            block.type === 'text' ? (
+          {segments.map((segment) => {
+            if (segment.type === 'tools') {
+              return (
+                <ToolCallGroup
+                  key={segment.tools[0].id}
+                  tools={segment.tools}
+                  foldKey={message.id}
+                  expandAll={expandAll}
+                />
+              )
+            }
+            const { block, idx } = segment
+            return block.type === 'text' ? (
               /^(API\s+)?Error[\s:]/i.test(block.text.trim()) ? (
                 <div
                   key={idx}
@@ -144,20 +193,23 @@ function MessageBubbleImpl({
                   {block.text}
                 </div>
               ) : (
-                <Markdown
+                <Foldable
                   key={idx}
-                  mode={
-                    message.isStreaming && idx === message.blocks.length - 1
-                      ? 'streaming'
-                      : 'static'
-                  }
-                  linkifyWorkspaceFiles
+                  foldKey={`${message.id}:${idx}`}
+                  disabled={expandAll || idx === wholeTextIdx}
                 >
-                  {block.text}
-                </Markdown>
+                  <Markdown
+                    mode={
+                      message.isStreaming && idx === message.blocks.length - 1
+                        ? 'streaming'
+                        : 'static'
+                    }
+                    linkifyWorkspaceFiles
+                  >
+                    {block.text}
+                  </Markdown>
+                </Foldable>
               )
-            ) : block.type === 'tool' ? (
-              <ToolCallBlock key={block.tool.id} tool={block.tool} />
             ) : block.type === 'status' ? (
               <div
                 key={idx}
@@ -173,7 +225,7 @@ function MessageBubbleImpl({
                 <span className="font-medium">{block.label}</span>
                 {block.detail && <span className="opacity-70">{block.detail}</span>}
               </div>
-            ) : block.type === 'image' ? (
+            ) : (
               <img
                 key={idx}
                 src={imageSrc(block)}
@@ -182,8 +234,8 @@ function MessageBubbleImpl({
                 className="my-2 max-w-full max-h-96 cursor-zoom-in rounded-md border border-foreground/[0.08]"
                 onClick={() => setZoomedSrc(imageSrc(block))}
               />
-            ) : null,
-          )}
+            )
+          })}
           {message.isStreaming && message.blocks.length === 0 && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Spinner size="sm" />
