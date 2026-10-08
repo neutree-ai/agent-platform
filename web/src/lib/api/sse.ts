@@ -45,6 +45,8 @@ type AgentSSEHandler = {
   onItemCompleted?: (item: UniversalItem) => void
   onQuestionRequested?: (request: AskUserRequest) => void
   onError?: (error: string) => void
+  /** The send was refused because another turn is running in the session. */
+  onSessionBusy?: (message: string) => void
 }
 
 // ── Handler → TurnPlugin adapter ──
@@ -267,6 +269,10 @@ export function createAgentChat(
       const body = await response
         .json()
         .catch(() => ({ error: i18n.t('common.errors.requestFailed') }))
+      if (body.code === 'session_busy' && handlers.onSessionBusy) {
+        handlers.onSessionBusy(i18n.t('session.errors.sessionBusy'))
+        return
+      }
       handlers.onError?.(body.error || i18n.t('common.errors.requestFailed'))
       return
     }

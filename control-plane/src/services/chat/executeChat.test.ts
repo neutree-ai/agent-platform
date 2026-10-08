@@ -12,11 +12,25 @@ vi.mock('../workspace-autostart', () => ({
   ensureWorkspaceRunning: vi.fn().mockResolvedValue(undefined),
   WorkspaceStartError: class WorkspaceStartError extends Error {},
 }))
+// Stands in for the claim columns on the sessions row: session id → holder.
+const claimRows = vi.hoisted(() => new Map<string, string>())
 vi.mock('../db/sessions', () => ({
   getSession: vi.fn(),
   transitionSessionStatus: vi.fn(),
   takePendingMessage: vi.fn(),
   restorePendingMessage: vi.fn(),
+  claimSessionTurn: vi.fn(async (sid: string, token: string) => {
+    if (claimRows.has(sid)) return false
+    claimRows.set(sid, token)
+    return true
+  }),
+  adoptSessionTurn: vi.fn(async (sid: string, token: string) => {
+    claimRows.set(sid, token)
+  }),
+  renewSessionTurn: vi.fn(async (sid: string, token: string) => claimRows.get(sid) === token),
+  releaseSessionTurn: vi.fn(async (sid: string, token: string) => {
+    if (claimRows.get(sid) === token) claimRows.delete(sid)
+  }),
 }))
 vi.mock('../../lib/session-token', () => ({
   ensureTokenForSession: vi.fn().mockResolvedValue('tok'),
@@ -38,6 +52,7 @@ vi.mock('../../lib/sse', () => ({
 const { executeChat } = await import('./executeChat')
 const { getSession, transitionSessionStatus } = await import('../db/sessions')
 const { turnDemand, __resetTurnGate } = await import('./turn-gate')
+const { createInterceptedSSEResponse } = await import('../../lib/sse')
 const { syncReadyReplicas, __resetReplicaRouter } = await import('../replica-router')
 
 const WS = 'ws1'
@@ -58,6 +73,7 @@ const sseResponse = () =>
 beforeEach(() => {
   vi.clearAllMocks()
   __resetTurnGate()
+  claimRows.clear()
   __resetReplicaRouter()
   seedCapacity()
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse()))
@@ -100,7 +116,7 @@ describe('executeChat admission-slot release', () => {
     expect(turnDemand(WS).active).toBe(1)
   })
 
-  it('releases the slot on an early return (session belongs to another workspace)', async () => {
+  it('takes no slot for a session that belongs to another workspace', async () => {
     vi.mocked(getSession).mockResolvedValue({
       id: 's1',
       workspace_id: 'other-ws',
@@ -117,5 +133,70 @@ describe('executeChat admission-slot release', () => {
 
     expect(resp.status).toBe(400)
     expect(turnDemand(WS).active).toBe(0)
+  })
+})
+
+// One turn per session: the agent and cp both key a turn's plumbing by session
+// id, so a second turn arriving while one runs loses a reply. executeChat turns
+// it away instead, and lets it in again once the first turn has settled.
+describe('executeChat one turn per session', () => {
+  const chat = (sessionId: string | null) =>
+    executeChat({ workspace, message: 'hi', sessionId, images: null, source: 'web' })
+  const lastInterceptOpts = () => vi.mocked(createInterceptedSSEResponse).mock.calls.at(-1)?.[1]
+
+  beforeEach(() => {
+    vi.mocked(transitionSessionStatus).mockResolvedValue(undefined)
+    vi.mocked(getSession).mockImplementation(async (id: string) =>
+      id === 'gone' ? null : ({ id, workspace_id: WS, replica_ordinal: 0 } as never),
+    )
+  })
+
+  it('turns away a second turn while one is running', async () => {
+    await chat('s1')
+    const resp = await chat('s1')
+
+    expect(resp.status).toBe(409)
+    expect(await resp.json()).toMatchObject({ code: 'session_busy' })
+    expect(fetch).toHaveBeenCalledTimes(1)
+    // The refused turn took no admission slot.
+    expect(turnDemand(WS).active).toBe(1)
+  })
+
+  it('admits the next turn once the running one has settled', async () => {
+    await chat('s1')
+    await lastInterceptOpts()?.onSessionSettled?.()
+
+    const resp = await chat('s1')
+
+    expect(resp.status).toBe(200)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not hold the session after a setup failure', async () => {
+    vi.mocked(transitionSessionStatus).mockRejectedValueOnce(new Error('db blip'))
+    await expect(chat('s1')).rejects.toThrow('db blip')
+
+    expect(claimRows.has('s1')).toBe(false)
+    expect((await chat('s1')).status).toBe(200)
+  })
+
+  it('leaves other sessions alone', async () => {
+    await chat('s1')
+
+    expect((await chat('s2')).status).toBe(200)
+  })
+
+  it('claims a new session once it has an id', async () => {
+    await chat(null)
+    await lastInterceptOpts()?.onNewSession?.('fresh')
+
+    expect((await chat('fresh')).status).toBe(409)
+  })
+
+  it('does not claim a session that is not in the workspace', async () => {
+    const resp = await chat('gone')
+
+    expect(resp.status).toBe(400)
+    expect(claimRows.has('gone')).toBe(false)
   })
 })

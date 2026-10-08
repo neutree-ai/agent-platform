@@ -520,6 +520,37 @@ describe('createAgentSessionStore', () => {
       expect(s.isLoading).toBe(true)
     })
 
+    test('a send refused as session-busy is taken back and returned to the composer', async () => {
+      let handlers: SSEHandlers = {}
+      const getWorkspaceMessages = vi.fn().mockResolvedValue([])
+      const getSession = vi.fn().mockResolvedValue({ chat_status: 'idle', pending_message: null })
+      const deps = makeDeps({
+        api: { getWorkspaceMessages, getSession },
+        sse: {
+          createAgentChat: vi.fn((_wid, _msg, _sid, h: SSEHandlers) => {
+            handlers = h
+          }),
+        },
+      })
+      const { s } = make('ws-1', deps)
+      await s.switchSession('session-1')
+      // Someone else started a turn this tab has not seen yet.
+      getSession.mockResolvedValue({ chat_status: 'agent', pending_message: null })
+      getWorkspaceMessages.mockResolvedValue([dbMessage(1, 'user', 'theirs')])
+
+      s.sendMessage('mine')
+      handlers.onSessionBusy?.('busy')
+      await vi.waitFor(() => expect(deps.sse.createCPReconnectStream).toHaveBeenCalled())
+
+      expect(s.returnedDraft).toEqual({ content: 'mine', images: [] })
+      expect(s.error).toBe('busy')
+      expect(s.messages.some((m) => m.content === 'mine')).toBe(false)
+      expect(s.messages.some((m) => m.content === 'theirs')).toBe(true)
+
+      s.clearReturnedDraft()
+      expect(s.returnedDraft).toBeNull()
+    })
+
     test('calls SSE createAgentChat with correct args', async () => {
       const deps = makeDeps()
       const { s } = make('ws-1', deps)
