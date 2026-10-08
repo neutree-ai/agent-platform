@@ -220,7 +220,9 @@
         "count_one": "{{count}} 个工具调用",
         "count_other": "{{count}} 个工具调用",
         "failed_one": "{{count}} 个失败",
-        "failed_other": "{{count}} 个失败"
+        "failed_other": "{{count}} 个失败",
+        "showAll": "展开全部",
+        "collapse": "收起"
       },
       "turnStatsBar": {
         "turns_one": "{{count}} 轮",
