@@ -30,8 +30,8 @@ export function Transcript({
 }: TranscriptProps) {
   const body = (
     <div className={className}>
-      {messages.map((m) => (
-        <MessageBubble key={m.id} message={m} />
+      {messages.map((m, idx) => (
+        <MessageBubble key={m.id} message={m} isLatest={idx === messages.length - 1} />
       ))}
     </div>
   )

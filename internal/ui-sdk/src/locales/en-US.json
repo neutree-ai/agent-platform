@@ -12,7 +12,9 @@
         },
         "actions": {
           "copy": "Copy",
-          "copied": "Copied!"
+          "copied": "Copied!",
+          "showMore": "Show more",
+          "showLess": "Show less"
         }
       },
       "toolRenderers": {
@@ -213,6 +215,12 @@
           "error": "error",
           "done": "done"
         }
+      },
+      "toolCallGroup": {
+        "count_one": "{{count}} tool call",
+        "count_other": "{{count}} tool calls",
+        "failed_one": "{{count}} failed",
+        "failed_other": "{{count}} failed"
       },
       "turnStatsBar": {
         "turns_one": "{{count}} turn",

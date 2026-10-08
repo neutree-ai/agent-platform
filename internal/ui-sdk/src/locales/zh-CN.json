@@ -12,7 +12,9 @@
         },
         "actions": {
           "copy": "复制",
-          "copied": "已复制"
+          "copied": "已复制",
+          "showMore": "展开全文",
+          "showLess": "收起"
         }
       },
       "toolRenderers": {
@@ -213,6 +215,12 @@
           "error": "错误",
           "done": "完成"
         }
+      },
+      "toolCallGroup": {
+        "count_one": "{{count}} 个工具调用",
+        "count_other": "{{count}} 个工具调用",
+        "failed_one": "{{count}} 个失败",
+        "failed_other": "{{count}} 个失败"
       },
       "turnStatsBar": {
         "turns_one": "{{count}} 轮",
