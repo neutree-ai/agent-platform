@@ -346,6 +346,72 @@ export async function restorePendingMessage(
   )
 }
 
+// ── Turn claim ───────────────────────────────────────────────────────────
+//
+// The lock behind "one turn per session" (see services/chat/session-turn.ts).
+// Every statement is a single UPDATE, so two replicas racing for the same
+// session are settled by the row lock.
+
+/** Claim the session for a turn. False when a live claim already holds it. */
+export async function claimSessionTurn(
+  sessionId: string,
+  token: string,
+  ttlSeconds: number,
+): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE sessions
+        SET turn_claim = $2,
+            turn_claim_expires_at = now() + make_interval(secs => $3)
+      WHERE id = $1
+        AND (turn_claim IS NULL OR turn_claim_expires_at <= now())`,
+    [sessionId, token, ttlSeconds],
+  )
+  return !!rowCount
+}
+
+/**
+ * Take the session's claim whoever holds it. For a turn this replica already
+ * owns: a session it has just created, or a turn it is recovering.
+ */
+export async function adoptSessionTurn(
+  sessionId: string,
+  token: string,
+  ttlSeconds: number,
+): Promise<void> {
+  await pool.query(
+    `UPDATE sessions
+        SET turn_claim = $2,
+            turn_claim_expires_at = now() + make_interval(secs => $3)
+      WHERE id = $1`,
+    [sessionId, token, ttlSeconds],
+  )
+}
+
+/** Extend a claim this holder still owns. False when it has been taken over. */
+export async function renewSessionTurn(
+  sessionId: string,
+  token: string,
+  ttlSeconds: number,
+): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE sessions
+        SET turn_claim_expires_at = now() + make_interval(secs => $3)
+      WHERE id = $1 AND turn_claim = $2`,
+    [sessionId, token, ttlSeconds],
+  )
+  return !!rowCount
+}
+
+/** Drop a claim this holder still owns. */
+export async function releaseSessionTurn(sessionId: string, token: string): Promise<void> {
+  await pool.query(
+    `UPDATE sessions
+        SET turn_claim = NULL, turn_claim_expires_at = NULL
+      WHERE id = $1 AND turn_claim = $2`,
+    [sessionId, token],
+  )
+}
+
 export async function resetAllSessionsIdle(workspaceId: string): Promise<void> {
   await pool.query(
     "UPDATE sessions SET chat_status = 'idle' WHERE workspace_id = $1 AND status = 'active' AND chat_status != 'idle'",

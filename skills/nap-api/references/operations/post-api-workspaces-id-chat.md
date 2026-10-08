@@ -68,6 +68,8 @@ ends and returns the aggregated object documented below. |
 running server-side. Returns the session id to poll for results. |
 | 400 | Invalid body |
 | 404 | Workspace not found |
+| 409 | Another turn is running in the session (`code: "session_busy"`).
+A session runs one turn at a time; send again once it has ended. |
 | 502 | Agent unavailable |
 | 503 | Workspace not running |
 

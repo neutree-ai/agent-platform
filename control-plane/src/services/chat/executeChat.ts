@@ -14,6 +14,7 @@ import { getWorkspace } from '../db/workspaces'
 import { pickReplicaForTurn } from '../replica-router'
 import { WorkspaceStartError, ensureWorkspaceRunning } from '../workspace-autostart'
 import { type ChatImage, buildAgentChatBody, buildUserMessageBlocks } from './request'
+import { adoptSessionTurn, claimSessionTurn } from './session-turn'
 import { TurnCapacityError, type TurnSlot, acquireTurn } from './turn-gate'
 
 interface ExecuteChatOpts {
@@ -73,6 +74,27 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   const sessionId = opts.sessionId
   let userMessageText: string | null = opts.message
 
+  // Reject cross-workspace session ids before we touch the agent. Without
+  // this a caller could drive messages belonging to another workspace's
+  // session, or create orphan rows with `session_id` pointing at a
+  // session that lives under a different workspace_id.
+  let boundReplica: number | undefined
+  if (sessionId) {
+    const session = await getSession(sessionId)
+    if (!session || session.workspace_id !== workspaceId) {
+      return jsonError('Session not found for this workspace', 400)
+    }
+    boundReplica = session.replica_ordinal ?? undefined
+  }
+
+  // One turn per session, held as a lease on the session row. A new session
+  // is claimed once `session.started` names it.
+  let claim = sessionId ? await claimSessionTurn(sessionId) : null
+  if (sessionId && !claim) {
+    return jsonError('Another turn is running in this session', 409, 'session_busy')
+  }
+  const releaseSession = () => claim?.release()
+
   // Admit the turn before doing any work. Auto-scaling workspaces are capped at
   // readyReplicas × target (queue / 503 over the cap); static workspaces are
   // only accounted, never blocked.
@@ -80,6 +102,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   try {
     slot = await acquireTurn(workspaceId)
   } catch (e) {
+    await releaseSession()
     if (e instanceof TurnCapacityError) {
       return jsonError('Workspace is busy, please retry shortly', 503)
     }
@@ -89,7 +112,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   // The slot must be released exactly once. On the streaming path the
   // interceptor takes ownership (onTurnEnd) and releases when the turn ends;
   // every other exit — an early return OR a thrown error during setup (a
-  // transient DB failure in getSession / ensureTokenForSession /
+  // transient DB failure in ensureTokenForSession /
   // transitionSessionStatus / addMessage would otherwise reach neither the
   // handoff nor an inline release, silently leaking a unit of capacity) —
   // funnels through this finally. `handedOff` is set true right before the
@@ -109,19 +132,6 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
       }
       console.error(`[chat] auto-start failed workspace=${workspaceId}:`, e)
       return jsonError('Failed to start workspace', 503)
-    }
-
-    // Reject cross-workspace session ids before we touch the agent. Without
-    // this a caller could drive messages belonging to another workspace's
-    // session, or create orphan rows with `session_id` pointing at a
-    // session that lives under a different workspace_id.
-    let boundReplica: number | undefined
-    if (sessionId) {
-      const session = await getSession(sessionId)
-      if (!session || session.workspace_id !== workspaceId) {
-        return jsonError('Session not found for this workspace', 400)
-      }
-      boundReplica = session.replica_ordinal ?? undefined
     }
 
     // For an auto-scaling workspace, pin this turn to a specific replica: keep
@@ -218,11 +228,10 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
       })
     }
     const taskIdForHook = opts.taskId
-    const onNewSession = taskIdForHook
-      ? async (newSid: string) => {
-          await addTeamworkSession(taskIdForHook, newSid, 'coordinator', null)
-        }
-      : undefined
+    const onNewSession = async (newSid: string) => {
+      claim ??= await adoptSessionTurn(newSid)
+      if (taskIdForHook) await addTeamworkSession(taskIdForHook, newSid, 'coordinator', null)
+    }
 
     const intercepted = createInterceptedSSEResponse(response, {
       workspaceId,
@@ -250,13 +259,17 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
       // the turn terminates (clean end, error, interrupt, or pod death), which is
       // the single point that also frees the accounting for the autoscaler.
       onTurnEnd: () => slot.release(),
+      onSessionSettled: releaseSession,
     })
     handedOff = true
     return intercepted
   } finally {
     // Released here for every non-handoff exit (early return or thrown error);
     // the streaming path sets handedOff and lets the interceptor own it.
-    if (!handedOff) slot.release()
+    if (!handedOff) {
+      slot.release()
+      await releaseSession()
+    }
   }
 }
 
@@ -311,8 +324,8 @@ export async function drainPendingMessage(
   }
 }
 
-function jsonError(error: string, status: number): Response {
-  return new Response(JSON.stringify({ error }), {
+function jsonError(error: string, status: number, code?: string): Response {
+  return new Response(JSON.stringify(code ? { error, code } : { error }), {
     status,
     headers: { 'Content-Type': 'application/json' },
   })

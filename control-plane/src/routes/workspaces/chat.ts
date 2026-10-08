@@ -106,6 +106,13 @@ const chatRoute = createRoute({
       description: 'Workspace not found',
       content: { 'application/json': { schema: ErrorSchema } },
     },
+    409: {
+      description: [
+        'Another turn is running in the session (`code: "session_busy"`).',
+        'A session runs one turn at a time; send again once it has ended.',
+      ].join('\n'),
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
     502: {
       description: 'Agent unavailable',
       content: { 'application/json': { schema: ErrorSchema } },

@@ -291,6 +291,7 @@ export function WorkspaceChatPanel({
   const error = useAgentSessionStore((s) => s.error)
   const pendingQuestion = useAgentSessionStore((s) => s.pendingQuestion)
   const pendingMessage = useAgentSessionStore((s) => s.pendingMessage)
+  const returnedDraft = useAgentSessionStore((s) => s.returnedDraft)
   const lastTurnStats = useAgentSessionStore((s) => s.lastTurnStats)
   const actions = useAgentSessionActions()
 
@@ -574,6 +575,17 @@ export function WorkspaceChatPanel({
       actions.clearPendingMessage()
     }
   }, [readonly, pendingMessage, isLoading, isSwitching, isDeleting, actions])
+
+  // A send the server refused comes back here: put it in the composer again,
+  // unless the user has already started typing something else.
+  useEffect(() => {
+    if (!returnedDraft) return
+    if (!input) setInput(returnedDraft.content)
+    if (returnedDraft.images.length > 0) {
+      setAttachedImages((current) => (current.length > 0 ? current : returnedDraft.images))
+    }
+    actions.clearReturnedDraft()
+  }, [returnedDraft, input, setInput, actions])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (shouldSubmitOnKey(e, chatSendKeyMode)) {

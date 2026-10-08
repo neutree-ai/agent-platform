@@ -43,6 +43,7 @@
     },
     "errors": {
       "cpReconnectFailed": "恢复工作空间连接失败",
+      "sessionBusy": "这个会话里有另一轮对话正在进行，你的消息没有发出。",
       "deleteFailed": "删除会话失败",
       "interruptFailed": "中断失败",
       "interruptNotReady": "当前还无法终止，对话正在准备中，仍在进行，请稍后再试",

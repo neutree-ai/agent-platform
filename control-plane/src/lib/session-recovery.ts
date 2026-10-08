@@ -1,4 +1,5 @@
 import { drainPendingMessage } from '../services/chat/executeChat'
+import { adoptSessionTurn } from '../services/chat/session-turn'
 import { getLastMessageWithBlocks } from '../services/db/messages'
 import { pool } from '../services/db/pool'
 import { transitionSessionStatus } from '../services/db/sessions'
@@ -109,12 +110,16 @@ export async function recoverOrphanedSessions() {
       console.log(
         `[Recovery] workspace=${workspaceId} session=${sessionId} reconnecting to agent stream`,
       )
+      // The turn is this replica's now: take its claim over from the one
+      // that was running it.
+      const claim = await adoptSessionTurn(sessionId)
       createInterceptedSSEResponse(response, {
         workspaceId,
         userMessageText: null,
         existingSessionId: sessionId,
         source: 'recovery',
         initialAssistant,
+        onSessionSettled: () => claim.release(),
       })
     } catch (e: any) {
       console.error(`[Recovery] workspace=${workspaceId} session=${sessionId} error:`, e.message)

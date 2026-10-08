@@ -43,6 +43,7 @@
     },
     "errors": {
       "cpReconnectFailed": "CP reconnect failed",
+      "sessionBusy": "Another turn is running in this session. Your message was not sent.",
       "deleteFailed": "Failed to delete session",
       "interruptFailed": "Failed to interrupt",
       "interruptNotReady": "Can't stop yet — the turn is still starting up. It's still running; try again in a moment.",
