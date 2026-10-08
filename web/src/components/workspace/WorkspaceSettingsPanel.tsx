@@ -832,7 +832,11 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
           patch.system_prompt = ''
         } else {
           if (draft.promptId !== config.prompt_id) patch.prompt_id = draft.promptId
-          if (draft.systemPrompt !== config.system_prompt) patch.system_prompt = draft.systemPrompt
+          // With a library prompt selected, the draft text is that prompt's
+          // content, held for display. Saving it as system_prompt would turn
+          // a prompt inherited from the template into a custom-text override.
+          if (draft.promptId === null && draft.systemPrompt !== config.system_prompt)
+            patch.system_prompt = draft.systemPrompt
         }
         if (revertedFields.has('mcp_config')) patch.mcp_config = '{}'
         else if (draft.mcpConfig !== config.mcp_config) patch.mcp_config = draft.mcpConfig
