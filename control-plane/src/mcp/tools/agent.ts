@@ -16,6 +16,7 @@ import {
 } from '../../lib/sse'
 import { truncateToolOutput } from '../../lib/truncate-tool-output'
 import { resolveAgentAddress } from '../../lib/workspace-address'
+import { adoptSessionTurn, claimSessionTurn } from '../../services/chat/session-turn'
 import {
   addMessage,
   getLastAssistantMessage,
@@ -403,6 +404,7 @@ function runSubAgentTurn(
   onSessionPersisted?: (sessionId: string) => Promise<void>,
   sessionToken?: string | null,
   callerWorkspaceId?: string | null,
+  onReplaced?: () => void,
 ): SubAgentHandle {
   // Shared state + queue coordinate the persist and broadcast plugins.
   // Broadcast reads `state.sessionId` (for re-keying) and `sessionEndedSeen`
@@ -426,6 +428,7 @@ function runSubAgentTurn(
     existingSessionId,
     queue,
   )
+  activeStream.onReplaced = onReplaced
 
   const streamStartedAt = Date.now()
   const tag = `call_agent target=${targetWorkspaceId}`
@@ -622,6 +625,16 @@ Examples:
           }
         }
 
+        // One turn per session: a session that is mid-turn cannot take
+        // another. A new sub-session is claimed once it has an id.
+        let claim = session_id ? await claimSessionTurn(session_id) : null
+        if (session_id && !claim) {
+          return textResult(
+            `Error: session_id "${session_id}" is running another turn. Wait for it to finish (get_agent_result) before continuing it.`,
+          )
+        }
+        const releaseSession = () => claim?.release()
+
         const address = resolveAgentAddress(target.id, { sessionId: session_id ?? null })
 
         // Mint or reuse a session_token scoped to the *sub-agent's* workspace.
@@ -632,17 +645,24 @@ Examples:
           ? await ensureTokenForSession(target.id, session_id)
           : await mintToken({ workspaceId: target.id })
 
-        const chatResp = await fetch(`${address}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: prompt,
-            ...(session_id ? { session_id } : {}),
-            session_token: subSessionToken,
-          }),
-        })
+        let chatResp: Response
+        try {
+          chatResp = await fetch(`${address}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: prompt,
+              ...(session_id ? { session_id } : {}),
+              session_token: subSessionToken,
+            }),
+          })
+        } catch (e) {
+          await releaseSession()
+          throw e
+        }
 
         if (!chatResp.ok) {
+          await releaseSession()
           return textResult(`Error: Agent "${slug}" returned status ${chatResp.status}`)
         }
 
@@ -652,15 +672,16 @@ Examples:
         // runSubAgentTurn's SerialQueue *after* createSession commits, so
         // the FK to sessions(id) is satisfied. parent_session_id stays
         // null for now (we don't carry caller session_id by design).
-        const onSessionPersisted = taskId
-          ? (sid: string) =>
-              addTeamworkSession(taskId, sid, 'member', null).catch((e) => {
-                console.error(
-                  `[call_agent] Failed to register member session task=${taskId} slug=${slug}:`,
-                  e,
-                )
-              })
-          : undefined
+        const onSessionPersisted = async (sid: string) => {
+          claim ??= await adoptSessionTurn(sid)
+          if (!taskId) return
+          await addTeamworkSession(taskId, sid, 'member', null).catch((e) => {
+            console.error(
+              `[call_agent] Failed to register member session task=${taskId} slug=${slug}:`,
+              e,
+            )
+          })
+        }
 
         const handle = runSubAgentTurn(
           chatResp,
@@ -671,7 +692,11 @@ Examples:
           onSessionPersisted,
           subSessionToken,
           callerWorkspace.id,
+          () => void releaseSession(),
         )
+        // The sub-agent's turn is over when its stream is, whichever way the
+        // caller waits for it.
+        void handle.resultPromise.catch(() => {}).finally(releaseSession)
 
         if (mode === 'background') {
           handle.resultPromise.catch((e) =>
