@@ -1,7 +1,7 @@
 // Browser-service HTTP client
 // Env: BROWSER_SERVICE_URL (default: http://nap-browser:3005)
 
-const BROWSER_SERVICE_URL = process.env.BROWSER_SERVICE_URL || 'http://nap-browser:3005'
+export const BROWSER_SERVICE_URL = process.env.BROWSER_SERVICE_URL || 'http://nap-browser:3005'
 
 interface BrowserSession {
   id: string
@@ -104,44 +104,4 @@ export async function deleteBrowser(token: string, id: string): Promise<{ succes
   return request<{ success: boolean }>(token, `/api/browsers/${id}`, {
     method: 'DELETE',
   })
-}
-
-export async function getCdpVersion(
-  token: string,
-  id: string,
-): Promise<{ webSocketDebuggerUrl?: string }> {
-  return request<{ webSocketDebuggerUrl?: string }>(token, `/cdp/${id}/json/version`)
-}
-
-interface BrowserFileInfo {
-  path: string
-  size?: number
-  modifiedAt?: string
-  createdAt?: string
-  mode?: number
-}
-
-export async function listFiles(
-  token: string,
-  id: string,
-  path: string,
-  pattern?: string,
-): Promise<BrowserFileInfo[]> {
-  const params = new URLSearchParams({ path })
-  if (pattern) params.set('pattern', pattern)
-  const result = await request<{ files: BrowserFileInfo[] }>(
-    token,
-    `/api/browsers/${id}/files?${params.toString()}`,
-  )
-  return result.files
-}
-
-/**
- * Build a browser-service URL that downloads a file using the given token via
- * the `?token=` fallback. Lets agents hand a clickable download link to the
- * end user without going through MCP for the bytes.
- */
-export function buildFileDownloadUrl(token: string, id: string, path: string): string {
-  const params = new URLSearchParams({ path, token })
-  return `${BROWSER_SERVICE_URL}/api/browsers/${id}/files/content?${params.toString()}`
 }
