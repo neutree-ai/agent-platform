@@ -9,6 +9,7 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process'
+import { readFileSync, readdirSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { Readable, Writable } from 'node:stream'
 import {
@@ -79,6 +80,14 @@ export interface AcpBridgeOptions {
    * codec if needed. Must not throw.
    */
   onExtNotification?: (method: string, params: Record<string, unknown>) => void
+  /**
+   * Set when the program runs its turns in a worker process of its own and
+   * keeps running after that worker dies — codex-acp drives a `codex
+   * app-server` child and, when it exits, only disposes the connection to it,
+   * leaving the prompt in flight unanswered. The bridge then watches for the
+   * worker while a prompt is in flight and fails the prompt once it is gone.
+   */
+  runsTurnsInWorkerProcess?: boolean
 }
 
 // ── Per-session handler ──
@@ -136,6 +145,50 @@ export class BridgeChildDiedError extends Error {
   }
 }
 
+/**
+ * Thrown when the agent program is still running but the worker process it
+ * runs turns in is gone, so the prompt in flight can never be answered.
+ */
+export class BridgeWorkerDiedError extends Error {
+  constructor() {
+    super('agent worker process exited unexpectedly')
+    this.name = 'BridgeWorkerDiedError'
+  }
+}
+
+/** How often a bridge with a prompt in flight looks for its worker process. */
+const WORKER_CHECK_MS = 10_000
+/** Consecutive checks that must find no worker before the prompt is failed. */
+const WORKER_MISSING_CHECKS = 2
+
+/**
+ * Whether `pid` has a live child process. Read from /proc; where that is not
+ * available (non-Linux) or not readable, the answer is true, so the caller
+ * never acts on a process table it could not see.
+ */
+export function hasChildProcess(pid: number, procDir = '/proc'): boolean {
+  let entries: string[]
+  try {
+    entries = readdirSync(procDir)
+  } catch {
+    return true
+  }
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue
+    let stat: string
+    try {
+      stat = readFileSync(`${procDir}/${entry}/stat`, 'utf-8')
+    } catch {
+      continue // exited between the listing and the read
+    }
+    // `pid (comm) state ppid …` — comm may itself contain spaces and parens,
+    // so the fields are read from after the last `)`.
+    const [state, ppid] = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+    if (Number(ppid) === pid && state !== 'Z') return true
+  }
+  return false
+}
+
 export class AcpBridge {
   private child: ChildProcess | null = null
   private connection: ClientSideConnection | null = null
@@ -145,6 +198,7 @@ export class AcpBridge {
   private pendingPromptRejects = new Map<string, (err: Error) => void>()
   private destroyed = false
   private codec: SessionIdCodec
+  private workerWatch: ReturnType<typeof setInterval> | null = null
 
   constructor(options: AcpBridgeOptions) {
     this.options = options
@@ -182,6 +236,7 @@ export class AcpBridge {
 
     this.child.on('exit', (code, signal) => {
       console.warn(`[acp-bridge] Process exited: code=${code} signal=${signal}`)
+      this.stopWorkerWatch()
       // Resolve MCP ready if the process exits before the handshake unblocks it.
       resolveReady()
       // Reject any in-flight prompt promises so the awaiting /chat handler
@@ -260,6 +315,41 @@ export class AcpBridge {
     // now that the handshake is up; MCP failures still surface through the
     // normal session handler.
     resolveReady()
+
+    if (this.options.runsTurnsInWorkerProcess) this.startWorkerWatch()
+  }
+
+  /**
+   * While a prompt is in flight, check that the program still has its worker
+   * process. Once it is gone the program can no longer answer the prompt, so
+   * fail it and kill the program: `isAlive()` then reports the bridge dead and
+   * the session's next turn starts on a fresh one.
+   */
+  private startWorkerWatch(): void {
+    let missing = 0
+    this.workerWatch = setInterval(() => {
+      const pid = this.child?.pid
+      if (pid === undefined || this.pendingPromptRejects.size === 0 || hasChildProcess(pid)) {
+        missing = 0
+        return
+      }
+      missing++
+      if (missing < WORKER_MISSING_CHECKS) return
+      console.warn(`[acp-bridge] Worker process gone with a prompt in flight, pid=${pid}`)
+      this.stopWorkerWatch()
+      const pending = [...this.pendingPromptRejects.values()]
+      this.pendingPromptRejects.clear()
+      this.child?.kill()
+      const err = new BridgeWorkerDiedError()
+      for (const reject of pending) reject(err)
+    }, WORKER_CHECK_MS)
+    this.workerWatch.unref()
+  }
+
+  private stopWorkerWatch(): void {
+    if (!this.workerWatch) return
+    clearInterval(this.workerWatch)
+    this.workerWatch = null
   }
 
   /**
@@ -405,6 +495,7 @@ export class AcpBridge {
    */
   destroy(): void {
     this.destroyed = true
+    this.stopWorkerWatch()
     // Reject any in-flight prompts before tearing down so the awaiting
     // /chat handler unblocks immediately instead of waiting for the child
     // exit signal.
