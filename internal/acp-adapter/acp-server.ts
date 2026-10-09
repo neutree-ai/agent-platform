@@ -87,16 +87,25 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   // in-flight session with no termination event, leaving the scheduler's SSE
   // fetch to idle out ~4m).
   const busyTurns = new Map<string, number>()
+  // The turn most recently started in each session, numbered across all
+  // sessions so a number names one turn for the life of the process.
+  const latestTurn = new Map<string, number>()
+  let turnCounter = 0
   function isBusy(sid: string): boolean {
     return (busyTurns.get(sid) ?? 0) > 0
   }
   function enterTurn(sid: string): void {
     busyTurns.set(sid, (busyTurns.get(sid) ?? 0) + 1)
+    latestTurn.set(sid, ++turnCounter)
   }
   function exitTurn(sid: string): void {
     const n = (busyTurns.get(sid) ?? 0) - 1
-    if (n > 0) busyTurns.set(sid, n)
-    else busyTurns.delete(sid)
+    if (n > 0) {
+      busyTurns.set(sid, n)
+    } else {
+      busyTurns.delete(sid)
+      latestTurn.delete(sid)
+    }
   }
   // Sessions whose bridge must be destroyed once all in-flight turns end, so
   // the next prompt re-spawns with the freshly reloaded env vars.
@@ -204,6 +213,23 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   }
 
   setInterval(evictIdleBridges, BRIDGE_EVICT_INTERVAL_MS).unref()
+
+  // An interrupt asks the agent to end the turn; an agent that cannot answer
+  // (its worker is gone, its connection is closed) never does. After the grace
+  // period the turn is ended from this side by destroying the bridge, which
+  // fails the prompt in flight; the session's next turn loads from its
+  // persisted state on a fresh bridge.
+  const INTERRUPT_GRACE_MS = Number(process.env.INTERRUPT_GRACE_MS) || 15_000
+  // Sessions whose turn in flight is being ended this way, so the /chat
+  // handler reports it as interrupted rather than failed.
+  const forcedInterrupts = new Set<string>()
+
+  function forceEndTurn(sessionId: string, turn: number, why: string) {
+    if (latestTurn.get(sessionId) !== turn) return
+    console.warn(`[agent] Interrupt ${why}, destroying bridge session=${sessionId}`)
+    forcedInterrupts.add(sessionId)
+    destroyBridge(sessionId)
+  }
 
   // Destroy idle bridges now; defer busy ones until their turn completes.
   function destroyIdleBridges() {
@@ -515,6 +541,7 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           // prompt once. A freshly loaded child that fails again means the
           // cause is upstream/content (not a stuck bridge), so we let it throw.
           if (!reusedBridge || turnProducedOutput) throw promptErr
+          if (forcedInterrupts.has(currentSessionId)) throw promptErr
           console.warn(
             `[agent] Reused bridge failed with no output, rebuilding session=${currentSessionId}: ${promptErr?.message ?? promptErr}`,
           )
@@ -554,26 +581,33 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         const stats = translator.buildStats(result)
         await sink.write('message', JSON.stringify(translator.sessionEnded(reason, stats)))
       } catch (err: any) {
-        // ACP agents (Codex/Claude) surface upstream errors as JSON-RPC
-        // -32603 with a generic "Internal error" message; the actionable
-        // cause (e.g. OpenAI content-policy reason, rate-limit detail) sits
-        // in err.data.message. Prefer that, append a short code tag if we
-        // have one (e.g. "cyber_policy"), otherwise fall back.
-        // ACP authRequired (-32000) arrives bare, without the provider's
-        // response, so name the likely fix instead of echoing it.
-        const cause = err.data?.message
-        const tag = err.data?.codex_error_info ?? err.data?.error_code
-        const msg =
-          err.code === ACP_AUTH_REQUIRED
-            ? 'The model provider rejected the credentials (authentication required). Check the API key configured for this provider.'
-            : cause
-              ? tag
-                ? `${cause} (${tag})`
-                : cause
-              : err.message || JSON.stringify(err)
-        console.error(`[agent] Chat error session=${currentSessionId}:`, msg)
-        await sink.write('message', JSON.stringify(translator.error(msg)))
-        await sink.write('message', JSON.stringify(translator.sessionEnded('error')))
+        if (currentSessionId && forcedInterrupts.delete(currentSessionId)) {
+          for (const evt of translator.finalize()) {
+            await sink.write('message', JSON.stringify(evt))
+          }
+          await sink.write('message', JSON.stringify(translator.sessionEnded('interrupted')))
+        } else {
+          // ACP agents (Codex/Claude) surface upstream errors as JSON-RPC
+          // -32603 with a generic "Internal error" message; the actionable
+          // cause (e.g. OpenAI content-policy reason, rate-limit detail) sits
+          // in err.data.message. Prefer that, append a short code tag if we
+          // have one (e.g. "cyber_policy"), otherwise fall back.
+          // ACP authRequired (-32000) arrives bare, without the provider's
+          // response, so name the likely fix instead of echoing it.
+          const cause = err.data?.message
+          const tag = err.data?.codex_error_info ?? err.data?.error_code
+          const msg =
+            err.code === ACP_AUTH_REQUIRED
+              ? 'The model provider rejected the credentials (authentication required). Check the API key configured for this provider.'
+              : cause
+                ? tag
+                  ? `${cause} (${tag})`
+                  : cause
+                : err.message || JSON.stringify(err)
+          console.error(`[agent] Chat error session=${currentSessionId}:`, msg)
+          await sink.write('message', JSON.stringify(translator.error(msg)))
+          await sink.write('message', JSON.stringify(translator.sessionEnded('error')))
+        }
       }
 
       if (currentSessionId) {
@@ -674,7 +708,17 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
     console.log(`[agent] Interrupt request session=${sessionId}`)
     const bridge = sessionBridges.get(sessionId)
     if (bridge) {
-      bridge.cancel(sessionId)
+      const turn = latestTurn.get(sessionId)
+      const cancelled = bridge.cancel(sessionId)
+      if (turn === undefined) {
+        cancelled.catch(() => {})
+      } else {
+        cancelled.catch((e) => forceEndTurn(sessionId, turn, `failed (${e?.message ?? e})`))
+        setTimeout(
+          () => forceEndTurn(sessionId, turn, `unanswered after ${INTERRUPT_GRACE_MS}ms`),
+          INTERRUPT_GRACE_MS,
+        ).unref()
+      }
       return c.json({ success: true, interrupted: true })
     }
     return c.json({ success: false, interrupted: false })

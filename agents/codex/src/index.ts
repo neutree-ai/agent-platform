@@ -95,6 +95,7 @@ const BRIDGE_OPTS = {
   args: [] as string[],
   cwd: WORKSPACE_DIR,
   env: { INITIAL_AGENT_MODE: 'agent-full-access' },
+  runsTurnsInWorkerProcess: true,
 }
 
 setBridgeFactory(async () => {
