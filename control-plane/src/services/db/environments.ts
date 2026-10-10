@@ -1,3 +1,4 @@
+import type { RuntimeMode } from '../../../../internal/types/runtime-mode'
 import { generateId, pool } from './pool'
 import type { Environment } from './types'
 
@@ -136,6 +137,8 @@ export interface WorkspaceObservation {
   workspace_id: string
   environment_id: string
   is_builtin: boolean
+  /** Workload shape; decides how a remote workspace's forward proxy addresses it. */
+  runtime_mode: RuntimeMode
   observed_phase: string | null
   /** Pod-template version of the running workload; null when none was reported. */
   observed_template_version: number | null
@@ -144,7 +147,8 @@ export interface WorkspaceObservation {
   /**
    * Ready replica ordinals the runner reported; null for a workspace that
    * reports no set. Drives the per-replica forward proxies of a remote
-   * auto-scaling workspace.
+   * auto-scaling workspace; a static one reports `[0]` but is addressed by its
+   * Service.
    */
   ready_replica_ids: number[] | null
   /** Current stored status, to compare the projection against. */
@@ -169,7 +173,7 @@ export async function listWorkspaceObservations(
   thresholdSec: number,
 ): Promise<WorkspaceObservation[]> {
   const { rows } = await pool.query(
-    `SELECT p.workspace_id, p.environment_id, e.is_builtin,
+    `SELECT p.workspace_id, p.environment_id, e.is_builtin, p.runtime_mode,
             p.observed_phase, p.observed_template_version,
             ${ENV_OFFLINE_SQL} AS env_offline,
             p.endpoint->'readyReplicaIds' AS ready_replica_ids,

@@ -35,6 +35,7 @@ function observation(over: Partial<Parameters<typeof obs.mockResolvedValue>[0][n
     workspace_id: 'ws1',
     environment_id: 'builtin',
     is_builtin: true,
+    runtime_mode: 'static' as const,
     observed_phase: 'running',
     observed_template_version: null,
     env_offline: false,
@@ -157,9 +158,14 @@ describe('template-version cache', () => {
 })
 
 describe('remote forward proxies', () => {
-  it('keeps one proxy per ready replica when a replica set is reported', async () => {
+  it('keeps one proxy per ready replica when an auto-scaling workspace reports a set', async () => {
     obs.mockResolvedValue([
-      observation({ is_builtin: false, environment_id: 'env1', ready_replica_ids: [0, 2] }),
+      observation({
+        is_builtin: false,
+        environment_id: 'env1',
+        runtime_mode: 'auto-scaling',
+        ready_replica_ids: [0, 2],
+      }),
     ])
 
     await runEnvProjection(THRESHOLD)
@@ -168,9 +174,32 @@ describe('remote forward proxies', () => {
     expect(ensureRemoteProxy).not.toHaveBeenCalled()
   })
 
-  it('keeps the single ordinal-less proxy when no replica set is reported', async () => {
+  it('keeps the single ordinal-less proxy when an auto-scaling workspace reports no set', async () => {
     obs.mockResolvedValue([
-      observation({ is_builtin: false, environment_id: 'env1', ready_replica_ids: null }),
+      observation({
+        is_builtin: false,
+        environment_id: 'env1',
+        runtime_mode: 'auto-scaling',
+        ready_replica_ids: null,
+      }),
+    ])
+
+    await runEnvProjection(THRESHOLD)
+
+    expect(ensureRemoteProxy).toHaveBeenCalledWith('ws1', 'env1')
+    expect(syncReplicaProxies).not.toHaveBeenCalled()
+  })
+
+  // A static workload reports `[0]` once running, but has a ClusterIP Service and
+  // no headless one: per-ordinal addressing would dial a pod DNS that doesn't exist.
+  it('addresses a static workspace by its Service even when it reports [0]', async () => {
+    obs.mockResolvedValue([
+      observation({
+        is_builtin: false,
+        environment_id: 'env1',
+        runtime_mode: 'static',
+        ready_replica_ids: [0],
+      }),
     ])
 
     await runEnvProjection(THRESHOLD)

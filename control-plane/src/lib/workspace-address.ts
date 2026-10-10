@@ -35,28 +35,32 @@ import { getRemoteProxyPort } from './remote-proxy'
  *
  * A workspace on a remote (BYOI) environment is reached through that
  * environment's tunnel instead, and that lookup comes first. cp keeps localhost
- * forward proxies per reachable remote workspace (lib/remote-proxy) — one per
- * replica, carrying the ordinal in the tunnel meta so the runner dials the right
- * pod. It stays a synchronous O(1) map lookup that built-in workspaces always
- * miss. `replicaId` is threaded through so a session-bound turn reaches its own
- * replica; if that replica's proxy isn't up yet, the lookup misses and we fall
- * through, which fails fast rather than mis-routing the turn elsewhere.
+ * forward proxies per reachable remote workspace (lib/remote-proxy): a static
+ * one has a single proxy to its Service, so the replica id is ignored there as
+ * well; an auto-scaling one has one per replica, carrying the ordinal in the
+ * tunnel meta so the runner dials the right pod. It stays a synchronous O(1) map
+ * lookup that built-in workspaces always miss. `replicaId` is threaded through
+ * so a session-bound turn reaches its own replica; if that replica's proxy isn't
+ * up yet, the lookup misses and we fall through, which fails fast rather than
+ * mis-routing the turn elsewhere.
  */
 export function getWorkspaceAddress(workspaceId: string, replicaId?: number): string {
-  const remotePort = getRemoteProxyPort(workspaceId, replicaId)
-  if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
-
   const mode = runtimeModeOf(workspaceId)
   switch (mode) {
     case 'auto-scaling': {
+      const remotePort = getRemoteProxyPort(workspaceId, replicaId)
+      if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
       const id = replicaId ?? anyReadyReplica(workspaceId)
       return id === undefined
         ? builtinHeadlessAddress(defaultCfg, workspaceId)
         : builtinReplicaAddress(defaultCfg, workspaceId, id)
     }
     case 'static':
-    case undefined:
+    case undefined: {
+      const remotePort = getRemoteProxyPort(workspaceId)
+      if (remotePort !== undefined) return `http://127.0.0.1:${remotePort}`
       return builtinReplicaAddress(defaultCfg, workspaceId)
+    }
     default:
       return assertNever(mode)
   }

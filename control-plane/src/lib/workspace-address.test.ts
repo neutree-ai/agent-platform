@@ -128,6 +128,7 @@ describe('resolveAgentAddress', () => {
   })
 
   it('routes a replica-bound remote session to that replica’s proxy', () => {
+    runtimeModeOfMock.mockReturnValue('auto-scaling')
     // proxy exists only for replica 2 → a turn bound to 2 reaches it, others miss
     getRemoteProxyPortMock.mockImplementation((_ws, id) => (id === 2 ? 41250 : undefined))
 
@@ -135,6 +136,18 @@ describe('resolveAgentAddress', () => {
       'http://127.0.0.1:41250',
     )
     expect(getRemoteProxyPortMock).toHaveBeenCalledWith('ws1', 2)
+  })
+
+  // A static workspace is in the ready set as replica 0, so its turns and reloads
+  // carry replicaId 0 — but a remote one has only the ordinal-less Service proxy.
+  it('routes a replica-bound remote static session to its Service proxy', () => {
+    runtimeModeOfMock.mockReturnValue('static')
+    getRemoteProxyPortMock.mockImplementation((_ws, id) => (id === undefined ? 41234 : undefined))
+
+    expect(resolveAgentAddress('ws1', { sessionId: 'sess-1', replicaId: 0 })).toBe(
+      'http://127.0.0.1:41234',
+    )
+    expect(getRemoteProxyPortMock).toHaveBeenCalledWith('ws1')
   })
 })
 
