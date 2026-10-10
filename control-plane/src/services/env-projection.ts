@@ -1,3 +1,4 @@
+import { assertNever } from '../../../internal/types/runtime-mode'
 import { dropRemoteProxy, ensureRemoteProxy, syncReplicaProxies } from '../lib/remote-proxy'
 import { type WorkspaceStatus, applyStatusChange } from '../lib/workspace-status'
 import {
@@ -46,9 +47,11 @@ function mapObservedToStatus(phase: string | null, isBuiltin: boolean): Workspac
 /**
  * Forward proxy lifecycle for a remote workspace: a reachable, running one gets
  * a localhost proxy so cp's fetch sites can reach it through the tunnel;
- * anything else has none. A workspace reporting a ready-replica set gets one
- * proxy per ready ordinal, one reporting none gets the single ordinal-less
- * proxy. Built-in workspaces are reached over cluster DNS and never take part.
+ * anything else has none. A static workspace gets the single ordinal-less proxy
+ * to its Service — its reported ready set is always `[0]` and has no per-pod
+ * DNS behind it. An auto-scaling workspace reporting a ready-replica set gets
+ * one proxy per ready ordinal, one reporting none gets the ordinal-less proxy.
+ * Built-in workspaces are reached over cluster DNS and never take part.
  */
 async function reconcileProxy(o: WorkspaceObservation, status: WorkspaceStatus): Promise<void> {
   if (o.is_builtin) return
@@ -56,10 +59,20 @@ async function reconcileProxy(o: WorkspaceObservation, status: WorkspaceStatus):
     dropRemoteProxy(o.workspace_id)
     return
   }
-  if (o.ready_replica_ids && o.ready_replica_ids.length > 0) {
-    await syncReplicaProxies(o.workspace_id, o.environment_id, o.ready_replica_ids)
-  } else {
-    await ensureRemoteProxy(o.workspace_id, o.environment_id)
+  const mode = o.runtime_mode
+  switch (mode) {
+    case 'static':
+      await ensureRemoteProxy(o.workspace_id, o.environment_id)
+      return
+    case 'auto-scaling':
+      if (o.ready_replica_ids && o.ready_replica_ids.length > 0) {
+        await syncReplicaProxies(o.workspace_id, o.environment_id, o.ready_replica_ids)
+      } else {
+        await ensureRemoteProxy(o.workspace_id, o.environment_id)
+      }
+      return
+    default:
+      assertNever(mode)
   }
 }
 
