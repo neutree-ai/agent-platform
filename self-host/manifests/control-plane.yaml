@@ -111,6 +111,22 @@ spec:
               value: "http://${APP_PREFIX}-browser:3005"
             - name: BROWSER_PUBLIC_URL
               value: "${BROWSER_PUBLIC_URL}"
+            # Where agents' browsers come from. Empty means the browser
+            # service above; a hosted backend reads its key below.
+            - name: BROWSER_BACKEND
+              value: "${BROWSER_BACKEND}"
+            - name: KERNEL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_PREFIX}-cp-secret
+                  key: KERNEL_API_KEY
+                  optional: true
+            - name: BROWSER_USE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_PREFIX}-cp-secret
+                  key: BROWSER_USE_API_KEY
+                  optional: true
             - name: SANDBOX_SERVICE_URL
               value: "http://${APP_PREFIX}-sandbox:3006"
             - name: SANDBOX_PUBLIC_URL

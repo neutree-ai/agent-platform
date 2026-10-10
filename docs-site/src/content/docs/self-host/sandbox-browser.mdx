@@ -75,6 +75,24 @@ BROWSER_PUBLIC_URL=https://browsers.example.com
 
 The override feeds **both** the service's own callback address and the registered `redirect_uri`, keeping them in sync. Leave it blank to keep the original NodePort behavior, which doesn't affect existing deployments. The address has no trailing slash.
 
+## Optional: hosted browser backend
+
+By default agents get their browsers from the Agent Browser service this page installs. To get them from a hosted vendor instead, set the backend and that vendor's key:
+
+```bash
+BROWSER_BACKEND=kernel     # or browser-use
+KERNEL_API_KEY=            # BROWSER_USE_API_KEY for browser-use
+```
+
+| Backend | Vendor | Key |
+| --- | --- | --- |
+| `kernel` | [Kernel](https://www.kernel.sh) | `KERNEL_API_KEY` |
+| `browser-use` | [Browser Use](https://browser-use.com) | `BROWSER_USE_API_KEY` |
+
+The setting applies to the whole platform: every workspace uses the same backend and the same key, and each workspace only sees the browsers it created. The cluster needs outbound access to the vendor.
+
+With a hosted backend, agents no longer use the Agent Browser service, so `BROWSER_ENABLED` can stay `false`. The workspace browser panel still talks to that service and does not show browsers created on a hosted backend; users open the live view from the link the agent gives them.
+
 ## Debugging
 
 - Login redirect reports `400 invalid_client` — the matching row is missing in `oauth_clients`. Confirm the seed Job ran and succeeded: `kubectl -n <ns> logs job/nap-seed-oauth-clients`; the log prints `registered "sandbox-service" → ...`. Re-run manually: `install.sh --seed-only`.

@@ -203,6 +203,12 @@ fi
 export TURN_AUTH_SECRET="${TURN_AUTH_SECRET:-}"
 export COTURN_NODE_SELECTOR="${COTURN_NODE_SELECTOR:-}"
 
+# Hosted browser backend: where the browsers agents ask for come from. Blank
+# keeps them on the browser service this installer deploys.
+export BROWSER_BACKEND="${BROWSER_BACKEND:-}"
+export KERNEL_API_KEY="${KERNEL_API_KEY:-}"
+export BROWSER_USE_API_KEY="${BROWSER_USE_API_KEY:-}"
+
 # --- Service public URLs + OAuth redirect URIs ---------------------------
 # Every URL a browser (or an OAuth callback) has to reach from outside the
 # cluster is resolved here, once. Each defaults to the NodePort form the
@@ -318,6 +324,21 @@ check_app_prefix() {
   fi
 }
 
+# control-plane refuses to start on a backend it does not know or a backend
+# without its key; catch both here, before anything is applied.
+check_browser_backend() {
+  case "$BROWSER_BACKEND" in
+    ""|nap) ;;
+    kernel)
+      [ -n "$KERNEL_API_KEY" ] || die "BROWSER_BACKEND=kernel needs KERNEL_API_KEY"
+      ;;
+    browser-use)
+      [ -n "$BROWSER_USE_API_KEY" ] || die "BROWSER_BACKEND=browser-use needs BROWSER_USE_API_KEY"
+      ;;
+    *) die "BROWSER_BACKEND=${BROWSER_BACKEND} is not supported — use nap, kernel or browser-use" ;;
+  esac
+}
+
 # --- Render templates ------------------------------------------------------
 
 # Percent-encode a string for the userinfo of a connection URI (RFC 3986
@@ -367,6 +388,7 @@ render_manifests() {
   VARS+='${LDAP_SEARCH_FILTER}${LDAP_ATTR_USERNAME}${LDAP_ATTR_NAME}${LDAP_ATTR_EMAIL}'
   VARS+='${ADMIN_USERNAME}${ADMIN_PASSWORD}${ADMIN_DISPLAY_NAME}'
   VARS+='${BROWSER_NODE_PORT}${BROWSER_JWT_SECRET}'
+  VARS+='${BROWSER_BACKEND}${KERNEL_API_KEY}${BROWSER_USE_API_KEY}'
   VARS+='${WEB_PUBLIC_URL}${FILES_PUBLIC_URL}${BROWSER_PUBLIC_URL}${SANDBOX_PUBLIC_URL}'
   VARS+='${SANDBOX_NODE_PORT}${SANDBOX_JWT_SECRET}${SANDBOX_SERVICE_KEY}${SANDBOX_DOMAIN}${OPENSANDBOX_URL}'
   VARS+='${SANDBOX_SERVICE_URL_RESOLVED}${BROWSER_SERVICE_URL_RESOLVED}'
@@ -484,6 +506,9 @@ attach_pull_secret_to_cnpg() {
 apply_coturn() {
   if [ "$BROWSER_ENABLED" != "true" ]; then
     log "BROWSER_ENABLED=false — skipping coturn (browser-only)."
+    # Remove a coturn left over from a previous install/run.
+    kubectl -n "${NAMESPACE}" delete deployment/coturn service/coturn \
+      --ignore-not-found=true
     return 0
   fi
   if [ "$COTURN_ENABLED" != "true" ]; then
@@ -852,7 +877,7 @@ apply_manifests() {
     kapply -f "$RENDERED_DIR/sandbox-image-warmer.yaml"
   else
     log "SANDBOX_ENABLED=false — skipping sandbox-service."
-    kubectl -n "${NAMESPACE}" delete deployment/nap-sandbox service/nap-sandbox \
+    kubectl -n "${NAMESPACE}" delete "deployment/${APP_PREFIX}-sandbox" "service/${APP_PREFIX}-sandbox" \
       --ignore-not-found=true
     kubectl -n "${NAMESPACE}" delete daemonset/sandbox-image-warmer \
       --ignore-not-found=true
@@ -862,7 +887,7 @@ apply_manifests() {
   else
     log "BROWSER_ENABLED=false — skipping browser-service."
     # Remove a browser-service left over from a previous install/run.
-    kubectl -n "${NAMESPACE}" delete deployment/nap-browser service/nap-browser \
+    kubectl -n "${NAMESPACE}" delete "deployment/${APP_PREFIX}-browser" "service/${APP_PREFIX}-browser" \
       --ignore-not-found=true
   fi
   ensure_recreate_strategy afs-controller
@@ -1011,6 +1036,7 @@ MODE="${1:-full}"
 
 check_prereqs
 check_app_prefix
+check_browser_backend
 
 if [ "$DEPLOY_PROFILE" = "single-node" ]; then
   log "DEPLOY_PROFILE=single-node — 1-node k3s. Connected: pulls from the public"

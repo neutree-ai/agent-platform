@@ -75,6 +75,24 @@ BROWSER_PUBLIC_URL=https://browsers.example.com
 
 该覆盖**同时**作用于服务自身的回调地址和注册的 `redirect_uri`，让两者保持同步。留空则保持原有的 NodePort 行为，不影响既有部署。地址末尾不带斜杠。
 
+## 可选：托管浏览器后端
+
+默认情况下，agent 的浏览器来自本页安装的 Agent Browser 服务。要改用托管厂商的浏览器，设置后端和该厂商的 key：
+
+```bash
+BROWSER_BACKEND=kernel     # 或 browser-use
+KERNEL_API_KEY=            # browser-use 对应 BROWSER_USE_API_KEY
+```
+
+| 后端 | 厂商 | Key |
+| --- | --- | --- |
+| `kernel` | [Kernel](https://www.kernel.sh) | `KERNEL_API_KEY` |
+| `browser-use` | [Browser Use](https://browser-use.com) | `BROWSER_USE_API_KEY` |
+
+该设置对整个平台生效：所有 workspace 共用同一个后端和同一个 key，每个 workspace 只能看到自己创建的浏览器。集群需要能访问厂商的公网服务。
+
+使用托管后端后，agent 不再使用 Agent Browser 服务，`BROWSER_ENABLED` 可以保持 `false`。workspace 的浏览器面板仍然连接 Agent Browser 服务，不会显示托管后端上的浏览器；用户通过 agent 给出的链接打开实时画面。
+
 ## 排障
 
 - 登录跳转报 `400 invalid_client` —— `oauth_clients` 中缺少匹配行。确认 seed Job 已运行且成功：`kubectl -n <ns> logs job/nap-seed-oauth-clients`；日志会打印 `registered "sandbox-service" → ...`。手动重跑：`install.sh --seed-only`。
