@@ -1,5 +1,6 @@
 import { type TurnPlugin, runTurn } from '../../../internal/sse-consumer/src'
 import type { TurnStats, UniversalEvent } from '../../../internal/types/events'
+import { countOpenAgentCalls } from '../services/db/agent-calls'
 import {
   addMessage,
   insertEvent,
@@ -615,14 +616,25 @@ export function createInterceptedSSEResponse(
       // left in place for the user to decide. Skip while CP is shutting
       // down — startup recovery on the next pod owns the drain instead.
       const sid = state.sessionId
-      if (!sid || state.endReason !== 'completed' || isDraining()) return
+      if (!sid || isDraining()) return
+      if (state.endReason === 'completed') {
+        try {
+          // Dynamic import: executeChat statically imports this module, so a
+          // static import here would form an initialization cycle.
+          const { drainPendingMessage } = await import('../services/chat/executeChat')
+          await drainPendingMessage(workspaceId, sid)
+        } catch (e) {
+          console.error(`[SSE] pending drain failed ${tag} session=${sid}:`, e)
+        }
+      }
+      // However the turn ended, record it on the agent call that ran it and
+      // post any call results that were waiting for this session to be free.
+      // After the drain, so a follow-up the user queued goes first.
       try {
-        // Dynamic import: executeChat statically imports this module, so a
-        // static import here would form an initialization cycle.
-        const { drainPendingMessage } = await import('../services/chat/executeChat')
-        await drainPendingMessage(workspaceId, sid)
+        const { settleSessionTurn } = await agentCallDelivery()
+        await settleSessionTurn(sid, { reason: state.endReason })
       } catch (e) {
-        console.error(`[SSE] pending drain failed ${tag} session=${sid}:`, e)
+        console.error(`[SSE] agent call settle failed ${tag} session=${sid}:`, e)
       }
     })
 
@@ -634,6 +646,15 @@ export function createInterceptedSSEResponse(
       Connection: 'keep-alive',
     },
   })
+}
+
+/**
+ * Dynamic import: agent-call-delivery reaches executeChat, which statically
+ * imports this module, so a static import here would form an initialization
+ * cycle.
+ */
+function agentCallDelivery() {
+  return import('../services/chat/agent-call-delivery')
 }
 
 // ── Shared pieces for main-turn plugins ──
@@ -1038,10 +1059,17 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
             const muted = await getWorkspaceConfig(workspaceId)
               .then((cfg) => cfg?.muted === true)
               .catch(() => false)
-            await transitionSessionStatus(sessionId, muted ? 'idle' : 'human')
+            // A session still waiting on agent calls it made has not given its
+            // answer yet: their results start a further turn. It settles the
+            // same quiet way until a turn ends with nothing outstanding.
+            const waiting = await countOpenAgentCalls(sessionId)
+              .then((n) => n > 0)
+              .catch(() => false)
+            const quiet = muted || waiting
+            await transitionSessionStatus(sessionId, quiet ? 'idle' : 'human')
             console.log(`[SSE] Stored assistant message ${tag} session=${sessionId}`)
             await ctx.onSessionSettled?.()
-            if (muted) return
+            if (quiet) return
             // Summarize the agent's final answer, not the head of the whole
             // turn. 500 chars keeps the WeChat Work markdown message (2048
             // bytes) under budget for CJK text plus the trailing link.
@@ -1184,6 +1212,8 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
           queue.run(async () => {
             if (state.sessionId) {
               await transitionSessionStatus(state.sessionId, 'human')
+              const { noteSessionInputRequested } = await agentCallDelivery()
+              await noteSessionInputRequested(state.sessionId)
             }
           }, logError('transition to human (question)'))
           break

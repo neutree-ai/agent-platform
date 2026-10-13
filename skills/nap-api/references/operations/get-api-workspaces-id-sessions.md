@@ -47,6 +47,7 @@
 | `last_turn_stats` | object,null | Yes |  |
 | `starred_at` | string,null | Yes |  |
 | `caller_agent` | object,null | Yes |  |
+| `pending_agent_calls` | integer | Yes | Calls this session's agent made to other agents (call_agent) whose results have not come back yet. The session is done only when chat_status is not "agent" AND this is 0. |
 
 ## Security
 

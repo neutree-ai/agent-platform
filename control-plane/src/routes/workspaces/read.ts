@@ -37,6 +37,7 @@ function toApiSession(s: SessionWithPreview) {
     caller_agent: s.caller_agent_name
       ? { name: s.caller_agent_name, slug: s.caller_agent_slug }
       : null,
+    pending_agent_calls: s.pending_agent_calls,
   }
 }
 

@@ -1,3 +1,4 @@
+import { openAgentCallCountSql } from './agent-calls'
 import { pool } from './pool'
 import type {
   PaginatedSessions,
@@ -118,7 +119,8 @@ export async function listSessions(
          COALESCE(mc.cnt, 0)::int AS message_count,
          COALESCE(fm.content, '') AS preview,
          cw.name AS caller_agent_name,
-         cw.slug AS caller_agent_slug
+         cw.slug AS caller_agent_slug,
+         ${openAgentCallCountSql('s.id')} AS pending_agent_calls
        FROM sessions s
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::int AS cnt FROM messages m WHERE m.session_id = s.id
@@ -196,7 +198,8 @@ export async function listSessionsByCaller(
        COALESCE(mc.cnt, 0)::int AS message_count,
        COALESCE(fm.content, '') AS preview,
        cw.name AS caller_agent_name,
-       cw.slug AS caller_agent_slug
+       cw.slug AS caller_agent_slug,
+       ${openAgentCallCountSql('s.id')} AS pending_agent_calls
      FROM sessions s
      LEFT JOIN LATERAL (
        SELECT COUNT(*)::int AS cnt FROM messages m WHERE m.session_id = s.id
@@ -410,6 +413,16 @@ export async function releaseSessionTurn(sessionId: string, token: string): Prom
       WHERE id = $1 AND turn_claim = $2`,
     [sessionId, token],
   )
+}
+
+/** Whether a turn is running in the session right now, per its claim. */
+export async function sessionHasLiveTurn(sessionId: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM sessions
+      WHERE id = $1 AND turn_claim IS NOT NULL AND turn_claim_expires_at > now()`,
+    [sessionId],
+  )
+  return !!rowCount
 }
 
 export async function resetAllSessionsIdle(workspaceId: string): Promise<void> {

@@ -31,15 +31,18 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-type SessionStatus = 'running' | 'needs-you' | 'error' | 'idle'
+type SessionStatus = 'running' | 'waiting' | 'needs-you' | 'error' | 'idle'
 
-function classifyStatus(chatStatus: string): SessionStatus {
+function classifyStatus(chatStatus: string, pendingAgentCalls: number): SessionStatus {
   // chat_status from cp is one of: 'agent' (agent running), 'human' (waiting
   // for user), 'idle'. Error states are surfaced via other channels for now.
   const s = chatStatus.toLowerCase()
   if (s === 'human') return 'needs-you'
   if (s === 'agent') return 'running'
   if (s.includes('error') || s.includes('fail')) return 'error'
+  // No turn is running, but the agent is waiting on agents it called: their
+  // results start its next turn.
+  if (pendingAgentCalls > 0) return 'waiting'
   return 'idle'
 }
 
@@ -88,7 +91,7 @@ function SessionRow({
   onToggleStar,
 }: SessionRowProps) {
   const { t, i18n } = useTranslation()
-  const status = classifyStatus(session.chat_status)
+  const status = classifyStatus(session.chat_status, session.pending_agent_calls)
   const starred = !!session.starred_at
   const { Icon: SourceIcon } = sourceVisual(session.source)
   const sourceText = sourceLabel(session.source, t)
@@ -187,6 +190,18 @@ function SessionRow({
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
         </span>
+      )
+    }
+    if (status === 'waiting') {
+      const label = t('components.sessions.status.waiting', {
+        count: session.pending_agent_calls,
+      })
+      return (
+        <span
+          className="inline-flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-info"
+          aria-label={label}
+          title={label}
+        />
       )
     }
     if (status === 'needs-you') {

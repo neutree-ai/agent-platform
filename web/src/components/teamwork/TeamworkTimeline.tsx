@@ -4,6 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { ApiTeamworkRosterCandidate } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
 import type { ChatMessage, ToolCall } from '@/stores/agent-session-store'
+import { parseAgentCallDelivery } from '@neutree-ai/types'
 import {
   AlertCircle,
   Check,
@@ -126,16 +127,55 @@ function peelMcpEnvelope(result: unknown): string | null {
 interface ParsedDispatchResult {
   sessionId: string | null
   text: string | null
+  /** The call outlived its tool call; its reply arrives later. */
+  running: boolean
 }
 
 function parseCallAgentResult(result: unknown): ParsedDispatchResult {
   const text = peelMcpEnvelope(result)
-  if (text == null) return { sessionId: null, text: null }
+  if (text == null) return { sessionId: null, text: null, running: false }
   try {
-    const parsed = JSON.parse(text) as { session_id?: string; text?: string }
-    return { sessionId: parsed?.session_id ?? null, text: parsed?.text ?? null }
+    const parsed = JSON.parse(text) as { session_id?: string; text?: string; status?: string }
+    return {
+      sessionId: parsed?.session_id ?? null,
+      text: parsed?.text ?? null,
+      running: parsed?.status === 'running' || parsed?.status === 'started',
+    }
   } catch {
-    return { sessionId: null, text }
+    return { sessionId: null, text, running: false }
+  }
+}
+
+/** What a later tool result or delivery says about a call still shown as running. */
+interface LateResult {
+  status: DispatchStatus
+  text: string | null
+}
+
+/**
+ * Read a get_agent_result tool result: JSON `{ status, text?, error? }`. A
+ * result that is not that shape is taken as the reply itself.
+ */
+function parseAgentResult(tool: ToolCall): LateResult | null {
+  const raw = peelMcpEnvelope(tool.result)
+  if (!raw) return tool.isError ? { status: 'error', text: null } : null
+  if (tool.isError) return { status: 'error', text: raw }
+  let parsed: { status?: string; text?: string; error?: string } | null = null
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    parsed = null
+  }
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.status !== 'string') {
+    return { status: 'done', text: raw }
+  }
+  switch (parsed.status) {
+    case 'ended':
+      return { status: 'done', text: parsed.text ?? null }
+    case 'failed':
+      return { status: 'error', text: parsed.error ?? parsed.text ?? null }
+    default:
+      return null
   }
 }
 
@@ -167,12 +207,39 @@ function deriveOrchestrationModel(
   const laneLabels = new Map<string, string>([['coord', coordinatorName]])
   let col = 0
 
-  // For background dispatches, coord later polls get_agent_result to fetch
-  // the real reply. Track each response event by its session_id so the
-  // backfill can hydrate text + flip status from running → done.
+  // A background dispatch's real reply comes later: delivered to the coord
+  // session as a message, or fetched by the coord with get_agent_result. Track
+  // each response event by its session_id so the backfill can hydrate text +
+  // flip status from running → done.
   const responseBySessionId = new Map<string, TimelineEvent>()
 
+  const applyLateResult = (sessionId: string, late: LateResult) => {
+    const resp = responseBySessionId.get(sessionId)
+    if (!resp || resp.kind.kind !== 'response') return
+    resp.kind.status = late.status
+    if (late.text) resp.kind.text = late.text
+  }
+
   for (const m of messages) {
+    // Results the platform delivered to the coordinator: not something the
+    // user said, but the replies to earlier dispatches.
+    const delivery = m.role === 'user' ? parseAgentCallDelivery(m.content ?? '') : null
+    if (delivery) {
+      for (const entry of delivery) {
+        switch (entry.status) {
+          case 'ended':
+            applyLateResult(entry.sessionId, { status: 'done', text: entry.text })
+            break
+          case 'failed':
+            applyLateResult(entry.sessionId, { status: 'error', text: entry.error ?? entry.text })
+            break
+          case 'needs_input':
+            break
+        }
+      }
+      continue
+    }
+
     if (m.role === 'user') {
       events.push({
         id: `user:${m.id}`,
@@ -189,18 +256,8 @@ function deriveOrchestrationModel(
       if (!CALL_AGENT_RE.test(tool.name)) {
         if (GET_AGENT_RESULT_RE.test(tool.name)) {
           const sid = extractSessionIdArg(tool)
-          if (sid) {
-            const resp = responseBySessionId.get(sid)
-            if (resp && resp.kind.kind === 'response') {
-              const resultText = peelMcpEnvelope(tool.result)
-              if (resultText) {
-                resp.kind.text = resultText
-                resp.kind.status = tool.isError ? 'error' : 'done'
-              } else if (tool.isError) {
-                resp.kind.status = 'error'
-              }
-            }
-          }
+          const late = parseAgentResult(tool)
+          if (sid && late) applyLateResult(sid, late)
         }
         continue
       }
@@ -217,11 +274,13 @@ function deriveOrchestrationModel(
         : tool.resultAt != null || tool.completedAt != null
           ? 'done'
           : 'running'
-      // For background, call_agent returns synchronously with {status:'started'}
-      // and no text — the agent is still running. The real reply lands later
-      // via a get_agent_result tool call and is backfilled above.
+      // A call that outlives its tool call (background, or a foreground call
+      // that took long) returns with no text — the agent is still running. The
+      // real reply lands later, delivered to the session or fetched with
+      // get_agent_result, and is backfilled above.
+      const stillRunning = parsed.running || (args.mode === 'background' && !parsed.text)
       const responseStatus: DispatchStatus =
-        args.mode === 'background' && !parsed.text && !tool.isError ? 'running' : dispatchStatus
+        stillRunning && !tool.isError ? 'running' : dispatchStatus
 
       if (!laneLabels.has(targetKey)) {
         laneOrder.push(targetKey)

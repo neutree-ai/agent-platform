@@ -40,25 +40,31 @@ SID=$(curl -s -X POST "$BASE/api/workspaces/$WS/chat" "${auth[@]}" \
 [ -n "$SID" ] || { echo "error: no session_id returned" >&2; exit 1; }
 echo "session_id: $SID" >&2
 
-# 2. Poll until the turn truly ends, then read the latest result.
+# 2. Poll until the session is truly done, then read the latest result.
 #    Any non-"agent" status means the turn handed back (idle, human, ...) -- we
-#    don't need to tell them apart. But a just-issued POST can briefly still read
-#    the PREVIOUS turn's status, so also require the last message to be this
-#    turn's assistant reply before treating the turn as done.
+#    don't need to tell them apart. Two more things must hold before that counts
+#    as done:
+#    - pending_agent_calls is 0. An agent that handed work to other agents ends
+#      its turn while they run; each result comes back as a further turn, so
+#      until the count is 0 the last reply is only an interim one.
+#    - the last message is this turn's assistant reply. A just-issued POST can
+#      briefly still read the PREVIOUS turn's status.
 i=0
 while :; do
   i=$((i+1))
-  st=$(curl -s "$BASE/api/workspaces/$WS/sessions/$SID" "${auth[@]}" | jq -r '.chat_status // "unknown"')
+  sess=$(curl -s "$BASE/api/workspaces/$WS/sessions/$SID" "${auth[@]}")
+  st=$(echo "$sess" | jq -r '.chat_status // "unknown"')
+  pending=$(echo "$sess" | jq -r '.pending_agent_calls // 0')
   msgs=$(curl -s "$BASE/api/workspaces/$WS/messages?session_id=$SID" "${auth[@]}")
   last_role=$(echo "$msgs" | jq -r 'last | .role // "none"')
-  printf '\r  polling... %s / last=%s (%d)   ' "$st" "$last_role" "$i" >&2
-  if [ "$st" != "agent" ] && [ "$last_role" = "assistant" ]; then
+  printf '\r  polling... %s / pending=%s / last=%s (%d)   ' "$st" "$pending" "$last_role" "$i" >&2
+  if [ "$st" != "agent" ] && [ "$pending" = "0" ] && [ "$last_role" = "assistant" ]; then
     echo >&2
     echo "$msgs" | jq -r '[.[] | select(.role=="assistant")] | last | (.content // "")
       | if . == "" then "[no text reply; likely tool actions -- continue with -s to ask more]" else . end'
     break
   fi
-  [ "$i" -ge "$MAX" ] && { echo >&2; echo "error: timed out after $MAX polls (status=$st)" >&2; exit 2; }
+  [ "$i" -ge "$MAX" ] && { echo >&2; echo "error: timed out after $MAX polls (status=$st, pending_agent_calls=$pending)" >&2; exit 2; }
   sleep "$INTERVAL"
 done
 echo "continue with: $0 -s $SID \"...\"" >&2

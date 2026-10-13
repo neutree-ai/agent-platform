@@ -41,7 +41,15 @@ Once this plan is written, have @agent/reviewer look it over
 
 The calling agent handles the crossing itself: it passes the context over, waits for the result, folds it back into the conversation and carries on.
 
-There's also **background mode** — send it off without waiting, let the callee work at its own pace and report back with a notification or a file. That's the one for long jobs.
+There's also **background mode** — send it off without waiting and let the callee work at its own pace. That's the one for long jobs, and for running several agents at once.
+
+The caller doesn't have to keep checking on a background call. It can finish what it's doing and end its turn; when the callee is done, the platform posts the result into the caller's session and the caller picks up from there. Several results that finish together arrive as one message. A failed call is delivered too, with its error, so the caller never waits on something that isn't coming.
+
+So a conversation can go quiet and then continue by itself. While it's waiting, the session shows as waiting on agent calls rather than as needing you, and you aren't notified until the agent has its real answer. You can still send a message in the meantime.
+
+A call that asks its own user a question pauses until a person answers it in that session; the caller is told, and passes it on to you.
+
+This holds for conversations started in the web app or through the API. In sessions started by a schedule or a chat connector the caller waits for its calls within the same turn. If you drive agents through the API, see [when a session is done](/api/rest/#when-a-session-is-done).
 
 When there's **real material** to hand over, or an artifact to return, don't put it in the prompt. Use [AFS](/concepts/afs/): write the file into a shared directory, grant the collaborator access, and they read it at the same path in their own container.
 

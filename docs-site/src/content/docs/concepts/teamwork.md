@@ -46,8 +46,8 @@ Teamwork isn't from scratch. Two existing capabilities carry it.
 
 The main agent calls another through two built-in tools:
 
-- `call_agent` — starts a call, taking the target's slug and the task description to hand over. That description becomes the first user message of the sub-session, so the main agent distills the relevant part of its own context into it. It runs **synchronously** or **asynchronously**: synchronous waits, asynchronous pushes a long job into the background. Either way you get the sub-session's ID back.
-- `get_agent_result` — looks up a result by sub-session ID. It polls asynchronous work and it reads back collaboration that already happened.
+- `call_agent` — starts a call, taking the target's slug and the task description to hand over. That description becomes the first user message of the sub-session, so the main agent distills the relevant part of its own context into it. It runs **synchronously** or **asynchronously**: synchronous waits, asynchronous pushes a long job into the background. Either way you get the sub-session's ID back. The result of an asynchronous call is posted back to the main agent's session when the sub-agent finishes, so the main agent can end its turn and be woken with it instead of polling.
+- `get_agent_result` — looks up a call by sub-session ID and says whether it is still running, has ended, has failed, or is waiting on a person. It reads back collaboration that already happened, and it is how the main agent checks on a call where results aren't posted back.
 
 `call_agent` can also **start a new session or continue an old one**, so two agents can hold a multi-turn conversation across several threads, much as people do.
 
@@ -94,7 +94,7 @@ As said above, an elaborate dispatch canvas doesn't improve the outcome. But one
 A team task's detail page has a **timeline**:
 
 - One track per member session, coordinator on top, sub-agents below in order
-- Each `call_agent` drops a point on it, showing the **message sent down**, the **result sent back**, and whether the call was synchronous or asynchronous
+- Each `call_agent` drops a point on it, showing the **message sent down**, the **result sent back**, and whether the call was synchronous or asynchronous. An asynchronous call stays marked as running until its result is delivered
 
 Collapse it if you'd rather. But when a multi-agent flow is misbehaving, it's the most direct instrument there is — you see what the main agent handed over and what came back, without reading the whole conversation line by line.
 

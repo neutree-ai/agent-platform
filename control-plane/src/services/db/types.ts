@@ -251,6 +251,8 @@ export interface SessionWithPreview extends Session {
   caller_agent_name: string | null
   /** Calling agent's slug, joined from its workspace; null when not agent-invoked. */
   caller_agent_slug: string | null
+  /** Agent calls this session made whose results have not come back yet. */
+  pending_agent_calls: number
 }
 
 export interface PaginatedSessions {

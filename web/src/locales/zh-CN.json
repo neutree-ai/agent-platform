@@ -3680,6 +3680,7 @@
       "status": {
         "needsYou": "待你回复",
         "running": "运行中",
+        "waiting_other": "等待 {{count}} 个子 Agent 返回",
         "error": "出错"
       },
       "source": {

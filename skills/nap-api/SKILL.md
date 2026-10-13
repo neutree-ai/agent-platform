@@ -55,7 +55,7 @@ Non-obvious capability routing (when the operation isn't where you'd first look)
 
 ## Example — drive the agent (async chat + poll)
 
-The most common task, end to end. Send a prompt, poll until the turn ends, read the transcript — no other files needed:
+The most common task, end to end. Send a prompt, poll until the session is done, read the transcript — no other files needed:
 
 ```bash
 BASE="${NAP_BASE_URL:-https://nap.example.com}"
@@ -67,17 +67,36 @@ SID=$(curl -s -X POST "$BASE/api/workspaces/$NAP_WS/chat" \
   -d '{"message":"List the files in the repo and summarize the README","mode":"async","source":"api"}' \
   | jq -r .session_id)
 
-# 2. Poll the session until the agent stops running.
-#    chat_status: "agent" = still working · "idle" = finished · "human" = waiting on you (see pending_message)
-while [ "$(curl -s "$BASE/api/workspaces/$NAP_WS/sessions/$SID" \
-    -H "Authorization: Bearer $NAP_TOKEN" | jq -r .chat_status)" = "agent" ]; do
+# 2. Poll the session until it is done: no turn running AND no agent calls outstanding.
+#    chat_status: "agent" = a turn is running · "idle" / "human" = no turn running
+#    pending_agent_calls: calls to other agents whose results have not come back yet
+while :; do
+  S=$(curl -s "$BASE/api/workspaces/$NAP_WS/sessions/$SID" -H "Authorization: Bearer $NAP_TOKEN")
+  [ "$(echo "$S" | jq -r .chat_status)" != "agent" ] \
+    && [ "$(echo "$S" | jq -r '.pending_agent_calls // 0')" = "0" ] && break
   sleep 3
 done
 
-# 3. Read the full transcript for this turn.
+# 3. Read the full transcript.
 curl -s "$BASE/api/workspaces/$NAP_WS/messages?session_id=$SID" \
   -H "Authorization: Bearer $NAP_TOKEN" | jq .
 ```
+
+### When is a session done?
+
+**Done = `chat_status` is not `agent` AND `pending_agent_calls` is `0`.** Checking `chat_status` alone is not enough.
+
+One chat request starts one turn, but a session can run more turns than you started. An agent that hands work to other agents (`call_agent`) may end its turn while those calls are still running — its reply at that point is an interim "dispatched, waiting". When a called agent finishes, the platform posts the result into the session and the agent runs a further turn on its own; results that finish together arrive in one turn. So between turns the session can read `chat_status: "idle"` with `pending_agent_calls` above `0`, and the last assistant message is not the final answer yet.
+
+- **`async`** — poll `GET /api/workspaces/{id}/sessions/{sessionId}` with the condition above (the loop in step 2).
+- **`sync`** — the response carries `pending_agent_calls` too. `0`: `final_message` is the answer. Above `0`: it is interim; switch to polling the session, then read the messages.
+- **`stream`** — the stream closes when the first turn ends. Read the session afterwards; if `pending_agent_calls` is above `0`, poll as above.
+
+The messages the platform posts for delivered results have `role: "user"` and start with `[Automated delivery of call_agent results`. They are not something a person typed; when reading a transcript, take the last `assistant` message as the answer.
+
+You may send a new message while calls are outstanding — the session is not busy between turns. The results still arrive afterwards as their own turn.
+
+This applies to sessions started with `source` `api` or `web`. Sessions from schedules and chat connectors do not get results posted back: there the agent waits for its calls inside the one turn, and `pending_agent_calls` stays `0`.
 
 Continue the same conversation by POSTing again with this `session_id` in the body. For token-by-token output instead of polling, omit `mode` (or use `mode: "stream"`) and read the `text/event-stream` of UniversalEvent frames.
 
@@ -92,7 +111,7 @@ The cloud agent is a **fresh, isolated agent** — it shares none of your local 
 
 ### Driver script
 
-A ready-to-run driver ships with this skill at **`scripts/handoff.sh`** — call it directly or adapt it. It dispatches a turn, polls until the turn truly ends, and prints the agent's reply. Pass `-s <session_id>` to **continue** an existing session instead of starting a new one — that's how you carry a conversation across calls.
+A ready-to-run driver ships with this skill at **`scripts/handoff.sh`** — call it directly or adapt it. It dispatches a turn, polls until the session is done (see [When is a session done?](#when-is-a-session-done)), and prints the agent's reply. Pass `-s <session_id>` to **continue** an existing session instead of starting a new one — that's how you carry a conversation across calls.
 
 ```bash
 export NAP_TOKEN=<service-token> NAP_WS=<workspace-id>   # NAP_BASE_URL defaults to https://nap.example.com
@@ -102,7 +121,7 @@ scripts/handoff.sh -s <session_id> "now add tests"       # continue that session
 echo "long task text..." | scripts/handoff.sh -          # task from stdin
 ```
 
-The poll loop treats any non-`agent` `chat_status` as the turn handing back (idle, human, …) — but also requires the last message to be this turn's assistant reply, guarding against a just-issued POST briefly reading the previous turn's status. It prints only the agent's final text; read the full turn (tool calls included) with `GET /api/workspaces/{id}/messages?session_id=…`, and pull any files the agent produced with `GET /api/workspaces/{id}/agent/files?path=…`.
+The poll loop treats any non-`agent` `chat_status` as the turn handing back (idle, human, …) — but also requires `pending_agent_calls` to be `0`, so an agent that fanned work out to other agents is followed through to its final answer, and the last message to be this turn's assistant reply, guarding against a just-issued POST briefly reading the previous turn's status. It prints only the agent's final text; read the full turn (tool calls included) with `GET /api/workspaces/{id}/messages?session_id=…`, and pull any files the agent produced with `GET /api/workspaces/{id}/agent/files?path=…`.
 
 ## Resources
 

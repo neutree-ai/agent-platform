@@ -3656,6 +3656,8 @@
       "status": {
         "needsYou": "Needs you",
         "running": "Running",
+        "waiting_one": "Waiting on {{count}} agent call",
+        "waiting_other": "Waiting on {{count}} agent calls",
         "error": "Error"
       },
       "source": {

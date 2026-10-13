@@ -3,14 +3,19 @@ import { getSubAgentSessionLink } from '../sub-agent-session-link'
 import { type ToolCall, getMcpText, unwrapMcpInput } from '../types'
 import type { ToolRendererDef } from '../types'
 
-// cp's call_agent result envelope (after MCP text unwrap).
-//   ended:    { session_id, status: 'ended',    text }
-//   running:  { session_id, status: 'running',  message? }
-//   started:  { status: 'started',              message? }   // no session_id yet
+// cp's result envelope for call_agent and get_agent_result (after MCP text unwrap).
+//   ended:       { session_id, status: 'ended',       text }
+//   failed:      { session_id, status: 'failed',      error?, text }
+//   running:     { session_id, status: 'running',     message? }
+//   needs_input: { session_id, status: 'needs_input', message? }
+//   started:     { status: 'started',                 message? }   // no session_id yet
+type AgentResultStatus = 'ended' | 'failed' | 'running' | 'needs_input' | 'started'
+
 interface CallAgentResult {
   session_id?: string
-  status?: 'ended' | 'running' | 'started'
+  status?: AgentResultStatus
   text?: string
+  error?: string
   message?: string
 }
 
@@ -38,6 +43,75 @@ function SubAgentSessionId({ slug, sessionId }: { slug: string; sessionId: strin
     <span className="font-mono text-mini text-muted-foreground" title={sessionId}>
       {shortId(sessionId)}
     </span>
+  )
+}
+
+function StatusChip({ status }: { status: AgentResultStatus | undefined }) {
+  switch (status) {
+    case 'ended':
+      return (
+        <span className="rounded bg-success/15 px-1.5 py-0.5 text-mini text-success">done</span>
+      )
+    case 'failed':
+      return (
+        <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-mini text-destructive">
+          failed
+        </span>
+      )
+    case 'running':
+      return <span className="rounded bg-info/15 px-1.5 py-0.5 text-mini text-info">running</span>
+    case 'needs_input':
+      return (
+        <span className="rounded bg-warning/15 px-1.5 py-0.5 text-mini text-warning">
+          needs input
+        </span>
+      )
+    case 'started':
+      return <span className="rounded bg-info/15 px-1.5 py-0.5 text-mini text-info">started</span>
+    default:
+      return null
+  }
+}
+
+/**
+ * `slug` is the called agent, which lets the session id link to its session;
+ * null when the tool call does not name one (get_agent_result).
+ */
+function renderAgentResult(tool: ToolCall, slug: string | null) {
+  const parsed = parseAgentResult(tool)
+
+  // Not the envelope — show the raw text (error strings, results stored before
+  // get_agent_result returned one).
+  if (!parsed || typeof parsed !== 'object' || !parsed.status) {
+    const text = getMcpText(tool.result)
+    if (!text) return null
+    return (
+      <pre className="whitespace-pre-wrap text-tiny font-mono rounded bg-muted/50 p-1.5 overflow-x-auto max-h-[300px] overflow-y-auto">
+        {text}
+      </pre>
+    )
+  }
+
+  const { status, session_id, text, error, message } = parsed
+  const note = error ?? message
+
+  return (
+    <div className="text-tiny space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusChip status={status} />
+        {session_id && slug !== null && <SubAgentSessionId slug={slug} sessionId={session_id} />}
+      </div>
+      {note ? (
+        <div className="rounded border border-dashed bg-muted/30 p-1.5 text-tiny text-muted-foreground">
+          {note}
+        </div>
+      ) : null}
+      {text ? (
+        <pre className="whitespace-pre-wrap text-tiny font-mono rounded bg-muted/50 p-1.5 overflow-x-auto max-h-[300px] overflow-y-auto">
+          {text}
+        </pre>
+      ) : null}
+    </div>
   )
 }
 
@@ -95,48 +169,7 @@ export const callAgentRenderer: ToolRendererDef = {
   },
 
   renderResult(tool: ToolCall) {
-    const parsed = parseAgentResult(tool)
-
-    // Couldn't parse — fall back to raw text (older cp builds, error strings).
-    if (!parsed) {
-      const text = getMcpText(tool.result)
-      if (!text) return null
-      return (
-        <pre className="whitespace-pre-wrap text-tiny font-mono rounded bg-muted/50 p-1.5 overflow-x-auto max-h-[300px] overflow-y-auto">
-          {text}
-        </pre>
-      )
-    }
-
-    const { status, session_id, text, message } = parsed
-    const slug = String(unwrapMcpInput(tool.input).slug || '')
-
-    const statusChip =
-      status === 'ended' ? (
-        <span className="rounded bg-success/15 px-1.5 py-0.5 text-mini text-success">done</span>
-      ) : status === 'running' ? (
-        <span className="rounded bg-info/15 px-1.5 py-0.5 text-mini text-info">running</span>
-      ) : status === 'started' ? (
-        <span className="rounded bg-info/15 px-1.5 py-0.5 text-mini text-info">started</span>
-      ) : null
-
-    return (
-      <div className="text-tiny space-y-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {statusChip}
-          {session_id && <SubAgentSessionId slug={slug} sessionId={session_id} />}
-        </div>
-        {text ? (
-          <pre className="whitespace-pre-wrap text-tiny font-mono rounded bg-muted/50 p-1.5 overflow-x-auto max-h-[300px] overflow-y-auto">
-            {text}
-          </pre>
-        ) : message ? (
-          <div className="rounded border border-dashed bg-muted/30 p-1.5 text-tiny text-muted-foreground">
-            {message}
-          </div>
-        ) : null}
-      </div>
-    )
+    return renderAgentResult(tool, String(unwrapMcpInput(tool.input).slug || ''))
   },
 }
 
@@ -154,12 +187,6 @@ export const getAgentResultRenderer: ToolRendererDef = {
     )
   },
   renderResult(tool: ToolCall) {
-    const text = getMcpText(tool.result)
-    if (!text) return null
-    return (
-      <pre className="whitespace-pre-wrap text-tiny font-mono rounded bg-muted/50 p-1.5 overflow-x-auto max-h-[300px] overflow-y-auto">
-        {text}
-      </pre>
-    )
+    return renderAgentResult(tool, null)
   },
 }

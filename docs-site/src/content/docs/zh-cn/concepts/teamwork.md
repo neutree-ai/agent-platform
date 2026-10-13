@@ -46,8 +46,8 @@ Teamwork 不是从零起的。它建立在两个已有的能力之上：
 
 主 Agent 通过这两个内置工具去调另一个 Agent：
 
-- `call_agent`——发起调用。参数是目标 Agent 的 slug 和这次要交给它的任务描述（这段描述就是 sub-session 的第一条 user message——主 Agent 会从自己的上下文里提炼出与本次调用相关的部分作为参数）。支持**同步**和**异步**两种模式：同步会等 sub-agent 完成；异步可主动让长任务转入后台。无论同步异步，工具都会返回 sub-session 的 ID
-- `get_agent_result`——用 sub-session ID 查询结果。可用于轮询异步任务，也可用于回看历史协作
+- `call_agent`——发起调用。参数是目标 Agent 的 slug 和这次要交给它的任务描述（这段描述就是 sub-session 的第一条 user message——主 Agent 会从自己的上下文里提炼出与本次调用相关的部分作为参数）。支持**同步**和**异步**两种模式：同步会等 sub-agent 完成；异步可主动让长任务转入后台。无论同步异步，工具都会返回 sub-session 的 ID。异步调用的结果在 sub-agent 做完后由平台投回主 Agent 的 session，主 Agent 可以先结束这一轮，等结果来了再接着做，不用轮询
+- `get_agent_result`——用 sub-session ID 查一次调用，返回它还在跑、已结束、失败了，还是在等人回答。可用于回看历史协作；在结果不会投回来的场景里，主 Agent 靠它查进度
 
 `call_agent` 还支持**新开会话**或**继续之前的会话**——两个 Agent 之间也可以有多轮、多线程的对话，跟人和人协作类似。
 
@@ -94,7 +94,7 @@ Teamwork 不是替代上面这两个能力，而是在它们之上加一层"**�
 team task 的详情页提供一个**协作时间线**：
 
 - 每个成员的 session 是一条时间线（协调员在最上，sub-agent 依次往下）
-- 每次 `call_agent` 在时间线上落一个点，标明：**主→次发出的 sub-message**、**次→主返回的 result**、调用是**同步还是异步**
+- 每次 `call_agent` 在时间线上落一个点，标明：**主→次发出的 sub-message**、**次→主返回的 result**、调用是**同步还是异步**。异步调用在结果投回之前一直显示为进行中
 
 不喜欢可以折叠掉。但在 debug 多 Agent 协作时这是最直接的工具——你能立刻看到主 Agent 究竟把什么传给了 sub-agent、sub-agent 又总结回来了什么，不必逐条翻对话记录。
 

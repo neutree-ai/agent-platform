@@ -44,7 +44,7 @@ export function registerTools(server: McpServer, ctx: McpRequestContext) {
   }
 
   registerMemoryTools(server, workspaceId)
-  registerAgentTools(server, workspaceId, taskId)
+  registerAgentTools(server, workspaceId, taskId, sessionId)
   registerBrowserTools(server, workspaceId)
   registerSandboxTools(server, workspaceId)
   registerSkillsTools(server, workspaceId)

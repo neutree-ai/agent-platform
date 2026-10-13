@@ -1,5 +1,6 @@
 import type { ApiMessage, ChatBody } from '../../../../internal/types/api'
 import { aggregateChatStream, awaitSessionId } from '../../lib/sse-aggregate'
+import { countOpenAgentCalls } from '../db/agent-calls'
 import { getMessages } from '../db/messages'
 import type { Workspace } from '../db/types'
 import { executeChat } from './executeChat'
@@ -81,6 +82,7 @@ export async function dispatchChatTurn(opts: DispatchChatTurnOpts): Promise<Resp
       stats: (agg.stats as Record<string, unknown> | null) ?? null,
       reason: agg.reason,
       error: agg.error,
+      pending_agent_calls: agg.sessionId ? await countOpenAgentCalls(agg.sessionId) : 0,
     },
     200,
   )

@@ -6,6 +6,8 @@
 
 Returns a lite shape with id, name, chat_status, status, last_active_at, and a 40-char preview of the first user message. Use GET /workspaces/:id/sessions for the full ApiSession list.
 
+This is the endpoint to poll after an async chat. The session is done when `chat_status` is not `agent` AND `pending_agent_calls` is `0`: a session whose agent called other agents can sit at `idle` between turns while it waits for their results, which arrive as further turns.
+
 ## Parameters
 
 | Name | In | Type | Required | Description |
@@ -31,6 +33,7 @@ Returns a lite shape with id, name, chat_status, status, last_active_at, and a 4
 | `last_active_at` | string | Yes |  |
 | `preview` | string | Yes |  |
 | `pending_message` | object,null | Yes |  |
+| `pending_agent_calls` | integer | Yes | Calls this session's agent made to other agents (call_agent) whose results have not come back yet. Each result is posted to the session as a further turn, so the session is done only when chat_status is not "agent" AND this is 0. |
 
 ## Security
 

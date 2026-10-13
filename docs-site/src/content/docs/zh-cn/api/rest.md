@@ -47,10 +47,36 @@ SID=$(curl -s -X POST "$BASE/api/workspaces/$NAP_WS/chat" \
   -d '{"message":"列一下仓库里的文件，总结 README","mode":"async","source":"api"}' \
   | jq -r .session_id)
 
-# 然后轮询这个 session 直到 agent 跑完，再读对话记录。
+# 轮询到 session 真正结束：没有 turn 在跑，也没有还没返回的 agent 调用。
+while :; do
+  S=$(curl -s "$BASE/api/workspaces/$NAP_WS/sessions/$SID" -H "Authorization: Bearer $NAP_TOKEN")
+  [ "$(echo "$S" | jq -r .chat_status)" != "agent" ] \
+    && [ "$(echo "$S" | jq -r '.pending_agent_calls // 0')" = "0" ] && break
+  sleep 3
+done
+
+# 再读对话记录。
+curl -s "$BASE/api/workspaces/$NAP_WS/messages?session_id=$SID" \
+  -H "Authorization: Bearer $NAP_TOKEN" | jq .
 ```
 
 也可以流式返回，想盯着它干活而不是等结果的话。
+
+### session 什么时候算结束
+
+`chat_status` 不是 `agent`，**并且** `pending_agent_calls` 是 `0`，才算结束。后一半容易漏。
+
+一次请求只发起一轮，但 session 里跑的轮数可能比你发起的多。agent [把活交给别的 agent](/zh-cn/guides/6-compose-agents/) 之后，可以不等对方做完就先结束这一轮，这时它的回复只是一句"已经派出去了，在等"。对方做完，平台把结果投回这个 session，agent 自己再跑一轮。两轮之间，session 的 `chat_status` 是 `idle`，`pending_agent_calls` 大于 0，最后一条回复还不是答案。
+
+| 模式 | 怎么做 |
+|---|---|
+| `async` | 轮询 `GET /api/workspaces/{id}/sessions/{sessionId}`，两个条件都满足才停，就是上面那个循环。 |
+| `sync` | 响应里也带 `pending_agent_calls`。是 `0`，`final_message` 就是答案；大于 `0`，那只是中间回复，接着轮询 session，结束后再读消息。 |
+| `stream` | 流在第一轮结束时关闭。之后查一次 session，还有调用没返回就接着轮询。 |
+
+投回来的结果在对话记录里是 `user` 消息，以 `[Automated delivery of call_agent results` 开头。它不是谁打的字，答案看最后一条 `assistant` 消息。
+
+只有 `source` 为 `api` 或 `web` 的 session 会收到投回的结果。定时任务和 IM 渠道发起的 session 里，agent 在同一轮内等调用返回，`pending_agent_calls` 一直是 `0`。
 
 不在你第一直觉那个位置的几件事：
 

@@ -207,6 +207,7 @@ function toApiSession(s: any): ApiSession {
     caller_agent: s.caller_agent_name
       ? { name: s.caller_agent_name, slug: s.caller_agent_slug ?? null }
       : null,
+    pending_agent_calls: s.pending_agent_calls ?? 0,
   }
 }
 

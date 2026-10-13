@@ -47,10 +47,36 @@ SID=$(curl -s -X POST "$BASE/api/workspaces/$NAP_WS/chat" \
   -d '{"message":"List the files in the repo and summarize the README","mode":"async","source":"api"}' \
   | jq -r .session_id)
 
-# Then poll the session until the agent stops running, and read the transcript.
+# Poll until the session is done: no turn running, no agent calls outstanding.
+while :; do
+  S=$(curl -s "$BASE/api/workspaces/$NAP_WS/sessions/$SID" -H "Authorization: Bearer $NAP_TOKEN")
+  [ "$(echo "$S" | jq -r .chat_status)" != "agent" ] \
+    && [ "$(echo "$S" | jq -r '.pending_agent_calls // 0')" = "0" ] && break
+  sleep 3
+done
+
+# Then read the transcript.
+curl -s "$BASE/api/workspaces/$NAP_WS/messages?session_id=$SID" \
+  -H "Authorization: Bearer $NAP_TOKEN" | jq .
 ```
 
 Turns can also stream, if you'd rather watch it work than wait for it.
+
+### When a session is done
+
+A session is done when `chat_status` is not `agent` **and** `pending_agent_calls` is `0`. The second half is easy to miss.
+
+One request starts one turn, but the session may run more turns than you started. An agent that [hands work to other agents](/guides/6-compose-agents/) can end its turn while they're still running, with a reply that amounts to "dispatched, waiting". When a called agent finishes, the platform posts its result into the session and the agent takes a further turn on its own. In between, the session reads `idle` with `pending_agent_calls` above zero, and its last reply isn't the answer yet.
+
+| Mode | What to do |
+|---|---|
+| `async` | Poll `GET /api/workspaces/{id}/sessions/{sessionId}` until both conditions hold, as in the loop above. |
+| `sync` | The response carries `pending_agent_calls`. At `0`, `final_message` is the answer. Above `0` it's interim — poll the session, then read the messages. |
+| `stream` | The stream closes at the end of the first turn. Read the session afterwards and poll if calls are outstanding. |
+
+Delivered results show up in the transcript as `user` messages beginning `[Automated delivery of call_agent results`. Nobody typed them; the answer is the last `assistant` message.
+
+Results are posted back only into sessions started with `source` `api` or `web`. In sessions started by a schedule or a chat connector the agent waits for its calls inside the one turn, and `pending_agent_calls` stays `0`.
 
 Where things are when they aren't where you'd look first:
 

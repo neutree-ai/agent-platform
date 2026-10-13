@@ -39,6 +39,12 @@ const ChatJsonResponseDoc = z.object({
   stats: z.record(z.string(), z.any()).nullable(),
   reason: z.enum(['ended', 'timeout', 'error', 'disconnected']),
   error: z.string().nullable(),
+  pending_agent_calls: z
+    .number()
+    .int()
+    .describe(
+      'Agent calls (call_agent) still outstanding when this turn ended. Above 0 means final_message is interim: the results arrive as further turns in the same session. Poll GET /sessions/{sessionId} until chat_status is not "agent" and pending_agent_calls is 0, then read the messages.',
+    ),
 })
 
 const ChatAsyncResponseDoc = z.object({
@@ -61,6 +67,17 @@ const chatRoute = createRoute({
     '- `async` (recommended) — `202 Accepted` with `{ session_id }` as soon as',
     '  the session exists; the turn keeps running server-side. Poll',
     '  `GET /sessions/:id` and read `GET /messages?session_id=` for results.',
+    '',
+    '**When is the session done?** One request starts one turn, but an agent',
+    'that hands work to other agents (`call_agent`) may end that turn while the',
+    'calls are still running; each result is then posted to the session as a',
+    'further turn, started by the server. `GET /sessions/:id` reports the calls',
+    'still outstanding as `pending_agent_calls`. The session has given its final',
+    'answer when `chat_status` is not `agent` AND `pending_agent_calls` is `0`',
+    '— in every mode. With `sync`, the response carries the same count: above',
+    'zero, `final_message` is interim and the rest is read by polling. With',
+    '`stream`, the stream closes at the end of the first turn; check the session',
+    'afterwards. This applies to sessions started with `source` `api` or `web`.',
     '',
     'When `mode` is absent, the legacy `body.stream` flag (`true` → stream,',
     '`false` → sync) and then the `Accept` header are consulted; default SSE.',

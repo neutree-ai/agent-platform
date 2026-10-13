@@ -16,7 +16,19 @@ import {
 } from '../../lib/sse'
 import { truncateToolOutput } from '../../lib/truncate-tool-output'
 import { resolveAgentAddress } from '../../lib/workspace-address'
+import {
+  noteSessionInputRequested,
+  resolveDeliveryTarget,
+  settleSessionTurn,
+} from '../../services/chat/agent-call-delivery'
 import { adoptSessionTurn, claimSessionTurn } from '../../services/chat/session-turn'
+import {
+  type AgentCall,
+  consumeAgentCall,
+  countOpenAgentCalls,
+  getLatestAgentCall,
+  insertAgentCall,
+} from '../../services/db/agent-calls'
 import {
   addMessage,
   getLastAssistantMessage,
@@ -28,6 +40,7 @@ import {
 import {
   createSession,
   getSession,
+  sessionHasLiveTurn,
   transitionSessionStatus,
   updateSessionActivity,
   updateSessionStats,
@@ -49,6 +62,39 @@ const AGENT_CALL_IDLE_TIMEOUT_MS = 60 * 60 * 1000
 // instead of blocking until completion. Keeps well under MCP client request
 // timeouts (typically 60–120s) so the response always arrives in time.
 const FOREGROUND_WAIT_MS = 30_000
+
+const AUTOMATIC_DELIVERY_NOTE =
+  'The result will be delivered to this session automatically, as a new message, when the agent finishes. Do not poll for it: carry on with other work, or end your turn and wait.'
+
+/**
+ * Tool result for a call that outlives the tool call. `delivery` tells the
+ * calling agent how the result reaches it: `automatic` when the call is tracked
+ * and will be posted back, `poll` when it has to ask with get_agent_result.
+ */
+function runningResult(sessionId: string | null, tracked: boolean) {
+  return {
+    status: 'running',
+    session_id: sessionId,
+    delivery: tracked ? 'automatic' : 'poll',
+    message: tracked
+      ? `Agent is still working. ${AUTOMATIC_DELIVERY_NOTE}`
+      : 'Agent is still working. Use get_agent_result with the session_id to retrieve the result.',
+  }
+}
+
+/** What get_agent_result reports for a call. */
+type AgentResultStatus = 'running' | 'needs_input' | 'ended' | 'failed'
+
+function trackedCallStatus(call: AgentCall): AgentResultStatus {
+  switch (call.status) {
+    case 'running':
+      return call.input_requested_at ? 'needs_input' : 'running'
+    case 'ended':
+      return 'ended'
+    case 'failed':
+      return 'failed'
+  }
+}
 
 interface SubAgentHandle {
   /** Resolves as soon as the sub-agent emits `session.started`. Rejects if the stream ends first. */
@@ -90,6 +136,11 @@ interface SubAgentPersistCtx {
   }) => void
   getText: () => string
   appendText: (text: string) => void
+  /**
+   * Frees the sub-session for its next turn. Called before the turn is
+   * settled, so results waiting for this session can be posted to it at once.
+   */
+  releaseSession?: () => Promise<void> | undefined
   /**
    * Session token minted by `call_agent` and threaded to the sub-agent via
    * `/chat` body. Bound to the SDK-revealed sub-session id once the
@@ -362,6 +413,7 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
           queue.run(async () => {
             if (state.sessionId) {
               await transitionSessionStatus(state.sessionId, 'human')
+              await noteSessionInputRequested(state.sessionId)
             }
           }, logError('transition to human (question)'))
           break
@@ -375,11 +427,17 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
 
       if (state.sessionId) {
         // Successful session.ended → 'human'; any other path → 'idle'. A muted
-        // target workspace stays 'idle' either way — it never asks for attention.
+        // target workspace stays 'idle' either way — it never asks for attention —
+        // and so does a session still waiting on calls of its own, whose turn
+        // was not its last word.
         const muted = await getWorkspaceConfig(targetWorkspaceId)
           .then((cfg) => cfg?.muted === true)
           .catch(() => false)
-        const terminalStatus = result.reason === 'completed' && !muted ? 'human' : 'idle'
+        const waiting = await countOpenAgentCalls(state.sessionId)
+          .then((n) => n > 0)
+          .catch(() => false)
+        const asksForAttention = result.reason === 'completed' && !muted && !waiting
+        const terminalStatus = asksForAttention ? 'human' : 'idle'
         try {
           await transitionSessionStatus(state.sessionId, terminalStatus)
         } catch (e) {
@@ -387,6 +445,16 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
             `[call_agent] final transition to ${terminalStatus} target=${targetWorkspaceId}:`,
             e,
           )
+        }
+        // A turn cut off by this replica shutting down is still alive on the
+        // agent; the replica that recovers it records how it ends.
+        const handedOff = !state.sessionEndedSeen && isDraining()
+        if (!handedOff) {
+          await ctx.releaseSession?.()
+          await settleSessionTurn(state.sessionId, {
+            reason: result.reason,
+            error: result.error?.message,
+          }).catch(logError('settle turn'))
         }
       }
 
@@ -404,7 +472,7 @@ function runSubAgentTurn(
   onSessionPersisted?: (sessionId: string) => Promise<void>,
   sessionToken?: string | null,
   callerWorkspaceId?: string | null,
-  onReplaced?: () => void,
+  releaseSession?: () => Promise<void> | undefined,
 ): SubAgentHandle {
   // Shared state + queue coordinate the persist and broadcast plugins.
   // Broadcast reads `state.sessionId` (for re-keying) and `sessionEndedSeen`
@@ -428,7 +496,7 @@ function runSubAgentTurn(
     existingSessionId,
     queue,
   )
-  activeStream.onReplaced = onReplaced
+  activeStream.onReplaced = () => void releaseSession?.()
 
   const streamStartedAt = Date.now()
   const tag = `call_agent target=${targetWorkspaceId}`
@@ -450,6 +518,7 @@ function runSubAgentTurn(
     state,
     queue,
     sessionToken,
+    releaseSession,
     onSessionStarted: (sid) => {
       if (!sessionIdResolved) {
         sessionIdResolved = true
@@ -527,7 +596,16 @@ function runSubAgentTurn(
   return { sessionIdPromise, resultPromise }
 }
 
-export function registerAgentTools(server: McpServer, workspaceId: string, taskId: string | null) {
+export function registerAgentTools(
+  server: McpServer,
+  workspaceId: string,
+  taskId: string | null,
+  sessionId: string | null,
+) {
+  // `sessionId` is the calling session, resolved upstream from the session
+  // token. When it takes deliveries (see `resolveDeliveryTarget`), a call that
+  // outlives its tool call is tracked and its result posted back to it.
+  //
   // `taskId` (when set) was validated upstream in `handleMcpRequest` to belong
   // to a teamwork task that this workspace coordinates. call_agent uses it to
   // widen slug resolution to roster members (notably own-private workspaces
@@ -547,7 +625,11 @@ Conversation modes (pick based on intent):
 - New conversation (default, omit \`session_id\`): start a fresh session. Use this when the request is self-contained or unrelated to any previous dispatch — the sub-agent has no memory of prior calls.
 - Continue conversation (pass \`session_id\` from a prior call_agent result): resume the existing sub-agent session so it sees its full history. Use this for follow-ups, clarifications, or iterative refinement on the same task ("now also do X", "you missed Y, redo with Z"). The \`session_id\` must belong to the *same target agent* you originally called and must still be active.
 
-Result is always JSON with \`session_id\` (the sub-agent's session) and \`status\` (\`ended\`/\`running\`). On \`ended\`, also includes \`text\` (the sub-agent's reply). On \`running\` (background mode or foreground timeout), poll with get_agent_result. Save the returned \`session_id\` if you might want to continue the conversation later.
+Result is always JSON with \`session_id\` (the sub-agent's session) and \`status\` (\`ended\`/\`running\`). On \`ended\`, also includes \`text\` (the sub-agent's reply). Save the returned \`session_id\` if you might want to continue the conversation later.
+
+On \`running\` (background mode, or a foreground call that is taking long), the \`delivery\` field says how the result reaches you:
+- \`automatic\` — the platform posts the result into this conversation as a new message when the sub-agent finishes, failed or not. Do NOT poll. Dispatch whatever else you need (several background calls can run in parallel), do any work that does not depend on the result, then end your turn; you are woken with the results, and results that finish together arrive in one message. Tell the user you are waiting rather than guessing an answer.
+- \`poll\` — nothing is posted back. Call get_agent_result with the \`session_id\` until its \`status\` is no longer \`running\`, and keep your turn open until you have what you need.
 
 Examples:
 - "@agent/reviewer check this code" → call_agent(slug="reviewer", prompt="check this code")
@@ -635,6 +717,11 @@ Examples:
         }
         const releaseSession = () => claim?.release()
 
+        const delivery = await resolveDeliveryTarget(sessionId, workspaceId).catch((e) => {
+          console.error(`[call_agent] delivery target lookup failed session=${sessionId}:`, e)
+          return null
+        })
+
         const address = resolveAgentAddress(target.id, { sessionId: session_id ?? null })
 
         // Mint or reuse a session_token scoped to the *sub-agent's* workspace.
@@ -672,8 +759,26 @@ Examples:
         // runSubAgentTurn's SerialQueue *after* createSession commits, so
         // the FK to sessions(id) is satisfied. parent_session_id stays
         // null for now (we don't carry caller session_id by design).
+        const targetWorkspaceId = target.id
+        const trackCall = async (sid: string) => {
+          if (!delivery) return
+          await insertAgentCall({
+            parentSessionId: delivery.parentSessionId,
+            parentWorkspaceId: workspaceId,
+            childSessionId: sid,
+            childWorkspaceId: targetWorkspaceId,
+            callerUserId: delivery.callerUserId,
+          }).catch((e) => {
+            console.error(`[call_agent] Failed to track call slug=${slug} session=${sid}:`, e)
+          })
+        }
+        // A continued session already exists and its turn is already claimed.
+        if (session_id) await trackCall(session_id)
         const onSessionPersisted = async (sid: string) => {
           claim ??= await adoptSessionTurn(sid)
+          // A new sub-session is tracked from the moment it exists, so the
+          // turn's end always finds the call to record its outcome on.
+          if (!session_id) await trackCall(sid)
           if (!taskId) return
           await addTeamworkSession(taskId, sid, 'member', null).catch((e) => {
             console.error(
@@ -692,11 +797,13 @@ Examples:
           onSessionPersisted,
           subSessionToken,
           callerWorkspace.id,
-          () => void releaseSession(),
+          releaseSession,
         )
         // The sub-agent's turn is over when its stream is, whichever way the
         // caller waits for it.
         void handle.resultPromise.catch(() => {}).finally(releaseSession)
+
+        const tracked = delivery !== null
 
         if (mode === 'background') {
           handle.resultPromise.catch((e) =>
@@ -709,12 +816,15 @@ Examples:
                 setTimeout(() => reject(new Error('timeout')), 10000),
               ),
             ])
-            return textResult(JSON.stringify({ session_id: sid, status: 'running' }))
+            return textResult(JSON.stringify(runningResult(sid, tracked)))
           } catch {
             return textResult(
               JSON.stringify({
                 status: 'started',
-                message: 'Agent call started but session ID not yet available.',
+                delivery: tracked ? 'automatic' : 'poll',
+                message: tracked
+                  ? `Agent call started; its session ID is not available yet. ${AUTOMATIC_DELIVERY_NOTE}`
+                  : 'Agent call started but session ID not yet available.',
               }),
             )
           }
@@ -737,13 +847,7 @@ Examples:
             console.error(`[call_agent] Foreground-degraded stream error for slug=${slug}:`, e),
           )
           const sid = await handle.sessionIdPromise.catch(() => null)
-          return textResult(
-            JSON.stringify({
-              status: 'running',
-              session_id: sid,
-              message: `Agent is still processing (>${FOREGROUND_WAIT_MS / 1000}s). Use get_agent_result with the session_id to retrieve the result.`,
-            }),
-          )
+          return textResult(JSON.stringify(runningResult(sid, tracked)))
         }
 
         // Foreground completed. We always include the sub-agent's session_id
@@ -751,6 +855,16 @@ Examples:
         // The calling agent should read the `text` field for the agent's
         // reply; `session_id` is metadata.
         const completedSid = await handle.sessionIdPromise.catch(() => null)
+        if (delivery && completedSid) {
+          // The sub-agent ended its turn while waiting on calls of its own, so
+          // this reply is interim: its real result is delivered later.
+          const call = await getLatestAgentCall(completedSid, delivery.parentSessionId)
+          if (call?.status === 'running') {
+            return textResult(JSON.stringify(runningResult(completedSid, true)))
+          }
+          // Handed over inline, so it must not be delivered a second time.
+          await consumeAgentCall(completedSid, delivery.parentSessionId)
+        }
         return textResult(
           JSON.stringify({
             session_id: completedSid,
@@ -768,25 +882,72 @@ Examples:
     'get_agent_result',
     {
       title: 'Get Agent Call Result',
-      description: 'Get the result of a background agent call by session ID.',
+      description: `Check on an agent call by the session ID call_agent returned.
+
+Result is JSON with \`session_id\` and \`status\`:
+- \`running\` — the sub-agent is still working; there is no \`text\` yet.
+- \`needs_input\` — the sub-agent asked its user a question and is paused until a person answers it in that session. Tell the user.
+- \`ended\` — finished; \`text\` is its reply.
+- \`failed\` — stopped without finishing; \`error\` says why and \`text\` holds any output it produced first.
+
+You only need this when call_agent returned \`delivery: "poll"\`. With \`delivery: "automatic"\` the result is posted to you; use this tool only to peek at progress or to re-read a reply that was truncated in the delivery.`,
       inputSchema: z.object({
-        session_id: z
-          .string()
-          .describe('The session ID returned by a background call_agent invocation'),
+        session_id: z.string().describe('The session ID returned by a call_agent invocation'),
       }),
     },
     async ({ session_id }) => {
       try {
-        const message = await getLastAssistantMessage(session_id)
-        if (!message) {
+        const session = await getSession(session_id)
+        if (!session) {
+          return textResult(`Error: session_id "${session_id}" not found`)
+        }
+
+        const call = sessionId ? await getLatestAgentCall(session_id, sessionId) : null
+        let status: AgentResultStatus
+        if (call) {
+          status = trackedCallStatus(call)
+        } else {
+          // An untracked call has no recorded outcome; the session shows
+          // whether its turn is still going.
+          const live = await sessionHasLiveTurn(session_id)
+          if (live) {
+            status = session.chat_status === 'human' ? 'needs_input' : 'running'
+          } else {
+            status = session.chat_status === 'agent' ? 'running' : 'ended'
+          }
+        }
+
+        if (status === 'running') {
           return textResult(
             JSON.stringify({
-              status: 'running',
-              message: 'No result yet — agent may still be processing',
+              session_id,
+              status,
+              message: 'No result yet — the agent is still working.',
             }),
           )
         }
-        return textResult(message.content)
+        if (status === 'needs_input') {
+          return textResult(
+            JSON.stringify({
+              session_id,
+              status,
+              message:
+                'The agent asked its user a question and is paused until someone answers it in that session.',
+            }),
+          )
+        }
+
+        // Read here, so the same result is not also delivered as a message.
+        if (call && sessionId) await consumeAgentCall(session_id, sessionId)
+        const message = await getLastAssistantMessage(session_id)
+        return textResult(
+          JSON.stringify({
+            session_id,
+            status,
+            ...(call?.error ? { error: call.error } : {}),
+            text: message?.content || '(Agent returned no text response)',
+          }),
+        )
       } catch (e: any) {
         return textResult(`Error: ${e.message}`)
       }

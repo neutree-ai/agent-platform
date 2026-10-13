@@ -263,6 +263,12 @@ export const ApiSessionSchema = z.object({
       slug: z.string().nullable(),
     })
     .nullable(),
+  pending_agent_calls: z
+    .number()
+    .int()
+    .describe(
+      'Calls this session\'s agent made to other agents (call_agent) whose results have not come back yet. The session is done only when chat_status is not "agent" AND this is 0.',
+    ),
 })
 
 export type ApiSession = z.infer<typeof ApiSessionSchema>
@@ -316,6 +322,12 @@ export const ApiSessionLiteSchema = z.object({
   preview: z.string(),
   /** Queued follow-up draft, or null when there is none. */
   pending_message: ApiPendingMessageSchema.nullable(),
+  pending_agent_calls: z
+    .number()
+    .int()
+    .describe(
+      'Calls this session\'s agent made to other agents (call_agent) whose results have not come back yet. Each result is posted to the session as a further turn, so the session is done only when chat_status is not "agent" AND this is 0.',
+    ),
 })
 
 export type ApiSessionLite = z.infer<typeof ApiSessionLiteSchema>
@@ -1812,6 +1824,12 @@ export const ChatJsonResponseSchema = z.object({
   reason: z.enum(['ended', 'timeout', 'error', 'disconnected']),
   /** Populated when reason !== 'ended'. */
   error: z.string().nullable(),
+  pending_agent_calls: z
+    .number()
+    .int()
+    .describe(
+      'Agent calls (call_agent) still outstanding when this turn ended. Above 0 means final_message is interim: the results arrive as further turns in the same session. Poll GET /sessions/{sessionId} until chat_status is not "agent" and pending_agent_calls is 0, then read the messages.',
+    ),
 })
 export type ChatJsonResponse = z.infer<typeof ChatJsonResponseSchema>
 

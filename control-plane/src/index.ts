@@ -8,6 +8,7 @@ import { startReconcileLoop } from './lib/reconcile'
 import { recoverOrphanedSessions } from './lib/session-recovery'
 import { initSkillReloadQueue } from './lib/skill-reload-queue'
 import { drainActiveStreams } from './lib/sse'
+import { startAgentCallSweep } from './services/chat/agent-call-delivery'
 import { initDb, pool } from './services/db/pool'
 import { initNotificationQueue } from './services/notifications/queue'
 
@@ -64,6 +65,8 @@ if (process.env.DISABLE_SESSION_RECOVERY === '1') {
   console.log('[CP] Session recovery disabled (DISABLE_SESSION_RECOVERY=1)')
 } else {
   recoverOrphanedSessions().catch((e) => console.error('[Recovery] Fatal error:', e))
+  // Same switch: the sweep starts turns in sessions other replicas own.
+  startAgentCallSweep()
 }
 
 const port = Number.parseInt(process.env.PORT || '3000')
