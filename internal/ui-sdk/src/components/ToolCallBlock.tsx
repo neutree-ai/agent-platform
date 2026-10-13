@@ -38,7 +38,17 @@ function getToolDuration(tool: ToolCall): number | null {
 
 // ── Main component ──
 
-function ToolCallBlockImpl({ tool }: { tool: ToolCall }) {
+function ToolCallBlockImpl({
+  tool,
+  recovered = false,
+}: {
+  tool: ToolCall
+  /**
+   * The agent carried on after this call failed, so the failure is part of
+   * its exploration rather than something the reader has to look at.
+   */
+  recovered?: boolean
+}) {
   const { t } = useTranslation()
   const agentType = useAgentType()
   const lazy = useLazyToolRenderers()
@@ -100,19 +110,14 @@ function ToolCallBlockImpl({ tool }: { tool: ToolCall }) {
                     {formatDuration(duration)}
                   </span>
                 )}
-                <span
-                  aria-label={
-                    tool.isError
-                      ? t('components.chat.toolCallBlock.status.error')
-                      : t('components.chat.toolCallBlock.status.done')
-                  }
-                  title={
-                    tool.isError
-                      ? t('components.chat.toolCallBlock.status.error')
-                      : t('components.chat.toolCallBlock.status.done')
-                  }
-                  className={`h-1.5 w-1.5 rounded-full ${tool.isError ? 'bg-destructive' : 'bg-success'}`}
-                />
+                {/* Success is the default and goes unmarked. */}
+                {tool.isError && (
+                  <span
+                    aria-label={t('components.chat.toolCallBlock.status.error')}
+                    title={t('components.chat.toolCallBlock.status.error')}
+                    className={`h-1.5 w-1.5 rounded-full ${recovered ? 'bg-muted-foreground/60' : 'bg-destructive'}`}
+                  />
+                )}
               </span>
             )}
             {tool.result === undefined && <Spinner size="sm" className="ml-auto shrink-0" />}

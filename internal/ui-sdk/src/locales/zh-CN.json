@@ -212,8 +212,7 @@
       },
       "toolCallBlock": {
         "status": {
-          "error": "错误",
-          "done": "完成"
+          "error": "错误"
         }
       },
       "toolCallGroup": {

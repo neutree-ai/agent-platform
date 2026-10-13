@@ -212,8 +212,7 @@
       },
       "toolCallBlock": {
         "status": {
-          "error": "error",
-          "done": "done"
+          "error": "error"
         }
       },
       "toolCallGroup": {

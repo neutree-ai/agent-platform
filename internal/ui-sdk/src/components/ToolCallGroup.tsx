@@ -45,20 +45,34 @@ function getSpan(nodes: ToolNode[]): number | null {
  * A run of consecutive tool calls. Two or more sibling calls fold into a
  * summary row that keeps the latest call — and any still running — in view; a
  * sub-agent's calls fold the same way under the call that spawned it.
+ *
+ * A failed call the agent moved on from is marked quietly. Only a failure
+ * nothing came after — the run's closing call — is marked as an error.
  */
 function ToolCallGroupImpl({
   tools,
   foldKey,
   expandAll = false,
+  followed = false,
 }: {
   tools: ToolCall[]
   /** Identifies this run across unmounts, so the reader's choice survives. */
   foldKey: string
   /** Show every call, whatever the reader folded. */
   expandAll?: boolean
+  /** The agent made more calls after this run, or is still working. */
+  followed?: boolean
 }) {
   const roots = useMemo(() => buildTree(tools), [tools])
-  return <Siblings nodes={roots} foldKey={foldKey} expandAll={expandAll} nested={false} />
+  return (
+    <Siblings
+      nodes={roots}
+      foldKey={foldKey}
+      expandAll={expandAll}
+      nested={false}
+      closing={!followed}
+    />
+  )
 }
 
 export const ToolCallGroup = memo(ToolCallGroupImpl)
@@ -70,8 +84,18 @@ interface LevelProps {
   nested: boolean
 }
 
-function Siblings({ nodes, foldKey, expandAll, nested }: LevelProps) {
+function Siblings({
+  nodes,
+  foldKey,
+  expandAll,
+  nested,
+  closing,
+}: LevelProps & {
+  /** Nothing came after these calls, so the last one closes the run. */
+  closing: boolean
+}) {
   const agentType = useAgentType()
+  const closingId = closing ? nodes[nodes.length - 1]?.tool.id : undefined
   // A renderer registered later can turn a call into a default-expanded card.
   useSyncExternalStore(subscribeToolRenderers, getToolRenderersVersion)
 
@@ -101,6 +125,7 @@ function Siblings({ nodes, foldKey, expandAll, nested }: LevelProps) {
             node={segment[0]}
             foldKey={foldKey}
             expandAll={expandAll}
+            closing={segment[0].tool.id === closingId}
           />
         ) : (
           <FoldedSegment
@@ -109,6 +134,7 @@ function Siblings({ nodes, foldKey, expandAll, nested }: LevelProps) {
             foldKey={foldKey}
             expandAll={expandAll}
             nested={nested}
+            closingId={closingId}
           />
         ),
       )}
@@ -116,7 +142,16 @@ function Siblings({ nodes, foldKey, expandAll, nested }: LevelProps) {
   )
 }
 
-function FoldedSegment({ nodes, foldKey, expandAll, nested }: LevelProps) {
+function FoldedSegment({
+  nodes,
+  foldKey,
+  expandAll,
+  nested,
+  closingId,
+}: LevelProps & {
+  /** The call that closes the run, when it is one of these. */
+  closingId: string | undefined
+}) {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useFoldState(`${foldKey}:${nodes[0].tool.id}`)
   const showAll = expanded || expandAll
@@ -124,6 +159,7 @@ function FoldedSegment({ nodes, foldKey, expandAll, nested }: LevelProps) {
     ? nodes
     : nodes.filter((node, idx) => idx === nodes.length - 1 || node.tool.result === undefined)
   const failed = nodes.filter((node) => node.tool.isError).length
+  const unrecovered = nodes.some((node) => node.tool.isError && node.tool.id === closingId)
   const span = getSpan(nodes)
 
   return (
@@ -139,7 +175,7 @@ function FoldedSegment({ nodes, foldKey, expandAll, nested }: LevelProps) {
           {t('components.chat.toolCallGroup.count', { count: nodes.length })}
         </span>
         {failed > 0 && (
-          <span className="text-destructive">
+          <span className={unrecovered ? 'text-destructive' : undefined}>
             {t('components.chat.toolCallGroup.failed', { count: failed })}
           </span>
         )}
@@ -155,7 +191,13 @@ function FoldedSegment({ nodes, foldKey, expandAll, nested }: LevelProps) {
         )}
       </button>
       {visible.map((node) => (
-        <ToolNodeView key={node.tool.id} node={node} foldKey={foldKey} expandAll={expandAll} />
+        <ToolNodeView
+          key={node.tool.id}
+          node={node}
+          foldKey={foldKey}
+          expandAll={expandAll}
+          closing={node.tool.id === closingId}
+        />
       ))}
     </>
   )
@@ -165,16 +207,28 @@ function ToolNodeView({
   node,
   foldKey,
   expandAll,
+  closing,
 }: {
   node: ToolNode
   foldKey: string
   expandAll: boolean
+  /** This call closes the run: nothing came after it. */
+  closing: boolean
 }) {
+  const { tool } = node
+  // A sub-agent that returned a result got past whatever its own calls hit.
+  const succeeded = tool.result !== undefined && !tool.isError
   return (
     <>
-      <ToolCallBlock tool={node.tool} />
+      <ToolCallBlock tool={tool} recovered={!closing} />
       {node.children.length > 0 && (
-        <Siblings nodes={node.children} foldKey={foldKey} expandAll={expandAll} nested />
+        <Siblings
+          nodes={node.children}
+          foldKey={foldKey}
+          expandAll={expandAll}
+          nested
+          closing={closing && !succeeded}
+        />
       )}
     </>
   )

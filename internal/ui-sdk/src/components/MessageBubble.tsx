@@ -117,6 +117,7 @@ function MessageBubbleImpl({
   const [copied, setCopied] = useState(false)
   const [zoomedSrc, setZoomedSrc] = useState<string | null>(null)
   const segments = useMemo(() => toSegments(message.blocks), [message.blocks])
+  const lastToolsIdx = segments.map((segment) => segment.type).lastIndexOf('tools')
   const wholeTextIdx =
     isLatest || message.isStreaming ? message.blocks.map((b) => b.type).lastIndexOf('text') : -1
 
@@ -172,7 +173,7 @@ function MessageBubbleImpl({
         </>
       ) : (
         <div className="w-full min-w-0 break-words">
-          {segments.map((segment) => {
+          {segments.map((segment, segmentIdx) => {
             if (segment.type === 'tools') {
               return (
                 <ToolCallGroup
@@ -180,6 +181,7 @@ function MessageBubbleImpl({
                   tools={segment.tools}
                   foldKey={message.id}
                   expandAll={expandAll}
+                  followed={message.isStreaming || segmentIdx !== lastToolsIdx}
                 />
               )
             }
