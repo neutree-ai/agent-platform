@@ -3,6 +3,7 @@ import { createInterceptedSSEResponse, createReconnectSSEResponse } from '../lib
 import type { AppEnv } from '../lib/types'
 import { canAccessWorkspace } from '../lib/workspace-access'
 import { resolveAgentAddress } from '../lib/workspace-address'
+import { chatTurnHooks } from '../services/chat/executeChat'
 import { transitionSessionStatus } from '../services/db/sessions'
 import { getWorkspace } from '../services/db/workspaces'
 
@@ -145,6 +146,7 @@ export function createProxyRoutes() {
           workspaceId,
           userMessageText: null,
           existingSessionId: reconnectSessionId,
+          turnHooks: chatTurnHooks(workspaceId),
         })
       }
       return new Response(response.body, {

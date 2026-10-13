@@ -46,6 +46,7 @@ describe('setupActiveStream replacement', () => {
       userMessageText: null,
       existingSessionId: 's1',
       onSessionSettled,
+      turnHooks: { afterTurn: vi.fn(), onInputRequested: vi.fn() },
     })
     expect(onSessionSettled).not.toHaveBeenCalled()
 

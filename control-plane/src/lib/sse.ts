@@ -411,6 +411,26 @@ interface InterceptedSSEOptions {
    * another replica to recover.
    */
   onSessionSettled?: () => void | Promise<void>
+  /** What the turn's dispatcher does as the turn moves on; see `TurnHooks`. */
+  turnHooks: TurnHooks
+}
+
+/**
+ * Follow-up work that belongs to whoever dispatched the turn. This module
+ * intercepts a turn's stream and knows when the turn changes state; starting
+ * further turns is chat dispatch's business, so it is handed in here rather
+ * than reached for.
+ */
+export interface TurnHooks {
+  /**
+   * The turn is over and the session is free for its next one. `reason` is the
+   * `session.ended` reason, or null when the stream was lost before it. Not
+   * called when this process shuts down mid-turn: the turn lives on for
+   * another replica to recover.
+   */
+  afterTurn(sessionId: string, reason: string | null): Promise<void>
+  /** The turn parked on a question to its user. */
+  onInputRequested(sessionId: string): Promise<void>
 }
 
 export function createInterceptedSSEResponse(
@@ -431,6 +451,7 @@ export function createInterceptedSSEResponse(
     replicaId,
     onTurnEnd,
     onSessionSettled,
+    turnHooks,
   } = opts
   if (!response.body) {
     // No stream to intercept — the turn is over before it began. Fire the
@@ -510,6 +531,7 @@ export function createInterceptedSSEResponse(
     onNewSession,
     replicaId,
     onSessionSettled,
+    onInputRequested: turnHooks.onInputRequested,
   })
   const broadcastPlugin = createBroadcastPlugin({
     workspaceId,
@@ -607,34 +629,18 @@ export function createInterceptedSSEResponse(
       } catch (e) {
         console.error(`[SSE] session settle failed ${tag}:`, e)
       }
-      // After a cleanly-completed turn, dispatch any follow-up the user
-      // queued mid-turn. This runs once `runTurn` has fully resolved — both
-      // plugins' `onEnd` are done and `activeStreams` is cleaned up — so the
-      // drained turn registers its own stream without racing this teardown,
-      // and after the session is settled, so it finds the session free.
-      // A turn that errored or was interrupted does not drain: the draft is
-      // left in place for the user to decide. Skip while CP is shutting
-      // down — startup recovery on the next pod owns the drain instead.
+      // Hand over to the dispatcher for whatever follows the turn. This runs
+      // once `runTurn` has fully resolved — both plugins' `onEnd` are done and
+      // `activeStreams` is cleaned up — so a turn it starts registers its own
+      // stream without racing this teardown, and after the session is
+      // settled, so it finds the session free. Skip while CP is shutting
+      // down — startup recovery on the next pod owns the follow-up instead.
       const sid = state.sessionId
       if (!sid || isDraining()) return
-      if (state.endReason === 'completed') {
-        try {
-          // Dynamic import: executeChat statically imports this module, so a
-          // static import here would form an initialization cycle.
-          const { drainPendingMessage } = await import('../services/chat/executeChat')
-          await drainPendingMessage(workspaceId, sid)
-        } catch (e) {
-          console.error(`[SSE] pending drain failed ${tag} session=${sid}:`, e)
-        }
-      }
-      // However the turn ended, record it on the agent call that ran it and
-      // post any call results that were waiting for this session to be free.
-      // After the drain, so a follow-up the user queued goes first.
       try {
-        const { settleSessionTurn } = await agentCallDelivery()
-        await settleSessionTurn(sid, { reason: state.endReason })
+        await turnHooks.afterTurn(sid, state.endReason)
       } catch (e) {
-        console.error(`[SSE] agent call settle failed ${tag} session=${sid}:`, e)
+        console.error(`[SSE] after-turn hook failed ${tag} session=${sid}:`, e)
       }
     })
 
@@ -646,15 +652,6 @@ export function createInterceptedSSEResponse(
       Connection: 'keep-alive',
     },
   })
-}
-
-/**
- * Dynamic import: agent-call-delivery reaches executeChat, which statically
- * imports this module, so a static import here would form an initialization
- * cycle.
- */
-function agentCallDelivery() {
-  return import('../services/chat/agent-call-delivery')
 }
 
 // ── Shared pieces for main-turn plugins ──
@@ -763,6 +760,7 @@ interface PersistPluginCtx {
     blocks: InterceptContentPart[]
   }
   onSessionSettled?: () => void | Promise<void>
+  onInputRequested: TurnHooks['onInputRequested']
 }
 
 function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
@@ -1212,8 +1210,7 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
           queue.run(async () => {
             if (state.sessionId) {
               await transitionSessionStatus(state.sessionId, 'human')
-              const { noteSessionInputRequested } = await agentCallDelivery()
-              await noteSessionInputRequested(state.sessionId)
+              await ctx.onInputRequested(state.sessionId)
             }
           }, logError('transition to human (question)'))
           break

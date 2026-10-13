@@ -23,8 +23,8 @@ const workspaces = vi.hoisted(() => ({ getWorkspace: vi.fn() }))
 vi.mock('../db/workspaces', () => workspaces)
 const messages = vi.hoisted(() => ({ getLastAssistantMessage: vi.fn() }))
 vi.mock('../db/messages', () => messages)
-const chat = vi.hoisted(() => ({ executeChat: vi.fn() }))
-vi.mock('./executeChat', () => chat)
+// Stands in for chat dispatch, which the module is handed rather than imports.
+const startTurn = vi.fn()
 const sse = vi.hoisted(() => ({ isDraining: vi.fn() }))
 vi.mock('../../lib/sse', () => sse)
 
@@ -87,7 +87,7 @@ beforeEach(() => {
     slug: id === 'ws-child' ? 'reviewer' : null,
   }))
   messages.getLastAssistantMessage.mockResolvedValue({ content: 'looks good' })
-  chat.executeChat.mockResolvedValue(sseResponse())
+  startTurn.mockResolvedValue(sseResponse())
 })
 
 describe('which sessions take deliveries', () => {
@@ -146,7 +146,7 @@ describe('settling a turn', () => {
   it('closes the call that ran it and posts to the caller, then to itself', async () => {
     calls.endAgentCalls.mockResolvedValue([call()])
 
-    await settleSessionTurn('child', { reason: 'completed' })
+    await settleSessionTurn('child', { reason: 'completed' }, startTurn)
 
     expect(calls.endAgentCalls).toHaveBeenCalledWith('child', 'ended', null)
     expect(calls.takeDeliverableAgentCalls.mock.calls.map((c) => c[0])).toEqual(['parent', 'child'])
@@ -155,7 +155,7 @@ describe('settling a turn', () => {
   it('keeps the call running while the session waits on calls of its own', async () => {
     calls.countOpenAgentCalls.mockResolvedValue(2)
 
-    await settleSessionTurn('child', { reason: 'completed' })
+    await settleSessionTurn('child', { reason: 'completed' }, startTurn)
 
     expect(calls.endAgentCalls).not.toHaveBeenCalled()
   })
@@ -163,10 +163,10 @@ describe('settling a turn', () => {
   it('records a turn that did not complete as failed, whatever it was waiting on', async () => {
     calls.countOpenAgentCalls.mockResolvedValue(2)
 
-    await settleSessionTurn('child', { reason: 'error', error: 'model overloaded' })
+    await settleSessionTurn('child', { reason: 'error', error: 'model overloaded' }, startTurn)
     expect(calls.endAgentCalls).toHaveBeenLastCalledWith('child', 'failed', 'model overloaded')
 
-    await settleSessionTurn('child', { reason: null })
+    await settleSessionTurn('child', { reason: null }, startTurn)
     expect(calls.endAgentCalls).toHaveBeenLastCalledWith(
       'child',
       'failed',
@@ -177,7 +177,7 @@ describe('settling a turn', () => {
   it('tells the caller when the session parks on a question', async () => {
     calls.markAgentCallInputRequested.mockResolvedValue([call({ status: 'running' })])
 
-    await noteSessionInputRequested('child')
+    await noteSessionInputRequested('child', startTurn)
 
     expect(calls.takeDeliverableAgentCalls).toHaveBeenCalledWith('parent', expect.any(Number))
   })
@@ -185,9 +185,9 @@ describe('settling a turn', () => {
 
 describe('delivering results', () => {
   it('does nothing when no result is ready', async () => {
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
-    expect(chat.executeChat).not.toHaveBeenCalled()
+    expect(startTurn).not.toHaveBeenCalled()
     expect(sessions.getSession).not.toHaveBeenCalled()
   })
 
@@ -195,10 +195,10 @@ describe('delivering results', () => {
     sse.isDraining.mockReturnValue(true)
     calls.takeDeliverableAgentCalls.mockResolvedValue([call()])
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
     expect(calls.takeDeliverableAgentCalls).not.toHaveBeenCalled()
-    expect(chat.executeChat).not.toHaveBeenCalled()
+    expect(startTurn).not.toHaveBeenCalled()
   })
 
   it('posts every ready result as one turn in the calling session', async () => {
@@ -209,10 +209,10 @@ describe('delivering results', () => {
     // Both finished calls still count as open until the post succeeds.
     calls.countOpenAgentCalls.mockResolvedValue(3)
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
-    expect(chat.executeChat).toHaveBeenCalledTimes(1)
-    const opts = chat.executeChat.mock.calls[0][0]
+    expect(startTurn).toHaveBeenCalledTimes(1)
+    const opts = startTurn.mock.calls[0][0]
     expect(opts.sessionId).toBe('parent')
     expect(opts.callerUserId).toBe('u1')
     expect(opts.message).toContain('written by the platform, not by the user')
@@ -226,9 +226,9 @@ describe('delivering results', () => {
     calls.takeDeliverableAgentCalls.mockResolvedValue([call()])
     calls.countOpenAgentCalls.mockResolvedValue(1)
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
-    expect(chat.executeChat.mock.calls[0][0].message).toContain(
+    expect(startTurn.mock.calls[0][0].message).toContain(
       'No calls from this session are still running.',
     )
   })
@@ -238,9 +238,9 @@ describe('delivering results', () => {
       call({ status: 'running', input_requested_at: '2026-01-01T00:00:00Z' }),
     ])
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
-    expect(chat.executeChat.mock.calls[0][0].message).toContain('waiting for user input')
+    expect(startTurn.mock.calls[0][0].message).toContain('waiting for user input')
     expect(messages.getLastAssistantMessage).not.toHaveBeenCalled()
   })
 
@@ -248,18 +248,18 @@ describe('delivering results', () => {
     calls.takeDeliverableAgentCalls.mockResolvedValue([call()])
     messages.getLastAssistantMessage.mockResolvedValue({ content: 'x'.repeat(20_000) })
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
-    const { message } = chat.executeChat.mock.calls[0][0]
+    const { message } = startTurn.mock.calls[0][0]
     expect(message.length).toBeLessThan(17_000)
     expect(message).toContain('read the full reply with get_agent_result')
   })
 
   it('keeps the results for later when the calling session is mid-turn', async () => {
     calls.takeDeliverableAgentCalls.mockResolvedValue([call()])
-    chat.executeChat.mockResolvedValue(jsonResponse(409))
+    startTurn.mockResolvedValue(jsonResponse(409))
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
     expect(calls.releaseAgentCallDelivery).toHaveBeenCalledWith(['c1'])
     expect(calls.markAgentCallsDelivered).not.toHaveBeenCalled()
@@ -268,9 +268,9 @@ describe('delivering results', () => {
 
   it('counts a failed post as an attempt and leaves the retry to the lease', async () => {
     calls.takeDeliverableAgentCalls.mockResolvedValue([call()])
-    chat.executeChat.mockResolvedValue(jsonResponse(503))
+    startTurn.mockResolvedValue(jsonResponse(503))
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
     expect(calls.failAgentCallDelivery).toHaveBeenCalledWith(
       ['c1'],
@@ -279,8 +279,8 @@ describe('delivering results', () => {
     )
     expect(calls.releaseAgentCallDelivery).not.toHaveBeenCalled()
 
-    chat.executeChat.mockRejectedValue(new Error('connection reset'))
-    await deliverAgentCallResults('parent')
+    startTurn.mockRejectedValue(new Error('connection reset'))
+    await deliverAgentCallResults('parent', startTurn)
     expect(calls.failAgentCallDelivery).toHaveBeenLastCalledWith(
       ['c1'],
       expect.any(Number),
@@ -295,17 +295,17 @@ describe('delivering results', () => {
     calls.takeDeliverableAgentCalls.mockResolvedValue([call()])
     sessions.getSession.mockResolvedValue(session)
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
     expect(calls.dropAgentCallDelivery).toHaveBeenCalledWith(['c1'], note)
-    expect(chat.executeChat).not.toHaveBeenCalled()
+    expect(startTurn).not.toHaveBeenCalled()
   })
 
   it('drops results whose calling workspace is gone', async () => {
     calls.takeDeliverableAgentCalls.mockResolvedValue([call()])
     workspaces.getWorkspace.mockResolvedValue(null)
 
-    await deliverAgentCallResults('parent')
+    await deliverAgentCallResults('parent', startTurn)
 
     expect(calls.dropAgentCallDelivery).toHaveBeenCalledWith(
       ['c1'],

@@ -1,5 +1,5 @@
 import { ensureTokenForSession, mintToken } from '../../lib/session-token'
-import { createInterceptedSSEResponse } from '../../lib/sse'
+import { type TurnHooks, createInterceptedSSEResponse } from '../../lib/sse'
 import { resolveAgentAddress } from '../../lib/workspace-address'
 import { addMessage, insertUserMessageBlocks } from '../db/messages'
 import {
@@ -13,6 +13,7 @@ import type { Workspace } from '../db/types'
 import { getWorkspace } from '../db/workspaces'
 import { pickReplicaForTurn } from '../replica-router'
 import { WorkspaceStartError, ensureWorkspaceRunning } from '../workspace-autostart'
+import { noteSessionInputRequested, settleSessionTurn } from './agent-call-delivery'
 import { type ChatImage, buildAgentChatBody, buildUserMessageBlocks } from './request'
 import { adoptSessionTurn, claimSessionTurn } from './session-turn'
 import { TurnCapacityError, type TurnSlot, acquireTurn } from './turn-gate'
@@ -260,6 +261,7 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
       // the single point that also frees the accounting for the autoscaler.
       onTurnEnd: () => slot.release(),
       onSessionSettled: releaseSession,
+      turnHooks: chatTurnHooks(workspaceId),
     })
     handedOff = true
     return intercepted
@@ -274,10 +276,34 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
 }
 
 /**
+ * What follows a turn in a workspace's session, for every path that intercepts
+ * one (see `TurnHooks`).
+ */
+export function chatTurnHooks(workspaceId: string): TurnHooks {
+  return {
+    afterTurn: async (sessionId, reason) => {
+      // After a cleanly-completed turn, dispatch any follow-up the user queued
+      // mid-turn. A turn that errored or was interrupted does not drain: the
+      // draft is left in place for the user to decide.
+      if (reason === 'completed') {
+        await drainPendingMessage(workspaceId, sessionId).catch((e) =>
+          console.error(`[chat] pending drain failed session=${sessionId}:`, e),
+        )
+      }
+      // However the turn ended, record it on the agent call that ran it and
+      // post any call results that were waiting for this session to be free.
+      // After the drain, so a follow-up the user queued goes first.
+      await settleSessionTurn(sessionId, { reason }, executeChat)
+    },
+    onInputRequested: (sessionId) => noteSessionInputRequested(sessionId, executeChat),
+  }
+}
+
+/**
  * Drain a session's queued follow-up message (if any) into a fresh turn.
  *
  * Called after a turn ends cleanly (`session.ended` reason `completed`, see
- * `createInterceptedSSEResponse`) and from startup recovery when an agent has
+ * `chatTurnHooks`) and from startup recovery when an agent has
  * forgotten an orphaned session. The draft is taken atomically; if dispatch
  * can't happen (workspace down, agent unreachable) it's put back so a later
  * attempt — or the user — can still pick it up.

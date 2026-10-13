@@ -21,6 +21,7 @@ import {
   resolveDeliveryTarget,
   settleSessionTurn,
 } from '../../services/chat/agent-call-delivery'
+import { executeChat } from '../../services/chat/executeChat'
 import { adoptSessionTurn, claimSessionTurn } from '../../services/chat/session-turn'
 import {
   type AgentCall,
@@ -413,7 +414,7 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
           queue.run(async () => {
             if (state.sessionId) {
               await transitionSessionStatus(state.sessionId, 'human')
-              await noteSessionInputRequested(state.sessionId)
+              await noteSessionInputRequested(state.sessionId, executeChat)
             }
           }, logError('transition to human (question)'))
           break
@@ -451,10 +452,11 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
         const handedOff = !state.sessionEndedSeen && isDraining()
         if (!handedOff) {
           await ctx.releaseSession?.()
-          await settleSessionTurn(state.sessionId, {
-            reason: result.reason,
-            error: result.error?.message,
-          }).catch(logError('settle turn'))
+          await settleSessionTurn(
+            state.sessionId,
+            { reason: result.reason, error: result.error?.message },
+            executeChat,
+          ).catch(logError('settle turn'))
         }
       }
 

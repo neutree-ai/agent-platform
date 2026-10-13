@@ -20,13 +20,17 @@ import {
 } from '../db/agent-calls'
 import { getLastAssistantMessage } from '../db/messages'
 import { getSession } from '../db/sessions'
+import type { Workspace } from '../db/types'
 import { getWorkspace } from '../db/workspaces'
-import { executeChat } from './executeChat'
 
 // Delivers the results of `call_agent` calls back to the session that made
 // them. A call that outlives its tool call is recorded in `agent_calls`; when
 // the called session's turn ends, its result is posted to the calling session
 // as a new turn, so the calling agent can end its own turn instead of polling.
+//
+// Posting a result means starting a turn, which is chat dispatch's job. This
+// module sits below chat dispatch, so every entry point takes the function
+// that starts a turn (`StartTurn`) from its caller.
 //
 // Delivery is driven from the table. Whatever notices a change — a turn
 // ending, or the sweep below — calls `deliverAgentCallResults` for the calling
@@ -66,6 +70,16 @@ function sourceTakesDeliveries(source: string): boolean {
       return false
   }
 }
+
+/** Starts a turn in an existing session; `executeChat` in practice. */
+type StartTurn = (opts: {
+  workspace: Workspace
+  message: string
+  sessionId: string
+  images: null
+  source: string
+  callerUserId?: string
+}) => Promise<Response>
 
 interface DeliveryTarget {
   parentSessionId: string
@@ -114,13 +128,17 @@ interface TurnOutcome {
  * (if any) and posts whatever is now ready, both to the session that called
  * this one and to this session itself, which is free to take results again.
  */
-export async function settleSessionTurn(sessionId: string, outcome: TurnOutcome): Promise<void> {
+export async function settleSessionTurn(
+  sessionId: string,
+  outcome: TurnOutcome,
+  startTurn: StartTurn,
+): Promise<void> {
   const closed = await closeCallsAsChild(sessionId, outcome)
   const parents = new Set(closed.map((c) => c.parent_session_id))
   for (const parent of parents) {
-    await deliverAgentCallResults(parent)
+    await deliverAgentCallResults(parent, startTurn)
   }
-  await deliverAgentCallResults(sessionId)
+  await deliverAgentCallResults(sessionId, startTurn)
 }
 
 async function closeCallsAsChild(sessionId: string, outcome: TurnOutcome): Promise<AgentCall[]> {
@@ -137,11 +155,14 @@ async function closeCallsAsChild(sessionId: string, outcome: TurnOutcome): Promi
 }
 
 /** The session's turn is parked on a question to its user: tell its caller once. */
-export async function noteSessionInputRequested(sessionId: string): Promise<void> {
+export async function noteSessionInputRequested(
+  sessionId: string,
+  startTurn: StartTurn,
+): Promise<void> {
   const calls = await markAgentCallInputRequested(sessionId)
   const parents = new Set(calls.map((c) => c.parent_session_id))
   for (const parent of parents) {
-    await deliverAgentCallResults(parent)
+    await deliverAgentCallResults(parent, startTurn)
   }
 }
 
@@ -149,7 +170,10 @@ export async function noteSessionInputRequested(sessionId: string): Promise<void
  * Post every result ready for this session as one turn. Does nothing when
  * there is none, so it can be called on any hint that there might be.
  */
-export async function deliverAgentCallResults(parentSessionId: string): Promise<void> {
+export async function deliverAgentCallResults(
+  parentSessionId: string,
+  startTurn: StartTurn,
+): Promise<void> {
   // A replica on its way out would start a turn it cannot see through.
   if (isDraining()) return
 
@@ -174,7 +198,7 @@ export async function deliverAgentCallResults(parentSessionId: string): Promise<
     }
 
     const message = await buildDeliveryMessage(parentSessionId, calls)
-    const resp = await executeChat({
+    const resp = await startTurn({
       workspace,
       message,
       sessionId: parentSessionId,
@@ -263,7 +287,7 @@ let sweeping = false
  * away mid-turn, a post that failed, a session that was busy and whose turn
  * then ended on another replica.
  */
-async function sweepAgentCalls(): Promise<void> {
+async function sweepAgentCalls(startTurn: StartTurn): Promise<void> {
   if (sweeping || isDraining()) return
   sweeping = true
   try {
@@ -279,16 +303,16 @@ async function sweepAgentCalls(): Promise<void> {
       parents.add(parent)
     }
     for (const parent of parents) {
-      await deliverAgentCallResults(parent)
+      await deliverAgentCallResults(parent, startTurn)
     }
   } finally {
     sweeping = false
   }
 }
 
-export function startAgentCallSweep(): void {
+export function startAgentCallSweep(startTurn: StartTurn): void {
   const timer = setInterval(() => {
-    sweepAgentCalls().catch((e) => console.error('[agent-call] sweep failed:', e))
+    sweepAgentCalls(startTurn).catch((e) => console.error('[agent-call] sweep failed:', e))
   }, SWEEP_INTERVAL_MS)
   timer.unref?.()
 }

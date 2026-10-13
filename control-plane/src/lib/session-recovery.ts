@@ -1,4 +1,4 @@
-import { drainPendingMessage } from '../services/chat/executeChat'
+import { chatTurnHooks, drainPendingMessage } from '../services/chat/executeChat'
 import { adoptSessionTurn } from '../services/chat/session-turn'
 import { getLastMessageWithBlocks } from '../services/db/messages'
 import { pool } from '../services/db/pool'
@@ -120,6 +120,7 @@ export async function recoverOrphanedSessions() {
         source: 'recovery',
         initialAssistant,
         onSessionSettled: () => claim.release(),
+        turnHooks: chatTurnHooks(workspaceId),
       })
     } catch (e: any) {
       console.error(`[Recovery] workspace=${workspaceId} session=${sessionId} error:`, e.message)
