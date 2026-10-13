@@ -1483,6 +1483,7 @@
       "sessionTitle": "浏览器会话"
     },
     "workspaceChat": {
+      "waitingOnAgents_other": "在等 {{count}} 个子 Agent 返回，结果回来后会自动继续。这期间可以照常发消息。",
       "actions": {
         "search": "搜索",
         "rename": "重命名",

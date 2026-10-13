@@ -186,6 +186,21 @@ function HintBar({ visible, hints }: { visible: boolean; hints: string[] }) {
   )
 }
 
+/**
+ * Shown above the composer while the agent waits on agents it called. No turn
+ * is running, so the composer is open, yet the conversation is not over: the
+ * results start the agent's next turn on their own.
+ */
+function WaitingOnAgentsNotice({ count }: { count: number }) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex items-center justify-center gap-1.5 px-3 pb-1 text-tiny text-muted-foreground">
+      <span className="inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-info" />
+      <span>{t('components.workspaceChat.waitingOnAgents', { count })}</span>
+    </div>
+  )
+}
+
 interface WorkspaceChatPanelProps {
   workspace: Workspace
   /**
@@ -211,7 +226,7 @@ interface WorkspaceChatPanelProps {
   onMessages?: (messages: ChatMessageType[]) => void
 }
 
-/** How often a shared workspace's open session checks for turns started elsewhere. */
+/** How often the open session checks for turns this tab did not start. */
 const REMOTE_TURN_POLL_MS = 5000
 
 export function WorkspaceChatPanel({
@@ -241,23 +256,35 @@ export function WorkspaceChatPanel({
   const lastTurnStats = useAgentSessionStore((s) => s.lastTurnStats)
   const actions = useAgentSessionActions()
 
-  // Other people's turns in a shared workspace don't reach this tab's stream;
-  // poll the active session to pick them up while the tab is visible.
-  useEffect(() => {
-    if (!multiAuthor || readonly) return
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void actions.syncRemoteTurn()
-    }, REMOTE_TURN_POLL_MS)
-    return () => clearInterval(timer)
-  }, [multiAuthor, readonly, actions])
-
-  const isChatBusy = isLoading || isDeleting
-  const isSessionLocked = isDeleting || isSwitching
-
   // ── Session list ──
   const { data: sessions = [], fetchNextPage, hasNextPage } = useSessions(workspace.id)
   const invalidateSessions = useInvalidateSessions()
   const markSeen = useMarkSeen()
+
+  // Agent calls the open session is still waiting on. Read from the session
+  // list, which is refreshed whenever a turn ends.
+  const pendingAgentCalls = sessions.find((s) => s.id === activeSessionId)?.pending_agent_calls ?? 0
+  const waitingOnAgents = pendingAgentCalls > 0
+
+  // Turns this tab did not start don't reach its stream: other people's in a
+  // shared workspace, and the one the platform starts to deliver the results
+  // of agent calls. Poll the active session to pick them up while the tab is
+  // visible.
+  useEffect(() => {
+    if (readonly) return
+    if (!multiAuthor && !waitingOnAgents) return
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      void actions.syncRemoteTurn()
+      // A call can also close without a turn here (its result read another
+      // way, or dropped), so the count is re-read rather than inferred.
+      if (waitingOnAgents) invalidateSessions(workspace.id)
+    }, REMOTE_TURN_POLL_MS)
+    return () => clearInterval(timer)
+  }, [multiAuthor, waitingOnAgents, readonly, actions, invalidateSessions, workspace.id])
+
+  const isChatBusy = isLoading || isDeleting
+  const isSessionLocked = isDeleting || isSwitching
 
   // Auto-mark `human` sessions as seen once the user opens them. Guard with a
   // ref so we only fire once per (session, status) pair — repeated renders or
@@ -846,6 +873,9 @@ export function WorkspaceChatPanel({
           )}
 
           {!readonly && <HintBar visible={isLoading} hints={hints} />}
+          {!readonly && waitingOnAgents && !isLoading && (
+            <WaitingOnAgentsNotice count={pendingAgentCalls} />
+          )}
           {!readonly && (
             <Composer
               ref={composerRef}
