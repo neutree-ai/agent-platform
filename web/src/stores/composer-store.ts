@@ -30,34 +30,26 @@ export const useComposerStore = create<ComposerState>((set) => ({
 
 /**
  * Wire a chat composer to {@link useComposerStore}: when another panel calls
- * `requestInsert` for this workspace, splice the text in at the textarea's
- * caret, then return focus and selection there.
+ * `requestInsert` for this workspace, hand the text to `insert` (the
+ * composer's caret-aware insert, which also restores focus and selection).
  *
  * The request is *consumed* (cleared) on handling. That way a composer mounting
  * late — e.g. after a slot switch unmounted it — still picks up a request made
  * while it was gone, and a later remount doesn't replay a stale one.
- *
- * A `<textarea>` keeps `selectionStart` while blurred, so the caret the user
- * last left in the composer is still the right insertion point even though
- * focus has moved away to the file browser.
  */
 export function useComposerInsertRequests({
   workspaceId,
   enabled,
-  inputRef,
-  setInput,
-  onInserted,
+  insert,
 }: {
   workspaceId: string
   enabled: boolean
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  setInput: (value: string) => void
-  onInserted?: () => void
+  insert: (text: string) => void
 }) {
   const request = useComposerStore((s) => s.request)
-  // Keep the latest non-stable callbacks reachable without widening deps.
-  const latestRef = useRef({ setInput, onInserted })
-  latestRef.current = { setInput, onInserted }
+  // Keep the latest callback reachable without widening deps.
+  const insertRef = useRef(insert)
+  insertRef.current = insert
 
   useEffect(() => {
     if (!enabled || !request) return
@@ -67,34 +59,6 @@ export function useComposerInsertRequests({
     // later remount of this composer from replaying the same insert.
     if (useComposerStore.getState().request !== request) return
     useComposerStore.setState({ request: null })
-
-    const el = inputRef.current
-    const current = el?.value ?? ''
-    const start = el?.selectionStart ?? current.length
-    const end = el?.selectionEnd ?? start
-    const before = current.slice(0, start)
-    const after = current.slice(end)
-    // Pad so the mention never fuses with an adjacent word. A space must also
-    // sit *before* the final caret: the `@file/` picker keys off the text up to
-    // the caret, and that space is what keeps it dismissed after the insert.
-    const lead = before && !/\s$/.test(before) ? ' ' : ''
-    const afterStartsBlank = /^\s/.test(after)
-    const trail = afterStartsBlank ? '' : ' '
-    const piece = `${lead}${request.text}${trail}`
-    // When `after` already opens with whitespace, reuse it instead of adding a
-    // second space — land the caret just past it.
-    const caret = before.length + piece.length + (afterStartsBlank ? 1 : 0)
-
-    latestRef.current.setInput(before + piece + after)
-    // Defer focus to a macrotask so it runs after the file browser's Radix
-    // dropdown finishes its own close-time focus restoration (which would
-    // otherwise pull focus back to the menu trigger).
-    setTimeout(() => {
-      if (el) {
-        el.focus()
-        el.setSelectionRange(caret, caret)
-      }
-      latestRef.current.onInserted?.()
-    }, 0)
-  }, [request, workspaceId, enabled, inputRef])
+    insertRef.current(request.text)
+  }, [request, workspaceId, enabled])
 }

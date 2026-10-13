@@ -2,6 +2,8 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  // UI SDK sources use the automatic JSX runtime (no `import React`).
+  esbuild: { jsx: 'automatic' },
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
@@ -16,6 +18,10 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['src/**/*.test.ts', '../internal/sse-consumer/src/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      '../internal/sse-consumer/src/**/*.test.ts',
+      '../internal/ui-sdk/src/**/*.test.ts',
+    ],
   },
 })

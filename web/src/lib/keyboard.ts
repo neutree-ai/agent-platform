@@ -8,7 +8,7 @@ type AnyKeyboardEvent = ReactKeyboardEvent | KeyboardEvent
  * submit/confirm actions. Covers `isComposing` on both React synthetic and raw
  * events, plus the legacy 229 keyCode emitted by older Safari.
  */
-export function isComposing(e: AnyKeyboardEvent): boolean {
+function isComposing(e: AnyKeyboardEvent): boolean {
   const native = 'nativeEvent' in e ? e.nativeEvent : e
   return native.isComposing || native.keyCode === 229
 }

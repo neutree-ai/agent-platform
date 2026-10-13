@@ -112,6 +112,7 @@ export default defineConfig(({ mode }) => {
         'i18next',
         '@radix-ui/react-tooltip',
         '@radix-ui/react-collapsible',
+        '@radix-ui/react-dialog',
         '@radix-ui/react-slot',
       ],
     },

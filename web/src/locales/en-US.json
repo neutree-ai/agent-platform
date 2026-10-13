@@ -1464,13 +1464,7 @@
         "smallerText": "Smaller text",
         "largerText": "Larger text",
         "resetSession": "Reset session",
-        "stop": "Stop",
-        "attachImage": "Attach image",
-        "compactConversation": "Compact conversation",
-        "send": "Send",
-        "sendShortcut": "Send (Ctrl/Cmd+Enter)",
-        "sendShortcutEnter": "Send (Enter)",
-        "queue": "Queue"
+        "compactConversation": "Compact conversation"
       },
       "relativeTime": {
         "justNow": "just now",
@@ -1485,9 +1479,7 @@
       },
       "placeholders": {
         "searchMessages": "Search messages...",
-        "sessionName": "Session name",
-        "messageInput": "Message... ({{modifier}}+Enter)",
-        "messageInputEnter": "Message... (Enter to send, Shift+Enter for newline)"
+        "sessionName": "Session name"
       },
       "empty": {
         "noMatches": "No matches",
@@ -1506,16 +1498,7 @@
         "searchConversation": "Ctrl/Cmd+F to search conversation",
         "configureCommands": "Configure commands in the toolbar above",
         "compactConversation": "Use /compact to compress long conversations"
-      },
-      "pending": {
-        "label": "Queued",
-        "autoSendHint": "Sends when the agent finishes",
-        "clear": "Discard",
-        "queueHint": "Agent is busy — will be queued",
-        "unsavedChanges": "Unsaved changes",
-        "composerHint": "Agent is busy — send to queue"
-      },
-      "attachmentAlt": "attachment"
+      }
     },
     "workspaceSandbox": {
       "empty": {
@@ -3441,23 +3424,6 @@
         }
       }
     },
-    "voiceInput": {
-      "actions": {
-        "start": "Voice input ({{modifier}}+Shift+M)",
-        "stopAndTranscribe": "Stop and transcribe",
-        "cancel": "Cancel",
-        "transcribing": "Transcribing…"
-      },
-      "states": {
-        "listening": "Listening…",
-        "transcribing": "Transcribing…"
-      },
-      "errors": {
-        "unsupported": "Voice input is not supported in this browser.",
-        "permissionDenied": "Microphone access was denied.",
-        "failed": "Transcription failed"
-      }
-    },
     "chatInput": {
       "alts": {
         "attachment": "attachment"
@@ -3896,16 +3862,6 @@
           "structContent": "Project {{PROJECT_ID}}, branch {{BRANCH}}, file {{FILE_PATH}}"
         }
       }
-    },
-    "commandTrigger": {
-      "actions": {
-        "send": "Send"
-      },
-      "types": {
-        "plain": "Plain",
-        "struct": "Struct"
-      },
-      "fileMentionHint": "Browse workspace files"
     },
     "agentSettingsEditor": {
       "hints": {

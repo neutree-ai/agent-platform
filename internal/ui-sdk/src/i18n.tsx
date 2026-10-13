@@ -8,7 +8,7 @@
 // components need no key rewrites; the bundle below is just that subtree.
 import i18next, { type i18n as I18nInstance } from 'i18next'
 import { type ReactNode, useEffect } from 'react'
-import { I18nextProvider, getI18n, initReactI18next, setI18n } from 'react-i18next'
+import { I18nextProvider, getI18n, initReactI18next, setI18n, useTranslation } from 'react-i18next'
 import enUS from './locales/en-US.json'
 import zhCN from './locales/zh-CN.json'
 
@@ -38,6 +38,25 @@ if (hostI18n) setI18n(hostI18n)
 // Normalize anything zh-ish to our zh-CN bundle, everything else to en-US.
 function normalizeLocale(locale: string | undefined): 'en-US' | 'zh-CN' {
   return locale?.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'
+}
+
+/**
+ * Translation hook bound to the SDK's own instance regardless of the
+ * surrounding <I18nextProvider>. Used by components (like the composer) that
+ * render host-provided children: wrapping those in <TranscriptI18nProvider>
+ * would rebind the host's own `useTranslation()` calls to this bundle.
+ */
+export function useSdkTranslation() {
+  return useTranslation(undefined, { i18n: transcriptI18n })
+}
+
+/** Switch the SDK's language when `locale` is given (no-op when undefined). */
+export function useSdkLocale(locale: string | undefined) {
+  useEffect(() => {
+    if (locale === undefined) return
+    const target = normalizeLocale(locale)
+    if (transcriptI18n.language !== target) void transcriptI18n.changeLanguage(target)
+  }, [locale])
 }
 
 export interface TranscriptI18nProviderProps {

@@ -234,6 +234,63 @@
     },
     "markdown": {
       "systemMessage": "系统消息"
+    },
+    "composer": {
+      "placeholders": {
+        "modEnter": "输入消息...（{{modifier}}+Enter）",
+        "enter": "输入消息...（Enter 发送，Shift+Enter 换行）",
+        "touch": "输入消息..."
+      },
+      "actions": {
+        "send": "发送",
+        "sendShortcutModEnter": "发送（{{modifier}}+Enter）",
+        "sendShortcutEnter": "发送（Enter）",
+        "queue": "加入待发",
+        "stop": "停止",
+        "attachImage": "添加图片",
+        "removeAttachment": "移除图片"
+      },
+      "pending": {
+        "label": "待发送",
+        "autoSendHint": "Agent 完成后自动发送",
+        "discard": "清除",
+        "queueHint": "Agent 忙碌中，将加入待发",
+        "unsavedChanges": "有改动",
+        "busyHint": "Agent 忙碌中，发送即加入待发"
+      },
+      "attachmentAlt": "附件",
+      "menu": {
+        "label": "候选项"
+      },
+      "commands": {
+        "types": {
+          "plain": "纯文本",
+          "struct": "模板"
+        },
+        "send": "发送",
+        "cancel": "取消",
+        "close": "关闭"
+      },
+      "voice": {
+        "actions": {
+          "start": "语音输入",
+          "startWithShortcut": "语音输入（{{modifier}}+Shift+M）",
+          "stopAndTranscribe": "停止并转写",
+          "cancel": "取消"
+        },
+        "states": {
+          "listening": "聆听中…",
+          "transcribing": "转写中…"
+        },
+        "errors": {
+          "unsupported": "当前浏览器不支持语音输入。",
+          "permissionDenied": "麦克风权限被拒绝。",
+          "failed": "转写失败"
+        }
+      },
+      "nap": {
+        "fileMentionHint": "浏览工作区文件"
+      }
     }
   }
 }

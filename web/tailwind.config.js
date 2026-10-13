@@ -119,10 +119,6 @@ export default {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.4' },
         },
-        'voice-eq': {
-          '0%, 100%': { transform: 'scaleY(0.3)' },
-          '50%': { transform: 'scaleY(1)' },
-        },
         'breathing-halo': {
           '0%, 100%': { opacity: '0.4', transform: 'scale(0.95)' },
           '50%': { opacity: '0.8', transform: 'scale(1.05)' },
@@ -130,7 +126,6 @@ export default {
       },
       animation: {
         'pulse-text': 'pulse-text 2s ease-in-out infinite',
-        'voice-eq': 'voice-eq 1.1s ease-in-out infinite',
         'breathing-halo': 'breathing-halo 2.6s ease-in-out infinite',
       },
       borderRadius: {

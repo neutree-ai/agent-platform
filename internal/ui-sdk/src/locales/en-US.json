@@ -234,6 +234,63 @@
     },
     "markdown": {
       "systemMessage": "System message"
+    },
+    "composer": {
+      "placeholders": {
+        "modEnter": "Message... ({{modifier}}+Enter)",
+        "enter": "Message... (Enter to send, Shift+Enter for newline)",
+        "touch": "Message..."
+      },
+      "actions": {
+        "send": "Send",
+        "sendShortcutModEnter": "Send ({{modifier}}+Enter)",
+        "sendShortcutEnter": "Send (Enter)",
+        "queue": "Queue",
+        "stop": "Stop",
+        "attachImage": "Attach image",
+        "removeAttachment": "Remove image"
+      },
+      "pending": {
+        "label": "Queued",
+        "autoSendHint": "Sends when the agent finishes",
+        "discard": "Discard",
+        "queueHint": "Agent is busy — will be queued",
+        "unsavedChanges": "Unsaved changes",
+        "busyHint": "Agent is busy — send to queue"
+      },
+      "attachmentAlt": "attachment",
+      "menu": {
+        "label": "Suggestions"
+      },
+      "commands": {
+        "types": {
+          "plain": "Plain",
+          "struct": "Struct"
+        },
+        "send": "Send",
+        "cancel": "Cancel",
+        "close": "Close"
+      },
+      "voice": {
+        "actions": {
+          "start": "Voice input",
+          "startWithShortcut": "Voice input ({{modifier}}+Shift+M)",
+          "stopAndTranscribe": "Stop and transcribe",
+          "cancel": "Cancel"
+        },
+        "states": {
+          "listening": "Listening…",
+          "transcribing": "Transcribing…"
+        },
+        "errors": {
+          "unsupported": "Voice input is not supported in this browser.",
+          "permissionDenied": "Microphone access was denied.",
+          "failed": "Transcription failed"
+        }
+      },
+      "nap": {
+        "fileMentionHint": "Browse workspace files"
+      }
     }
   }
 }

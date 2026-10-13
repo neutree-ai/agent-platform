@@ -1489,13 +1489,7 @@
         "smallerText": "缩小字号",
         "largerText": "放大字号",
         "resetSession": "重置会话",
-        "stop": "停止",
-        "attachImage": "添加图片",
-        "compactConversation": "压缩会话",
-        "send": "发送",
-        "sendShortcut": "发送（Ctrl/Cmd+Enter）",
-        "sendShortcutEnter": "发送（Enter）",
-        "queue": "加入待发"
+        "compactConversation": "压缩会话"
       },
       "relativeTime": {
         "justNow": "刚刚",
@@ -1510,9 +1504,7 @@
       },
       "placeholders": {
         "searchMessages": "搜索消息...",
-        "sessionName": "会话名称",
-        "messageInput": "输入消息...（{{modifier}}+Enter）",
-        "messageInputEnter": "输入消息...（Enter 发送，Shift+Enter 换行）"
+        "sessionName": "会话名称"
       },
       "empty": {
         "noMatches": "没有匹配结果",
@@ -1531,16 +1523,7 @@
         "searchConversation": "按 Ctrl/Cmd+F 搜索会话",
         "configureCommands": "可在上方工具栏配置命令",
         "compactConversation": "可使用 /compact 压缩长会话"
-      },
-      "pending": {
-        "label": "待发送",
-        "autoSendHint": "Agent 完成后自动发送",
-        "clear": "清除",
-        "queueHint": "Agent 忙碌中，将加入待发",
-        "unsavedChanges": "有改动",
-        "composerHint": "Agent 忙碌中，发送即加入待发"
-      },
-      "attachmentAlt": "附件"
+      }
     },
     "workspaceSandbox": {
       "empty": {
@@ -3465,23 +3448,6 @@
         }
       }
     },
-    "voiceInput": {
-      "actions": {
-        "start": "语音输入",
-        "stopAndTranscribe": "停止并转写",
-        "cancel": "取消",
-        "transcribing": "转写中…"
-      },
-      "states": {
-        "listening": "聆听中…",
-        "transcribing": "转写中…"
-      },
-      "errors": {
-        "unsupported": "当前浏览器不支持语音输入。",
-        "permissionDenied": "麦克风权限被拒绝。",
-        "failed": "转写失败"
-      }
-    },
     "chatInput": {
       "alts": {
         "attachment": "附件"
@@ -3920,16 +3886,6 @@
           "structContent": "项目 {{PROJECT_ID}}，分支 {{BRANCH}}，文件 {{FILE_PATH}}"
         }
       }
-    },
-    "commandTrigger": {
-      "actions": {
-        "send": "发送"
-      },
-      "types": {
-        "plain": "纯文本",
-        "struct": "模板"
-      },
-      "fileMentionHint": "浏览工作区文件"
     },
     "agentSettingsEditor": {
       "hints": {

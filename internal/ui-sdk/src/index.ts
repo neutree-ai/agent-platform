@@ -1,5 +1,5 @@
-// @neutree-ai/ui-sdk — shared UI SDK for the agent platform. First module:
-// agent session transcript rendering.
+// @neutree-ai/ui-sdk — shared UI SDK for the agent platform: agent session
+// transcript rendering and the chat composer.
 
 // ── Data layer ──
 // ApiMessage/ApiContentPart are the wire input contract (structurally
@@ -51,3 +51,48 @@ export {
   unwrapMcpInput,
   jsonPreview,
 } from './tool-renderers/types'
+
+// ── Composer ──
+// Network-free chat input; data sources (commands, @-triggers, voice) come in
+// through props.
+export { Composer } from './composer/Composer'
+export type {
+  ComposerAttachments,
+  ComposerCommand,
+  ComposerHandle,
+  ComposerImageAttachment,
+  ComposerPending,
+  ComposerProps,
+  ComposerTrigger,
+  ComposerTriggerItem,
+  ComposerVoice,
+} from './composer/types'
+export { shouldSubmitOnKey, type ComposerSendKey } from './composer/keys'
+export { parseTemplateVariables, resolveTemplate } from './composer/text'
+// Hosts without their own Radix tooltip provider wrap the app in this one.
+export { TooltipProvider } from './ui/tooltip'
+
+// ── Platform composer preset ──
+// Built-in + workspace commands, @file / @agent mentions and voice, over an
+// injected client.
+export {
+  NAP_BUILTIN_COMMAND_NAMES,
+  createNapComposerPreset,
+  isNapBuiltinCommandSupported,
+  useNapComposer,
+} from './nap-composer/preset'
+export type {
+  NapBuiltinCommandName,
+  NapComposerInclude,
+  NapComposerOptions,
+  NapComposerPreset,
+} from './nap-composer/preset'
+export { createNapHttpClient } from './nap-composer/client'
+export type {
+  NapCallableAgent,
+  NapComposerClient,
+  NapDirEntry,
+  NapHttpClientOptions,
+  NapTranscribeOptions,
+  NapWorkspaceCommand,
+} from './nap-composer/client'

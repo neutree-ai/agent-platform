@@ -7,9 +7,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { RESERVED_COMMAND_NAMES } from '@/components/workspace/CommandTrigger'
 import { PromptField } from '@/components/workspace/PromptField'
+import { NAP_BUILTIN_COMMAND_NAMES } from '@neutree-ai/ui-sdk'
 import { useTranslation } from 'react-i18next'
+
+const RESERVED_COMMAND_NAMES: ReadonlySet<string> = new Set(NAP_BUILTIN_COMMAND_NAMES)
 
 interface CommandFieldsValue {
   name: string
