@@ -67,8 +67,7 @@ export type {
   ComposerTriggerItem,
   ComposerVoice,
 } from './composer/types'
-export { shouldSubmitOnKey, type ComposerSendKey } from './composer/keys'
-export { parseTemplateVariables, resolveTemplate } from './composer/text'
+export type { ComposerSendKey } from './composer/keys'
 // Hosts without their own Radix tooltip provider wrap the app in this one.
 export { TooltipProvider } from './ui/tooltip'
 

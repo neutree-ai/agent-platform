@@ -42,31 +42,16 @@ function builtinCommand(name: NapBuiltinCommandName): ComposerCommand {
  * and `goal` go out as literal `/compact` / `/goal …` prompts, which only work
  * on cores that parse slash commands out of the prompt text; `create-skill`
  * is an ordinary prompt driving the platform's skill tools and works anywhere.
- * An unknown or missing agent type is assumed to support everything.
+ * claude-code, codex and goose all dispatch `/compact` and `/goal`; dsh's
+ * bridge hands prompt text to the harness verbatim, and commands there go
+ * through a separate channel the bridge doesn't use. An unknown or missing
+ * agent type is assumed to support everything.
  */
 export function isNapBuiltinCommandSupported(
   name: NapBuiltinCommandName,
   agentType: string | undefined,
 ): boolean {
-  switch (name) {
-    case 'compact':
-    case 'goal':
-      return coreParsesSlashCommands(agentType)
-    case 'create-skill':
-      return true
-  }
-}
-
-function coreParsesSlashCommands(agentType: string | undefined): boolean {
-  switch (agentType) {
-    // Its bridge hands prompt text to the harness verbatim; commands there go
-    // through a separate command channel the bridge doesn't use.
-    case 'dsh':
-      return false
-    // claude-code, codex and goose all dispatch `/compact` and `/goal`.
-    default:
-      return true
-  }
+  return name === 'create-skill' || agentType !== 'dsh'
 }
 
 // ─── Small caches ───────────────────────────────────────────────────

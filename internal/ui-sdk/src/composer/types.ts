@@ -47,7 +47,7 @@ export interface ComposerTriggerItem {
 
 /** A caret-anchored suggestion source, e.g. `@file/…` or `@agent/…`. */
 export interface ComposerTrigger {
-  /** Stable id; also scopes result caching and element ids. */
+  /** Stable id; also scopes element ids. */
   id: string
   /**
    * Matched against the text before the caret; anchor it with `$`. Capture

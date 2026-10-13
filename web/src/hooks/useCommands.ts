@@ -1,13 +1,16 @@
 import { api } from '@/lib/api/client'
 import type { WorkspaceCommand } from '@/lib/api/types'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-export function useCommands(workspaceId: string, enabled = true) {
-  return useQuery({
+export function commandsQueryOptions(workspaceId: string) {
+  return queryOptions({
     queryKey: ['commands', workspaceId],
     queryFn: () => api.listCommands(workspaceId),
-    enabled,
   })
+}
+
+export function useCommands(workspaceId: string) {
+  return useQuery(commandsQueryOptions(workspaceId))
 }
 
 export function useCreateCommand(workspaceId: string) {

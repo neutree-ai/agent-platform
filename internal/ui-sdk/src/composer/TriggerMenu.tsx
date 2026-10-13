@@ -1,13 +1,11 @@
 import { type ReactNode, useEffect, useRef } from 'react'
 import { cn } from '../lib/utils'
+import type { ComposerTriggerItem } from './types'
 
-export interface TriggerMenuRow {
-  key: string
-  icon?: ReactNode
-  label: ReactNode
-  description?: ReactNode
-  meta?: ReactNode
-}
+export type TriggerMenuRow = Pick<
+  ComposerTriggerItem,
+  'key' | 'icon' | 'label' | 'description' | 'meta'
+>
 
 /** Element id of option `index` inside the listbox `listboxId`. */
 export function triggerOptionId(listboxId: string, index: number): string {

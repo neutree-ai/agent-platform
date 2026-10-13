@@ -18,6 +18,7 @@ import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { CommandDialog } from './CommandDialog'
+import { IconAction } from './IconAction'
 import { TriggerMenu, type TriggerMenuRow, triggerOptionId } from './TriggerMenu'
 import { VoiceCapturePanel, VoiceControl, useVoiceRecorder } from './Voice'
 import { isComposingKey, isTouchFirst, modifierLabel, shouldSubmitOnKey } from './keys'
@@ -278,11 +279,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   const [structCommand, setStructCommand] = useState<ComposerCommand | null>(null)
 
-  const runCommand = useCallback((text: string, command: ComposerCommand) => {
-    const { onRunCommand, onSubmit } = latest.current
-    if (onRunCommand) onRunCommand(text, command)
-    else onSubmit(text, [])
-  }, [])
+  const runCommand = (text: string, command: ComposerCommand) => {
+    if (props.onRunCommand) props.onRunCommand(text, command)
+    else props.onSubmit(text, [])
+  }
 
   const pick = (index: number) => {
     if (menuKind === 'slash') {
@@ -540,21 +540,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                       : t('components.composer.pending.autoSendHint')}
                   </span>
                   {pending.onDiscard && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="ml-auto h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
-                          onClick={pending.onDiscard}
-                          aria-label={t('components.composer.pending.discard')}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t('components.composer.pending.discard')}</TooltipContent>
-                    </Tooltip>
+                    <IconAction
+                      label={t('components.composer.pending.discard')}
+                      className="ml-auto h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
+                      onClick={pending.onDiscard}
+                    >
+                      <X className="h-3 w-3" />
+                    </IconAction>
                   )}
                 </>
               ) : (
@@ -607,24 +599,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 {!running && (
                   <>
                     {attachments && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            disabled={disabled}
-                            onClick={() => fileInputRef.current?.click()}
-                            aria-label={t('components.composer.actions.attachImage')}
-                          >
-                            <ImagePlus className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t('components.composer.actions.attachImage')}
-                        </TooltipContent>
-                      </Tooltip>
+                      <IconAction
+                        label={t('components.composer.actions.attachImage')}
+                        disabled={disabled}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                      </IconAction>
                     )}
                     {toolbar}
                   </>
@@ -659,21 +640,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                     </Tooltip>
                   )}
                   {onStop && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={onStop}
-                          aria-label={t('components.composer.actions.stop')}
-                        >
-                          <Square className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{t('components.composer.actions.stop')}</TooltipContent>
-                    </Tooltip>
+                    <IconAction
+                      label={t('components.composer.actions.stop')}
+                      variant="outline"
+                      onClick={onStop}
+                    >
+                      <Square className="h-4 w-4" />
+                    </IconAction>
                   )}
                 </span>
               ) : (

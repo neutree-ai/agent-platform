@@ -2,9 +2,8 @@ import { Mic, Square, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSdkTranslation } from '../i18n'
 import { cn } from '../lib/utils'
-import { Button } from '../ui/button'
 import { Spinner } from '../ui/spinner'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { IconAction } from './IconAction'
 import { modifierLabel } from './keys'
 import type { ComposerVoice } from './types'
 
@@ -58,6 +57,7 @@ export function useVoiceRecorder({
     return () => {
       clearTimer()
       stopStream()
+      cancelledRef.current = true
       try {
         if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
       } catch {
@@ -97,12 +97,15 @@ export function useVoiceRecorder({
     recorder.onstop = async () => {
       stopStream()
       clearTimer()
+      const chunks = chunksRef.current
+      chunksRef.current = []
+      recorderRef.current = null
       if (cancelledRef.current) {
         setState('idle')
         return
       }
       setState('transcribing')
-      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+      const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
       try {
         const transcribe = latest.current.voice?.transcribe
         if (!transcribe)
@@ -163,70 +166,43 @@ export function VoiceControl({
 
   if (state === 'idle') {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={onStart}
-            disabled={disabled}
-            aria-label={t('components.composer.voice.actions.start')}
-          >
-            <Mic className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          {shortcut
+      <IconAction
+        label={t('components.composer.voice.actions.start')}
+        tooltip={
+          shortcut
             ? t('components.composer.voice.actions.startWithShortcut', {
                 modifier: modifierLabel(),
               })
-            : t('components.composer.voice.actions.start')}
-        </TooltipContent>
-      </Tooltip>
+            : undefined
+        }
+        onClick={onStart}
+        disabled={disabled}
+      >
+        <Mic className="h-4 w-4" />
+      </IconAction>
     )
   }
 
   if (state === 'recording') {
     return (
       <div className="flex items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-primary/80 hover:text-primary"
-              onClick={() => onStop(false)}
-              aria-label={t('components.composer.voice.actions.stopAndTranscribe')}
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {t('components.composer.voice.actions.stopAndTranscribe')}
-          </TooltipContent>
-        </Tooltip>
+        <IconAction
+          label={t('components.composer.voice.actions.stopAndTranscribe')}
+          className="h-7 w-7 text-primary/80 hover:text-primary"
+          onClick={() => onStop(false)}
+        >
+          <Square className="h-3.5 w-3.5 fill-current" />
+        </IconAction>
         <span className="flex items-center gap-1 text-tiny tabular-nums text-muted-foreground">
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary/80" />
           {fmtTime(seconds)}
         </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onStop(true)}
-              aria-label={t('components.composer.voice.actions.cancel')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('components.composer.voice.actions.cancel')}</TooltipContent>
-        </Tooltip>
+        <IconAction
+          label={t('components.composer.voice.actions.cancel')}
+          onClick={() => onStop(true)}
+        >
+          <X className="h-4 w-4" />
+        </IconAction>
       </div>
     )
   }

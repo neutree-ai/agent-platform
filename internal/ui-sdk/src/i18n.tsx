@@ -66,9 +66,6 @@ export interface TranscriptI18nProviderProps {
 }
 
 export function TranscriptI18nProvider({ locale, children }: TranscriptI18nProviderProps) {
-  const target = normalizeLocale(locale)
-  useEffect(() => {
-    if (transcriptI18n.language !== target) void transcriptI18n.changeLanguage(target)
-  }, [target])
+  useSdkLocale(normalizeLocale(locale))
   return <I18nextProvider i18n={transcriptI18n}>{children}</I18nextProvider>
 }

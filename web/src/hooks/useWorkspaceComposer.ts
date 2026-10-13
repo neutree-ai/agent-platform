@@ -1,9 +1,8 @@
-import { dirListUrl } from '@/lib/api/agent-files'
+import { commandsQueryOptions } from '@/hooks/useCommands'
 import { api } from '@/lib/api/client'
 import {
   type NapComposerClient,
   type NapComposerPreset,
-  type NapDirEntry,
   createNapHttpClient,
   useNapComposer,
 } from '@neutree-ai/ui-sdk'
@@ -23,8 +22,7 @@ export function useWorkspaceComposer(workspaceId: string, agentType: string): Na
     return {
       listCommands: () =>
         queryClient.ensureQueryData({
-          queryKey: ['commands', workspaceId],
-          queryFn: () => api.listCommands(workspaceId),
+          ...commandsQueryOptions(workspaceId),
           revalidateIfStale: true,
         }),
       listCallableAgents: () =>
@@ -33,14 +31,7 @@ export function useWorkspaceComposer(workspaceId: string, agentType: string): Na
           queryFn: () => api.getCallableAgents(),
           revalidateIfStale: true,
         }),
-      listDir: async (dir, query, signal) => {
-        const resp = await fetch(dirListUrl(workspaceId, dir || '/', query || undefined), {
-          signal,
-        })
-        if (!resp.ok) return []
-        const json = (await resp.json()) as { entries?: NapDirEntry[] }
-        return json.entries ?? []
-      },
+      listDir: http.listDir,
       transcribe: http.transcribe,
     }
   }, [queryClient, workspaceId])

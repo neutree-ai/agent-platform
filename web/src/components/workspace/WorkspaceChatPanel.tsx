@@ -56,7 +56,6 @@ import {
   MessageBubble,
   TranscriptI18nProvider,
   TurnStatsBar,
-  isNapBuiltinCommandSupported,
 } from '@neutree-ai/ui-sdk'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
@@ -296,7 +295,9 @@ export function WorkspaceChatPanel({
   const { agentInfo } = useAgentInfo(workspace.id)
   const agentType = agentInfo?.agent_type ?? 'claude-code'
   const composerSources = useWorkspaceComposer(workspace.id, agentType)
-  const canCompact = isNapBuiltinCommandSupported('compact', agentType)
+  // Offered only when the agent core can run it; the preset decides.
+  const compactCommand = composerSources.commands.find((c) => c.name === 'compact')
+  const canCompact = !!compactCommand
   const hints = useMemo(
     () => [
       t('components.workspaceChat.hints.customCommands'),
@@ -873,7 +874,7 @@ export function WorkspaceChatPanel({
               }}
               {...composerSources}
               toolbar={
-                canCompact && (
+                compactCommand && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -882,7 +883,7 @@ export function WorkspaceChatPanel({
                         size="icon"
                         className="h-7 w-7"
                         disabled={isChatBusy}
-                        onClick={() => sendCommand('/compact')}
+                        onClick={() => sendCommand(compactCommand.content)}
                         aria-label={t('components.workspaceChat.actions.compactConversation')}
                       >
                         <Shrink className="h-4 w-4" />

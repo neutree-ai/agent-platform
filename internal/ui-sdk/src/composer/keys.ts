@@ -52,7 +52,7 @@ export function shouldSubmitOnKey(
 }
 
 /** True on macOS / iOS, where the primary modifier is ⌘ rather than Ctrl. */
-export function isApplePlatform(): boolean {
+function isApplePlatform(): boolean {
   if (typeof navigator === 'undefined') return false
   const uaData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
   const platform = uaData?.platform || navigator.platform || navigator.userAgent || ''
