@@ -218,14 +218,20 @@ export async function chat(
   }
   activeControllers.set(queryKey, activeTurn)
 
-  // Always hand the SDK an async generator, never a bare string. A string makes
-  // the SDK treat the run as a single user turn and close stdin on the first
-  // `result` — but this turn deliberately outlives that result (see the consumer
-  // loop below), so the CLI keeps running tools with its permission channel
-  // already shut. Every call needing a permission round-trip then comes back
+  // The CLI's stdin doubles as its permission channel, and the SDK closes it
+  // once the prompt is exhausted and the first `result` is in — a bare string
+  // or a generator that returns after one message both end there. This turn
+  // deliberately outlives that result (see the consumer loop below), so the
+  // CLI would keep running background sub-agents with the channel already
+  // shut: every call needing a permission round-trip comes back
   // `Tool permission request failed: AbortError: Stream closed`, while
-  // auto-allowed ones still succeed. A generator keeps stdin open until the
-  // stream itself ends.
+  // auto-allowed ones still succeed. So the prompt generator stays open until
+  // the CLI reports the session idle, which it only does once the main agent
+  // and its background sub-agents are all done.
+  let releaseInput!: () => void
+  const inputReleased = new Promise<void>((r) => {
+    releaseInput = r
+  })
   const contentBlocks: Array<
     | {
         type: 'image'
@@ -255,6 +261,7 @@ export async function chat(
   }
   const prompt: AsyncIterable<SDKUserMessage> = (async function* () {
     yield userMsg as SDKUserMessage
+    await inputReleased
   })()
 
   // Build per-turn mcpServers. We own `tos-platform` here (instead of letting
@@ -328,6 +335,9 @@ export async function chat(
         settingSources: ['user', 'project'],
         includePartialMessages: true,
         abortController,
+        // Without this the CLI never emits `session_state_changed`, and the
+        // prompt generator above would wait for an idle signal that never comes.
+        env: { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: '1' },
         stderr: (data) => process.stderr.write(`[cc] ${data}`),
         canUseTool: async (toolName, input, { signal }) => {
           // Only intercept AskUserQuestion — auto-approve everything else
@@ -517,6 +527,20 @@ export async function chat(
 
       await callbacks.onMessage(message)
 
+      // `idle` is the CLI's turn-over signal: nothing is running and no
+      // background sub-agent is left to wake the main agent again. Ending the
+      // prompt now lets the SDK close stdin and the CLI exit, which ends this
+      // stream. An idle before the first result would be a startup state, not
+      // the end of this turn.
+      if (
+        resultCount > 0 &&
+        message.type === 'system' &&
+        message.subtype === 'session_state_changed' &&
+        message.state === 'idle'
+      ) {
+        releaseInput()
+      }
+
       // Deliberately no `break` on `result`. A background sub-agent keeps
       // running after the main agent ends its turn, and the CLI delivers its
       // completion as a further turn on this same stream — breaking here
@@ -554,6 +578,8 @@ export async function chat(
       await callbacks.onError(describeTurnFailure(raw, lastErrorSubtype))
     }
   } finally {
+    // Unblock the prompt generator on every exit path so it can unwind.
+    releaseInput()
     const key = resultSessionId || queryKey
     // Only drop our own entry — a superseding turn may already own this key.
     if (activeControllers.get(key) === activeTurn) {
