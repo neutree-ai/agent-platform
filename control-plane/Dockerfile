@@ -62,7 +62,8 @@ RUN cd /app/internal/types && npm install --no-audit --no-fund
 # context across the boundary (raw i18n keys, "must be used within Provider").
 # Point ui-sdk at web's single node_modules instead so every shared lib resolves
 # to one identical module (web/package.json already carries all of ui-sdk's deps).
-RUN ln -sfn /app/web/node_modules /app/internal/ui-sdk/node_modules
+RUN rm -rf /app/internal/ui-sdk/node_modules \
+    && ln -s /app/web/node_modules /app/internal/ui-sdk/node_modules
 
 # Build frontend
 ENV NODE_OPTIONS=--max-old-space-size=4096
