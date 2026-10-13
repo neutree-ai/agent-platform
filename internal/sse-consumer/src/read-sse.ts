@@ -9,7 +9,10 @@
  * Intentionally excluded (add only when needed):
  *   - `id:` last-event-id bookkeeping
  *   - `retry:` reconnection hints
- *   - Comment lines (starting with `:`)
+ *
+ * Cost is linear in the bytes received, whatever the chunking: each chunk is
+ * scanned once for line terminators, and a line that spans chunks is kept as
+ * a list of fragments that is joined once, when its terminator arrives.
  *
  * This layer is domain-neutral. It does not parse JSON, does not care about
  * any NAP event shape, and does not reconnect on errors. Upper layers add
@@ -25,6 +28,9 @@ export interface ReadSSEOptions {
   signal?: AbortSignal
 }
 
+const LF = 10
+const BOM = 0xfeff
+
 export async function* readSSE(
   response: Response,
   options?: ReadSSEOptions,
@@ -39,7 +45,10 @@ export async function* readSSE(
   }
 
   const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
+  // The one leading BOM the spec allows is stripped by hand below: left to the
+  // decoder, a BOM split across chunks is not handled consistently by runtimes.
+  const decoder = new TextDecoder('utf-8', { ignoreBOM: true })
+  let atStreamStart = true
 
   let onAbort: (() => void) | null = null
   if (signal) {
@@ -49,9 +58,13 @@ export async function* readSSE(
     signal.addEventListener('abort', onAbort, { once: true })
   }
 
-  // Line-buffering across chunks. SSE lines are delimited by \n, \r, or \r\n;
-  // we normalize by treating \r\n and \r as \n before splitting.
-  let lineBuffer = ''
+  // Fragments of the line whose terminator has not arrived yet. Never holds
+  // an empty string, so a non-empty list means a non-empty line.
+  let partial: string[] = []
+
+  // The previous chunk ended on a CR. If the next character is LF it belongs
+  // to that same CRLF terminator and must not start a new (blank) line.
+  let pendingCR = false
 
   // Current event being accumulated. Fields reset on blank-line boundary.
   let currentEvent = 'message'
@@ -61,7 +74,7 @@ export async function* readSSE(
     if (currentData.length === 0 && currentEvent === 'message') return null
     const evt: SSEEvent = {
       event: currentEvent,
-      data: currentData.join('\n'),
+      data: currentData.length === 1 ? currentData[0] : currentData.join('\n'),
     }
     currentEvent = 'message'
     currentData = []
@@ -70,40 +83,76 @@ export async function* readSSE(
 
   function handleField(line: string): void {
     // Per spec: field ends at first ':'. Leading space after ':' is stripped.
-    // Lines without ':' are field names with empty values (ignored here).
+    // Lines without ':' are field names with empty values (ignored here), and
+    // a line starting with ':' is a comment.
     const colon = line.indexOf(':')
-    if (colon === -1) return
-    const field = line.slice(0, colon)
-    let value = line.slice(colon + 1)
-    if (value.startsWith(' ')) value = value.slice(1)
+    if (colon <= 0) return
+    const valueStart = line.charCodeAt(colon + 1) === 32 ? colon + 2 : colon + 1
 
-    if (field === 'data') {
-      currentData.push(value)
-    } else if (field === 'event') {
-      currentEvent = value || 'message'
+    if (colon === 4 && line.startsWith('data')) {
+      currentData.push(line.slice(valueStart))
+    } else if (colon === 5 && line.startsWith('event')) {
+      currentEvent = line.slice(valueStart) || 'message'
     }
     // Other fields (id, retry, unknown) are ignored by design.
   }
 
   try {
-    while (true) {
+    let ended = false
+    while (!ended) {
       const { done, value } = await reader.read()
       if (signal?.aborted) {
         throw signal.reason instanceof Error
           ? signal.reason
           : new DOMException('Aborted', 'AbortError')
       }
-      if (done) break
 
-      lineBuffer += decoder.decode(value, { stream: true })
+      // At end of stream, drain whatever the decoder still holds (an
+      // incomplete multi-byte sequence becomes U+FFFD) through the same scan.
+      ended = done
+      const text = done ? decoder.decode() : decoder.decode(value, { stream: true })
+      const len = text.length
 
-      // Normalize line endings, then split. We keep the last (possibly
-      // partial) fragment in lineBuffer until the next chunk.
-      const normalized = lineBuffer.replace(/\r\n?/g, '\n')
-      const lines = normalized.split('\n')
-      lineBuffer = lines.pop() ?? ''
+      let pos = 0
+      if (len > 0) {
+        if (atStreamStart) {
+          atStreamStart = false
+          if (text.charCodeAt(0) === BOM) pos = 1
+        } else if (pendingCR) {
+          pendingCR = false
+          if (text.charCodeAt(0) === LF) pos = 1
+        }
+      }
 
-      for (const line of lines) {
+      // Next LF / CR at or after `pos`. -2: not searched yet, -1: none left.
+      // Each is searched forward only, so a chunk is scanned at most twice.
+      let nl = -2
+      let cr = -2
+      while (pos < len) {
+        if (nl !== -1 && nl < pos) nl = text.indexOf('\n', pos)
+        if (cr !== -1 && cr < pos) cr = text.indexOf('\r', pos)
+
+        let end: number
+        if (nl === -1) {
+          if (cr === -1) break
+          end = cr
+        } else {
+          end = cr !== -1 && cr < nl ? cr : nl
+        }
+
+        let line = end === pos ? '' : text.slice(pos, end)
+        if (partial.length > 0) {
+          if (line !== '') partial.push(line)
+          line = partial.length === 1 ? partial[0] : partial.join('')
+          partial = []
+        }
+
+        pos = end + 1
+        if (end === cr) {
+          if (pos === len) pendingCR = true
+          else if (text.charCodeAt(pos) === LF) pos++
+        }
+
         if (line === '') {
           const evt = flush()
           if (evt) yield evt
@@ -111,23 +160,16 @@ export async function* readSSE(
           handleField(line)
         }
       }
+
+      if (pos < len) partial.push(pos === 0 ? text : text.slice(pos))
     }
 
-    // Stream ended. Flush any remaining decoder state and handle trailing
-    // content. A well-formed SSE stream ends with a blank line, but some
-    // producers omit it; we flush pending field state just in case.
-    lineBuffer += decoder.decode()
-    if (lineBuffer.length > 0) {
-      const normalized = lineBuffer.replace(/\r\n?/g, '\n')
-      const lines = normalized.split('\n')
-      for (const line of lines) {
-        if (line === '') {
-          const evt = flush()
-          if (evt) yield evt
-        } else {
-          handleField(line)
-        }
-      }
+    // Stream ended. A well-formed SSE stream ends with a blank line, but some
+    // producers omit it; handle an unterminated last line and flush pending
+    // field state just in case.
+    if (partial.length > 0) {
+      handleField(partial.length === 1 ? partial[0] : partial.join(''))
+      partial = []
     }
     const trailing = flush()
     if (trailing) yield trailing

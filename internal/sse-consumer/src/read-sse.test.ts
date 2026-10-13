@@ -216,4 +216,197 @@ describe('readSSE', () => {
       'session.ended',
     ])
   })
+
+  it('treats a CRLF split across chunks as one terminator', async () => {
+    const res = makeResponse(['data: a\r', '\ndata: b\r\n\r\n'])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: 'a\nb' }])
+  })
+
+  it('treats a CR at chunk end followed by a non-LF as a bare CR terminator', async () => {
+    const res = makeResponse(['data: a\r', 'data: b\r', '\r'])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: 'a\nb' }])
+  })
+
+  it('keeps a pending CR across an empty chunk', async () => {
+    const res = makeResponse(['data: a\r', '', '\n\r\n'])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: 'a' }])
+  })
+
+  it('handles CR CR LF as two terminators', async () => {
+    const res = makeResponse(['data: a\r', '\r\ndata: b\n\n'])
+    expect(await collect(readSSE(res))).toEqual([
+      { event: 'message', data: 'a' },
+      { event: 'message', data: 'b' },
+    ])
+  })
+
+  it('ignores comment lines, including a keepalive between events', async () => {
+    const res = makeResponse([': hi\n\n', 'data: a\n:\n\n', ':\n\ndata: b\n\n'])
+    expect(await collect(readSSE(res))).toEqual([
+      { event: 'message', data: 'a' },
+      { event: 'message', data: 'b' },
+    ])
+  })
+
+  it('does not treat a field that merely starts with data/event as that field', async () => {
+    const res = makeResponse(['database: x\nevents: y\ndata\ndata: ok\n\n'])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: 'ok' }])
+  })
+
+  it('keeps empty data lines', async () => {
+    const res = makeResponse(['data:\ndata: \ndata: x\n\n'])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: '\n\nx' }])
+  })
+
+  it('handles an unterminated last line that spans chunks', async () => {
+    const res = makeResponse(['data: par', 'tial ', 'line'])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: 'partial line' }])
+  })
+
+  it('strips one leading BOM, even when it is split across chunks', async () => {
+    const bytes = new TextEncoder().encode('\uFEFFdata: a\n\n')
+    const res = makeByteResponse([bytes.subarray(0, 1), bytes.subarray(1, 2), bytes.subarray(2)])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: 'a' }])
+  })
+
+  it('keeps a second BOM as content, however the stream is chunked', async () => {
+    const bytes = new TextEncoder().encode('\uFEFF\uFEFFdata: a\n\n')
+    const res = makeByteResponse([bytes.subarray(0, 1), bytes.subarray(1, 2), bytes.subarray(2)])
+    expect(await collect(readSSE(res))).toEqual([])
+  })
+
+  it('replaces a truncated multi-byte sequence at end of stream', async () => {
+    const res = makeByteResponse([
+      new TextEncoder().encode('data: ok'),
+      new Uint8Array([0xe2, 0x89]),
+    ])
+    expect(await collect(readSSE(res))).toEqual([{ event: 'message', data: 'ok\uFFFD' }])
+  })
+
+  it('reads a 32MB single-line event delivered in 16KB chunks in linear time', async () => {
+    const body = 'x'.repeat(32 * 1024 * 1024)
+    const bytes = new TextEncoder().encode(`data: ${body}\n\ndata: after\n\n`)
+    const chunks: Uint8Array[] = []
+    for (let i = 0; i < bytes.length; i += 16384) chunks.push(bytes.subarray(i, i + 16384))
+    const t0 = performance.now()
+    const events = await collect(readSSE(makeByteResponse(chunks)))
+    const ms = performance.now() - t0
+    expect(events.length).toBe(2)
+    expect(events[0].data === body).toBe(true)
+    expect(events[1]).toEqual({ event: 'message', data: 'after' })
+    // A reader that rescans the buffered line on every chunk needs tens of
+    // seconds here; a linear one needs well under one.
+    expect(ms).toBeLessThan(5000)
+  }, 30_000)
+
+  it('yields the same events for any chunking', async () => {
+    const enc = new TextEncoder()
+    const atoms = [
+      'data',
+      'event',
+      'id',
+      'retry',
+      ':',
+      ': ',
+      ' ',
+      '\n',
+      '\n',
+      '\n\n',
+      '\r',
+      '\r\n',
+      '\r\n\r\n',
+      'a',
+      'bc',
+      '{"k":1}',
+      '≥',
+      '你好',
+      '😀',
+      '\uFEFF',
+      'data: ',
+      'event: x',
+      'data:',
+    ]
+    const rand = seededRandom(20261013)
+    let crAtChunkEnd = 0
+    for (let iter = 0; iter < 5000; iter++) {
+      let text = ''
+      const n = 1 + Math.floor(rand() * 40)
+      for (let i = 0; i < n; i++) text += atoms[Math.floor(rand() * atoms.length)]
+      const bytes = enc.encode(text)
+      const expected = parseWhole(text)
+      expect(await collect(readSSE(makeByteResponse([bytes]))), JSON.stringify(text)).toEqual(
+        expected,
+      )
+
+      for (let k = 0; k < 3; k++) {
+        const chunks: Uint8Array[] = []
+        for (let i = 0; i < bytes.length; ) {
+          const roll = rand()
+          const size = roll < 0.15 ? 0 : roll < 0.6 ? 1 : 1 + Math.floor(rand() * 8)
+          chunks.push(bytes.subarray(i, i + size))
+          i += size
+        }
+        for (let c = 0; c + 1 < chunks.length; c++) {
+          if (chunks[c].length > 0 && chunks[c][chunks[c].length - 1] === 13) crAtChunkEnd++
+        }
+        expect(
+          await collect(readSSE(makeByteResponse(chunks))),
+          `${JSON.stringify(text)} split as ${JSON.stringify(chunks.map((c) => c.length))}`,
+        ).toEqual(expected)
+      }
+    }
+    // The generator has to actually exercise terminators cut at a chunk edge.
+    expect(crAtChunkEnd).toBeGreaterThan(500)
+  }, 60_000)
 })
+
+function makeByteResponse(chunks: Uint8Array[]): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(c)
+      controller.close()
+    },
+  })
+  return new Response(stream)
+}
+
+// Deterministic PRNG (mulberry32) so a failing input can be reproduced.
+function seededRandom(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0
+    let t = s
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// Reference parser over the complete text of a stream: the obvious
+// whole-string formulation of the same rules, with no chunk state.
+function parseWhole(text: string): SSEEvent[] {
+  const events: SSEEvent[] = []
+  let event = 'message'
+  let data: string[] = []
+  const flush = () => {
+    if (data.length > 0 || event !== 'message') events.push({ event, data: data.join('\n') })
+    event = 'message'
+    data = []
+  }
+  const body = text.startsWith('\uFEFF') ? text.slice(1) : text
+  for (const line of body.split(/\r\n|\r|\n/)) {
+    if (line === '') {
+      flush()
+      continue
+    }
+    const colon = line.indexOf(':')
+    if (colon === -1) continue
+    const field = line.slice(0, colon)
+    let value = line.slice(colon + 1)
+    if (value.startsWith(' ')) value = value.slice(1)
+    if (field === 'data') data.push(value)
+    else if (field === 'event') event = value || 'message'
+  }
+  flush()
+  return events
+}
