@@ -161,12 +161,31 @@ afsShares.openapi(
 
     try {
       let share = await getAfsShareByName(id, name)
-      if (!share) {
+      // Creating a share takes three writes: the record, the owner's mount, and
+      // the owner's membership. A request that failed after the first leaves a
+      // record with no mount behind it, so an existing record is only complete
+      // once the owner is a member; until then a retry picks up where it stopped.
+      let ownerIsMember = false
+      if (share) {
+        const members = await listAfsShareMembers(share.id)
+        ownerIsMember = members.some((m) => m.workspace_id === id)
+      }
+      if (!share || !ownerIsMember) {
         const afsEnv = await afsEnvForWorkspace(id)
-        await ensureDefaultFs(afsEnv)
-        const dir = await createDir(afsEnv)
-        share = await createAfsShare(id, name, dir.id, dir.accessKey)
-        await mountAtWorkspace(afsEnv, id, dir.id, dir.accessKey, name, false)
+        if (!share) {
+          await ensureDefaultFs(afsEnv)
+          const dir = await createDir(afsEnv)
+          share = await createAfsShare(id, name, dir.id, dir.accessKey)
+        } else {
+          // The earlier attempt may have mounted before it failed, and
+          // afs-fuse's Mount RPC rejects duplicate mountpoints.
+          try {
+            await unmountAtWorkspace(afsEnv, id, name)
+          } catch {
+            // Best-effort — usually there is nothing mounted.
+          }
+        }
+        await mountAtWorkspace(afsEnv, id, share.afs_dir_id, share.access_key, name, false)
         await addAfsShareMember(share.id, id, 'read_write')
       }
       return c.json(
