@@ -291,6 +291,15 @@
       "nap": {
         "fileMentionHint": "浏览工作区文件"
       }
+    },
+    "askUserQuestion": {
+      "actions": {
+        "customReplyPlaceholder": "或者输入自定义回复...",
+        "confirm": "确认"
+      },
+      "hints": {
+        "selectAllThatApply": "可多选"
+      }
     }
   }
 }

@@ -3586,15 +3586,6 @@
         }
       }
     },
-    "askUserQuestion": {
-      "actions": {
-        "customReplyPlaceholder": "Or type a custom reply...",
-        "confirm": "Confirm"
-      },
-      "hints": {
-        "selectAllThatApply": "Select all that apply"
-      }
-    },
     "sessions": {
       "untitled": "Untitled",
       "rename": "Rename",

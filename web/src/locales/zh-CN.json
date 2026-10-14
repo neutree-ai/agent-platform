@@ -3610,15 +3610,6 @@
         }
       }
     },
-    "askUserQuestion": {
-      "actions": {
-        "customReplyPlaceholder": "或者输入自定义回复...",
-        "confirm": "确认"
-      },
-      "hints": {
-        "selectAllThatApply": "可多选"
-      }
-    },
     "sessions": {
       "untitled": "未命名",
       "rename": "重命名",

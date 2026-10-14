@@ -1,22 +1,45 @@
-import { Button } from '@/components/ui/button'
-import type { AskUserRequest } from '@/lib/api/types'
 import { Check } from 'lucide-react'
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useSdkLocale, useSdkTranslation } from '../i18n'
+import { Button } from '../ui/button'
+
+/** One question an agent asked with AskUserQuestion. */
+export interface AskUserQuestionItem {
+  question: string
+  header: string
+  options: { label: string; description: string }[]
+  multiSelect: boolean
+}
+
+/** A pending AskUserQuestion: what the agent's session is waiting on. */
+export interface AskUserRequest {
+  requestId: string
+  questions: AskUserQuestionItem[]
+}
 
 // The agent looks each answer up by the question's full text, and reads a
 // multi-select answer as its option labels joined by ", ". Keeping selections
 // as a list per question covers both cases without widening the wire shape.
 const ANSWER_SEPARATOR = ', '
 
+/**
+ * The questions an agent asked with AskUserQuestion, to be answered above the
+ * composer: options to pick (one, or several when multiSelect), or a reply
+ * typed in. `onRespond` gets the answers keyed by question text; the host
+ * sends them to the session's respond endpoint.
+ */
 export function AskUserQuestionPanel({
   request,
   onRespond,
+  locale,
 }: {
   request: AskUserRequest
   onRespond: (answers: Record<string, string>) => void
+  /** Host locale (e.g. "zh-CN", "en"). Anything zh-* maps to zh-CN. */
+  locale?: string
 }) {
-  const { t } = useTranslation()
+  useSdkLocale(locale)
+  const { t } = useSdkTranslation()
   const [selections, setSelections] = useState<Record<string, string[]>>({})
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({})
 

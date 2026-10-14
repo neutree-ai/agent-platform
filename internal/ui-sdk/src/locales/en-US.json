@@ -292,6 +292,15 @@
       "nap": {
         "fileMentionHint": "Browse workspace files"
       }
+    },
+    "askUserQuestion": {
+      "actions": {
+        "customReplyPlaceholder": "Or type a custom reply...",
+        "confirm": "Confirm"
+      },
+      "hints": {
+        "selectAllThatApply": "Select all that apply"
+      }
     }
   }
 }

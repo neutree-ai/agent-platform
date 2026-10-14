@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AskUserQuestionPanel } from '@/components/workspace/AskUserQuestionPanel'
 import { ShareSessionButton } from '@/components/workspace/ShareSessionButton'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSlotContext } from '@/contexts/SlotContext'
@@ -51,6 +50,7 @@ import type { ChatMessage as ChatMessageType } from '@/stores/agent-session-stor
 import { useComposerInsertRequests } from '@/stores/composer-store'
 import { useDraft } from '@/stores/draft-store'
 import {
+  AskUserQuestionPanel,
   Composer,
   type ComposerHandle,
   MessageBubble,
@@ -528,10 +528,11 @@ export function WorkspaceChatPanel({
           keyed against the host i18n bundle. TranscriptProviders'
           TranscriptI18nProvider rebinds useTranslation to the SDK's chat-only
           instance, which would make every self-translating app child
-          (ShareSessionButton, AskUserQuestionPanel, …) render raw keys.
+          (ShareSessionButton, …) render raw keys.
           Override back to the app instance here; the SDK components that
           render transcript strings (MessageBubble / TurnStatsBar) re-assert
-          it, and the Composer binds the SDK instance on its own. */}
+          it, and the Composer and AskUserQuestionPanel bind the SDK instance on
+          their own. */}
       <I18nextProvider i18n={appI18n}>
         {!readonly &&
           headerSlot &&
@@ -855,7 +856,11 @@ export function WorkspaceChatPanel({
           )}
 
           {pendingQuestion && (
-            <AskUserQuestionPanel request={pendingQuestion} onRespond={actions.respondToQuestion} />
+            <AskUserQuestionPanel
+              request={pendingQuestion}
+              onRespond={actions.respondToQuestion}
+              locale={i18n.language}
+            />
           )}
 
           {!readonly && <HintBar visible={isLoading} hints={hints} />}
