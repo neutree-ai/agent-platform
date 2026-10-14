@@ -328,6 +328,8 @@ export const ApiSessionLiteSchema = z.object({
     .describe(
       'Calls this session\'s agent made to other agents (call_agent) whose results have not come back yet. Each result is posted to the session as a further turn, so the session is done only when chat_status is not "agent" AND this is 0.',
     ),
+  /** How full the context was at the end of the last turn; null before one. */
+  last_turn_stats: ContextGaugeSchema.nullable(),
 })
 
 export type ApiSessionLite = z.infer<typeof ApiSessionLiteSchema>
