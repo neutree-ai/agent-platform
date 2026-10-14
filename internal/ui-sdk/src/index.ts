@@ -21,6 +21,7 @@ export { MessageBubble } from './components/MessageBubble'
 export { ToolCallBlock } from './components/ToolCallBlock'
 export { ToolCallGroup } from './components/ToolCallGroup'
 export { TurnStatsBar } from './components/TurnStatsBar'
+export { WaitingOnAgentsNotice } from './components/WaitingOnAgentsNotice'
 export { AgentTypeProvider, useAgentType } from './components/AgentTypeContext'
 export {
   setSubAgentSessionLink,

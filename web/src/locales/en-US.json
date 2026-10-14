@@ -1458,8 +1458,6 @@
       "sessionTitle": "Browser session"
     },
     "workspaceChat": {
-      "waitingOnAgents_one": "Waiting on {{count}} agent call. The agent picks up on its own when it returns — you can keep typing.",
-      "waitingOnAgents_other": "Waiting on {{count}} agent calls. The agent picks up on its own when they return — you can keep typing.",
       "actions": {
         "search": "Search",
         "rename": "Rename",

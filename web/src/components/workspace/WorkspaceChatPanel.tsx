@@ -56,6 +56,7 @@ import {
   MessageBubble,
   TranscriptI18nProvider,
   TurnStatsBar,
+  WaitingOnAgentsNotice,
 } from '@neutree-ai/ui-sdk'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
@@ -182,21 +183,6 @@ function HintBar({ visible, hints }: { visible: boolean; hints: string[] }) {
       >
         {hints[index]}
       </div>
-    </div>
-  )
-}
-
-/**
- * Shown above the composer while the agent waits on agents it called. No turn
- * is running, so the composer is open, yet the conversation is not over: the
- * results start the agent's next turn on their own.
- */
-function WaitingOnAgentsNotice({ count }: { count: number }) {
-  const { t } = useTranslation()
-  return (
-    <div className="flex items-center justify-center gap-1.5 px-3 pb-1 text-tiny text-muted-foreground">
-      <span className="inline-flex h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-info" />
-      <span>{t('components.workspaceChat.waitingOnAgents', { count })}</span>
     </div>
   )
 }
@@ -874,7 +860,7 @@ export function WorkspaceChatPanel({
 
           {!readonly && <HintBar visible={isLoading} hints={hints} />}
           {!readonly && waitingOnAgents && !isLoading && (
-            <WaitingOnAgentsNotice count={pendingAgentCalls} />
+            <WaitingOnAgentsNotice count={pendingAgentCalls} locale={i18n.language} />
           )}
           {!readonly && (
             <Composer

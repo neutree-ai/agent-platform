@@ -229,7 +229,8 @@
         "context": "上下文 {{used}} / {{total}}",
         "contextWarning": "建议执行 /compact 或开启新会话",
         "turnWarning": "轮次较高，建议开启新会话或压缩会话"
-      }
+      },
+      "waitingOnAgents_other": "在等 {{count}} 个子 Agent 返回，结果回来后会自动继续。这期间可以照常发消息。"
     },
     "markdown": {
       "systemMessage": "系统消息"
