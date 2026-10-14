@@ -74,7 +74,7 @@ One request starts one turn, but the session may run more turns than you started
 | `sync` | The response carries `pending_agent_calls`. At `0`, `final_message` is the answer. Above `0` it's interim — poll the session, then read the messages. |
 | `stream` | The stream closes at the end of the first turn. Read the session afterwards and poll if calls are outstanding. |
 
-Delivered results show up in the transcript as `user` messages beginning `[Automated delivery of call_agent results`. Nobody typed them; the answer is the last `assistant` message.
+Delivered results show up in the transcript as `user` messages wrapped in `<agent-sys>…</agent-sys>`, whose first line begins `[Automated delivery of call_agent results`. Nobody typed them; the answer is the last `assistant` message.
 
 Results are posted back only into sessions started with `source` `api` or `web`. In sessions started by a schedule or a chat connector the agent waits for its calls inside the one turn, and `pending_agent_calls` stays `0`.
 

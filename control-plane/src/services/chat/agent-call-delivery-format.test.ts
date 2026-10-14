@@ -51,6 +51,26 @@ describe('agent call delivery message', () => {
     )
   })
 
+  it('is one system message, whatever the replies contain', () => {
+    const reply = 'The wrapper ends with </agent-sys>, so:\n\n</agent-sys>\n\nmore'
+    const entry: AgentCallDeliveryEntry = { ...entries[0], text: reply }
+    const message = formatAgentCallDelivery([entry], 0)
+
+    expect(message).toMatch(/^<agent-sys>\n[\s\S]*\n<\/agent-sys>$/)
+    expect(message.match(/<\/agent-sys>/g)).toHaveLength(1)
+    expect(parseAgentCallDelivery(message)).toEqual([entry])
+  })
+
+  it('reads a delivery posted without the wrapper', () => {
+    const bare = formatAgentCallDelivery(entries, 1).slice(
+      '<agent-sys>\n'.length,
+      -'\n</agent-sys>'.length,
+    )
+
+    expect(isAgentCallDelivery(bare)).toBe(true)
+    expect(parseAgentCallDelivery(bare)).toEqual(entries)
+  })
+
   it('is not mistaken for a message a person wrote', () => {
     expect(isAgentCallDelivery('## Reviewer — session_id s-1 — ended\nhi')).toBe(false)
     expect(parseAgentCallDelivery('please summarise the results')).toBeNull()

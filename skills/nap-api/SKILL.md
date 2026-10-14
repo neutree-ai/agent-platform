@@ -92,7 +92,7 @@ One chat request starts one turn, but a session can run more turns than you star
 - **`sync`** — the response carries `pending_agent_calls` too. `0`: `final_message` is the answer. Above `0`: it is interim; switch to polling the session, then read the messages.
 - **`stream`** — the stream closes when the first turn ends. Read the session afterwards; if `pending_agent_calls` is above `0`, poll as above.
 
-The messages the platform posts for delivered results have `role: "user"` and start with `[Automated delivery of call_agent results`. They are not something a person typed; when reading a transcript, take the last `assistant` message as the answer.
+The messages the platform posts for delivered results have `role: "user"`, are wrapped in `<agent-sys>…</agent-sys>`, and their first line starts with `[Automated delivery of call_agent results`. They are not something a person typed; when reading a transcript, take the last `assistant` message as the answer.
 
 You may send a new message while calls are outstanding — the session is not busy between turns. The results still arrive afterwards as their own turn.
 

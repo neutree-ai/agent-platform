@@ -1,13 +1,30 @@
 // The message that carries `call_agent` results back to the calling session.
 //
 // The control plane posts it as a user turn, so it is plain text the calling
-// agent reads. Clients that show a session — the collaboration timeline, the
-// transcript — recognise it by its first line and read the results back out,
-// which is why writing and reading it live side by side here.
+// agent reads. It is wrapped in `<agent-sys>`, the platform's tag for a message
+// nobody typed, which a transcript folds into one "system message" row. Clients
+// that show more than that — the collaboration timeline — recognise it by its
+// first line and read the results back out, which is why writing and reading it
+// live side by side here.
 
-/** First line of every delivery message. */
+const SYS_OPEN = '<agent-sys>\n'
+const SYS_CLOSE = '\n</agent-sys>'
+const SYS_END_TAG = '</agent-sys>'
+const SYS_END_TAG_QUOTED = '&lt;/agent-sys>'
+
+/** First line of every delivery message, inside the wrapper. */
 const AGENT_CALL_DELIVERY_MARKER =
   '[Automated delivery of call_agent results — written by the platform, not by the user.]'
+
+/** The message without its wrapper. Transcripts also hold deliveries posted bare. */
+function unwrap(text: string): string {
+  if (!text.startsWith(SYS_OPEN) || !text.endsWith(SYS_CLOSE)) return text
+  return text.slice(SYS_OPEN.length, -SYS_CLOSE.length)
+}
+
+/** An agent's own words may spell the closing tag; it must not end the wrapper early. */
+const quote = (s: string) => s.split(SYS_END_TAG).join(SYS_END_TAG_QUOTED)
+const unquote = (s: string) => s.split(SYS_END_TAG_QUOTED).join(SYS_END_TAG)
 
 export type AgentCallDeliveryStatus = 'ended' | 'failed' | 'needs_input'
 
@@ -60,11 +77,12 @@ export function formatAgentCallDelivery(
     stillRunning > 0
       ? `${stillRunning} more call(s) from this session are still running; their results will be delivered the same way. If you need them before you can answer, end your turn and wait.`
       : 'No calls from this session are still running.'
-  return [AGENT_CALL_DELIVERY_MARKER, ...entries.map(formatEntry), outstanding].join('\n\n')
+  const body = [AGENT_CALL_DELIVERY_MARKER, ...entries.map(formatEntry), outstanding].join('\n\n')
+  return `${SYS_OPEN}${quote(body)}${SYS_CLOSE}`
 }
 
 export function isAgentCallDelivery(text: string): boolean {
-  return text.startsWith(AGENT_CALL_DELIVERY_MARKER)
+  return unwrap(text).startsWith(AGENT_CALL_DELIVERY_MARKER)
 }
 
 const ENTRY_HEAD = /^## (.*) — session_id (\S+) — (ended|failed|waiting for user input)$/
@@ -88,7 +106,7 @@ function statusFromLabel(label: string): AgentCallDeliveryStatus {
  */
 export function parseAgentCallDelivery(text: string): AgentCallDeliveryEntry[] | null {
   if (!isAgentCallDelivery(text)) return null
-  const lines = text.slice(AGENT_CALL_DELIVERY_MARKER.length).split('\n')
+  const lines = unquote(unwrap(text)).slice(AGENT_CALL_DELIVERY_MARKER.length).split('\n')
 
   const entries: { head: RegExpExecArray; body: string[] }[] = []
   for (const line of lines) {

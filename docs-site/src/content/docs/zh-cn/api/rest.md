@@ -74,7 +74,7 @@ curl -s "$BASE/api/workspaces/$NAP_WS/messages?session_id=$SID" \
 | `sync` | 响应里也带 `pending_agent_calls`。是 `0`，`final_message` 就是答案；大于 `0`，那只是中间回复，接着轮询 session，结束后再读消息。 |
 | `stream` | 流在第一轮结束时关闭。之后查一次 session，还有调用没返回就接着轮询。 |
 
-投回来的结果在对话记录里是 `user` 消息，以 `[Automated delivery of call_agent results` 开头。它不是谁打的字，答案看最后一条 `assistant` 消息。
+投回来的结果在对话记录里是 `user` 消息，整条包在 `<agent-sys>…</agent-sys>` 里，第一行以 `[Automated delivery of call_agent results` 开头。它不是谁打的字，答案看最后一条 `assistant` 消息。
 
 只有 `source` 为 `api` 或 `web` 的 session 会收到投回的结果。定时任务和 IM 渠道发起的 session 里，agent 在同一轮内等调用返回，`pending_agent_calls` 一直是 `0`。
 
