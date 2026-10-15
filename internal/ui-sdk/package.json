@@ -1,6 +1,6 @@
 {
   "name": "@neutree-ai/ui-sdk",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Neutree Agent Platform shared UI SDK — reusable React components for embedding platform UI in third-party apps: agent session transcript rendering (messages, tool calls) from the platform's wire message format, and a chat composer with a preset for platform workspaces. Host-agnostic: drop in with a locale, inject your own markdown and data client.",
   "type": "module",
   "main": "./dist/index.js",
