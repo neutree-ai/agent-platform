@@ -445,7 +445,7 @@ interface AskUserQuestionOption {
   description: string
 }
 
-export interface AskUserQuestionItem {
+interface AskUserQuestionItem {
   question: string
   header: string
   options: AskUserQuestionOption[]

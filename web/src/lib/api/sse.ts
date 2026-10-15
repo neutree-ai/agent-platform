@@ -2,4 +2,4 @@
 // which the web app and third-party apps share; re-exported for the importers
 // here.
 export { createAgentChat, createCPReconnectStream } from '@neutree-ai/ui-sdk'
-export type { ContentDelta, UniversalItem } from '@neutree-ai/ui-sdk'
+export type { UniversalItem } from '@neutree-ai/ui-sdk'
