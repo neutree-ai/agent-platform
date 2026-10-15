@@ -86,7 +86,7 @@ export async function countOpenAgentCalls(parentSessionId: string): Promise<numb
 }
 
 /** A call the parent still waits on, as a client shows it. */
-export interface OpenAgentCall {
+interface OpenAgentCall {
   child_session_id: string
   agent: { slug: string | null; name: string | null }
   started_at: string
