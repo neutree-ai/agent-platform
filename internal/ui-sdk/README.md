@@ -161,3 +161,27 @@ An app outside the platform should not hand a platform credential to the browser
 - If your app doesn't need a source (e.g. `@agent/…`), don't proxy it and switch it off with `include`.
 
 For example, with the proxy mounted at `/agent-api`, `createNapHttpClient({ baseUrl: '/agent-api', workspaceId: 'pinned' })` works as-is: the proxy maps `/agent-api/workspaces/pinned/commands` to the real workspace.
+
+## Session
+
+The platform web app's session store, shared: `createAgentSessionStore(workspaceId, deps)`. It is a zustand store; read it with `useStore` from `zustand`. It loads a session's history and streams the running turn, rendering text, tool calls and status lines as they arrive. It also handles:
+
+- reattaching to a turn after a reload;
+- queued follow-ups;
+- questions (`pendingQuestion`, `respondToQuestion`);
+- interrupting.
+
+`syncRemoteTurn` catches up with turns started elsewhere: the results of agent calls, or other people. Call it with `useRemoteTurnSync({ enabled, syncRemoteTurn })` while the session waits on agents (`pending_agent_calls > 0`). It checks every 5 s.
+
+`deps`:
+
+- `api`: session, messages, pending message, pending question, respond, interrupt, delete.
+- `sse`: `createAgentChat` and `createCPReconnectStream` from this package.
+- `effects`: what the host does when a session is created or a turn completes.
+- `drafts`, `toolResults`: optional.
+
+The chat and reconnect requests go to `/api` and `/_proxy` on the page's origin. An app outside the platform proxies those paths through its own backend, which pins the workspace and adds the service token. It points the SDK at the proxy once at start-up:
+
+```ts
+configureSessionEndpoints({ apiUrl: '/my-backend/nap', proxyUrl: '/my-backend/nap/_proxy' })
+```

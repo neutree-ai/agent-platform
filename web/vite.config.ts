@@ -114,6 +114,8 @@ export default defineConfig(({ mode }) => {
         '@radix-ui/react-collapsible',
         '@radix-ui/react-dialog',
         '@radix-ui/react-slot',
+        // The session store moved into the UI SDK; one zustand for both.
+        'zustand',
       ],
     },
     server: {

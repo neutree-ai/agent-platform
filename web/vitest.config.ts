@@ -8,6 +8,8 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
       'sse-consumer': resolve(__dirname, '../internal/sse-consumer/src/index.ts'),
+      // The UI SDK's session store reads the stream through it.
+      '@neutree-ai/sse-consumer': resolve(__dirname, '../internal/sse-consumer/src/index.ts'),
       // The store imports runtime values (toChatMessage, transcriptI18n) from
       // the UI SDK, so tests need its source alias (type-only @neutree-ai/*
       // imports are erased and don't).

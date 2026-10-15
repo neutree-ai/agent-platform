@@ -3,6 +3,7 @@ import { api } from '@/lib/api/client'
 import { createAgentChat, createCPReconnectStream } from '@/lib/api/sse'
 import { i18n } from '@/lib/i18n'
 import { playNotifySound } from '@/lib/sound'
+import { createToolResultDispatcher } from '@/plugins/registry'
 import { useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react'
 import { useStore } from 'zustand'
@@ -13,6 +14,7 @@ import {
   type AgentSessionSlice,
   createAgentSessionStore,
 } from './agent-session-store'
+import { clearDraftFor, getDraftFor, migrateDraft } from './draft-store'
 
 // ── Context ──
 
@@ -95,6 +97,8 @@ export function AgentSessionProvider({
           queryClient.invalidateQueries({ queryKey: sessionKeys.list(wid) }),
         invalidateWorkspaces: () => queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
       },
+      toolResults: createToolResultDispatcher(),
+      drafts: { get: getDraftFor, clear: clearDraftFor, migrate: migrateDraft },
     }
     const s = createAgentSessionStore(workspaceId, deps, { chatEndpoint })
     // Set activeSessionId synchronously so the first render has the correct value.

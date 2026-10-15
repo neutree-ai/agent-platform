@@ -27,6 +27,7 @@
     "react-i18next": "^14.0.0 || ^15.0.0"
   },
   "dependencies": {
+    "@neutree-ai/sse-consumer": "^0.1.0",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.4",
@@ -34,7 +35,8 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "diff": "^5.2.0",
-    "tailwind-merge": "^2.5.0"
+    "tailwind-merge": "^2.5.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@types/diff": "^5.2.0",

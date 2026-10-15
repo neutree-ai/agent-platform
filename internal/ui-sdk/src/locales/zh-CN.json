@@ -301,5 +301,27 @@
         "selectAllThatApply": "可多选"
       }
     }
+  },
+  "common": {
+    "errors": {
+      "connectionFailed": "连接失败",
+      "requestFailed": "请求失败",
+      "unknown": "未知错误"
+    }
+  },
+  "session": {
+    "errors": {
+      "sessionBusy": "这个会话里有另一轮对话正在进行，你的消息没有发出。",
+      "cpReconnectFailed": "恢复工作空间连接失败",
+      "loadHistoryFailed": "加载历史记录失败",
+      "respondFailed": "提交回复失败",
+      "interruptNotReady": "当前还无法终止，对话正在准备中，仍在进行，请稍后再试",
+      "interruptFailed": "中断失败",
+      "deleteFailed": "删除会话失败"
+    },
+    "status": {
+      "disconnected": "已断开连接",
+      "completed": "已完成"
+    }
   }
 }

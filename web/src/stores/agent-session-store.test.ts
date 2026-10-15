@@ -1,6 +1,10 @@
 import type { UniversalItem } from '@/lib/api/sse'
 import type { ApiMessage, AskUserRequest, ContextGauge, TurnStats } from '@/lib/api/types'
-import { _resetPluginsForTests, registerPlugin } from '@/plugins/registry'
+import {
+  _resetPluginsForTests,
+  createToolResultDispatcher,
+  registerPlugin,
+} from '@/plugins/registry'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { StoreApi } from 'zustand/vanilla'
 import type {
@@ -12,6 +16,7 @@ import type {
   SSEHandlers,
 } from './agent-session-store'
 import { createAgentSessionStore } from './agent-session-store'
+import { clearDraftFor, getDraftFor, migrateDraft } from './draft-store'
 
 // ── Test helpers ──
 
@@ -61,10 +66,13 @@ function makeDeps(overrides?: {
   sse?: Partial<AgentSessionSSE>
   effects?: Partial<AgentSessionEffects>
 }): AgentSessionDeps {
+  // The web app's own parts, as AgentSessionContext gives them.
   return {
     api: makeApi(overrides?.api),
     sse: makeSSE(overrides?.sse),
     effects: makeEffects(overrides?.effects),
+    toolResults: createToolResultDispatcher(),
+    drafts: { get: getDraftFor, clear: clearDraftFor, migrate: migrateDraft },
   }
 }
 

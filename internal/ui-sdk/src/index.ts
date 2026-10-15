@@ -98,3 +98,33 @@ export type {
   NapTranscribeOptions,
   NapWorkspaceCommand,
 } from './nap-composer/client'
+
+// A session's lifecycle, as the platform's chat runs it: the store (history,
+// the live turn, queued follow-ups, questions), its chat stream, and the check
+// for turns started elsewhere.
+export { createAgentSessionStore } from './session/agent-session-store'
+export type {
+  AgentSessionApi,
+  AgentSessionDeps,
+  AgentSessionEffects,
+  AgentSessionSSE,
+  AgentSessionSlice,
+  DraftStore,
+  SSEHandlers,
+  ToolResultContext,
+  ToolResultDispatcher,
+} from './session/agent-session-store'
+export {
+  configureSessionEndpoints,
+  createAgentChat,
+  createCPReconnectStream,
+} from './session/sse'
+export type { ContentDelta, SessionEndpoints, UniversalItem } from './session/sse'
+export { REMOTE_TURN_POLL_MS, useRemoteTurnSync } from './session/use-remote-turn-sync'
+export type { RemoteTurnSyncOptions } from './session/use-remote-turn-sync'
+export type {
+  ChatImageAttachment,
+  ContextGauge,
+  PendingMessage,
+  TurnStats,
+} from './session/types'

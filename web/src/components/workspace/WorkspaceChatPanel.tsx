@@ -57,6 +57,7 @@ import {
   TranscriptI18nProvider,
   TurnStatsBar,
   WaitingOnAgentsNotice,
+  useRemoteTurnSync,
 } from '@neutree-ai/ui-sdk'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
@@ -212,9 +213,6 @@ interface WorkspaceChatPanelProps {
   onMessages?: (messages: ChatMessageType[]) => void
 }
 
-/** How often the open session checks for turns this tab did not start. */
-const REMOTE_TURN_POLL_MS = 5000
-
 export function WorkspaceChatPanel({
   workspace,
   transformFirstMessage,
@@ -256,18 +254,13 @@ export function WorkspaceChatPanel({
   // shared workspace, and the one the platform starts to deliver the results
   // of agent calls. Poll the active session to pick them up while the tab is
   // visible.
-  useEffect(() => {
-    if (readonly) return
-    if (!multiAuthor && !waitingOnAgents) return
-    const timer = setInterval(() => {
-      if (document.visibilityState !== 'visible') return
-      void actions.syncRemoteTurn()
-      // A call can also close without a turn here (its result read another
-      // way, or dropped), so the count is re-read rather than inferred.
-      if (waitingOnAgents) invalidateSessions(workspace.id)
-    }, REMOTE_TURN_POLL_MS)
-    return () => clearInterval(timer)
-  }, [multiAuthor, waitingOnAgents, readonly, actions, invalidateSessions, workspace.id])
+  useRemoteTurnSync({
+    enabled: !readonly && (multiAuthor || waitingOnAgents),
+    syncRemoteTurn: actions.syncRemoteTurn,
+    // A call can also close without a turn here (its result read another
+    // way, or dropped), so the count is re-read rather than inferred.
+    onTick: waitingOnAgents ? () => invalidateSessions(workspace.id) : undefined,
+  })
 
   const isChatBusy = isLoading || isDeleting
   const isSessionLocked = isDeleting || isSwitching
