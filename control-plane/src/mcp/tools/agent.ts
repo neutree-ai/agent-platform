@@ -41,6 +41,7 @@ import {
 import {
   createSession,
   getSession,
+  markQuestionPending,
   sessionHasLiveTurn,
   transitionSessionStatus,
   updateSessionActivity,
@@ -411,9 +412,13 @@ function createSubAgentPersistPlugin(ctx: SubAgentPersistCtx): TurnPlugin {
         case 'question.requested': {
           // The sub-agent is waiting on the user. Match legacy behaviour and
           // mark the session 'human' so another caller can pick it up.
+          const question = {
+            request_id: String(evt.request_id ?? ''),
+            questions: Array.isArray(evt.questions) ? evt.questions : [],
+          }
           queue.run(async () => {
             if (state.sessionId) {
-              await transitionSessionStatus(state.sessionId, 'human')
+              await markQuestionPending(state.sessionId, question)
               await noteSessionInputRequested(state.sessionId, executeChat)
             }
           }, logError('transition to human (question)'))

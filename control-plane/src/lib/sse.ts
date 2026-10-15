@@ -11,6 +11,7 @@ import {
 import { touchSessionActivity } from '../services/db/session-activity'
 import {
   createSession,
+  markQuestionPending,
   setSessionReplicaOrdinal,
   transitionSessionStatus,
   updateSessionActivity,
@@ -1207,9 +1208,13 @@ function createPersistMainTurnPlugin(ctx: PersistPluginCtx): TurnPlugin {
         }
 
         case 'question.requested': {
+          const question = {
+            request_id: String(evt.request_id ?? ''),
+            questions: Array.isArray(evt.questions) ? evt.questions : [],
+          }
           queue.run(async () => {
             if (state.sessionId) {
-              await transitionSessionStatus(state.sessionId, 'human')
+              await markQuestionPending(state.sessionId, question)
               await ctx.onInputRequested(state.sessionId)
             }
           }, logError('transition to human (question)'))

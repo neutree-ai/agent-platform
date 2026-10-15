@@ -1,3 +1,4 @@
+import { latestStep } from '../agent-step'
 import { generateId, pool } from './pool'
 
 // Calls one agent session (the parent) made to another (the child) through
@@ -82,6 +83,45 @@ export async function countOpenAgentCalls(parentSessionId: string): Promise<numb
     [parentSessionId],
   )
   return rows[0]?.n ?? 0
+}
+
+/** A call the parent still waits on, as a client shows it. */
+export interface OpenAgentCall {
+  child_session_id: string
+  agent: { slug: string | null; name: string | null }
+  started_at: string
+  /** What the called agent did last, in one line; null before its first tool call. */
+  latest_step: string | null
+}
+
+/**
+ * The calls a session still waits on (the ones `countOpenAgentCalls` counts),
+ * oldest first, each with the called agent and its latest step.
+ */
+export async function listOpenAgentCalls(parentSessionId: string): Promise<OpenAgentCall[]> {
+  const { rows } = await pool.query<{
+    child_session_id: string
+    created_at: Date
+    slug: string | null
+    name: string | null
+    last_blocks: string | null
+  }>(
+    `SELECT c.child_session_id, c.created_at, w.slug, w.name,
+            (SELECT m.blocks FROM messages m
+              WHERE m.session_id = c.child_session_id AND m.role = 'assistant'
+              ORDER BY m.created_at DESC LIMIT 1) AS last_blocks
+       FROM agent_calls c
+       LEFT JOIN workspaces w ON w.id = c.child_workspace_id
+      WHERE c.parent_session_id = $1 AND ${openCallSql('c')}
+      ORDER BY c.created_at ASC`,
+    [parentSessionId],
+  )
+  return rows.map((row) => ({
+    child_session_id: row.child_session_id,
+    agent: { slug: row.slug, name: row.name },
+    started_at: new Date(row.created_at).toISOString(),
+    latest_step: latestStep(row.last_blocks),
+  }))
 }
 
 /** Whether a tracked call is running in this session as the child. */

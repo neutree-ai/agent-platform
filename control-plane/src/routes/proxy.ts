@@ -4,7 +4,7 @@ import type { AppEnv } from '../lib/types'
 import { canAccessWorkspace } from '../lib/workspace-access'
 import { resolveAgentAddress } from '../lib/workspace-address'
 import { chatTurnHooks } from '../services/chat/executeChat'
-import { transitionSessionStatus } from '../services/db/sessions'
+import { clearPendingQuestion, transitionSessionStatus } from '../services/db/sessions'
 import { getWorkspace } from '../services/db/workspaces'
 
 /**
@@ -159,6 +159,16 @@ export function createProxyRoutes() {
       })
     }
 
+    // An answered question is no longer pending, though the turn it paused
+    // goes on in the same stream without moving chat_status.
+    const respondMatch = agentPath.match(/^\/sessions\/([^/]+)\/respond$/)
+    if (respondMatch && c.req.method === 'POST' && response.ok) {
+      const answered = parseRequestId(body)
+      await clearPendingQuestion(decodeURIComponent(respondMatch[1]), answered).catch((e) =>
+        console.error('[proxy] clear pending question failed:', e.message),
+      )
+    }
+
     const respHeaders: Record<string, string> = {
       'Content-Type': response.headers.get('Content-Type') || 'application/json',
     }
@@ -173,4 +183,14 @@ export function createProxyRoutes() {
   })
 
   return proxy
+}
+
+// The request a respond body answers, if it says (`{ requestId }`).
+function parseRequestId(body: string | undefined): string | undefined {
+  try {
+    const parsed = JSON.parse(body ?? '') as { requestId?: unknown }
+    return typeof parsed.requestId === 'string' ? parsed.requestId : undefined
+  } catch {
+    return undefined
+  }
 }

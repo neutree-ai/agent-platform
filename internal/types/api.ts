@@ -310,6 +310,21 @@ export const ApiPendingMessageSchema = z.object({
 
 export type ApiPendingMessage = z.infer<typeof ApiPendingMessageSchema>
 
+export const ApiPendingQuestionSchema = z.object({
+  request_id: z.string(),
+  /** As the agent asked them; the shape depends on the agent type. */
+  questions: z.array(z.unknown()),
+})
+
+export const ApiOpenAgentCallSchema = z.object({
+  child_session_id: z.string(),
+  /** The called agent; null when its workspace is gone. */
+  agent: z.object({ slug: z.string().nullable(), name: z.string().nullable() }),
+  started_at: z.string(),
+  /** What the called agent did last, e.g. "Read …/aoc/SKILL.md"; null before its first tool call. */
+  latest_step: z.string().nullable(),
+})
+
 export const ApiSessionLiteSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -330,6 +345,14 @@ export const ApiSessionLiteSchema = z.object({
     ),
   /** How full the context was at the end of the last turn; null before one. */
   last_turn_stats: ContextGaugeSchema.nullable(),
+  pending_question: ApiPendingQuestionSchema.nullable().describe(
+    'The question the agent asked its user and is waiting on, or null. chat_status is "human" both when a turn has ended and while a question waits; this tells them apart. Answer it through the agent\'s respond endpoint.',
+  ),
+  agent_calls: z
+    .array(ApiOpenAgentCallSchema)
+    .describe(
+      'The calls counted in pending_agent_calls, oldest first, with what each called agent did last.',
+    ),
 })
 
 export type ApiSessionLite = z.infer<typeof ApiSessionLiteSchema>

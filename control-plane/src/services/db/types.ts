@@ -44,6 +44,12 @@ export interface SessionTurnStats {
  * running. Drained into a fresh turn once the current turn ends cleanly.
  * Single draft per session (re-arming merges), not a queue.
  */
+/** What a `question.requested` event carried; `questions` is agent-specific. */
+export interface SessionPendingQuestion {
+  request_id: string
+  questions: unknown[]
+}
+
 export interface SessionPendingMessage {
   content: string
   images: { data: string; media_type: string }[]
@@ -74,6 +80,8 @@ export interface Session {
    */
   replica_ordinal: number | null
   pending_message: SessionPendingMessage | null
+  /** The question the agent is waiting on its user for, or null. */
+  pending_question: SessionPendingQuestion | null
   /** When the session was starred, or null when it is not starred. */
   starred_at: string | null
 }

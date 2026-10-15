@@ -4,6 +4,7 @@ import type {
   PaginatedSessions,
   Session,
   SessionPendingMessage,
+  SessionPendingQuestion,
   SessionTurnStats,
   SessionWithPreview,
 } from './types'
@@ -280,11 +281,35 @@ export async function setSessionReplicaOrdinal(
   ])
 }
 
+// A question the agent asked is over once chat_status moves on, whichever way.
 export async function transitionSessionStatus(
   sessionId: string,
   to: 'agent' | 'human' | 'idle',
 ): Promise<void> {
-  await pool.query('UPDATE sessions SET chat_status = $1 WHERE id = $2', [to, sessionId])
+  await pool.query('UPDATE sessions SET chat_status = $1, pending_question = NULL WHERE id = $2', [
+    to,
+    sessionId,
+  ])
+}
+
+/** The agent asked its user something and waits: `human`, with the question. */
+export async function markQuestionPending(
+  sessionId: string,
+  question: SessionPendingQuestion,
+): Promise<void> {
+  await pool.query(
+    "UPDATE sessions SET chat_status = 'human', pending_question = $1 WHERE id = $2",
+    [JSON.stringify(question), sessionId],
+  )
+}
+
+/** The question was answered; the turn goes on. Only that question is cleared. */
+export async function clearPendingQuestion(sessionId: string, requestId?: string): Promise<void> {
+  await pool.query(
+    `UPDATE sessions SET pending_question = NULL
+      WHERE id = $1 AND ($2::text IS NULL OR pending_question->>'request_id' = $2)`,
+    [sessionId, requestId ?? null],
+  )
 }
 
 // ── Pending (queued follow-up) message ───────────────────────────────────

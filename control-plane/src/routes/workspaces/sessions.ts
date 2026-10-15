@@ -8,7 +8,7 @@ import {
 import type { AppEnv } from '../../lib/types'
 import { canAccessWorkspace } from '../../lib/workspace-access'
 import { resolveAgentAddress } from '../../lib/workspace-address'
-import { countOpenAgentCalls } from '../../services/db/agent-calls'
+import { countOpenAgentCalls, listOpenAgentCalls } from '../../services/db/agent-calls'
 import { pool } from '../../services/db/pool'
 import { listSessionToolCalls } from '../../services/db/session-tool-calls'
 import {
@@ -46,7 +46,7 @@ const getSessionRoute = createRoute({
   tags: ['workspaces'],
   summary: 'Get a single session (lightweight, sidebar shape)',
   description:
-    'Returns a lite shape with id, name, chat_status, status, last_active_at, a 40-char preview of the first user message, and the last turn\'s context gauge. Use GET /workspaces/:id/sessions for the full ApiSession list.\n\nThis is the endpoint to poll after an async chat. The session is done when `chat_status` is not `agent` AND `pending_agent_calls` is `0`: a session whose agent called other agents can sit at `idle` between turns while it waits for their results, which arrive as further turns.',
+    "Returns a lite shape with id, name, chat_status, status, last_active_at, a 40-char preview of the first user message, the last turn's context gauge, the question the agent is waiting on (if any), and the agent calls still open. Use GET /workspaces/:id/sessions for the full ApiSession list.\n\nThis is the endpoint to poll after an async chat. The session is done when `chat_status` is not `agent` AND `pending_agent_calls` is `0`: a session whose agent called other agents can sit at `idle` between turns while it waits for their results, which arrive as further turns.",
   security: [{ bearerAuth: [] }],
   request: { params: SessionScopedParam },
   responses: {
@@ -93,6 +93,8 @@ sessions.openapi(getSessionRoute, async (c) => {
       pending_message: session.pending_message ?? null,
       pending_agent_calls: await countOpenAgentCalls(session.id),
       last_turn_stats: session.last_turn_stats ?? null,
+      pending_question: session.pending_question ?? null,
+      agent_calls: await listOpenAgentCalls(session.id),
     },
     200,
   )
