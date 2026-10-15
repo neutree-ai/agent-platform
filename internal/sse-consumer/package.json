@@ -1,9 +1,25 @@
 {
   "name": "@neutree-ai/sse-consumer",
   "version": "0.1.0",
-  "private": true,
+  "description": "Reads the Neutree Agent Platform's SSE turn streams: a neutral SSE line reader (readSSE) and a turn runner (runTurn) with plugins, idle timeout and one reconnect.",
   "type": "module",
+  "main": "./dist/sse-consumer/src/index.js",
+  "types": "./dist/sse-consumer/src/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "import": "./dist/sse-consumer/src/index.js",
+      "types": "./dist/sse-consumer/src/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "typescript": "~5.6.2"
   }
 }

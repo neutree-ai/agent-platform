@@ -11,3 +11,14 @@ export type {
   TurnError,
   TurnErrorReason,
 } from './run-turn'
+
+// The wire types its API names, so readers outside the repo have them too.
+export type {
+  ChatImageAttachment,
+  ContentDelta,
+  ContentPart,
+  ContextGauge,
+  TurnStats,
+  UniversalEvent,
+  UniversalItem,
+} from '../../types/events'
