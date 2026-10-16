@@ -613,6 +613,28 @@ describe('createAgentSessionStore', () => {
       expect(s.messages).toEqual([])
     })
 
+    test('sends an image-only message with a single-space text', () => {
+      const deps = makeDeps()
+      const { s } = make('ws-1', deps)
+      const images = [{ data: 'base64data', media_type: 'image/png' }]
+
+      s.sendMessage(' ', images)
+
+      expect(deps.sse.createAgentChat).toHaveBeenCalledWith(
+        'ws-1',
+        ' ',
+        undefined,
+        expect.any(Object),
+        expect.any(AbortSignal),
+        images,
+      )
+      expect(s.messages[0]).toMatchObject({
+        role: 'user',
+        content: '',
+        blocks: [{ type: 'image', data: 'base64data', media_type: 'image/png' }],
+      })
+    })
+
     test('SSE session.started updates activeSessionId and skips history reload', async () => {
       const deps = makeDeps({
         sse: {

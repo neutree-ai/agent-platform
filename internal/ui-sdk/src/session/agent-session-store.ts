@@ -776,7 +776,8 @@ export function createAgentSessionStore(
     },
 
     sendMessage(content, images) {
-      if (!content.trim()) return
+      const text = content.trim()
+      if (!text && !images?.length) return
       // A turn is already in flight — promote this to the queued follow-up
       // rather than dropping it or starting a concurrent turn.
       if (store.getState().isLoading) {
@@ -784,7 +785,7 @@ export function createAgentSessionStore(
         return
       }
 
-      const userBlocks: ContentBlock[] = [{ type: 'text', text: content.trim() }]
+      const userBlocks: ContentBlock[] = text ? [{ type: 'text', text }] : []
       if (images?.length) {
         for (const img of images) {
           userBlocks.push({ type: 'image', data: img.data, media_type: img.media_type })
@@ -793,7 +794,7 @@ export function createAgentSessionStore(
       const userMessage: ChatMessage = {
         id: genId(),
         role: 'user',
-        content: content.trim(),
+        content: text,
         blocks: userBlocks,
       }
 
@@ -817,7 +818,9 @@ export function createAgentSessionStore(
       const version = switchVersion
       deps.sse.createAgentChat(
         workspaceId,
-        content.trim(),
+        // The chat API rejects an empty message, so an image-only send
+        // carries a single space.
+        text || ' ',
         store.getState().activeSessionId,
         {
           ...buildSSEHandlers(assistantId, version),
