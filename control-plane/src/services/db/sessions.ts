@@ -559,41 +559,15 @@ interface UserActivitySummary {
   punch_card: { dow: number; hour: number; count: number }[]
 }
 
-// Refresh `user_daily_interactions` in the background, at most once every
-// 10 min — same debounce as the admin matview refresh. Keeps "today"
-// reasonably fresh without slamming the planner on every Stats page load.
-let lastUserDailyRefresh = 0
-function refreshUserDailyInteractions(): void {
-  const now = Date.now()
-  if (now - lastUserDailyRefresh < 10 * 60 * 1000) return
-  lastUserDailyRefresh = now
-  // CONCURRENTLY only once populated: the base schema creates this matview
-  // `WITH NO DATA`, and Postgres rejects `REFRESH ... CONCURRENTLY` on a
-  // never-populated matview — so the first refresh must be plain or it stays
-  // empty forever and reads error with "has not been populated". Mirrors the
-  // guard in scheduler/src/db.ts refreshMatview().
-  pool
-    .query<{ ispopulated: boolean }>(
-      "SELECT ispopulated FROM pg_matviews WHERE matviewname = 'user_daily_interactions'",
-    )
-    .then((r) => {
-      const concurrently = r.rows[0]?.ispopulated === true ? 'CONCURRENTLY ' : ''
-      return pool.query(`REFRESH MATERIALIZED VIEW ${concurrently}user_daily_interactions`)
-    })
-    .catch((e) => console.error('[Stats] user_daily_interactions refresh failed:', e))
-}
-
 /**
  * Per-user activity summary for the Home Stats app. Daily interactions
- * come from the `user_daily_interactions` matview (refreshed lazily on
- * call); session counts and the punch card stay live since they don't
- * touch session_events and are bounded to the requesting user.
+ * come from the scheduler-maintained `user_daily_interactions` snapshot;
+ * session counts and the punch card stay live and are bounded to the user.
  */
 export async function getUserActivitySummary(
   userId: string,
   days: number,
 ): Promise<UserActivitySummary> {
-  refreshUserDailyInteractions()
   // Inclusive window: today + (days - 1) prior days = `days` rows.
   const offset = Math.max(0, days - 1)
   const [dailyRes, punchRes] = await Promise.all([
