@@ -4,7 +4,7 @@ import { pool } from '../../services/db/pool'
 
 const stats = new Hono<AppEnv>()
 
-// The admin_* matviews these handlers read are refreshed on a cadence by the
+// The admin_* snapshots these handlers read are refreshed on a cadence by the
 // scheduler's admin-stats-refresh cron (scheduler/src/admin-stats-refresh.ts).
 // Handlers just read the latest snapshot — no on-request refresh here.
 
@@ -150,10 +150,10 @@ stats.get('/mcp-usage', async (c) => {
 // activity time), NOT created_at (ingestion time — a first-pull backfill stamps
 // history with NOW()).
 //
-// Served from the admin_token_* matviews (migration 111) instead of the raw
+// Served from the admin_token_* snapshots instead of the raw
 // workspace_usage_events ledger: the all-time aggregates are full-table scans
 // that grow linearly with the append-only ledger, so reading the pre-rolled-up
-// matviews (refreshed on a cadence by the scheduler's admin-stats-refresh
+// snapshots (refreshed on a cadence by the scheduler's admin-stats-refresh
 // cron) keeps the dashboard cheap as the ledger grows. The user/workspace
 // names are joined live (small PK joins) so the matviews stay name-free.
 const TOKEN_SINCE = "(current_date - interval '29 days')::date"
