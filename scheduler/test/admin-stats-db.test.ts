@@ -127,9 +127,10 @@ test(
         0,
       )
       // A legacy refresh fails, but readers can still access the preserved snapshots.
-      await assert.rejects(fixture.query('REFRESH MATERIALIZED VIEW admin_daily_stats'), {
-        code: '42809',
-      })
+      await assert.rejects(
+        fixture.query('REFRESH MATERIALIZED VIEW admin_daily_stats'),
+        /not a materialized view/,
+      )
       assert.deepEqual(await snapshot(), before)
     })
     await t.test('missing watermark triggers an immediate full rebuild', async () => {
