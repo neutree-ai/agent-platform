@@ -10,6 +10,7 @@ import { initSkillReloadQueue } from './lib/skill-reload-queue'
 import { drainActiveStreams } from './lib/sse'
 import { startAgentCallSweep } from './services/chat/agent-call-delivery'
 import { executeChat } from './services/chat/executeChat'
+import { startSessionMessageQueue } from './services/chat/message-queue'
 import { initDb, pool } from './services/db/pool'
 import { initNotificationQueue } from './services/notifications/queue'
 
@@ -68,6 +69,7 @@ if (process.env.DISABLE_SESSION_RECOVERY === '1') {
   recoverOrphanedSessions().catch((e) => console.error('[Recovery] Fatal error:', e))
   // Same switch: the sweep starts turns in sessions other replicas own.
   startAgentCallSweep(executeChat)
+  startSessionMessageQueue(executeChat)
 }
 
 const port = Number.parseInt(process.env.PORT || '3000')

@@ -99,6 +99,36 @@ NAP is a set of services that share a PostgreSQL control plane. One control plan
 - `web/src` — the shell users actually operate
 - `self-host/` — how the whole thing is deployed, including the air-gapped path
 
+## Queue a session follow-up
+
+Connectors can append a follow-up to an existing session with
+`POST /api/workspaces/{workspaceId}/sessions/{sessionId}/queue`:
+
+```json
+{"message":"The approved action has finished. Continue with its result.","source":"webhook"}
+```
+
+Use the same bearer authentication as `/chat`. An optional `Idempotency-Key`
+header deduplicates retries within the session; reusing a key with different
+content returns `409`. The response is `202` with `session_id`, `queue_id` and
+`status: "queued"` once PostgreSQL has stored the message. An idle session is
+dispatched immediately; a busy session waits until its current turn settles.
+Messages are dispatched in FIFO order, preserving their source and caller, and
+do not replace the web composer's editable `/pending` draft.
+
+Queued entries and delivery leases survive control-plane restarts. A background
+sweep retries busy or unavailable agents and missed turn-end wakeups. Delivery
+is at least once across a crash during agent handoff; the idempotency key prevents
+duplicate enqueue requests, rather than making agent execution transactional.
+
+The queue requires migration `149_session_message_queue.sql`, applied at startup.
+To run its PostgreSQL concurrency test against a disposable database:
+
+```sh
+cd control-plane
+QUEUE_TEST_DATABASE_URL=postgresql://localhost/queue_test npm test -- src/services/db/session-message-queue.test.ts
+```
+
 ## Container images
 
 First-party images are published to GitHub Container Registry under `ghcr.io/neutree-ai/agent-platform/` (e.g. `nap-cp`, `nap-cg`, `nap-scheduler`, `nap-browser`, `nap-sandbox`). Builds are driven by [`.github/workflows/build-images.yml`](.github/workflows/build-images.yml): images are built on demand (`workflow_dispatch`) or when a per-service release tag `<image>-v<x.y.z>` is pushed — services version independently.

@@ -1,15 +1,20 @@
+import { randomUUID } from 'node:crypto'
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import {
   ApiPendingMessageSchema,
   ApiSessionLiteSchema,
   ApiSessionToolActivitySchema,
   ApiSessionUsageSchema,
+  ChatBodySchema,
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
 import { canAccessWorkspace } from '../../lib/workspace-access'
 import { resolveAgentAddress } from '../../lib/workspace-address'
+import { executeChat } from '../../services/chat/executeChat'
+import { drainSessionMessageQueue } from '../../services/chat/message-queue'
 import { countOpenAgentCalls } from '../../services/db/agent-calls'
 import { pool } from '../../services/db/pool'
+import { enqueueSessionMessage } from '../../services/db/session-message-queue'
 import { listSessionToolCalls } from '../../services/db/session-tool-calls'
 import {
   clearPendingMessage,
@@ -46,7 +51,7 @@ const getSessionRoute = createRoute({
   tags: ['workspaces'],
   summary: 'Get a single session (lightweight, sidebar shape)',
   description:
-    'Returns a lite shape with id, name, chat_status, status, last_active_at, a 40-char preview of the first user message, and the last turn\'s context gauge. Use GET /workspaces/:id/sessions for the full ApiSession list.\n\nThis is the endpoint to poll after an async chat. The session is done when `chat_status` is not `agent` AND `pending_agent_calls` is `0`: a session whose agent called other agents can sit at `idle` between turns while it waits for their results, which arrive as further turns.',
+    "Returns a lite shape with id, name, chat_status, status, last_active_at, a 40-char preview of the first user message, and the last turn's context gauge. Use GET /workspaces/:id/sessions for the full ApiSession list.\n\nThis is the endpoint to poll after an async chat. The session is done when `chat_status` is not `agent` AND `pending_agent_calls` is `0`: a session whose agent called other agents can sit at `idle` between turns while it waits for their results, which arrive as further turns.",
   security: [{ bearerAuth: [] }],
   request: { params: SessionScopedParam },
   responses: {
@@ -271,6 +276,80 @@ sessions.openapi(interruptSessionRoute, async (c) => {
 
   const { delivered, interrupted } = await interruptAgentSession(address, sessionId, 'Interrupt')
   return c.json({ success: delivered, interrupted }, 200)
+})
+
+// Connector messages have their own FIFO; they must never replace the web draft.
+const queueMessageRoute = createRoute({
+  method: 'post',
+  path: '/{id}/sessions/{sessionId}/queue',
+  tags: ['chat'],
+  summary: 'Append a message to a session queue',
+  description:
+    'Persists a follow-up and starts it when the session is free, without interrupting a running turn or replacing its editable pending draft. Messages are delivered in FIFO order. Source and caller identity are retained. Idempotency-Key deduplicates retries within the session, including already delivered messages. Delivery is at least once if the control plane crashes during agent handoff.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: SessionScopedParam,
+    headers: z.object({ 'Idempotency-Key': z.string().min(1).max(200).optional() }),
+    body: {
+      required: true,
+      content: {
+        'application/json': {
+          schema: ChatBodySchema.pick({ message: true, images: true, source: true }),
+        },
+      },
+    },
+  },
+  responses: {
+    202: {
+      description: 'Durably queued; dispatch is automatic once the session is free',
+      content: {
+        'application/json': {
+          schema: z.object({
+            session_id: z.string(),
+            queue_id: z.string(),
+            status: z.literal('queued'),
+          }),
+        },
+      },
+    },
+    404: {
+      description: 'Workspace or active session not found',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    409: {
+      description: 'Idempotency-Key was used with a different message',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+sessions.openapi(queueMessageRoute, async (c) => {
+  const user = c.get('user')
+  const { id, sessionId } = c.req.valid('param')
+  const body = c.req.valid('json')
+  const workspace = await getWorkspace(id)
+  if (!workspace || !(await canAccessWorkspace(workspace, user))) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+  const session = await getSession(sessionId)
+  if (!session || session.workspace_id !== id || session.status !== 'active') {
+    return c.json({ error: 'Session not found' }, 404)
+  }
+  const queueId = await enqueueSessionMessage(
+    sessionId,
+    c.req.header('Idempotency-Key') ?? randomUUID(),
+    {
+      message: body.message,
+      images: body.images ?? [],
+      source: body.source,
+      callerUserId: user.sub,
+    },
+  )
+  if (!queueId) return c.json({ error: 'Idempotency-Key was used with a different message' }, 409)
+  void drainSessionMessageQueue(id, sessionId, executeChat).catch((e) =>
+    console.error(`[message-queue] immediate dispatch failed session=${sessionId}:`, e),
+  )
+  return c.json({ session_id: sessionId, queue_id: queueId, status: 'queued' as const }, 202)
 })
 
 // ── PUT /:id/sessions/:sessionId/pending ───────────────────────────────────

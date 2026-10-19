@@ -14,6 +14,7 @@ import { getWorkspace } from '../db/workspaces'
 import { pickReplicaForTurn } from '../replica-router'
 import { WorkspaceStartError, ensureWorkspaceRunning } from '../workspace-autostart'
 import { noteSessionInputRequested, settleSessionTurn } from './agent-call-delivery'
+import { drainSessionMessageQueue } from './message-queue'
 import { type ChatImage, buildAgentChatBody, buildUserMessageBlocks } from './request'
 import { adoptSessionTurn, claimSessionTurn } from './session-turn'
 import { TurnCapacityError, type TurnSlot, acquireTurn } from './turn-gate'
@@ -294,6 +295,7 @@ export function chatTurnHooks(workspaceId: string): TurnHooks {
       // post any call results that were waiting for this session to be free.
       // After the drain, so a follow-up the user queued goes first.
       await settleSessionTurn(sessionId, { reason }, executeChat)
+      await drainSessionMessageQueue(workspaceId, sessionId, executeChat)
     },
     onInputRequested: (sessionId) => noteSessionInputRequested(sessionId, executeChat),
   }
