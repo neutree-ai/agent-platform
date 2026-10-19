@@ -211,7 +211,14 @@ export function useWsApps(workspaceId: string | undefined): AppDefinition[] {
         const path = typeof p.viewingPath === 'string' ? p.viewingPath : ''
         if (!path) return null
         const stripped = path.endsWith('/') ? path.slice(0, -1) : path
-        return decodeURIComponent(stripped.split('/').pop() || stripped)
+        const name = stripped.split('/').pop() || stripped
+        // A literal `%` in a filename is not a valid escape; throwing here
+        // would take the whole shell down on every load of the saved layout.
+        try {
+          return decodeURIComponent(name)
+        } catch {
+          return name
+        }
       },
     })
 
