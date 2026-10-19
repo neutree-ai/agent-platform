@@ -526,7 +526,7 @@ function buildStreamSink(trigger: JobData['trigger']): StreamSink | null {
   }
 }
 
-async function sendReply(trigger: JobData['trigger'], text: string) {
+export async function sendReply(trigger: JobData['trigger'], text: string) {
   const payload = trigger.payload as Record<string, unknown> | undefined
   if (!payload?.connector_id || !payload?.route_id) return
 

@@ -9,6 +9,11 @@ import {
 } from './db'
 import { registerDeadLetterWorker } from './dead-letter'
 import { type JobData, handleJob } from './handler'
+import {
+  AGENT_SESSION_DEAD_LETTER_QUEUE,
+  ensureLostJobQueue,
+  registerLostJobWorker,
+} from './lost-job'
 import { registerNotificationWorker } from './notifications'
 import { registerSkillReloadWorker } from './skill-reload'
 import { registerTitleGenWorker } from './title-gen'
@@ -45,7 +50,11 @@ const queueOptions = {
   // Does NOT catch a hung-but-alive handler (heartbeat keeps firing) — that is
   // runTurn's idle timeout's job.
   heartbeatSeconds: 120,
+  // Jobs failed by the monitor above have no handler left to tell the source
+  // channel; the lost-job worker on this queue does.
+  deadLetter: AGENT_SESSION_DEAD_LETTER_QUEUE,
 }
+await ensureLostJobQueue(boss)
 await boss.createQueue(QUEUE_NAME, queueOptions).catch(() => {})
 // Ensure config is up-to-date for existing queues
 await boss.updateQueue(QUEUE_NAME, queueOptions)
@@ -108,6 +117,7 @@ await registerNotificationWorker(boss)
 // Register the shared dead-letter sink + the skill-reload fanout worker.
 await registerDeadLetterWorker(boss)
 await registerSkillReloadWorker(boss)
+await registerLostJobWorker(boss)
 
 // Register the session title-generation cron worker.
 await registerTitleGenWorker(boss)
