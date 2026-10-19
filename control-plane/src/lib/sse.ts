@@ -21,7 +21,7 @@ import { notify } from '../services/notifications'
 import { pullWorkspaceUsage } from '../services/usage/pull'
 import { setSseStreamCountProvider, sseStreamDuration } from './metrics'
 import { bindSession as bindSessionToken } from './session-token'
-import { truncateToolOutput } from './truncate-tool-output'
+import { capToolResultEvent, truncateToolOutput } from './truncate-tool-output'
 
 // ── Active SSE stream tracking for client reconnect ──
 
@@ -1321,7 +1321,7 @@ export function createBroadcastPlugin(ctx: BroadcastPluginCtx): TurnPlugin {
           // output — also re-arms `turnActive` when a turn resumes after a
           // `question.requested` handoff (no fresh `session.started` fires).
           activeStream.turnActive = true
-          emitNow(rawData)
+          emitNow(capToolResultEvent(evt, rawData))
       }
     },
 
