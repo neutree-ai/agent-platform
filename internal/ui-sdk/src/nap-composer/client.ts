@@ -25,6 +25,13 @@ export interface NapCallableAgent {
   is_own: boolean
 }
 
+/** A skill attached to the workspace, addressed with `@skill/…`. */
+export interface NapWorkspaceSkill {
+  id: string
+  name: string
+  description?: string
+}
+
 /** One entry of a workspace directory listing. */
 export interface NapDirEntry {
   name: string
@@ -46,6 +53,8 @@ export interface NapTranscribeOptions {
 export interface NapComposerClient {
   /** The workspace's slash commands (`GET /workspaces/:id/commands`). */
   listCommands?: () => Promise<NapWorkspaceCommand[]>
+  /** Skills attached to the workspace (`GET /workspaces/:id/skills`). */
+  listSkills?: () => Promise<NapWorkspaceSkill[]>
   /** Agents the user can call (`GET /workspaces/callable`). */
   listCallableAgents?: () => Promise<NapCallableAgent[]>
   /**
@@ -79,7 +88,7 @@ async function errorMessage(res: Response): Promise<string> {
 
 /**
  * {@link NapComposerClient} over the platform's REST paths. Point `baseUrl` at
- * the platform API, or at a backend that exposes the same four paths.
+ * the platform API, or at a backend that exposes the same paths.
  */
 export function createNapHttpClient(options: NapHttpClientOptions): NapComposerClient {
   const base = options.baseUrl.replace(/\/+$/, '')
@@ -101,6 +110,10 @@ export function createNapHttpClient(options: NapHttpClientOptions): NapComposerC
     listCommands: async () => {
       const res = await request(`/workspaces/${ws}/commands`)
       return ((await res.json()) as { commands: NapWorkspaceCommand[] }).commands
+    },
+    listSkills: async () => {
+      const res = await request(`/workspaces/${ws}/skills`)
+      return ((await res.json()) as { skills: NapWorkspaceSkill[] }).skills
     },
     listCallableAgents: async () => {
       const res = await request('/workspaces/callable')

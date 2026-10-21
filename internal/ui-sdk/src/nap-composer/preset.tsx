@@ -1,4 +1,4 @@
-import { Bot, File as FileIcon, Folder, Library } from 'lucide-react'
+import { Bot, File as FileIcon, Folder, Library, Sparkles } from 'lucide-react'
 import { useMemo, useRef } from 'react'
 import type {
   ComposerCommand,
@@ -12,6 +12,7 @@ import type {
   NapComposerClient,
   NapDirEntry,
   NapTranscribeOptions,
+  NapWorkspaceSkill,
 } from './client'
 import { CREATE_SKILL_PROMPT } from './create-skill-prompt'
 
@@ -85,6 +86,11 @@ function mapMaybeAsync<T, R>(v: T | Promise<T>, fn: (v: T) => R): R | Promise<R>
   return v instanceof Promise ? v.then(fn) : fn(v)
 }
 
+/** Pair two maybe-async values, staying synchronous when both are. */
+function bothMaybeAsync<A, B>(a: A | Promise<A>, b: B | Promise<B>): [A, B] | Promise<[A, B]> {
+  return a instanceof Promise || b instanceof Promise ? Promise.all([a, b]) : [a, b]
+}
+
 // ─── Menu rows ──────────────────────────────────────────────────────
 
 function FileMentionHint() {
@@ -92,7 +98,13 @@ function FileMentionHint() {
   return <>{t('components.composer.nap.fileMentionHint')}</>
 }
 
+function SkillMentionHint() {
+  const { t } = useSdkTranslation()
+  return <>{t('components.composer.nap.skillMentionHint')}</>
+}
+
 const FILE_PREFIX = '@file/'
+const SKILL_PREFIX = '@skill/'
 const AGENT_PREFIX = '@agent/'
 const FILE_LIST_LIMIT = 50
 
@@ -125,6 +137,50 @@ const fileEntryItem: ComposerTriggerItem = {
   // No trailing space: the `@file/` trigger takes over from here.
   insertText: FILE_PREFIX,
   keepOpen: true,
+}
+
+const skillEntryItem: ComposerTriggerItem = {
+  key: '__skill__',
+  icon: <Sparkles className="h-3 w-3 shrink-0 text-muted-foreground" />,
+  label: (
+    <span className="flex min-w-0 items-center gap-2">
+      <span className="font-mono font-medium">{SKILL_PREFIX}</span>
+      <span className="truncate text-tiny text-muted-foreground">
+        <SkillMentionHint />
+      </span>
+    </span>
+  ),
+  // No trailing space: the `@skill/` trigger takes over from here.
+  insertText: SKILL_PREFIX,
+  keepOpen: true,
+}
+
+function skillItem(skill: NapWorkspaceSkill): ComposerTriggerItem {
+  return {
+    key: skill.id,
+    icon: <Sparkles className="h-3 w-3 shrink-0 text-muted-foreground" />,
+    label: (
+      <span className="font-mono font-medium">
+        {SKILL_PREFIX}
+        {skill.name}
+      </span>
+    ),
+    description: skill.description || undefined,
+    insertText: `${SKILL_PREFIX}${skill.name} `,
+  }
+}
+
+/** Name matches first, then description-only matches, each alphabetical. */
+function filterSkills(skills: NapWorkspaceSkill[], query: string): NapWorkspaceSkill[] {
+  const q = query.toLowerCase()
+  const byName: NapWorkspaceSkill[] = []
+  const byDescription: NapWorkspaceSkill[] = []
+  for (const skill of skills) {
+    if (skill.name.toLowerCase().includes(q)) byName.push(skill)
+    else if (skill.description?.toLowerCase().includes(q)) byDescription.push(skill)
+  }
+  const byNameOrder = (a: NapWorkspaceSkill, b: NapWorkspaceSkill) => a.name.localeCompare(b.name)
+  return [...byName.sort(byNameOrder), ...byDescription.sort(byNameOrder)]
 }
 
 function agentItem(agent: NapCallableAgent): ComposerTriggerItem {
@@ -190,6 +246,8 @@ export interface NapComposerInclude {
   workspaceCommands?: boolean
   /** `@file/…` workspace file mentions (needs `client.listDir`). Default on. */
   files?: boolean
+  /** `@skill/…` workspace skill mentions (needs `client.listSkills`). Default on. */
+  skills?: boolean
   /** `@agent/…` callable-agent mentions (needs `client.listCallableAgents`). Default on. */
   agents?: boolean
   /** Voice input (needs `client.transcribe`). Default on. */
@@ -221,14 +279,15 @@ export interface NapComposerPreset {
 }
 
 const AGENTS_TTL_MS = 30_000
+const SKILLS_TTL_MS = 30_000
 const FILES_TTL_MS = 10_000
 const FILES_CACHE_MAX = 50
 
 /**
  * Build composer data sources backed by the platform: built-in commands,
- * workspace commands, `@file/…`, `@agent/…` and voice. Each source can be
- * switched off through `include`. Not a hook — see {@link useNapComposer}
- * for the memoized React form.
+ * workspace commands, `@file/…`, `@skill/…`, `@agent/…` and voice. Each
+ * source can be switched off through `include`. Not a hook — see
+ * {@link useNapComposer} for the memoized React form.
  */
 export function createNapComposerPreset(options: NapComposerOptions): NapComposerPreset {
   const { client, agentType, workspaceId, include = {} } = options
@@ -260,25 +319,45 @@ export function createNapComposerPreset(options: NapComposerOptions): NapCompose
 
   const triggers: ComposerTrigger[] = []
   const listDir = include.files !== false ? client.listDir : undefined
+  const listSkills = include.skills !== false ? client.listSkills : undefined
   const listAgents = include.agents !== false ? client.listCallableAgents : undefined
 
-  if (listAgents || listDir) {
+  // A failed skill listing reads as no skills, so it can't empty the bare `@`
+  // menu it shares with agents.
+  const skills = listSkills
+    ? swrCell(() => listSkills().catch((): NapWorkspaceSkill[] => []), SKILLS_TTL_MS)
+    : () => []
+
+  if (listAgents || listDir || listSkills) {
     const agents = listAgents ? swrCell(listAgents, AGENTS_TTL_MS) : () => []
+    // A bare `@` offers the `@file/` and `@skill/` entries while the query is
+    // still a prefix of theirs.
+    const offers = (prefix: string, query: string) =>
+      query === '' || prefix.slice(1).startsWith(query)
     triggers.push({
       id: 'nap-agent',
-      // Bare `@…` or `@agent/…`; `@file/…` belongs to the file trigger.
-      pattern: /@(?!file\/)(?:agent\/)?([a-z0-9/-]*)$/,
+      // Bare `@…` or `@agent/…`; `@file/…` and `@skill/…` have their own triggers.
+      pattern: /@(?!file\/|skill\/)(?:agent\/)?([a-z0-9/-]*)$/,
       getItems: (query) =>
-        mapMaybeAsync(agents(), (list) => {
-          const showFileEntry =
-            !!listDir && (query === '' || FILE_PREFIX.slice(1).startsWith(query))
-          return [
-            ...(showFileEntry ? [fileEntryItem] : []),
-            ...list
-              .filter((a) => a.id !== workspaceId && agentRef(a).includes(query))
-              .map(agentItem),
-          ]
-        }),
+        // A typed name also matches skills, so `@brand` finds a skill without
+        // going through `@skill/` first.
+        mapMaybeAsync(bothMaybeAsync(agents(), query ? skills() : []), ([agentList, skillList]) => [
+          ...(listDir && offers(FILE_PREFIX, query) ? [fileEntryItem] : []),
+          ...(listSkills && offers(SKILL_PREFIX, query) ? [skillEntryItem] : []),
+          ...agentList
+            .filter((a) => a.id !== workspaceId && agentRef(a).includes(query))
+            .map(agentItem),
+          ...filterSkills(skillList, query).map(skillItem),
+        ]),
+    })
+  }
+
+  if (listSkills) {
+    triggers.push({
+      id: 'nap-skill',
+      pattern: /@skill\/([\w.-]*)$/,
+      getItems: (query) =>
+        mapMaybeAsync(skills(), (list) => filterSkills(list, query).map(skillItem)),
     })
   }
 

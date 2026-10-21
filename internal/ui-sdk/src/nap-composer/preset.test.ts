@@ -204,3 +204,64 @@ describe('@ agent trigger', () => {
     expect((await items(t as ComposerTrigger, '')).map((i) => i.insertText)).toEqual(['@file/'])
   })
 })
+
+describe('@skill trigger', () => {
+  const skills = [
+    { id: 's1', name: 'acme-brand-system', description: 'Brand colors and type' },
+    { id: 's2', name: 'pdf', description: 'Read and fill PDF forms' },
+    { id: 's3', name: 'colors-cheatsheet' },
+  ]
+  const client: NapComposerClient = {
+    listSkills: async () => skills,
+    listCallableAgents: async () => [
+      { id: 'w1', slug: 'brand-bot', name: 'Brand bot', owner: 'u', is_own: true },
+    ],
+    listDir: async () => [],
+  }
+
+  it('matches @skill/ and leaves it out of the bare @ trigger', () => {
+    const { pattern } = trigger(client, 'nap-skill')
+    expect(matchTrigger(pattern, 'use @skill/acme-br', 18)?.query).toBe('acme-br')
+    expect(matchTrigger(pattern, '@skill/', 7)?.query).toBe('')
+    expect(matchTrigger(pattern, '@skill/a b', 10)).toBeNull()
+    expect(matchTrigger(trigger(client, 'nap-agent').pattern, '@skill/x', 8)).toBeNull()
+  })
+
+  it('lists name matches before description matches and inserts the mention', async () => {
+    const t = trigger(client, 'nap-skill')
+    expect((await items(t, '')).map((i) => i.insertText)).toEqual([
+      '@skill/acme-brand-system ',
+      '@skill/colors-cheatsheet ',
+      '@skill/pdf ',
+    ])
+    expect((await items(t, 'COLOR')).map((i) => i.key)).toEqual(['s3', 's1'])
+    expect((await items(t, 'form')).map((i) => i.description)).toEqual(['Read and fill PDF forms'])
+  })
+
+  it('offers the @skill/ entry on a bare @ and matching skills once a name is typed', async () => {
+    const t = trigger(client, 'nap-agent')
+    expect((await items(t, '')).map((i) => i.insertText)).toEqual([
+      '@file/',
+      '@skill/',
+      '@agent/brand-bot ',
+    ])
+    expect((await items(t, 'sk')).map((i) => i.insertText)).toEqual(['@skill/'])
+    expect((await items(t, 'brand')).map((i) => i.insertText)).toEqual([
+      '@agent/brand-bot ',
+      '@skill/acme-brand-system ',
+    ])
+  })
+
+  it('keeps agents in the bare @ menu when the skill listing fails', async () => {
+    const t = trigger(
+      { ...client, listSkills: () => Promise.reject(new Error('forbidden')) },
+      'nap-agent',
+    )
+    expect((await items(t, 'brand')).map((i) => i.insertText)).toEqual(['@agent/brand-bot '])
+  })
+
+  it('leaves skills out when switched off', () => {
+    const preset = createNapComposerPreset({ client, include: { skills: false } })
+    expect(preset.triggers.map((x) => x.id)).toEqual(['nap-agent', 'nap-file'])
+  })
+})

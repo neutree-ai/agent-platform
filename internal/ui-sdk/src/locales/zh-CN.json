@@ -289,7 +289,8 @@
         }
       },
       "nap": {
-        "fileMentionHint": "浏览工作区文件"
+        "fileMentionHint": "浏览工作区文件",
+        "skillMentionHint": "使用已安装的 skill"
       }
     },
     "askUserQuestion": {

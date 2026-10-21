@@ -11,7 +11,7 @@
  * those queries exist.
  */
 import { dirListUrl, fileUrl, mkdir as mkdirAgent, move as moveAgent } from '@/lib/api/agent-files'
-import type { QueryClient } from '@tanstack/react-query'
+import { type QueryClient, queryOptions } from '@tanstack/react-query'
 import type { DufsEntry, SkillBrowserSource } from './types'
 
 export interface WorkspaceSkillEntry {
@@ -42,6 +42,30 @@ function workspaceSkillsUrl(workspaceId: string) {
 
 export const enabledSkillsQueryKey = (workspaceId: string) =>
   ['workspace-enabled-skills', workspaceId] as const
+
+export interface WorkspaceEnabledSkillEntry {
+  id: string
+  name: string
+  description?: string
+  editable?: boolean
+  gitSource?: boolean
+}
+
+export interface WorkspaceEnabledSkillsResponse {
+  skills?: WorkspaceEnabledSkillEntry[]
+}
+
+/** The skills attached to a workspace; a failed fetch reads as none. */
+export function enabledSkillsQueryOptions(workspaceId: string) {
+  return queryOptions({
+    queryKey: enabledSkillsQueryKey(workspaceId),
+    queryFn: async (): Promise<WorkspaceEnabledSkillsResponse> => {
+      const resp = await fetch(workspaceSkillsUrl(workspaceId), { credentials: 'include' })
+      if (!resp.ok) return { skills: [] }
+      return resp.json()
+    },
+  })
+}
 
 /**
  * `basePathRef` is mutated as a side effect of `fetchSkills` so subsequent

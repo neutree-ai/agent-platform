@@ -4,7 +4,7 @@ React components for embedding agent platform UI in your own app:
 
 - **Transcript** — renders an agent session (messages, tool calls) from the platform's wire message format.
 - **Composer** — the chat input: send-key handling, `/` commands, `@`-mentions, image attachments, voice input and a queued-follow-up state. Network-free; data comes in through props.
-- **Platform composer preset** — wires the Composer to a platform workspace (built-in and workspace commands, `@file/…`, `@agent/…`, voice) through a small client you provide.
+- **Platform composer preset** — wires the Composer to a platform workspace (built-in and workspace commands, `@file/…`, `@skill/…`, `@agent/…`, voice) through a small client you provide.
 
 The package ships compiled ESM plus Tailwind class names; it does no styling of its own beyond those classes.
 
@@ -133,6 +133,7 @@ Sources, each on by default and switched off through `include`:
 | `builtinCommands` | — | `compact` (sends `/compact`), `goal` (form → `/goal <condition>`), `create-skill` (form → a prompt that drives the platform's skill tools). `compact` and `goal` are only offered on agent cores that parse slash commands (all but `dsh`); see `isNapBuiltinCommandSupported`. `NAP_BUILTIN_COMMAND_NAMES` lists the reserved names. |
 | `workspaceCommands` | `listCommands` | The workspace's commands; prompt-library content wins over inline content; disabled ones are skipped. |
 | `files` | `listDir` | `@file/<path>` with folder drill-down and recursive search. |
+| `skills` | `listSkills` | `@skill/<name>` for the workspace's attached skills, searched by name and description. A bare `@` also offers the `@skill/` entry and, once a name is typed, the matching skills. |
 | `agents` | `listCallableAgents` | `@agent/<slug>` or `@agent/<owner>/<slug>`. A bare `@` also offers the `@file/` entry. |
 | `voice` | `transcribe` | Speech to text. |
 
@@ -141,6 +142,7 @@ Sources, each on by default and switched off through `include`:
 ```ts
 interface NapComposerClient {
   listCommands?(): Promise<NapWorkspaceCommand[]>          // GET  /workspaces/:id/commands → { commands }
+  listSkills?(): Promise<NapWorkspaceSkill[]>              // GET  /workspaces/:id/skills → { skills }
   listCallableAgents?(): Promise<NapCallableAgent[]>       // GET  /workspaces/callable
   listDir?(dir: string, query: string, signal?: AbortSignal): Promise<NapDirEntry[]>
                                                            // GET  /workspaces/:id/agent/dirs?path=&q= → { entries }
@@ -149,13 +151,13 @@ interface NapComposerClient {
 }
 ```
 
-Every method is optional; a source whose method is missing is left out. `createNapHttpClient({ baseUrl, workspaceId, headers?, credentials?, fetch? })` implements all four over those paths. The preset caches callable agents (30 s, stale-while-revalidate) and directory listings (10 s); commands are fetched each time the `/` menu opens, so put caching in your client if you want it.
+Every method is optional; a source whose method is missing is left out. `createNapHttpClient({ baseUrl, workspaceId, headers?, credentials?, fetch? })` implements all of them over those paths. The preset caches callable agents and skills (30 s, stale-while-revalidate) and directory listings (10 s); commands are fetched each time the `/` menu opens, so put caching in your client if you want it.
 
 ### External apps: go through your own backend
 
 An app outside the platform should not hand a platform credential to the browser. Instead, expose a narrow proxy on your backend and point `createNapHttpClient` (or your own client) at it:
 
-- **Allow-list exactly these four calls** — `GET …/commands`, `GET …/callable`, `GET …/agent/dirs`, `POST …/asr/transcribe` — and reject everything else.
+- **Allow-list exactly these calls** — `GET …/commands`, `GET …/skills`, `GET …/callable`, `GET …/agent/dirs`, `POST …/asr/transcribe` — and reject everything else.
 - **Pin the workspace server-side.** Ignore any workspace id the browser sends; substitute the one your app is bound to, and call the platform with a service token (Bearer) that only your backend holds.
 - **Pass the platform's responses through unchanged** (status and JSON body), so error messages still reach the user.
 - If your app doesn't need a source (e.g. `@agent/…`), don't proxy it and switch it off with `include`.

@@ -37,6 +37,7 @@ import { ResourcesSection } from '@/components/workspace/agent-config/ResourcesS
 import { SettingsSection } from '@/components/workspace/agent-config/SettingsSection'
 import { SkillsSection } from '@/components/workspace/agent-config/SkillsSection'
 import { ShareWithTeamsRow } from '@/components/workspace/share/ShareWithTeamsRow'
+import { enabledSkillsQueryKey } from '@/components/workspace/skill-browser/workspace-source'
 import { TransferOwnershipRow } from '@/components/workspace/transfer/TransferOwnershipRow'
 import { getAgentConfigDoc } from '@/docs/inline-help/agent-config-docs'
 import { getWorkspaceSettingsDoc } from '@/docs/inline-help/misc-docs'
@@ -876,6 +877,7 @@ export function WorkspaceSettingsPanel({ workspaceId, instanceId }: WorkspaceSet
         if (skillsChanged) {
           await api.updateWorkspaceSkills(workspaceId, [...draft.enabledSkills])
           setOriginalSkills(new Set(draft.enabledSkills))
+          qc.invalidateQueries({ queryKey: enabledSkillsQueryKey(workspaceId) })
         }
 
         setRevertedFields(new Set())

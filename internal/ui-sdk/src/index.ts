@@ -97,6 +97,7 @@ export type {
   NapHttpClientOptions,
   NapTranscribeOptions,
   NapWorkspaceCommand,
+  NapWorkspaceSkill,
 } from './nap-composer/client'
 
 // A session's lifecycle, as the platform's chat runs it: the store (history,

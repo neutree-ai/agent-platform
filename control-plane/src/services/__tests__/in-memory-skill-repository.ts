@@ -409,6 +409,7 @@ export class InMemorySkillRepository implements SkillRepository {
       out.push({
         id: meta.id,
         name: meta.name,
+        description: meta.description,
         user_id: meta.user_id,
         source_kind: meta.source_kind ?? null,
       })

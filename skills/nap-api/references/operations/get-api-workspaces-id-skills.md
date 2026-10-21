@@ -29,6 +29,7 @@
 |-------|------|----------|-------------|
 | `id` | string | Yes |  |
 | `name` | string | Yes |  |
+| `description` | string | Yes |  |
 | `editable` | boolean | Yes |  |
 | `gitSource` | boolean | Yes |  |
 

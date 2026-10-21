@@ -290,7 +290,8 @@
         }
       },
       "nap": {
-        "fileMentionHint": "Browse workspace files"
+        "fileMentionHint": "Browse workspace files",
+        "skillMentionHint": "Use an installed skill"
       }
     },
     "askUserQuestion": {

@@ -35,22 +35,13 @@ import { toast } from 'sonner'
 import { FileViewer } from './FileViewer'
 import { type SkillBrowserController, SkillBrowserShell } from './skill-browser/SkillBrowserShell'
 import {
+  type WorkspaceEnabledSkillEntry,
   type WorkspaceSkillEntry,
   createWorkspaceSkillSource,
   enabledSkillsQueryKey,
+  enabledSkillsQueryOptions,
   workspaceSkillUrls,
 } from './skill-browser/workspace-source'
-
-interface WorkspaceEnabledSkillEntry {
-  id: string
-  name: string
-  editable?: boolean
-  gitSource?: boolean
-}
-
-interface WorkspaceEnabledSkillsResponse {
-  skills?: WorkspaceEnabledSkillEntry[]
-}
 
 interface WorkspaceSkillsPanelProps {
   workspaceId: string
@@ -103,30 +94,15 @@ export function WorkspaceSkillsPanel({ workspaceId, instanceId }: WorkspaceSkill
   // enabled skill — we keep both around because publish/remove still match
   // by name (the in-container filesystem identity), but the PUT body now
   // requires UUIDs.
-  const fetchEnabledSkillsResponse =
-    useCallback(async (): Promise<WorkspaceEnabledSkillsResponse> => {
-      const resp = await fetch(workspaceSkillUrls.workspaceSkills(workspaceId), {
-        credentials: 'include',
-      })
-      if (!resp.ok) return { skills: [] }
-      return resp.json()
-    }, [workspaceId])
-
   const fetchEnabledSkills = useCallback(async (): Promise<WorkspaceEnabledSkillEntry[]> => {
-    const data = await qc.fetchQuery<WorkspaceEnabledSkillsResponse>({
-      queryKey: enabledSkillsQueryKey(workspaceId),
-      queryFn: fetchEnabledSkillsResponse,
-    })
+    const data = await qc.fetchQuery(enabledSkillsQueryOptions(workspaceId))
     return data.skills ?? []
-  }, [qc, workspaceId, fetchEnabledSkillsResponse])
+  }, [qc, workspaceId])
 
   // Skills the library has a published version of. Discard restores *that*
   // version, so a locally created draft that was never published has nothing
   // to restore from — the action stays disabled for it.
-  const enabledSkillsQuery = useQuery<WorkspaceEnabledSkillsResponse>({
-    queryKey: enabledSkillsQueryKey(workspaceId),
-    queryFn: fetchEnabledSkillsResponse,
-  })
+  const enabledSkillsQuery = useQuery(enabledSkillsQueryOptions(workspaceId))
   const publishedNames = useMemo(
     () => new Set((enabledSkillsQuery.data?.skills ?? []).map((s) => s.name)),
     [enabledSkillsQuery.data],

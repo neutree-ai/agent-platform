@@ -21,6 +21,7 @@ const WorkspaceIdParam = z.object({
 const WorkspaceSkillSchema = z.object({
   id: z.string(),
   name: z.string(),
+  description: z.string(),
   editable: z.boolean(),
   gitSource: z.boolean(),
 })

@@ -148,6 +148,7 @@ export interface SkillRepository {
 export interface WorkspaceSkillRow {
   id: string
   name: string
+  description: string | null
   user_id: string | null
   source_kind: string | null
 }
@@ -163,6 +164,7 @@ export function toWorkspaceSkillDtos(rows: WorkspaceSkillRow[], ownerId: string)
   return rows.map((s) => ({
     id: s.id,
     name: s.name ?? '(unknown)',
+    description: s.description ?? '',
     // Editable when the workspace owner owns it, or when it has no owner at
     // all (built-in).
     editable: s.user_id === ownerId || !s.user_id,
@@ -544,7 +546,7 @@ export class PgSkillRepository implements SkillRepository {
 
   async getWorkspaceSkillsForAgent(workspaceId: string): Promise<WorkspaceSkillRow[]> {
     const { rows } = await pool.query(
-      `SELECT s.id, s.name, s.user_id, ss.kind AS source_kind
+      `SELECT s.id, s.name, s.description, s.user_id, ss.kind AS source_kind
          FROM workspace_skills ws
          JOIN skills s ON s.id = ws.skill_id
          LEFT JOIN skill_sources ss ON ss.id = s.source_id
