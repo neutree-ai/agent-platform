@@ -51,7 +51,7 @@ export interface WorkspaceEnabledSkillEntry {
   gitSource?: boolean
 }
 
-export interface WorkspaceEnabledSkillsResponse {
+interface WorkspaceEnabledSkillsResponse {
   skills?: WorkspaceEnabledSkillEntry[]
 }
 
