@@ -26,3 +26,12 @@ export type EnvAppEnv = { Variables: { envPrincipal: EnvPrincipal } }
 type WorkspacePrincipal = { workspaceId: string; userId: string }
 
 export type WorkspaceAppEnv = { Variables: { workspacePrincipal: WorkspacePrincipal } }
+
+/**
+ * Principal for the application protocol (/apps/v1/*): an OAuth client
+ * (application) authenticated by its own id and secret. It acts only on the
+ * users it provisioned itself (users.managed_by = clientId).
+ */
+type AppPrincipal = { clientId: string }
+
+export type AppClientEnv = { Variables: { appPrincipal: AppPrincipal } }

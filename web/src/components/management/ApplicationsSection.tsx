@@ -133,7 +133,16 @@ export function ApplicationsSection(_: { instanceId: string }) {
                   }
                   description={app.description || undefined}
                   type={<ClientIdChip id={app.id} />}
-                  meta={`${t('components.management.applications.labels.createdAt', { value: created })} · ${ownerLabel}`}
+                  meta={[
+                    t('components.management.applications.labels.createdAt', { value: created }),
+                    ownerLabel,
+                    app.user_count > 0 &&
+                      t('components.management.applications.labels.users', {
+                        count: app.user_count,
+                      }),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                   actions={
                     isAdmin && (
                       <>

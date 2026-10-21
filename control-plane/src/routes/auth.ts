@@ -27,7 +27,7 @@ auth.get('/me', async (c) => {
     id: user.sub,
     username: user.username,
     role: dbUser?.role ?? user.role ?? 'user',
-    auth_source: dbUser?.password_hash ? 'password' : 'ldap',
+    auth_source: dbUser?.managed_by ? 'app' : dbUser?.password_hash ? 'password' : 'ldap',
     default_prompt_id: defaultPrompt?.id ?? null,
     default_prompt_name: defaultPrompt?.name ?? null,
     auto_evolution: dbUser?.auto_evolution ?? false,
@@ -114,8 +114,8 @@ auth.post('/login', async (c) => {
     return c.json({ error: 'Invalid credentials' }, 401)
   }
 
-  // Block system user from logging in
-  if (dbUser.role === 'system') {
+  // Block system users, and users an application manages, from logging in
+  if (dbUser.role === 'system' || dbUser.managed_by) {
     return c.json({ error: 'This account cannot be used for login' }, 403)
   }
 

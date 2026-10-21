@@ -36,6 +36,8 @@ export interface JwtPayload {
   email?: string
   role: 'user' | 'admin' | 'system'
   exp: number
+  /** Set on tokens an application obtained for a user it manages (oauth_clients.id). */
+  app?: string
   [key: string]: unknown // index signature for hono/jwt compatibility
 }
 

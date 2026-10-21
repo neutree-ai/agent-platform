@@ -2,7 +2,7 @@ export interface User {
   id: string
   username: string
   role: 'user' | 'admin' | 'system'
-  auth_source: 'password' | 'ldap'
+  auth_source: 'password' | 'ldap' | 'app'
   default_prompt_id: string | null
   default_prompt_name: string | null
   auto_evolution: boolean
@@ -290,7 +290,9 @@ interface AdminUser {
   display_name: string
   email: string | null
   role: 'user' | 'admin'
-  auth_source: 'password' | 'ldap'
+  auth_source: 'password' | 'ldap' | 'app'
+  /** For auth_source 'app': the application (client id) that provisioned the user. */
+  managed_by: string | null
   created_at: string
   last_login_at: string | null
   /** Number of workspaces (agents) owned by this user. */

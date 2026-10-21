@@ -11,3 +11,9 @@ Authorization: Bearer <token>
 1. Sign in to the NAP Web UI and go to **Integration → Tokens** (route `/integration/tokens`)
 2. Click **Create Service Token**, enter a Name, and confirm
 3. Copy the token from the dialog (**shown only once**)
+
+## appClientAuth
+
+**Type:** http
+
+Application client id and secret, registered under /api/applications

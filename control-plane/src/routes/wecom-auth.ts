@@ -54,7 +54,7 @@ wecomAuth.get('/callback', async (c) => {
       // Bind flow: manually verify JWT since callback is in the auth skip list
       const token = getCookie(c, 'token')
       const currentUser = token ? await verifyToken(token) : null
-      if (!currentUser) {
+      if (!currentUser || currentUser.app) {
         return c.redirect('/login?error=auth_required')
       }
 
@@ -85,7 +85,7 @@ wecomAuth.get('/callback', async (c) => {
       return c.redirect('/login?error=user_not_found')
     }
 
-    if (dbUser.role === 'system') {
+    if (dbUser.role === 'system' || dbUser.managed_by) {
       return c.redirect('/login?error=system_account')
     }
 

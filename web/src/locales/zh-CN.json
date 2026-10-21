@@ -2164,6 +2164,7 @@
         "description": "描述",
         "homepageUrl": "主页地址",
         "redirectUris": "回调地址",
+        "teams": "Team",
         "customId": "Client ID（可选）",
         "clientId": "Client ID",
         "clientSecret": "Client Secret"
@@ -2176,7 +2177,9 @@
         "customId": "留空则自动生成"
       },
       "help": {
-        "redirectUrisHint": "每行一个 URL，必须是 http(s)",
+        "redirectUrisHint": "每行一个 URL，必须是 http(s)。只代自己开通的用户调用 API 的应用可以留空",
+        "teamsHint": "应用开通的用户都会加入这些 Team",
+        "noTeams": "你还没有加入任何 Team",
         "storeSecurely": "Client secret 仅显示这一次，请在关闭前妥善保存",
         "rotateWarning": "轮换会使旧 secret 失效，已签发的 refresh token 不受影响"
       },
@@ -2190,7 +2193,6 @@
       },
       "errors": {
         "nameRequired": "请填写名称",
-        "redirectUrisRequired": "至少需要一个回调地址",
         "invalidUrl": "URL 无效，必须是 http(s)",
         "createFailed": "创建应用失败",
         "saveFailed": "保存失败",
@@ -3322,7 +3324,8 @@
           "roleAdmin": "管理员",
           "authSource": {
             "password": "密码",
-            "ldap": "LDAP"
+            "ldap": "LDAP",
+            "app": "应用"
           }
         },
         "toasts": {
@@ -3559,6 +3562,7 @@
           "unknownOwner": "未知",
           "redirectUris": "回调地址",
           "createdAt": "创建于 {{value}}",
+          "users": "{{count}} 个用户",
           "adminOnly": "仅管理员"
         },
         "toasts": {

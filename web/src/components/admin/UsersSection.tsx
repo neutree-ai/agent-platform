@@ -207,6 +207,15 @@ export function UsersSection({ instanceId }: { instanceId: string }) {
                               {t('components.admin.usersSection.badges.authSource.ldap')}
                             </Badge>
                           )}
+                          {u.auth_source === 'app' && (
+                            <Badge
+                              variant="secondary"
+                              className="px-1 py-0 text-mini"
+                              title={u.managed_by ?? undefined}
+                            >
+                              {t('components.admin.usersSection.badges.authSource.app')}
+                            </Badge>
+                          )}
                         </div>
                         {u.email && (
                           <div className="text-mini text-muted-foreground">{u.email}</div>

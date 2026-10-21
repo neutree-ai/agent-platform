@@ -185,6 +185,24 @@ export async function issueAccessToken(user: {
   return { access_token, expires_in: ACCESS_TOKEN_EXPIRES_IN }
 }
 
+/** A token an application obtained for one of its users. Bearer only: the
+ *  `app` claim keeps it from being accepted as a NAP sign-in cookie. */
+export async function issueAppUserToken(
+  user: { id: string; username: string; display_name: string; email: string | null },
+  clientId: string,
+): Promise<{ access_token: string; expires_in: number }> {
+  const payload = {
+    sub: user.id,
+    username: user.username,
+    name: user.display_name,
+    email: user.email ?? undefined,
+    role: 'user',
+    app: clientId,
+    exp: Math.floor(Date.now() / 1000) + ACCESS_TOKEN_EXPIRES_IN,
+  }
+  return { access_token: await sign(payload, JWT_SECRET), expires_in: ACCESS_TOKEN_EXPIRES_IN }
+}
+
 // ── Refresh Token ──
 
 export async function issueRefreshToken(userId: string, clientId: string): Promise<string> {

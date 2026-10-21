@@ -2139,6 +2139,7 @@
         "description": "Description",
         "homepageUrl": "Homepage URL",
         "redirectUris": "Redirect URIs",
+        "teams": "Teams",
         "customId": "Client ID (optional)",
         "clientId": "Client ID",
         "clientSecret": "Client Secret"
@@ -2151,7 +2152,9 @@
         "customId": "Leave empty to auto-generate"
       },
       "help": {
-        "redirectUrisHint": "One URL per line. Must be http(s).",
+        "redirectUrisHint": "One URL per line. Must be http(s). Leave empty for an application that only calls the API for the users it provisions.",
+        "teamsHint": "Every user the application provisions joins these teams.",
+        "noTeams": "You aren't in any team yet.",
         "storeSecurely": "The client secret will only be shown once. Store it securely before closing.",
         "rotateWarning": "Rotating invalidates the existing secret. Existing refresh tokens remain valid."
       },
@@ -2165,7 +2168,6 @@
       },
       "errors": {
         "nameRequired": "Name is required",
-        "redirectUrisRequired": "At least one redirect URI is required",
         "invalidUrl": "Invalid URL — must be http(s)",
         "createFailed": "Failed to create application",
         "saveFailed": "Failed to save",
@@ -3298,7 +3300,8 @@
           "roleAdmin": "admin",
           "authSource": {
             "password": "password",
-            "ldap": "LDAP"
+            "ldap": "LDAP",
+            "app": "app"
           }
         },
         "toasts": {
@@ -3535,6 +3538,7 @@
           "unknownOwner": "Unknown",
           "redirectUris": "Redirect URIs",
           "createdAt": "Created {{value}}",
+          "users": "{{count}} users",
           "adminOnly": "Admin only"
         },
         "toasts": {

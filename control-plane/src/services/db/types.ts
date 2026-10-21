@@ -9,6 +9,8 @@ export interface User {
   role: 'user' | 'admin' | 'system'
   default_prompt_id: string | null
   auto_evolution: boolean
+  /** The application (oauth_clients.id) that provisioned this user; such users can't sign in to NAP. */
+  managed_by: string | null
   created_at: string
   last_login_at: string | null
 }
