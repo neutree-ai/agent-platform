@@ -228,8 +228,16 @@ browsers.openapi(
       return c.json({ error: 'Not found' }, 404)
     }
 
+    // The sandbox renew sets expiry to now + timeout, so extend from the
+    // current expiry instead — otherwise renewing a long-lived browser
+    // shortens it. The remaining lifetime stays capped at the 24h create limit.
     const body = c.req.valid('json')
-    const result = await sandbox.renewBrowser(sbx.id, body.timeout_seconds ?? 3600)
+    const remainingMs = new Date(sbx.expiresAt).getTime() - Date.now()
+    const remainingSeconds = Number.isNaN(remainingMs)
+      ? 0
+      : Math.max(0, Math.ceil(remainingMs / 1000))
+    const timeoutSeconds = Math.min(86400, remainingSeconds + (body.timeout_seconds ?? 3600))
+    const result = await sandbox.renewBrowser(sbx.id, timeoutSeconds)
     return c.json({ expires_at: result.expiresAt }, 200)
   },
 )

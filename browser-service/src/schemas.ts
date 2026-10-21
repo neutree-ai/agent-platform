@@ -42,7 +42,11 @@ export const CreateBrowserBodySchema = z
 
 export const RenewBrowserBodySchema = z
   .object({
-    timeout_seconds: z.number().int().positive().optional().openapi({ example: 3600 }),
+    timeout_seconds: z.number().int().positive().optional().openapi({
+      example: 3600,
+      description:
+        'Seconds added to the remaining lifetime (default 3600). The total remaining lifetime is capped at 86400.',
+    }),
   })
   .openapi('RenewBrowserBody')
 
