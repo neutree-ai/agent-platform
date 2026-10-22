@@ -1,16 +1,14 @@
 import { Hono } from 'hono'
 import type { ApiWorkspaceConfig } from '../../../../internal/types/api'
+import { MCP_FORWARD_URL } from '../../../../internal/types/mcp-forward'
 import type { WorkspaceAppEnv } from '../../lib/types'
 import { caller, requireWorkspaceParam } from '../../middleware/workspace-auth'
+import { getMcpOriginClient } from '../../services/db/app-users'
 import { getMemoryByPath, listAttachmentsForWorkspace } from '../../services/db/memory'
 import { getUser } from '../../services/db/users'
 import { getWorkspaceConfig } from '../../services/db/workspaces'
 import { getToken, serverOriginFromUrl } from '../../services/mcp-oauth'
 import { encodeOrigin } from '../mcp-proxy'
-
-// Where the agent server listens for the MCP hop, inside the workspace pod.
-// The port is the agent container's, fixed by the pod template.
-const AGENT_MCP_FORWARD_URL = 'http://127.0.0.1:3001/mcp'
 
 const config = new Hono<WorkspaceAppEnv>()
 
@@ -50,26 +48,28 @@ config.get('/v1/workspaces/:id/config', requireWorkspaceParam(), async (c) => {
       for (const [name, server] of Object.entries(parsed.mcpServers) as [string, any][]) {
         if (server?.disabled) delete parsed.mcpServers[name]
       }
-      for (const server of Object.values(parsed.mcpServers) as any[]) {
-        // Inject workspace context for all MCP servers
-        if (server.url) {
+      await Promise.all(
+        (Object.values(parsed.mcpServers) as any[]).map(async (server) => {
+          if (!server.url) return
+          // Inject workspace context for all MCP servers
           server.headers = { ...server.headers, 'X-Workspace-ID': id, 'X-Agent-ID': id }
-        }
-        // Rewrite URL to CP proxy for servers with OAuth tokens
-        if (server.url) {
+          // Rewrite URL to CP proxy for servers with OAuth tokens, and for
+          // servers an application declared — the proxy signs who is calling.
           try {
             const origin = serverOriginFromUrl(server.url)
-            const token = await getToken(userId, origin)
-            if (token) {
-              const encodedOrig = encodeOrigin(origin)
+            const [token, appClient] = await Promise.all([
+              getToken(userId, origin),
+              getMcpOriginClient(origin),
+            ])
+            if (token || appClient) {
               const path = new URL(server.url).pathname
-              server.url = `${AGENT_MCP_FORWARD_URL}/${encodedOrig}${path}`
+              server.url = `${MCP_FORWARD_URL}/${encodeOrigin(origin)}${path}`
             }
           } catch {
             // skip if origin parsing fails
           }
-        }
-      }
+        }),
+      )
       mcpConfig = JSON.stringify(parsed)
     }
   } catch {

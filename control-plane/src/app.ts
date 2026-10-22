@@ -80,6 +80,7 @@ import workspacesTransferRoutes from './routes/workspaces/transfer'
 import workspacesUsageRoutes from './routes/workspaces/usage'
 import workspacesWriteRoutes from './routes/workspaces/write'
 import { renewToken, shouldRenewToken, verifyToken } from './services/auth'
+import { jwks } from './services/caller-assertion'
 import { getServiceTokenByHash } from './services/db/shares'
 import { getSettings } from './services/db/system-settings'
 
@@ -169,6 +170,7 @@ app.use('/*', async (c, next) => {
     path.startsWith('/s/') ||
     path.startsWith('/sk/') ||
     path.startsWith('/.well-known/agent-skills') ||
+    path === '/.well-known/jwks.json' ||
     path.startsWith('/api/docs') ||
     path === '/healthz' ||
     path.startsWith('/_cg/') ||
@@ -382,6 +384,8 @@ app.route('/api/skills', skillsRoutes)
 // No auth — the share token in the path is the capability.
 app.route('/sk', skillRegistryApp)
 app.route('/.well-known/agent-skills', wellKnownRootApp)
+// Public key for the caller statements the MCP proxy signs (services/caller-assertion).
+app.get('/.well-known/jwks.json', (c) => c.json(jwks()))
 app.route('/api/plugins', pluginsRoutes)
 app.route('/api/mcp-catalog', mcpCatalogRoutes)
 app.route('/api/system-workspaces', systemWorkspacesRoutes)

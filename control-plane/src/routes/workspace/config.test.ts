@@ -10,8 +10,14 @@ vi.mock('../../services/db/memory', () => ({
   getMemoryByPath: vi.fn(),
   listAttachmentsForWorkspace: vi.fn(),
 }))
-vi.mock('../../services/mcp-oauth', () => ({ getToken: vi.fn(), serverOriginFromUrl: vi.fn() }))
+vi.mock('../../services/mcp-oauth', () => ({
+  getToken: vi.fn(),
+  serverOriginFromUrl: (url: string) => new URL(url).origin,
+}))
+vi.mock('../../services/db/app-users', () => ({ getMcpOriginClient: vi.fn() }))
 
+import { MCP_FORWARD_URL } from '../../../../internal/types/mcp-forward'
+import { getMcpOriginClient } from '../../services/db/app-users'
 import { getMemoryByPath, listAttachmentsForWorkspace } from '../../services/db/memory'
 import { getUser } from '../../services/db/users'
 import { verifyWorkspaceToken } from '../../services/db/workspace-tokens'
@@ -87,6 +93,31 @@ describe('GET /workspace/v1/workspaces/:id/config', () => {
 
     const served = JSON.parse((await res.json()).mcp_config)
     expect(Object.keys(served.mcpServers)).toEqual(['live'])
+  })
+
+  // The proxy can only sign for calls it carries, so a declared server is
+  // pointed at the agent's loopback hop even with no OAuth token in play.
+  it("routes an application's declared MCP server through the proxy", async () => {
+    verify.mockResolvedValue({ workspaceId: 'ws1', userId: 'alice' })
+    vi.mocked(getMcpOriginClient).mockImplementation(async (origin) =>
+      origin === 'https://app.example.com' ? 'the-app' : null,
+    )
+    config.mockResolvedValue({
+      agent_type: 'claude-code',
+      mcp_config: JSON.stringify({
+        mcpServers: {
+          app: { type: 'http', url: 'https://app.example.com/mcp' },
+          other: { type: 'http', url: 'https://other.example.com/mcp' },
+        },
+      }),
+    } as never)
+
+    const res = await get('/v1/workspaces/ws1/config', 'ws_good')
+
+    const served = JSON.parse((await res.json()).mcp_config)
+    const encoded = Buffer.from('https://app.example.com').toString('base64url')
+    expect(served.mcpServers.app.url).toBe(`${MCP_FORWARD_URL}/${encoded}/mcp`)
+    expect(served.mcpServers.other.url).toBe('https://other.example.com/mcp')
   })
 
   it('404s when the workspace has no config', async () => {

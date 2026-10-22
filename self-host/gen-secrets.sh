@@ -42,6 +42,7 @@ SECRET_KEYS=(
   JWT_SECRET
   CREDENTIAL_ENCRYPTION_KEY
   PLATFORM_SERVICE_KEY
+  PLATFORM_SIGNING_KEY
   BROWSER_JWT_SECRET
   SANDBOX_JWT_SECRET
   SANDBOX_SERVICE_KEY
@@ -49,7 +50,16 @@ SECRET_KEYS=(
   PG_PASSWORD
 )
 
-gen() { openssl rand -hex 32; }
+# Most secrets are random hex. PLATFORM_SIGNING_KEY is an EC P-256 private key:
+# its PEM goes on one line with escaped newlines, quoted for `source`, and the
+# control plane turns the escapes back into newlines.
+gen() {
+  if [ "$1" = PLATFORM_SIGNING_KEY ]; then
+    printf '"%s"' "$(openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 | awk '{printf "%s\\n", $0}')"
+  else
+    openssl rand -hex 32
+  fi
+}
 
 # A value still needs filling if it is empty or a change-me* placeholder.
 needs_fill() {
@@ -75,7 +85,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     cur="${line#*=}"
     cur="${cur%\"}"; cur="${cur#\"}"   # strip surrounding quotes, if any
     if needs_fill "$cur"; then
-      echo "${matched}=$(gen)" >> "$TMP"
+      echo "${matched}=$(gen "$matched")" >> "$TMP"
       echo "    generated ${matched}"
     else
       echo "$line" >> "$TMP"
@@ -90,7 +100,7 @@ done < "$VALUES_FILE"
 # Append any secret key missing from the file entirely.
 for key in "${SECRET_KEYS[@]}"; do
   if [[ "$FILLED" != *" ${key} "* ]]; then
-    echo "${key}=$(gen)" >> "$TMP"
+    echo "${key}=$(gen "$key")" >> "$TMP"
     echo "    generated ${key} (appended)"
   fi
 done

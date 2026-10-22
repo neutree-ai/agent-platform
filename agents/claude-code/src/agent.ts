@@ -13,6 +13,7 @@ import type {
   ChatImageAttachment,
   TurnStats,
 } from '../../../internal/types/events.js'
+import { userMcpHeaders } from '../../../internal/types/mcp-forward.js'
 import {
   CP_URL,
   WORKSPACE_DIR,
@@ -269,17 +270,15 @@ export async function chat(
   // `X-Session-Token` carries the CP-minted proxy id for this turn's session.
   // Without it the platform MCP behaves identically to a non-session-aware
   // workspace-only chat. User-configured MCPs from `.mcp.json` are also merged
-  // in here (overriding the SDK's settingSources='project' auto-load) so the
-  // same token reaches third-party servers via cp's MCP proxy — the proxy
-  // then translates it into `X-Tos-Session-Id` for upstream.
+  // in here (overriding the SDK's settingSources='project' auto-load); see
+  // userMcpHeaders for which of them get the session token.
   const mcpServers: Record<string, McpServerConfig> = {
     exa: { type: 'http', url: 'https://mcp.exa.ai/mcp' },
     'web-fetch': jinaServer,
   }
   for (const [name, cfg] of Object.entries(getUserMcpServers())) {
     if (cfg.url) {
-      const headers = { ...(cfg.headers ?? {}) }
-      if (sessionToken) headers['X-Session-Token'] = sessionToken
+      const headers = userMcpHeaders({ url: cfg.url, headers: cfg.headers }, sessionToken)
       mcpServers[name] = { type: 'http', url: cfg.url, headers }
     } else if (cfg.command) {
       mcpServers[name] = { type: 'stdio', command: cfg.command, args: cfg.args, env: cfg.env }

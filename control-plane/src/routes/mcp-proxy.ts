@@ -3,6 +3,8 @@ import type { Context } from 'hono'
 import { resolveTokenForUser } from '../lib/session-token'
 import type { WorkspaceAppEnv } from '../lib/types'
 import { caller } from '../middleware/workspace-auth'
+import { CALLER_HEADER, signCallerAssertion } from '../services/caller-assertion'
+import { getMcpOriginCaller } from '../services/db/app-users'
 import { McpOAuthReauthRequired, getValidAccessToken } from '../services/mcp-oauth'
 
 /**
@@ -20,6 +22,9 @@ import { McpOAuthReauthRequired, getValidAccessToken } from '../services/mcp-oau
  *
  * The caller is the agent server, which holds the workspace token; the coding
  * CLI reaches it over loopback and never sees a credential.
+ *
+ * For an origin an application declared, the proxy also attaches a signed
+ * caller statement (services/caller-assertion) addressed to that application.
  */
 const mcpProxy = new Hono<WorkspaceAppEnv>()
 
@@ -53,7 +58,7 @@ function reauthRequired(c: Context, e: McpOAuthReauthRequired) {
 }
 
 mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
-  const { userId } = caller(c)
+  const { userId, workspaceId } = caller(c)
   const encodedOrigin = c.req.param('encodedOrigin')
   const rest = c.req.path.replace(new RegExp(`^.*?/v1/mcp/${encodedOrigin}`), '')
 
@@ -94,15 +99,23 @@ mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
     upstreamHeaders.set('Authorization', authHeader)
   }
 
+  // Only the proxy speaks for the platform: whatever the agent sent under the
+  // caller header is dropped before anything is signed.
+  upstreamHeaders.delete(CALLER_HEADER)
+
   // Translate the internal session-token header into stable identifiers for
   // third-party MCP servers. The raw token is an internal cp ↔ agent secret
   // and must never reach upstream.
   const sessionToken = upstreamHeaders.get('x-session-token')
+  // The session token only resolves per user; vouch for its session only when
+  // it belongs to the workspace the principal names.
+  let sessionId: string | undefined
   if (sessionToken) {
     upstreamHeaders.delete('x-session-token')
     try {
       const record = await resolveTokenForUser(sessionToken, userId)
       if (record) {
+        if (record.workspaceId === workspaceId) sessionId = record.sessionId ?? undefined
         upstreamHeaders.set('X-Workspace-Id', record.workspaceId)
         if (record.sessionId) {
           upstreamHeaders.set('X-Session-Id', record.sessionId)
@@ -115,6 +128,18 @@ mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
     } catch (e) {
       console.warn('[mcp-proxy] session-token resolve failed:', e)
     }
+  }
+
+  const appCaller = await getMcpOriginCaller(origin, userId)
+  if (appCaller) {
+    const assertion = await signCallerAssertion({
+      aud: appCaller.clientId,
+      sub: userId,
+      ext: appCaller.externalId ?? undefined,
+      workspace_id: workspaceId,
+      session_id: sessionId,
+    })
+    if (assertion) upstreamHeaders.set(CALLER_HEADER, assertion)
   }
 
   // Buffer the request body up-front so the request can be retried after a

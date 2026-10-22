@@ -8,6 +8,7 @@ import { startReconcileLoop } from './lib/reconcile'
 import { recoverOrphanedSessions } from './lib/session-recovery'
 import { initSkillReloadQueue } from './lib/skill-reload-queue'
 import { drainActiveStreams } from './lib/sse'
+import { loadSigningKey } from './services/caller-assertion'
 import { startAgentCallSweep } from './services/chat/agent-call-delivery'
 import { executeChat } from './services/chat/executeChat'
 import { initDb, pool } from './services/db/pool'
@@ -17,6 +18,7 @@ setGlobalDispatcher(new EnvHttpProxyAgent())
 
 // Initialize database
 await initDb()
+loadSigningKey()
 
 // Prometheus metrics
 collectDefaultMetrics()

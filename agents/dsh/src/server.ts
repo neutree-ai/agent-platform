@@ -89,7 +89,7 @@ registerUsageRoutes(app, '/usage', {
   fallbackModel: () => loadRuntimeConfig()?.model,
 })
 
-registerMcpForwardRoutes(app, '/mcp', {
+registerMcpForwardRoutes(app, {
   cpUrl: CP_URL ?? '',
   authHeaders: cpAuthHeaders,
 })

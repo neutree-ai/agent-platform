@@ -6,8 +6,14 @@ import {
   ApplicationUpdateBodySchema,
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
-import { setClientTeams, unknownTeamIds } from '../services/db/app-users'
+import {
+  mcpOriginsTakenByOthers,
+  setClientMcpOrigins,
+  setClientTeams,
+  unknownTeamIds,
+} from '../services/db/app-users'
 import { generateId, pool } from '../services/db/pool'
+import { serverOriginFromUrl } from '../services/mcp-oauth'
 
 const applications = new Hono<AppEnv>()
 
@@ -57,6 +63,28 @@ function sanitizeRedirectUris(input: unknown): string[] | null {
   return uris
 }
 
+// Declared MCP servers are matched by origin, the way cp's MCP proxy looks
+// them up. An origin another application declared is refused.
+async function checkMcpOrigins(
+  clientId: string,
+  input: string[],
+): Promise<{ origins: string[] } | { error: string; status: 400 | 409 }> {
+  const origins = new Set<string>()
+  for (const raw of input) {
+    const url = sanitizeHttpUrl(raw)
+    if (!url.ok) return { error: 'mcp_origins must be http(s) URLs', status: 400 }
+    if (url.value) origins.add(serverOriginFromUrl(url.value))
+  }
+  const taken = await mcpOriginsTakenByOthers(clientId, [...origins])
+  if (taken.length > 0) {
+    return {
+      error: `mcp_origins already declared by another application: ${taken.join(', ')}`,
+      status: 409,
+    }
+  }
+  return { origins: [...origins] }
+}
+
 // GET /api/applications — list (all authenticated users, read-only view)
 applications.get('/', async (c) => {
   const { rows } = await pool.query<ApiApplication>(
@@ -65,6 +93,8 @@ applications.get('/', async (c) => {
             u.display_name AS owner_display_name, u.username AS owner_username,
             coalesce((SELECT array_agg(t.team_id ORDER BY t.team_id)
                         FROM oauth_client_teams t WHERE t.client_id = c.id), '{}') AS team_ids,
+            coalesce((SELECT array_agg(o.origin ORDER BY o.origin)
+                        FROM oauth_client_mcp_origins o WHERE o.client_id = c.id), '{}') AS mcp_origins,
             (SELECT count(*)::int FROM users m WHERE m.managed_by = c.id) AS user_count
        FROM oauth_clients c
        LEFT JOIN users u ON u.id = c.created_by
@@ -116,6 +146,9 @@ applications.post('/', async (c) => {
     return c.json({ error: `unknown team_ids: ${unknownTeams.join(', ')}` }, 400)
   }
 
+  const mcp = await checkMcpOrigins(id, body.mcp_origins)
+  if ('error' in mcp) return c.json({ error: mcp.error }, mcp.status)
+
   const description = typeof body.description === 'string' ? body.description.trim() || null : null
   const secret = generateClientSecret()
   const secretHash = hashSecret(secret)
@@ -134,6 +167,7 @@ applications.post('/', async (c) => {
   }
 
   await setClientTeams(id, teamIds)
+  await setClientMcpOrigins(id, mcp.origins)
 
   return c.json(
     {
@@ -143,6 +177,7 @@ applications.post('/', async (c) => {
       homepage_url: homepage.value,
       redirect_uris: redirectUris,
       team_ids: teamIds,
+      mcp_origins: mcp.origins,
       client_secret: secret,
     },
     201,
@@ -194,7 +229,7 @@ applications.patch('/:id', async (c) => {
     values.push(redirectUris)
   }
 
-  if (updates.length === 0 && body.team_ids === undefined) {
+  if (updates.length === 0 && body.team_ids === undefined && body.mcp_origins === undefined) {
     return c.json({ error: 'nothing to update' }, 400)
   }
   const teamIds = body.team_ids === undefined ? undefined : [...new Set(body.team_ids)]
@@ -203,6 +238,12 @@ applications.patch('/:id', async (c) => {
     if (unknownTeams.length > 0) {
       return c.json({ error: `unknown team_ids: ${unknownTeams.join(', ')}` }, 400)
     }
+  }
+  let mcpOrigins: string[] | undefined
+  if (body.mcp_origins !== undefined) {
+    const mcp = await checkMcpOrigins(id, body.mcp_origins)
+    if ('error' in mcp) return c.json({ error: mcp.error }, mcp.status)
+    mcpOrigins = mcp.origins
   }
 
   updates.push('updated_at = NOW()')
@@ -215,6 +256,7 @@ applications.patch('/:id', async (c) => {
   if (!rowCount) return c.json({ error: 'not found' }, 404)
 
   if (teamIds) await setClientTeams(id, teamIds)
+  if (mcpOrigins) await setClientMcpOrigins(id, mcpOrigins)
   return c.json({ success: true })
 })
 

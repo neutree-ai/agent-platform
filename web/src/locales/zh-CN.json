@@ -2165,6 +2165,7 @@
         "homepageUrl": "主页地址",
         "redirectUris": "回调地址",
         "teams": "Team",
+        "mcpOrigins": "MCP 服务地址",
         "customId": "Client ID（可选）",
         "clientId": "Client ID",
         "clientSecret": "Client Secret"
@@ -2174,11 +2175,13 @@
         "description": "在 OAuth 授权页展示的简短说明",
         "homepageUrl": "https://example.com",
         "redirectUris": "https://example.com/api/auth/callback",
+        "mcpOrigins": "https://example.com",
         "customId": "留空则自动生成"
       },
       "help": {
         "redirectUrisHint": "每行一个 URL，必须是 http(s)。只代自己开通的用户调用 API 的应用可以留空",
         "teamsHint": "应用开通的用户都会加入这些 Team",
+        "mcpOriginsHint": "应用自己的 MCP 服务，每行一个。Agent 调用它们时经平台转发，并附上平台签名的调用方身份",
         "noTeams": "你还没有加入任何 Team",
         "storeSecurely": "Client secret 仅显示这一次，请在关闭前妥善保存",
         "rotateWarning": "轮换会使旧 secret 失效，已签发的 refresh token 不受影响"

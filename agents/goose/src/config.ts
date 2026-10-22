@@ -15,6 +15,7 @@ import { SkillManager } from '../../../internal/agent-skills/src/index.js'
 import { nodeFetch, nodeFs, nodeShell } from '../../../internal/agent-skills/src/node.js'
 import { renderPlatformSkillFiles } from '../../../internal/agent-skills/src/platform.js'
 import { writePlatformPrompt } from '../../../internal/platform-prompt/src/index.js'
+import { userMcpHeaders } from '../../../internal/types/mcp-forward.js'
 import { captureWorkspaceToken } from '../../../internal/types/workspace-token.js'
 
 export const CP_URL = process.env.CP_URL
@@ -474,20 +475,13 @@ export function loadAcpMcpServers(sessionToken?: string): McpServer[] {
   for (const [name, cfg] of Object.entries(_userMcpServers)) {
     if (name === 'tos-platform') continue
     if (cfg.url) {
-      // User-configured HTTP MCPs — go through cp proxy. Inject X-Session-Token
-      // so the proxy can translate it into X-Tos-Session-Id for upstream.
-      const headers = new Map<string, string>()
-      if (cfg.headers) {
-        for (const [k, v] of Object.entries(cfg.headers)) {
-          if (typeof v === 'string') headers.set(k, v)
-        }
-      }
-      if (sessionToken) headers.set('X-Session-Token', sessionToken)
+      // User-configured HTTP MCPs; see userMcpHeaders for the session token.
+      const headers = userMcpHeaders({ url: cfg.url, headers: cfg.headers }, sessionToken)
       servers.push({
         type: 'http',
         name,
         url: cfg.url,
-        headers: Array.from(headers, ([n, v]) => ({ name: n, value: v })),
+        headers: Object.entries(headers).map(([n, v]) => ({ name: n, value: v })),
       })
     } else if (cfg.command) {
       // Stdio MCPs — local processes, injected per-session too. Note the ACP

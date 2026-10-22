@@ -120,3 +120,58 @@ export async function setClientTeams(clientId: string, teamIds: string[]): Promi
     }
   }
 }
+
+/** The application that declared an MCP origin, if any. */
+export async function getMcpOriginClient(origin: string): Promise<string | null> {
+  const { rows } = await pool.query(
+    'SELECT client_id FROM oauth_client_mcp_origins WHERE origin = $1',
+    [origin],
+  )
+  return (rows[0]?.client_id as string) ?? null
+}
+
+/**
+ * The application that declared an MCP origin, with its own id for `userId`
+ * when it provisioned that user. Null when no application declared the origin.
+ */
+export async function getMcpOriginCaller(
+  origin: string,
+  userId: string,
+): Promise<{ clientId: string; externalId: string | null } | null> {
+  const { rows } = await pool.query(
+    `SELECT o.client_id, i.external_id
+       FROM oauth_client_mcp_origins o
+       LEFT JOIN users u ON u.id = $2 AND u.managed_by = o.client_id
+       -- the provider appIdentityProvider() names
+       LEFT JOIN user_identities i ON i.user_id = u.id AND i.provider = 'app:' || o.client_id
+      WHERE o.origin = $1`,
+    [origin, userId],
+  )
+  const row = rows[0]
+  return row ? { clientId: row.client_id, externalId: row.external_id ?? null } : null
+}
+
+/** The origins in `origins` another application already declared. */
+export async function mcpOriginsTakenByOthers(
+  clientId: string,
+  origins: string[],
+): Promise<string[]> {
+  if (origins.length === 0) return []
+  const { rows } = await pool.query(
+    'SELECT origin FROM oauth_client_mcp_origins WHERE origin = ANY($1) AND client_id <> $2',
+    [origins, clientId],
+  )
+  return rows.map((r) => r.origin as string)
+}
+
+/** Replace the application's declared MCP origins. Check them with mcpOriginsTakenByOthers first. */
+export async function setClientMcpOrigins(clientId: string, origins: string[]): Promise<void> {
+  await pool.query('DELETE FROM oauth_client_mcp_origins WHERE client_id = $1', [clientId])
+  if (origins.length > 0) {
+    await pool.query(
+      `INSERT INTO oauth_client_mcp_origins (origin, client_id)
+       SELECT unnest($2::text[]), $1`,
+      [clientId, origins],
+    )
+  }
+}

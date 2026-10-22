@@ -1880,6 +1880,11 @@ export const ApiApplicationSchema = z.object({
   redirect_uris: z.array(z.string()),
   /** Teams every user the application provisions is a member of. */
   team_ids: z.array(z.string()),
+  /**
+   * Origins of MCP servers the application runs. Workspace calls to them go
+   * through the platform, which attaches a signed caller statement.
+   */
+  mcp_origins: z.array(z.string()),
   /** Users the application provisioned through /apps/v1. */
   user_count: z.number(),
   created_by: z.string(),
@@ -1898,6 +1903,7 @@ export const ApiApplicationSecretSchema = z.object({
   homepage_url: z.string().nullable().optional(),
   redirect_uris: z.array(z.string()).optional(),
   team_ids: z.array(z.string()).optional(),
+  mcp_origins: z.array(z.string()).optional(),
   client_secret: z.string(),
 })
 
@@ -1911,6 +1917,7 @@ export const ApplicationCreateBodySchema = z.object({
   /** Empty for an application that only acts for the users it provisions. */
   redirect_uris: z.array(z.string()).default([]),
   team_ids: z.array(z.string()).default([]),
+  mcp_origins: z.array(z.string()).default([]),
 })
 
 export const ApplicationUpdateBodySchema = z
@@ -1920,6 +1927,7 @@ export const ApplicationUpdateBodySchema = z
     homepage_url: z.string().nullable(),
     redirect_uris: z.array(z.string()),
     team_ids: z.array(z.string()),
+    mcp_origins: z.array(z.string()),
   })
   .partial()
 

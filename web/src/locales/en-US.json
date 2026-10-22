@@ -2140,6 +2140,7 @@
         "homepageUrl": "Homepage URL",
         "redirectUris": "Redirect URIs",
         "teams": "Teams",
+        "mcpOrigins": "MCP servers",
         "customId": "Client ID (optional)",
         "clientId": "Client ID",
         "clientSecret": "Client Secret"
@@ -2149,11 +2150,13 @@
         "description": "Short description shown on the OAuth consent page",
         "homepageUrl": "https://example.com",
         "redirectUris": "https://example.com/api/auth/callback",
+        "mcpOrigins": "https://example.com",
         "customId": "Leave empty to auto-generate"
       },
       "help": {
         "redirectUrisHint": "One URL per line. Must be http(s). Leave empty for an application that only calls the API for the users it provisions.",
         "teamsHint": "Every user the application provisions joins these teams.",
+        "mcpOriginsHint": "The application's own MCP servers, one per line. Agent calls to them go through the platform, which attaches a signed statement of who is calling.",
         "noTeams": "You aren't in any team yet.",
         "storeSecurely": "The client secret will only be shown once. Store it securely before closing.",
         "rotateWarning": "Rotating invalidates the existing secret. Existing refresh tokens remain valid."

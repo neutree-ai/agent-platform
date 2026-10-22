@@ -17,6 +17,8 @@
  * on its own Hono app.
  */
 
+import { MCP_FORWARD_PATH } from '../../types/mcp-forward.js'
+
 interface RouteApp {
   all(path: string, handler: (c: any) => any): void
 }
@@ -78,7 +80,7 @@ function isExpectedDisconnect(e: any): boolean {
 }
 
 /**
- * Mount the hop at `prefix` (e.g. '/mcp'). Everything under it is forwarded to
+ * Mount the hop at MCP_FORWARD_PATH. Everything under it is forwarded to
  * cp's proxy verbatim apart from the added credential.
  *
  * Responses stream: MCP replies are long-lived SSE / streamable HTTP and must
@@ -86,16 +88,12 @@ function isExpectedDisconnect(e: any): boolean {
  * JSON-RPC calls are small, and it keeps this hop to a plain fetch. A client
  * that goes away aborts the upstream leg rather than leaving it dangling.
  */
-export function registerMcpForwardRoutes(
-  app: RouteApp,
-  prefix: string,
-  deps: McpForwardDeps,
-): void {
+export function registerMcpForwardRoutes(app: RouteApp, deps: McpForwardDeps): void {
   // Fixed at mount time, not recomputed per message.
   const base = `${deps.cpUrl.replace(/\/+$/, '')}/workspace/v1/mcp`
 
-  app.all(`${prefix}/*`, async (c: any) => {
-    const tail = c.req.path.slice(prefix.length)
+  app.all(`${MCP_FORWARD_PATH}/*`, async (c: any) => {
+    const tail = c.req.path.slice(MCP_FORWARD_PATH.length)
     const url = new URL(c.req.url)
     const target = `${base}${tail}${url.search}`
 

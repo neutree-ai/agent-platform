@@ -138,7 +138,7 @@ registerUsageRoutes(app, '/usage', {
 // The workspace's MCP hop: the CLI connects here so its configuration — which
 // it receives as argv, readable by anything in the container — names no
 // credential. The token is added on the way out to cp.
-registerMcpForwardRoutes(app, '/mcp', {
+registerMcpForwardRoutes(app, {
   cpUrl: CP_URL ?? '',
   authHeaders: cpAuthHeaders,
 })

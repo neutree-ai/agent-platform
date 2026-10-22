@@ -18,6 +18,7 @@ import {
   renderPlatformPrompt,
   writePlatformPrompt,
 } from '../../../internal/platform-prompt/src/index.js'
+import { userMcpHeaders } from '../../../internal/types/mcp-forward.js'
 import { captureWorkspaceToken } from '../../../internal/types/workspace-token.js'
 import { type McpServerSpec, writeCordisConfig } from './cordis.js'
 
@@ -372,11 +373,7 @@ function buildMcpServers(): McpServerSpec[] {
   for (const [name, cfg] of Object.entries(_userMcpServers)) {
     if (name === 'tos-platform') continue
     if (cfg.url) {
-      const headers: Record<string, string> = {}
-      for (const [k, v] of Object.entries(cfg.headers ?? {})) {
-        if (typeof v === 'string') headers[k] = v
-      }
-      if (_sessionToken !== undefined) headers['X-Session-Token'] = _sessionToken
+      const headers = userMcpHeaders({ url: cfg.url, headers: cfg.headers }, _sessionToken)
       servers.push({ name, url: cfg.url, headers })
     } else if (cfg.command) {
       servers.push({ name, command: cfg.command, args: cfg.args ?? [], env: cfg.env ?? {} })

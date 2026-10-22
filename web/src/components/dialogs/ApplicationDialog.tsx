@@ -34,6 +34,15 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/** URLs separated by whitespace or commas; null if any of them isn't http(s). */
+function parseUrlList(text: string): string[] | null {
+  const urls = text
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return urls.every(isHttpUrl) ? urls : null
+}
+
 export default function ApplicationDialog({
   open,
   onOpenChange,
@@ -52,6 +61,7 @@ export default function ApplicationDialog({
     application?.redirect_uris.join('\n') ?? '',
   )
   const [teamIds, setTeamIds] = useState<string[]>(application?.team_ids ?? [])
+  const [mcpOriginsText, setMcpOriginsText] = useState(application?.mcp_origins.join('\n') ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<ApiApplicationSecret | null>(null)
@@ -67,6 +77,7 @@ export default function ApplicationDialog({
       setCustomId('')
       setRedirectUrisText(application?.redirect_uris.join('\n') ?? '')
       setTeamIds(application?.team_ids ?? [])
+      setMcpOriginsText(application?.mcp_origins.join('\n') ?? '')
       setError(null)
       setCreated(null)
       setCopied(null)
@@ -84,11 +95,9 @@ export default function ApplicationDialog({
       setError(t('components.applicationDialog.errors.nameRequired'))
       return
     }
-    const redirectUris = redirectUrisText
-      .split(/[\s,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (!redirectUris.every(isHttpUrl)) {
+    const redirectUris = parseUrlList(redirectUrisText)
+    const mcpOrigins = parseUrlList(mcpOriginsText)
+    if (!redirectUris || !mcpOrigins) {
       setError(t('components.applicationDialog.errors.invalidUrl'))
       return
     }
@@ -109,6 +118,7 @@ export default function ApplicationDialog({
           homepage_url: trimmedHomepage || null,
           redirect_uris: redirectUris,
           team_ids: teamIds,
+          mcp_origins: mcpOrigins,
         })
         onSuccess?.()
         onOpenChange(false)
@@ -120,6 +130,7 @@ export default function ApplicationDialog({
           homepage_url: trimmedHomepage || null,
           redirect_uris: redirectUris,
           team_ids: teamIds,
+          mcp_origins: mcpOrigins,
         })
         setCreated(result)
       }
@@ -268,6 +279,19 @@ export default function ApplicationDialog({
               value={redirectUrisText}
               onChange={(e) => setRedirectUrisText(e.target.value)}
               placeholder={t('components.applicationDialog.placeholders.redirectUris')}
+            />
+          </Field>
+          <Field
+            label={t('components.applicationDialog.fields.mcpOrigins')}
+            htmlFor="app-mcp-origins"
+            help={t('components.applicationDialog.help.mcpOriginsHint')}
+          >
+            <Textarea
+              id="app-mcp-origins"
+              className="min-h-[60px] resize-none font-mono text-sm"
+              value={mcpOriginsText}
+              onChange={(e) => setMcpOriginsText(e.target.value)}
+              placeholder={t('components.applicationDialog.placeholders.mcpOrigins')}
             />
           </Field>
           <Field
