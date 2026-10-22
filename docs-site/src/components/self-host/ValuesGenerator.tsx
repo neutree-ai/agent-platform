@@ -24,6 +24,8 @@ interface FieldDef {
   required?: boolean
   /** select only */
   options?: string[]
+  /** secret only: how ↻ generates a value (default: 32 random bytes as hex) */
+  gen?: () => Promise<string>
   validate?: (
     value: string,
     values: Record<string, string>,
@@ -108,7 +110,7 @@ const UI = {
     copied: 'Copied',
     download: 'Download',
     fixBeforeDownload: 'Fix errors before downloading',
-    genSecretTitle: 'Generate a random 32-byte hex value',
+    genSecretTitle: 'Generate a random value',
     secretPlaceholder: 'click ↻ to generate',
     importNoFields: 'No fields parsed — check the pasted content',
     importResult: (count: number, tail: string) =>
@@ -146,7 +148,7 @@ const UI = {
     copied: '已复制',
     download: '下载',
     fixBeforeDownload: '请先修正错误再下载',
-    genSecretTitle: '生成一个随机的 32 字节十六进制值',
+    genSecretTitle: '生成随机值',
     secretPlaceholder: '点击 ↻ 生成',
     importNoFields: '未解析到任何字段 —— 请检查粘贴的内容',
     importResult: (count: number, tail: string) =>
@@ -239,6 +241,12 @@ const SCHEMA_ZH: {
     JWT_SECRET: { hint: '会话令牌签名密钥。可一键生成' },
     CREDENTIAL_ENCRYPTION_KEY: {
       hint: '凭据加密密钥（AES-256）。可一键生成；升级时不要更改',
+    },
+    PLATFORM_SERVICE_KEY: {
+      hint: '平台自身的后台服务（scheduler 的 worker）访问控制面所用的共享密钥。可一键生成',
+    },
+    PLATFORM_SIGNING_KEY: {
+      hint: 'EC P-256 私钥，为发往应用所声明 MCP 服务的调用签发调用方声明。可一键生成；留空则这些调用不签名',
     },
     PG_PASSWORD: { hint: '可一键随机生成' },
     PG_INSTANCES: {
@@ -457,6 +465,21 @@ const SCHEMA: SectionDef[] = [
         hint: 'Credential encryption key (AES-256). Generate with one click; do not change it across upgrades',
         required: true,
         validate: requiredNonEmpty,
+      },
+      {
+        key: 'PLATFORM_SERVICE_KEY',
+        kind: 'secret',
+        label: 'PLATFORM_SERVICE_KEY',
+        hint: "Shared key the platform's own background services (the scheduler's workers) present to the control plane. Generate with one click",
+        required: true,
+        validate: requiredNonEmpty,
+      },
+      {
+        key: 'PLATFORM_SIGNING_KEY',
+        kind: 'secret',
+        label: 'PLATFORM_SIGNING_KEY',
+        hint: 'EC P-256 private key that signs caller statements sent to the MCP servers applications declare. Generate with one click; left empty, those calls go unsigned',
+        gen: genSigningKey,
       },
     ],
   },
@@ -838,13 +861,34 @@ function crossValidate(values: Record<string, string>) {
 // openssl rand -hex 32
 // ---------------------------------------------------------------------------
 
-function genHex32(): string {
+async function genHex32(): Promise<string> {
   const buf = new Uint8Array(32)
   crypto.getRandomValues(buf)
   return Array.from(buf)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 }
+
+// Same shape as gen-secrets.sh's PLATFORM_SIGNING_KEY: an EC P-256 PKCS#8 PEM
+// on one line, each newline escaped as \n.
+async function genSigningKey(): Promise<string> {
+  const { privateKey } = await crypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    true,
+    ['sign'],
+  )
+  const der = new Uint8Array(await crypto.subtle.exportKey('pkcs8', privateKey))
+  const b64 = btoa(String.fromCharCode(...der))
+  return [
+    '-----BEGIN PRIVATE KEY-----',
+    ...(b64.match(/.{1,64}/g) ?? []),
+    '-----END PRIVATE KEY-----',
+  ]
+    .map((line) => `${line}\\n`)
+    .join('')
+}
+
+const genSecret = (f: FieldDef) => (f.gen ?? genHex32)()
 
 function buildInitial(): Record<string, string> {
   const out: Record<string, string> = {}
@@ -886,6 +930,9 @@ function renderValuesEnv(values: Record<string, string>): string {
       const v = values[f.key] ?? ''
       if (f.kind === 'password' && v === '') {
         lines.push(`${f.key}=`)
+      } else if (v.includes('\\')) {
+        // Quoted, so `source` keeps the escapes (the signing key's \n) as is.
+        lines.push(`${f.key}="${v}"`)
       } else {
         lines.push(`${f.key}=${v}`)
       }
@@ -983,17 +1030,17 @@ export default function ValuesGenerator({ locale = 'en' }: { locale?: string }) 
   const update = (key: string, v: string) =>
     setValues((prev) => ({ ...prev, [key]: v }))
 
-  const fillAllSecrets = () => {
+  const fillAllSecrets = async () => {
+    const empty = SCHEMA.filter((s) => isSectionEnabled(s, values))
+      .flatMap((s) => s.fields)
+      .filter((f) => f.kind === 'secret' && !values[f.key]?.trim())
+    const generated = await Promise.all(
+      empty.map(async (f) => [f.key, await genSecret(f)] as const),
+    )
     setValues((prev) => {
       const next = { ...prev }
-      for (const s of SCHEMA) {
-        if (!isSectionEnabled(s, next)) continue
-        for (const f of s.fields) {
-          if (f.kind !== 'secret') continue
-          if (!next[f.key] || next[f.key].trim() === '') {
-            next[f.key] = genHex32()
-          }
-        }
+      for (const [key, v] of generated) {
+        if (!next[key]?.trim()) next[key] = v
       }
       return next
     })
@@ -1092,7 +1139,7 @@ export default function ValuesGenerator({ locale = 'en' }: { locale?: string }) 
                 type="button"
                 class="vg-icon-btn"
                 title={ui.genSecretTitle}
-                onClick={() => update(f.key, genHex32())}
+                onClick={async () => update(f.key, await genSecret(f))}
               >
                 ↻
               </button>
