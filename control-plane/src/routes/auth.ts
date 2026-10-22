@@ -8,6 +8,8 @@ import { getPrompt } from '../services/db/prompts'
 import { ensurePlatformToken } from '../services/db/shares'
 import type { User } from '../services/db/types'
 import {
+  authSource,
+  canSignIn,
   getUser,
   getUserByUsername,
   setUserAutoEvolution,
@@ -27,7 +29,7 @@ auth.get('/me', async (c) => {
     id: user.sub,
     username: user.username,
     role: dbUser?.role ?? user.role ?? 'user',
-    auth_source: dbUser?.managed_by ? 'app' : dbUser?.password_hash ? 'password' : 'ldap',
+    auth_source: dbUser ? authSource(dbUser) : 'ldap',
     default_prompt_id: defaultPrompt?.id ?? null,
     default_prompt_name: defaultPrompt?.name ?? null,
     auto_evolution: dbUser?.auto_evolution ?? false,
@@ -114,8 +116,7 @@ auth.post('/login', async (c) => {
     return c.json({ error: 'Invalid credentials' }, 401)
   }
 
-  // Block system users, and users an application manages, from logging in
-  if (dbUser.role === 'system' || dbUser.managed_by) {
+  if (!canSignIn(dbUser)) {
     return c.json({ error: 'This account cannot be used for login' }, 403)
   }
 
@@ -141,7 +142,7 @@ auth.post('/login', async (c) => {
     id: dbUser.id,
     username: dbUser.username,
     role: dbUser.role,
-    auth_source: dbUser.password_hash ? 'password' : 'ldap',
+    auth_source: authSource(dbUser),
     default_prompt_id: null,
     default_prompt_name: null,
     auto_evolution: dbUser.auto_evolution,

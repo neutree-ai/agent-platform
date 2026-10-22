@@ -1,6 +1,19 @@
 import { generateId, pool } from './pool'
 import type { User } from './types'
 
+/** How the user signs in: an application acts for it, or a local password, or LDAP. */
+export function authSource(
+  user: Pick<User, 'managed_by' | 'password_hash'>,
+): 'app' | 'password' | 'ldap' {
+  if (user.managed_by) return 'app'
+  return user.password_hash ? 'password' : 'ldap'
+}
+
+/** System users and users an application manages never sign in to NAP itself. */
+export function canSignIn(user: Pick<User, 'role' | 'managed_by'>): boolean {
+  return user.role !== 'system' && !user.managed_by
+}
+
 export async function upsertUser(
   username: string,
   displayName: string,

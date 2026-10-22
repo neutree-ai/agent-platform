@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../../lib/types'
 import { pool } from '../../services/db/pool'
 import {
+  authSource,
   createUser,
   deleteUser,
   getUser,
@@ -68,10 +69,7 @@ users.get('/', async (c) => {
        GROUP BY w.user_id
      )
      SELECT f.id, f.username, f.display_name, f.email, f.role,
-            CASE WHEN f.managed_by IS NOT NULL THEN 'app'
-                 WHEN f.password_hash IS NOT NULL THEN 'password'
-                 ELSE 'ldap' END AS auth_source,
-            f.managed_by,
+            f.password_hash, f.managed_by,
             f.created_at, f.last_login_at,
             coalesce(wa.agent_count, 0)::int AS agent_count,
             coalesce(wa.interactions, 0)::int AS interactions,
@@ -93,7 +91,7 @@ users.get('/', async (c) => {
       display_name: r.display_name,
       email: r.email,
       role: r.role,
-      auth_source: r.auth_source,
+      auth_source: authSource(r),
       managed_by: r.managed_by,
       created_at: r.created_at,
       last_login_at: r.last_login_at,
