@@ -26,7 +26,11 @@ export function WorkspacePage() {
   const filledSlot = slotCtx?.filledSlot ?? null
 
   const { data: sessions = [], isFetching: sessionsFetching } = useSessions(workspaceId)
-  const { initialSessionId, initialSession } = useAutoSelectSession(sessions, sessionsFetching)
+  const { initialSessionId, initialSession } = useAutoSelectSession(
+    workspaceId,
+    sessions,
+    sessionsFetching,
+  )
 
   const syncSessionToUrl = useCallback(
     (sessionId: string | undefined) => {
