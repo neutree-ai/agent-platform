@@ -46,6 +46,7 @@ jobs:
           - { ws: agents/codex }
           - { ws: agents/goose }
           - { ws: agents/dsh }
+          - { ws: packages/server-sdk, test: npm test }
     steps:
       - uses: actions/checkout@v4
         with:

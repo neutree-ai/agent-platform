@@ -1,0 +1,30 @@
+{
+  "name": "@neutree-ai/server-sdk",
+  "version": "0.1.0",
+  "description": "Neutree Agent Platform server SDK — for the backend of an application built on the platform: provision its users and act as them, relay the UI SDK's session calls, verify the platform's caller statement on the application's MCP server, and read agent transcripts. No runtime dependencies; uses fetch and Web Crypto.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/node": "^22.0.0",
+    "typescript": "~5.6.2",
+    "vitest": "^4.1.4"
+  }
+}
