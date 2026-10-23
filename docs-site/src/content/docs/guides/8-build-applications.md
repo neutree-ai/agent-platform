@@ -3,25 +3,47 @@ title: 8. Building Applications on NAP
 description: The App Spec — give every user of your own product a set of agents, declared once and kept in step by NAP
 ---
 
-Chapters 1–7 were about agents people use inside NAP. This one is about agents that live inside **your** product: a tutoring site where every student has a study agent, an ops console where every engineer has an on-call agent, an internal tool where each person's agent works on their own files.
+Chapters 1–7 were about agents people use inside NAP. This one is about agents that live inside **your** product, where each of its users has agents of their own: one assistant per customer of a service, a research agent and a writing agent per member of a team, an agent per user that works only on that user's files.
 
 Your application keeps what it already has: its sign-in, pages, data and business rules. NAP runs the agents. The two meet in one document, the **App Spec**: what agents each user gets, with which model, prompt, skills and tools. You apply it from your deploy step, and NAP creates every user's workspaces from it and keeps them in step when it changes.
 
 ## How the pieces fit
 
-```
-Your application                         NAP
-────────────────                         ───
-sign-in, pages, data                     application (client id + secret)
-                                         ├── its team ◄── providers, environments, skills shared by an admin
-deploy step ── publish ───────────────►  ├── prompts and skills it publishes
-            └─ apply spec ────────────►  ├── App Spec: its agents
-                                         │      each agent = a template the application owns
-on sign-in ─── provision user ────────►  └── its users
-first use ──── ensure agent ──────────►        └── one workspace per agent
-chat ───────── as the user ───────────►            created from the agent's template,
-                                                   updated when the spec changes
-```
+<pre class="mermaid">
+flowchart LR
+  subgraph APP["Your application"]
+    DEPLOY["Deploy step"]
+    BACKEND["Backend<br/>sign-in, chat relay"]
+  end
+
+  subgraph NAP["NAP"]
+    ACCESS["Application and its team<br/>client id + secret,<br/>resources an admin shares"]
+    CONTENT["Prompts and skills<br/>the application publishes"]
+    SPEC["App Spec<br/>each agent → a template"]
+    USERS["Users<br/>the application provisions"]
+    WS["Workspaces<br/>one per user and agent"]
+  end
+
+  DEPLOY -- "publish" --> CONTENT
+  DEPLOY -- "apply" --> SPEC
+  ACCESS -. "references resolve here" .-> SPEC
+  CONTENT -. "referenced by name" .-> SPEC
+  SPEC -- "creates and updates" --> WS
+  BACKEND -- "provision on sign-in" --> USERS
+  USERS -- "own" --> WS
+  BACKEND -- "ensure agent,<br/>chat as the user" --> WS
+
+  classDef app fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+  classDef access fill:#ede9fe,stroke:#8b5cf6,color:#4c1d95
+  classDef declared fill:#fef3c7,stroke:#f59e0b,color:#78350f
+  classDef running fill:#dcfce7,stroke:#22c55e,color:#14532d
+  class DEPLOY,BACKEND app
+  class ACCESS access
+  class CONTENT,SPEC declared
+  class USERS,WS running
+</pre>
+
+Blue is your application. In NAP, purple is access (who the application is and what it may use), amber is what the application declares, green is what runs for its users.
 
 A few properties worth knowing before you start:
 
@@ -49,31 +71,31 @@ Keep it in the application's repository, next to the prompts and skills it publi
 apiVersion: nap.app/v1
 
 mcp_servers:
-  whale: { url: https://whale.example.com/mcp, identify_caller: true }
+  app-api: { url: https://api.example.com/mcp, identify_caller: true }
 
 agents:
-  study:
+  assistant:
     runtime:
       agent_type: claude-code
       max_concurrency: 4
       compute: { cpu_limit: "1", memory_limit: 2Gi }
-    model: { provider: deepseek, name: deepseek-v4, small: deepseek-v4-flash }
-    prompt: study                # the current version when applied; or study@3
-    skills: [well-whale]
-    mcp: { whale: {} }
+    model: { provider: main-provider, name: large-model, small: small-model }
+    prompt: assistant            # the current version when applied; or assistant@3
+    skills: [report-writer]
+    mcp: { app-api: {} }
     commands:
-      review: { content: "Review today's notes and list what to revise" }
+      summary: { content: "Summarize what we worked on today" }
     schedules:
-      daily: { cron: "0 9 * * *", timezone: Asia/Shanghai, prompt: "Plan today" }
-    calls: [diver]
-  diver:
+      weekly-digest: { cron: "0 9 * * 1", timezone: UTC, prompt: "Write this week's digest" }
+    calls: [researcher]
+  researcher:
     runtime: { agent_type: codex }
-    model: { provider: deepseek, name: deepseek-v4 }
+    model: { provider: main-provider, name: large-model }
 
 shared_folders:
   notes:                         # /mnt/afs/notes in both workspaces
-    owner: study
-    members: { diver: read_only }
+    owner: assistant
+    members: { researcher: read_only }
 ```
 
 | Field | What it declares |
@@ -92,7 +114,7 @@ shared_folders:
 Three rules shape the document:
 
 - **Unknown fields are refused.** A typo fails loudly instead of being silently ignored, and a field added in a later version can't collide with something you wrote today.
-- **Content is referenced by name.** The spec says `prompt: study`, never the prompt's text. The text lives in the Library, versioned.
+- **Content is referenced by name.** The spec says `prompt: assistant`, never the prompt's text. The text lives in the Library, versioned.
 - **Collections are keyed by name.** Agents, servers, commands, schedules and folders are maps, so a change to one entry is a change to one key.
 
 ## Apply it on every deploy
@@ -106,8 +128,8 @@ import { AppClient } from '@neutree-ai/server-sdk'
 
 const platform = new AppClient({ baseUrl, clientId, clientSecret })
 
-await platform.publishPrompt('study', await readFile('nap/prompts/study.md', 'utf8'))
-await platform.publishSkill('well-whale', await readFile('nap/skills/well-whale.tar.gz'))
+await platform.publishPrompt('assistant', await readFile('nap/prompts/assistant.md', 'utf8'))
+await platform.publishSkill('report-writer', await readFile('nap/skills/report-writer.tar.gz'))
 
 const spec = await readFile('nap/spec.yaml', 'utf8')
 const plan = await platform.applySpec(spec, { dryRun: true })
@@ -122,7 +144,7 @@ curl -u "$CLIENT_ID:$CLIENT_SECRET" -X PUT "$NAP_URL/apps/v1/spec?dry_run=true" 
   -H 'Content-Type: application/yaml' --data-binary @nap/spec.yaml
 ```
 
-The plan lists each agent as `create`, `update` (with the fields that change), `delete` or `unchanged`, and each shared folder the same way. A reference that doesn't resolve fails the whole apply with every problem listed, typically "provider deepseek is not published by or shared with the application" — which means asking for a share, not editing the spec.
+The plan lists each agent as `create`, `update` (with the fields that change), `delete` or `unchanged`, and each shared folder the same way. A reference that doesn't resolve fails the whole apply with every problem listed, typically "provider main-provider is not published by or shared with the application" — which means asking for a share, not editing the spec.
 
 Build skill archives reproducibly (sorted entries, fixed timestamps). The bytes decide whether a package is new, so an archive rebuilt with fresh timestamps is a new version on every deploy.
 
@@ -137,7 +159,7 @@ await platform.upsertUser(user.id, { displayName: user.name, email: user.email }
 The first time the user needs an agent, the application asks for its workspace. It is created then, from the agent's template, and returned as it is on later calls:
 
 ```ts
-const { workspace_id } = await platform.ensureAgent(user.id, 'study')
+const { workspace_id } = await platform.ensureAgent(user.id, 'assistant')
 const nap = platform.as(user.id)   // chat, files, sessions — as this user
 ```
 
@@ -157,7 +179,7 @@ Edit the spec, deploy, read the plan. After an apply, every affected workspace t
 
 Some changes behave differently:
 
-- **Prompts** move only on apply. Pin `study@3` to adopt new versions deliberately.
+- **Prompts** move only on apply. Pin `assistant@3` to adopt new versions deliberately.
 - **Skills** aren't pinned. A newly published package becomes the version every agent using the skill loads, without an apply — treat publishing a skill like a deploy.
 - **Single replica vs. scaling** is fixed when a workspace is created. A change applies to new workspaces; the replica bounds themselves can change.
 
