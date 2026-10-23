@@ -87,7 +87,9 @@ const Agent = z.strictObject({
   settings: z.union([z.record(z.string(), z.unknown()), z.string()]).optional(),
   commands: z.record(Name, z.strictObject({ content: z.string().min(1) })).optional(),
   schedules: z.record(Name, Schedule).optional(),
-  // Other agents of the spec this one may call, as the same user.
+  // Other agents of the spec this one calls. Each of them is given a slug
+  // (its name) and made callable by any of the same user's workspaces: the
+  // list says which agents are called, not that only this one may call them.
   calls: z.array(Name).optional(),
 })
 
