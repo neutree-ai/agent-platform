@@ -3,14 +3,12 @@ import { DocumentedDialog } from '@/components/ui/documented-dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SaveButton } from '@/components/ui/save-button'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import type { DialogProps } from '@/contexts/DialogStackContext'
 import { getOAuthAppDoc, getOAuthAppDocsHint } from '@/docs/inline-help/oauth-app-docs'
 import { api } from '@/lib/api/client'
 import type { ApiApplication, ApiApplicationSecret } from '@/lib/api/types'
 import { cn } from '@/lib/utils'
-import { useQuery } from '@tanstack/react-query'
 import { Check, Copy, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -60,7 +58,6 @@ export default function ApplicationDialog({
   const [redirectUrisText, setRedirectUrisText] = useState(
     application?.redirect_uris.join('\n') ?? '',
   )
-  const [teamIds, setTeamIds] = useState<string[]>(application?.team_ids ?? [])
   const [mcpOriginsText, setMcpOriginsText] = useState(application?.mcp_origins.join('\n') ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +73,6 @@ export default function ApplicationDialog({
       setHomepageUrl(application?.homepage_url ?? '')
       setCustomId('')
       setRedirectUrisText(application?.redirect_uris.join('\n') ?? '')
-      setTeamIds(application?.team_ids ?? [])
       setMcpOriginsText(application?.mcp_origins.join('\n') ?? '')
       setError(null)
       setCreated(null)
@@ -117,7 +113,6 @@ export default function ApplicationDialog({
           description: trimmedDescription || null,
           homepage_url: trimmedHomepage || null,
           redirect_uris: redirectUris,
-          team_ids: teamIds,
           mcp_origins: mcpOrigins,
         })
         onSuccess?.()
@@ -129,7 +124,6 @@ export default function ApplicationDialog({
           description: trimmedDescription || null,
           homepage_url: trimmedHomepage || null,
           redirect_uris: redirectUris,
-          team_ids: teamIds,
           mcp_origins: mcpOrigins,
         })
         setCreated(result)
@@ -294,12 +288,11 @@ export default function ApplicationDialog({
               placeholder={t('components.applicationDialog.placeholders.mcpOrigins')}
             />
           </Field>
-          <Field
-            label={t('components.applicationDialog.fields.teams')}
-            help={t('components.applicationDialog.help.teamsHint')}
-          >
-            <TeamToggles value={teamIds} onChange={setTeamIds} enabled={open && !isReveal} />
-          </Field>
+          {application && (
+            <p className="text-tiny text-muted-foreground">
+              {t('components.applicationDialog.help.team', { name: application.name })}
+            </p>
+          )}
           {error && <div className="text-xs text-destructive">{error}</div>}
         </div>
       )}
@@ -325,50 +318,6 @@ function Field({
       </Label>
       {children}
       {help && <p className="text-tiny text-muted-foreground">{help}</p>}
-    </div>
-  )
-}
-
-// The admin's own teams, one switch each. A declared team the admin isn't in
-// isn't listed, but stays in `value` and is saved back unchanged.
-function TeamToggles({
-  value,
-  onChange,
-  enabled,
-}: {
-  value: string[]
-  onChange: (ids: string[]) => void
-  enabled: boolean
-}) {
-  const { t } = useTranslation()
-  const { data: teams = [] } = useQuery({
-    queryKey: ['teams'],
-    queryFn: () => api.listTeams(),
-    enabled,
-  })
-  if (teams.length === 0) {
-    return (
-      <p className="text-mini text-muted-foreground">
-        {t('components.applicationDialog.help.noTeams')}
-      </p>
-    )
-  }
-  return (
-    <div className="flex flex-col gap-1.5">
-      {teams.map((team) => (
-        <div
-          key={team.id}
-          className="flex items-center justify-between gap-3 rounded-md border border-border/60 px-2.5 py-1.5"
-        >
-          <span className="min-w-0 truncate text-xs text-foreground">{team.name}</span>
-          <Switch
-            checked={value.includes(team.id)}
-            onCheckedChange={(on) =>
-              onChange(on ? [...value, team.id] : value.filter((id) => id !== team.id))
-            }
-          />
-        </div>
-      ))}
     </div>
   )
 }

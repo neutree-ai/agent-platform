@@ -7,10 +7,10 @@ import {
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
 import {
+  createAppTeam,
   mcpOriginsTakenByOthers,
+  renameAppTeam,
   setClientMcpOrigins,
-  setClientTeams,
-  unknownTeamIds,
 } from '../services/db/app-users'
 import { generateId, pool } from '../services/db/pool'
 import { serverOriginFromUrl } from '../services/mcp-oauth'
@@ -91,8 +91,7 @@ applications.get('/', async (c) => {
     `SELECT c.id, c.name, c.description, c.homepage_url, c.redirect_uris,
             c.created_by, c.created_at, c.updated_at,
             u.display_name AS owner_display_name, u.username AS owner_username,
-            coalesce((SELECT array_agg(t.team_id ORDER BY t.team_id)
-                        FROM oauth_client_teams t WHERE t.client_id = c.id), '{}') AS team_ids,
+            (SELECT t.id FROM teams t WHERE t.app_id = c.id) AS team_id,
             coalesce((SELECT array_agg(o.origin ORDER BY o.origin)
                         FROM oauth_client_mcp_origins o WHERE o.client_id = c.id), '{}') AS mcp_origins,
             (SELECT count(*)::int FROM users m WHERE m.managed_by = c.id) AS user_count
@@ -140,12 +139,6 @@ applications.post('/', async (c) => {
     id = `app_${generateId()}`
   }
 
-  const teamIds = [...new Set(body.team_ids)]
-  const unknownTeams = await unknownTeamIds(teamIds)
-  if (unknownTeams.length > 0) {
-    return c.json({ error: `unknown team_ids: ${unknownTeams.join(', ')}` }, 400)
-  }
-
   const mcp = await checkMcpOrigins(id, body.mcp_origins)
   if ('error' in mcp) return c.json({ error: mcp.error }, mcp.status)
 
@@ -153,20 +146,27 @@ applications.post('/', async (c) => {
   const secret = generateClientSecret()
   const secretHash = hashSecret(secret)
 
+  const client = await pool.connect()
+  let teamId: string
   try {
-    await pool.query(
+    await client.query('BEGIN')
+    await client.query(
       `INSERT INTO oauth_clients (id, name, description, homepage_url, secret_hash, redirect_uris, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [id, name, description, homepage.value, secretHash, redirectUris, user.sub],
     )
+    teamId = await createAppTeam(client, { id, name, description, createdBy: user.sub })
+    await client.query('COMMIT')
   } catch (err) {
+    await client.query('ROLLBACK')
     if ((err as { code?: string }).code === '23505') {
       return c.json({ error: 'id already exists' }, 409)
     }
     throw err
+  } finally {
+    client.release()
   }
 
-  await setClientTeams(id, teamIds)
   await setClientMcpOrigins(id, mcp.origins)
 
   return c.json(
@@ -176,7 +176,7 @@ applications.post('/', async (c) => {
       description,
       homepage_url: homepage.value,
       redirect_uris: redirectUris,
-      team_ids: teamIds,
+      team_id: teamId,
       mcp_origins: mcp.origins,
       client_secret: secret,
     },
@@ -200,17 +200,20 @@ applications.patch('/:id', async (c) => {
   const values: unknown[] = []
   let i = 1
 
+  const team: { name?: string; description?: string | null } = {}
   if (body.name !== undefined) {
     const name = body.name.trim()
     if (!name) return c.json({ error: 'name cannot be empty' }, 400)
     updates.push(`name = $${i++}`)
     values.push(name)
+    team.name = name
   }
   if (body.description !== undefined) {
     const description =
       typeof body.description === 'string' ? body.description.trim() || null : null
     updates.push(`description = $${i++}`)
     values.push(description)
+    team.description = description
   }
   if (body.homepage_url !== undefined) {
     const homepage = sanitizeHttpUrl(body.homepage_url)
@@ -229,15 +232,8 @@ applications.patch('/:id', async (c) => {
     values.push(redirectUris)
   }
 
-  if (updates.length === 0 && body.team_ids === undefined && body.mcp_origins === undefined) {
+  if (updates.length === 0 && body.mcp_origins === undefined) {
     return c.json({ error: 'nothing to update' }, 400)
-  }
-  const teamIds = body.team_ids === undefined ? undefined : [...new Set(body.team_ids)]
-  if (teamIds) {
-    const unknownTeams = await unknownTeamIds(teamIds)
-    if (unknownTeams.length > 0) {
-      return c.json({ error: `unknown team_ids: ${unknownTeams.join(', ')}` }, 400)
-    }
   }
   let mcpOrigins: string[] | undefined
   if (body.mcp_origins !== undefined) {
@@ -255,7 +251,7 @@ applications.patch('/:id', async (c) => {
   )
   if (!rowCount) return c.json({ error: 'not found' }, 404)
 
-  if (teamIds) await setClientTeams(id, teamIds)
+  await renameAppTeam(id, team)
   if (mcpOrigins) await setClientMcpOrigins(id, mcpOrigins)
   return c.json({ success: true })
 })

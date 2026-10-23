@@ -80,7 +80,8 @@ export function TeamsSection(_: { instanceId: string }) {
         ) : (
           <ResourceGrid>
             {teams.map((team) => {
-              const isAdmin = team.my_role === 'admin'
+              // An application's team goes away with the application.
+              const canDelete = team.my_role === 'admin' && !team.app_id
               const deleting = deletingId === team.id
               return (
                 <ResourceCard
@@ -93,7 +94,7 @@ export function TeamsSection(_: { instanceId: string }) {
                   type={<RoleBadge role={team.my_role} />}
                   onClick={() => setActiveTeamId(team.id)}
                   actions={
-                    isAdmin &&
+                    canDelete &&
                     (deleting ? (
                       <Button
                         type="button"
@@ -286,7 +287,12 @@ function TeamDialog({ teamId, onClose }: { teamId: string | null; onClose: () =>
           </div>
         ) : (
           <div className="min-w-0 space-y-4">
-            {isAdmin ? (
+            {team.app_id && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t('components.teamsSection.labels.appTeam')}
+              </p>
+            )}
+            {isAdmin && !team.app_id ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="td-name">{t('components.teamsSection.fields.name')}</Label>

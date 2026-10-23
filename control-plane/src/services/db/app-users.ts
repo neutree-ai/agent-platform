@@ -4,8 +4,9 @@
 // stored in user_identities under the provider `app:<client_id>`, so two apps
 // can use the same external id for different people without colliding.
 
+import type { PoolClient } from 'pg'
 import { generateId, pool } from './pool'
-import { addTeamMember, removeTeamMember } from './teams'
+import { addTeamMember } from './teams'
 import type { User } from './types'
 
 function appIdentityProvider(clientId: string): string {
@@ -24,8 +25,8 @@ export async function getAppUser(clientId: string, externalId: string): Promise<
 
 /**
  * Create the user, or update its name and email if it already exists, then
- * make it a member of the application's declared teams. Safe to call on every
- * request: concurrent calls for the same external id resolve to one user.
+ * make it a member of the application's team. Safe to call on every request:
+ * concurrent calls for the same external id resolve to one user.
  */
 export async function upsertAppUser(
   clientId: string,
@@ -70,54 +71,55 @@ export async function upsertAppUser(
 
   user = await getAppUser(clientId, externalId)
   if (!user) throw new Error(`app user ${clientId}/${externalId} vanished during upsert`)
-  for (const teamId of await listClientTeamIds(clientId)) {
-    await addTeamMember(teamId, user.id)
-  }
+  const teamId = await getAppTeamId(clientId)
+  if (teamId) await addTeamMember(teamId, user.id)
   return { user, created }
 }
 
-async function listClientTeamIds(clientId: string): Promise<string[]> {
-  const { rows } = await pool.query(
-    'SELECT team_id FROM oauth_client_teams WHERE client_id = $1 ORDER BY team_id',
-    [clientId],
-  )
-  return rows.map((r) => r.team_id as string)
-}
-
-/** The ids in `teamIds` that don't name an existing team. */
-export async function unknownTeamIds(teamIds: string[]): Promise<string[]> {
-  if (teamIds.length === 0) return []
-  const { rows } = await pool.query('SELECT id FROM teams WHERE id = ANY($1)', [teamIds])
-  const found = new Set(rows.map((r) => r.id as string))
-  return teamIds.filter((id) => !found.has(id))
+/** The id of the application's own team (migrations/151_app_teams.sql). */
+async function getAppTeamId(clientId: string): Promise<string | null> {
+  const { rows } = await pool.query('SELECT id FROM teams WHERE app_id = $1', [clientId])
+  return (rows[0]?.id as string) ?? null
 }
 
 /**
- * Replace the application's declared teams and bring every one of its users
- * in line: members of the teams added, removed from the teams dropped.
- * Check the ids with unknownTeamIds first.
+ * Create the application's team, named after it, with whoever registered the
+ * application as its admin. Runs in the transaction that creates the
+ * application.
  */
-export async function setClientTeams(clientId: string, teamIds: string[]): Promise<void> {
-  const wanted = [...new Set(teamIds)]
-  const current = await listClientTeamIds(clientId)
-  const added = wanted.filter((id) => !current.includes(id))
-  const dropped = current.filter((id) => !wanted.includes(id))
+export async function createAppTeam(
+  client: PoolClient,
+  app: { id: string; name: string; description: string | null; createdBy: string },
+): Promise<string> {
+  const id = generateId()
+  await client.query(
+    `INSERT INTO teams (id, name, description, created_by, app_id)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, app.name, app.description, app.createdBy, app.id],
+  )
+  await client.query(`INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, 'admin')`, [
+    id,
+    app.createdBy,
+  ])
+  return id
+}
 
-  await pool.query('DELETE FROM oauth_client_teams WHERE client_id = $1', [clientId])
-  if (wanted.length > 0) {
-    await pool.query(
-      `INSERT INTO oauth_client_teams (client_id, team_id)
-       SELECT $1, unnest($2::text[])`,
-      [clientId, wanted],
-    )
+/** Keep the application's team named after it. */
+export async function renameAppTeam(
+  clientId: string,
+  patch: { name?: string; description?: string | null },
+): Promise<void> {
+  if (patch.name !== undefined) {
+    await pool.query('UPDATE teams SET name = $1, updated_at = now() WHERE app_id = $2', [
+      patch.name,
+      clientId,
+    ])
   }
-
-  if (added.length > 0 || dropped.length > 0) {
-    const { rows } = await pool.query('SELECT id FROM users WHERE managed_by = $1', [clientId])
-    for (const { id: userId } of rows as { id: string }[]) {
-      for (const teamId of added) await addTeamMember(teamId, userId)
-      for (const teamId of dropped) await removeTeamMember(teamId, userId)
-    }
+  if (patch.description !== undefined) {
+    await pool.query('UPDATE teams SET description = $1, updated_at = now() WHERE app_id = $2', [
+      patch.description,
+      clientId,
+    ])
   }
 }
 

@@ -1878,8 +1878,11 @@ export const ApiApplicationSchema = z.object({
   description: z.string().nullable(),
   homepage_url: z.string().nullable(),
   redirect_uris: z.array(z.string()),
-  /** Teams every user the application provisions is a member of. */
-  team_ids: z.array(z.string()),
+  /**
+   * The application's own team. Its users are members; what is shared with
+   * the team is available to them.
+   */
+  team_id: z.string(),
   /**
    * Origins of MCP servers the application runs. Workspace calls to them go
    * through the platform, which attaches a signed caller statement.
@@ -1902,7 +1905,7 @@ export const ApiApplicationSecretSchema = z.object({
   description: z.string().nullable().optional(),
   homepage_url: z.string().nullable().optional(),
   redirect_uris: z.array(z.string()).optional(),
-  team_ids: z.array(z.string()).optional(),
+  team_id: z.string().optional(),
   mcp_origins: z.array(z.string()).optional(),
   client_secret: z.string(),
 })
@@ -1916,7 +1919,6 @@ export const ApplicationCreateBodySchema = z.object({
   homepage_url: z.string().nullable().optional(),
   /** Empty for an application that only acts for the users it provisions. */
   redirect_uris: z.array(z.string()).default([]),
-  team_ids: z.array(z.string()).default([]),
   mcp_origins: z.array(z.string()).default([]),
 })
 
@@ -1926,7 +1928,6 @@ export const ApplicationUpdateBodySchema = z
     description: z.string().nullable(),
     homepage_url: z.string().nullable(),
     redirect_uris: z.array(z.string()),
-    team_ids: z.array(z.string()),
     mcp_origins: z.array(z.string()),
   })
   .partial()
@@ -1945,6 +1946,11 @@ export const ApiTeamSchema = z.object({
   updated_at: z.string(),
   my_role: TeamRoleSchema,
   member_count: z.number().int(),
+  /**
+   * Set on an application's own team: its name follows the application and
+   * the application's users are members of it by the platform's doing.
+   */
+  app_id: z.string().nullable(),
 })
 export type ApiTeam = z.infer<typeof ApiTeamSchema>
 
