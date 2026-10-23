@@ -13,7 +13,6 @@ import { getTemplateVersion } from '../db/templates'
 import type { User } from '../db/types'
 import {
   createWorkspace,
-  deleteWorkspace,
   getWorkspace,
   getWorkspaceConfig,
   updateWorkspace,
@@ -40,6 +39,8 @@ interface AgentWorkspace {
   template_version: number
   /** On the agent's latest template version, with its current runtime. */
   up_to_date: boolean
+  /** Why it can't follow its agent, while it can't. */
+  blocked: string | null
 }
 
 interface AppWorkspaceRow {
@@ -53,12 +54,13 @@ interface AppWorkspaceRow {
   template_version: number
   latest_version: number
   status: string
+  blocked: string | null
 }
 
 const ROW_SQL = `
   SELECT aw.client_id, aw.agent, aw.user_id, aw.workspace_id, aw.runtime,
          a.template_id, a.runtime AS agent_runtime,
-         wc.template_version, t.latest_version, w.status
+         wc.template_version, t.latest_version, w.status, aw.blocked
     FROM app_workspaces aw
     JOIN app_agents a ON a.client_id = aw.client_id AND a.name = aw.agent
     JOIN templates t ON t.id = a.template_id
@@ -79,6 +81,7 @@ function toAgentWorkspace(row: AppWorkspaceRow): AgentWorkspace {
     status: row.status,
     template_version: row.template_version,
     up_to_date: isUpToDate(row),
+    blocked: row.blocked,
   }
 }
 
@@ -147,21 +150,28 @@ async function createAgentWorkspace(clientId: string, user: User, agent: string)
       await updateWorkspaceConfig(workspace.id, { auto_scaling: runtime.auto_scaling })
     }
     await applyRuntime(workspace.id, agent, runtime)
-    await attachDefaultMemoryStore({
-      workspaceId: workspace.id,
-      userId: user.id,
-      name: agent,
-      persistentMemory: placement.supports.persistentMemory,
-    })
     await pool.query(
       `INSERT INTO app_workspaces (client_id, agent, user_id, workspace_id, runtime)
        VALUES ($1, $2, $3, $4, $5)`,
       [clientId, agent, user.id, workspace.id, JSON.stringify(runtime)],
     )
   } catch (e) {
-    await deleteWorkspace(workspace.id)
+    // The whole way a workspace is deleted, so the schedule timers the
+    // template brought go with it. It never ran, so there's no usage to drain.
+    // A cleanup that fails is logged, and what made the creation fail is thrown.
+    await destroyWorkspace(workspace, true).catch((cleanup) =>
+      console.error(`[app-spec] deleting half-created workspace ${workspace.id} failed:`, cleanup),
+    )
     throw e
   }
+  // Last: it never fails, and a store made before a failure above would be
+  // left behind by the delete.
+  await attachDefaultMemoryStore({
+    workspaceId: workspace.id,
+    userId: user.id,
+    name: agent,
+    persistentMemory: placement.supports.persistentMemory,
+  })
   await placeWorkspace(workspace.id, placement.environmentId)
   await updateWorkspace(workspace.id, { status: 'starting' })
 }
@@ -263,9 +273,18 @@ async function convergeWorkspace(row: AppWorkspaceRow): Promise<void> {
         version: row.latest_version,
       })
       if (notVisible.length > 0) {
-        console.error(
-          `[app-spec] workspace ${row.workspace_id} can't take skills ${notVisible.join(', ')}`,
-        )
+        // Tried again on every pass, since the skills may be shared later;
+        // said once, and shown in the status until then.
+        const blocked = `skills not visible to the user: ${notVisible.join(', ')}`
+        if (blocked !== row.blocked) {
+          console.error(
+            `[app-spec] workspace ${row.workspace_id} can't follow its agent: ${blocked}`,
+          )
+          await pool.query('UPDATE app_workspaces SET blocked = $2 WHERE workspace_id = $1', [
+            row.workspace_id,
+            blocked,
+          ])
+        }
         return
       }
       computeChanged =
@@ -273,10 +292,10 @@ async function convergeWorkspace(row: AppWorkspaceRow): Promise<void> {
         canonicalJson(after?.compute_resources ?? {})
     }
     await applyRuntime(row.workspace_id, row.agent, row.agent_runtime)
-    await pool.query('UPDATE app_workspaces SET runtime = $2 WHERE workspace_id = $1', [
-      row.workspace_id,
-      JSON.stringify(row.agent_runtime),
-    ])
+    await pool.query(
+      'UPDATE app_workspaces SET runtime = $2, blocked = NULL WHERE workspace_id = $1',
+      [row.workspace_id, JSON.stringify(row.agent_runtime)],
+    )
 
     const workspace = await getWorkspace(row.workspace_id)
     if (workspace?.status !== 'running') return
@@ -316,6 +335,7 @@ interface AgentStatus {
   template_version: number
   workspaces: number
   up_to_date: number
+  blocked: number
 }
 
 /** Per agent of the spec: how many of its workspaces are up to date. */
@@ -324,7 +344,8 @@ export async function agentStatuses(clientId: string): Promise<AgentStatus[]> {
     `SELECT a.name AS agent, t.latest_version AS template_version,
             count(aw.workspace_id)::int AS workspaces,
             (count(aw.workspace_id) FILTER (
-               WHERE wc.template_version = t.latest_version AND aw.runtime = a.runtime))::int AS up_to_date
+               WHERE wc.template_version = t.latest_version AND aw.runtime = a.runtime))::int AS up_to_date,
+            (count(aw.workspace_id) FILTER (WHERE aw.blocked IS NOT NULL))::int AS blocked
        FROM app_agents a
        JOIN templates t ON t.id = a.template_id
        LEFT JOIN app_workspaces aw ON aw.client_id = a.client_id AND aw.agent = a.name
