@@ -19,5 +19,5 @@
 | `template_version` | integer | Yes |  |
 | `workspaces` | integer | Yes |  |
 | `up_to_date` | integer | Yes |  |
-| `blocked` | integer | Yes | Workspaces that can't follow the agent; see each user's agents |
+| `blocked` | integer | Yes | Workspaces that can't follow the agent or have their shared folders; see each user's agents |
 

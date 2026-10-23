@@ -4,7 +4,7 @@
 **Ensure the user's workspace for an agent**
 **Operation ID:** `put--apps-v1-users-{external_id}-agents-{agent}`
 
-Idempotent. Creates the workspace from the agent's template on the first call; afterwards returns it, bringing it up to date first when it is behind and idle. Call the API as the user (see the token route) to chat with it.
+Idempotent. Creates the workspace from the agent's template on the first call; afterwards returns it, bringing it up to date first when it is behind and idle. Either way, the user's shared folders are brought in line with the workspaces it has. Call the API as the user (see the token route) to chat with it.
 
 ## Parameters
 

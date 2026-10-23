@@ -5,6 +5,9 @@
 // When the spec changes an agent, each of its workspaces moves to the new
 // template version and takes the agent's new runtime, but only while no turn
 // is running in it: a busy workspace is left for the next pass of the sweep.
+//
+// The user's shared folders (see folders.ts) are brought in line along with
+// each workspace that is ensured, and by the same sweep.
 
 import { notifyAgentReload } from '../../lib/workspace-address'
 import { pool } from '../db/pool'
@@ -24,6 +27,7 @@ import { bindWorkspaceToTemplate, syncWorkspaceToTemplate } from '../template-wo
 import { destroyWorkspace } from '../workspace-lifecycle'
 import { attachDefaultMemoryStore } from '../workspace-memory'
 import { reconcileWorkspacePod } from '../workspace-reconcile'
+import { bringUserFoldersInLine, convergeAppFolders } from './folders'
 import { type AgentRuntime, canonicalJson } from './resolve'
 
 /** The spec has no agent by that name. */
@@ -39,7 +43,7 @@ interface AgentWorkspace {
   template_version: number
   /** On the agent's latest template version, with its current runtime. */
   up_to_date: boolean
-  /** Why it can't follow its agent, while it can't. */
+  /** Why it can't follow its agent or have its shared folders, while it can't. */
   blocked: string | null
 }
 
@@ -55,12 +59,13 @@ interface AppWorkspaceRow {
   latest_version: number
   status: string
   blocked: string | null
+  folders_blocked: string | null
 }
 
 const ROW_SQL = `
   SELECT aw.client_id, aw.agent, aw.user_id, aw.workspace_id, aw.runtime,
          a.template_id, a.runtime AS agent_runtime,
-         wc.template_version, t.latest_version, w.status, aw.blocked
+         wc.template_version, t.latest_version, w.status, aw.blocked, aw.folders_blocked
     FROM app_workspaces aw
     JOIN app_agents a ON a.client_id = aw.client_id AND a.name = aw.agent
     JOIN templates t ON t.id = a.template_id
@@ -81,7 +86,8 @@ function toAgentWorkspace(row: AppWorkspaceRow): AgentWorkspace {
     status: row.status,
     template_version: row.template_version,
     up_to_date: isUpToDate(row),
-    blocked: row.blocked,
+    // One reason for the caller, from the two places a workspace can be stuck.
+    blocked: [row.blocked, row.folders_blocked].filter((r) => r !== null).join('; ') || null,
   }
 }
 
@@ -177,8 +183,23 @@ async function createAgentWorkspace(clientId: string, user: User, agent: string)
 }
 
 /**
+ * Bring the user's shared folders in line, now that one of its workspaces
+ * exists. A folder that can't be is told in its workspace's blocked reason;
+ * anything else that goes wrong is left to the sweep, rather than failing the
+ * workspace's caller over a folder.
+ */
+async function bringFoldersInLine(clientId: string, userId: string): Promise<void> {
+  try {
+    await bringUserFoldersInLine(clientId, userId, { wait: true })
+  } catch (e) {
+    console.error(`[app-spec] shared folders of user ${userId} failed:`, e)
+  }
+}
+
+/**
  * The user's workspace for the agent, created on the first call. An existing
- * one that is behind the agent and idle is brought up to date first. Throws
+ * one that is behind the agent and idle is brought up to date first. Either
+ * way, the user's shared folders are brought in line. Throws
  * AgentNotFoundError and AgentPlacementError.
  */
 export async function ensureAgentWorkspace(
@@ -189,6 +210,7 @@ export async function ensureAgentWorkspace(
   const existing = await findRow(clientId, agent, user.id)
   if (existing) {
     if (!isUpToDate(existing)) await convergeWorkspace(existing)
+    await bringFoldersInLine(clientId, user.id)
     const row = (await findRow(clientId, agent, user.id)) ?? existing
     return { workspace: toAgentWorkspace(row), created: false }
   }
@@ -207,6 +229,7 @@ export async function ensureAgentWorkspace(
     await lock.query('SELECT pg_advisory_unlock(hashtext($1))', [key])
     lock.release()
   }
+  await bringFoldersInLine(clientId, user.id)
   const row = await findRow(clientId, agent, user.id)
   if (!row) throw new Error(`workspace for ${agent} vanished while creating it`)
   return { workspace: toAgentWorkspace(row), created }
@@ -313,7 +336,10 @@ async function convergeWorkspace(row: AppWorkspaceRow): Promise<void> {
   }
 }
 
-/** Bring every workspace that is behind its agent up to date, where idle. */
+/**
+ * Bring every workspace that is behind its agent up to date, where idle, and
+ * every user's shared folders in line.
+ */
 export async function convergeAppWorkspaces(clientId?: string): Promise<void> {
   const { rows } = await pool.query(
     `${ROW_SQL}
@@ -327,6 +353,13 @@ export async function convergeAppWorkspaces(clientId?: string): Promise<void> {
     } catch (e) {
       console.error(`[app-spec] converging workspace ${row.workspace_id} failed:`, e)
     }
+  }
+  // Folders change without waiting for a workspace to be idle, as they do
+  // when granted by hand.
+  try {
+    await convergeAppFolders(clientId)
+  } catch (e) {
+    console.error('[app-spec] converging shared folders failed:', e)
   }
 }
 
@@ -345,7 +378,8 @@ export async function agentStatuses(clientId: string): Promise<AgentStatus[]> {
             count(aw.workspace_id)::int AS workspaces,
             (count(aw.workspace_id) FILTER (
                WHERE wc.template_version = t.latest_version AND aw.runtime = a.runtime))::int AS up_to_date,
-            (count(aw.workspace_id) FILTER (WHERE aw.blocked IS NOT NULL))::int AS blocked
+            (count(aw.workspace_id) FILTER (
+               WHERE aw.blocked IS NOT NULL OR aw.folders_blocked IS NOT NULL))::int AS blocked
        FROM app_agents a
        JOIN templates t ON t.id = a.template_id
        LEFT JOIN app_workspaces aw ON aw.client_id = a.client_id AND aw.agent = a.name
