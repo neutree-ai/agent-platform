@@ -7,14 +7,8 @@ import {
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
 import { deleteAppContent } from '../services/app-content'
-import {
-  createAppAccounts,
-  mcpOriginsTakenByOthers,
-  renameAppTeam,
-  setClientMcpOrigins,
-} from '../services/db/app-users'
+import { createAppAccounts, renameAppTeam } from '../services/db/app-users'
 import { generateId, pool } from '../services/db/pool'
-import { serverOriginFromUrl } from '../services/mcp-oauth'
 
 const applications = new Hono<AppEnv>()
 
@@ -62,28 +56,6 @@ function sanitizeRedirectUris(input: unknown): string[] | null {
     uris.push(trimmed)
   }
   return uris
-}
-
-// Declared MCP servers are matched by origin, the way cp's MCP proxy looks
-// them up. An origin another application declared is refused.
-async function checkMcpOrigins(
-  clientId: string,
-  input: string[],
-): Promise<{ origins: string[] } | { error: string; status: 400 | 409 }> {
-  const origins = new Set<string>()
-  for (const raw of input) {
-    const url = sanitizeHttpUrl(raw)
-    if (!url.ok) return { error: 'mcp_origins must be http(s) URLs', status: 400 }
-    if (url.value) origins.add(serverOriginFromUrl(url.value))
-  }
-  const taken = await mcpOriginsTakenByOthers(clientId, [...origins])
-  if (taken.length > 0) {
-    return {
-      error: `mcp_origins already declared by another application: ${taken.join(', ')}`,
-      status: 409,
-    }
-  }
-  return { origins: [...origins] }
 }
 
 // GET /api/applications — list (all authenticated users, read-only view)
@@ -141,9 +113,6 @@ applications.post('/', async (c) => {
     id = `app_${generateId()}`
   }
 
-  const mcp = await checkMcpOrigins(id, body.mcp_origins)
-  if ('error' in mcp) return c.json({ error: mcp.error }, mcp.status)
-
   const description = typeof body.description === 'string' ? body.description.trim() || null : null
   const secret = generateClientSecret()
   const secretHash = hashSecret(secret)
@@ -169,8 +138,6 @@ applications.post('/', async (c) => {
     client.release()
   }
 
-  await setClientMcpOrigins(id, mcp.origins)
-
   return c.json(
     {
       id,
@@ -179,7 +146,6 @@ applications.post('/', async (c) => {
       homepage_url: homepage.value,
       redirect_uris: redirectUris,
       team_id: teamId,
-      mcp_origins: mcp.origins,
       client_secret: secret,
     },
     201,
@@ -234,15 +200,7 @@ applications.patch('/:id', async (c) => {
     values.push(redirectUris)
   }
 
-  if (updates.length === 0 && body.mcp_origins === undefined) {
-    return c.json({ error: 'nothing to update' }, 400)
-  }
-  let mcpOrigins: string[] | undefined
-  if (body.mcp_origins !== undefined) {
-    const mcp = await checkMcpOrigins(id, body.mcp_origins)
-    if ('error' in mcp) return c.json({ error: mcp.error }, mcp.status)
-    mcpOrigins = mcp.origins
-  }
+  if (updates.length === 0) return c.json({ error: 'nothing to update' }, 400)
 
   updates.push('updated_at = NOW()')
   values.push(id)
@@ -254,7 +212,6 @@ applications.patch('/:id', async (c) => {
   if (!rowCount) return c.json({ error: 'not found' }, 404)
 
   await renameAppTeam(id, team)
-  if (mcpOrigins) await setClientMcpOrigins(id, mcpOrigins)
   return c.json({ success: true })
 })
 

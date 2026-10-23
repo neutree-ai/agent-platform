@@ -58,7 +58,6 @@ export default function ApplicationDialog({
   const [redirectUrisText, setRedirectUrisText] = useState(
     application?.redirect_uris.join('\n') ?? '',
   )
-  const [mcpOriginsText, setMcpOriginsText] = useState(application?.mcp_origins.join('\n') ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [created, setCreated] = useState<ApiApplicationSecret | null>(null)
@@ -73,7 +72,6 @@ export default function ApplicationDialog({
       setHomepageUrl(application?.homepage_url ?? '')
       setCustomId('')
       setRedirectUrisText(application?.redirect_uris.join('\n') ?? '')
-      setMcpOriginsText(application?.mcp_origins.join('\n') ?? '')
       setError(null)
       setCreated(null)
       setCopied(null)
@@ -92,8 +90,7 @@ export default function ApplicationDialog({
       return
     }
     const redirectUris = parseUrlList(redirectUrisText)
-    const mcpOrigins = parseUrlList(mcpOriginsText)
-    if (!redirectUris || !mcpOrigins) {
+    if (!redirectUris) {
       setError(t('components.applicationDialog.errors.invalidUrl'))
       return
     }
@@ -113,7 +110,6 @@ export default function ApplicationDialog({
           description: trimmedDescription || null,
           homepage_url: trimmedHomepage || null,
           redirect_uris: redirectUris,
-          mcp_origins: mcpOrigins,
         })
         onSuccess?.()
         onOpenChange(false)
@@ -124,7 +120,6 @@ export default function ApplicationDialog({
           description: trimmedDescription || null,
           homepage_url: trimmedHomepage || null,
           redirect_uris: redirectUris,
-          mcp_origins: mcpOrigins,
         })
         setCreated(result)
       }
@@ -275,19 +270,18 @@ export default function ApplicationDialog({
               placeholder={t('components.applicationDialog.placeholders.redirectUris')}
             />
           </Field>
-          <Field
-            label={t('components.applicationDialog.fields.mcpOrigins')}
-            htmlFor="app-mcp-origins"
-            help={t('components.applicationDialog.help.mcpOriginsHint')}
-          >
-            <Textarea
-              id="app-mcp-origins"
-              className="min-h-[60px] resize-none font-mono text-sm"
-              value={mcpOriginsText}
-              onChange={(e) => setMcpOriginsText(e.target.value)}
-              placeholder={t('components.applicationDialog.placeholders.mcpOrigins')}
-            />
-          </Field>
+          {application && application.mcp_origins.length > 0 && (
+            <Field
+              label={t('components.applicationDialog.fields.mcpOrigins')}
+              help={t('components.applicationDialog.help.mcpOriginsHint')}
+            >
+              <div className="space-y-0.5 font-mono text-sm">
+                {application.mcp_origins.map((origin) => (
+                  <div key={origin}>{origin}</div>
+                ))}
+              </div>
+            </Field>
+          )}
           {application && (
             <p className="text-tiny text-muted-foreground">
               {t('components.applicationDialog.help.team', { name: application.name })}

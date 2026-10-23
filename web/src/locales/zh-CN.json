@@ -2174,12 +2174,11 @@
         "description": "在 OAuth 授权页展示的简短说明",
         "homepageUrl": "https://example.com",
         "redirectUris": "https://example.com/api/auth/callback",
-        "mcpOrigins": "https://example.com",
         "customId": "留空则自动生成"
       },
       "help": {
         "redirectUrisHint": "每行一个 URL，必须是 http(s)。只代自己开通的用户调用 API 的应用可以留空",
-        "mcpOriginsHint": "应用自己的 MCP 服务，每行一个。Agent 调用它们时经平台转发，并附上平台签名的调用方身份",
+        "mcpOriginsHint": "由应用的 spec 声明。Agent 调用它们时经平台转发，并附上平台签名的调用方身份",
         "storeSecurely": "Client secret 仅显示这一次，请在关闭前妥善保存",
         "rotateWarning": "轮换会使旧 secret 失效，已签发的 refresh token 不受影响",
         "team": "把模型供应商、Skill、Prompt、环境分享给团队「{{name}}」，这个应用的用户就能使用它们"
