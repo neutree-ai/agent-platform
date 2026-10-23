@@ -29,6 +29,7 @@
 | `updated_at` | string | Yes |  |
 | `my_role` | enum: admin, member | Yes |  |
 | `member_count` | integer | Yes |  |
+| `app_id` | string,null | Yes |  |
 
 ## Security
 

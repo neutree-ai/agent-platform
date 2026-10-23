@@ -17,6 +17,7 @@
 | 200 | Deleted |
 | 403 | Forbidden |
 | 404 | Not found |
+| 409 | An application's team |
 
 **Success Response Schema** (inline):
 

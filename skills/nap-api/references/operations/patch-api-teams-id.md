@@ -28,6 +28,7 @@
 | 200 | Updated |
 | 403 | Forbidden |
 | 404 | Not found |
+| 409 | An application's team |
 
 **Success Response Schema** (inline):
 
@@ -41,6 +42,7 @@
 | `updated_at` | string | Yes |  |
 | `my_role` | enum: admin, member | Yes |  |
 | `member_count` | integer | Yes |  |
+| `app_id` | string,null | Yes |  |
 
 ## Security
 
