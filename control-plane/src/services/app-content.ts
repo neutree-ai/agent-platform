@@ -1,7 +1,7 @@
 // What an application publishes for its users' agents (/apps/v1/prompts,
 // /apps/v1/skills).
 //
-// It belongs to the application's owner account (migrations/152_app_owners.sql)
+// It belongs to the application's owner account (migrations/153_app_owners.sql)
 // and is shared with the application's team, so the application's users, and
 // whoever else is in that team, can use it. An application names its content
 // by its own names, which only have to be unique within the application.

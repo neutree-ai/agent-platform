@@ -76,7 +76,7 @@ export async function upsertAppUser(
   return { user, created }
 }
 
-/** The id of the application's own team (migrations/151_app_teams.sql). */
+/** The id of the application's own team (migrations/152_app_teams.sql). */
 export async function getAppTeamId(clientId: string): Promise<string | null> {
   const { rows } = await pool.query('SELECT id FROM teams WHERE app_id = $1', [clientId])
   return (rows[0]?.id as string) ?? null
@@ -85,7 +85,7 @@ export async function getAppTeamId(clientId: string): Promise<string | null> {
 /**
  * Create the application's team, named after it, with whoever registered the
  * application as its admin, and the account the application owns its content
- * under (migrations/152_app_owners.sql), as a member. Runs in the transaction
+ * under (migrations/153_app_owners.sql), as a member. Runs in the transaction
  * that creates the application; returns the team's id.
  */
 export async function createAppAccounts(
