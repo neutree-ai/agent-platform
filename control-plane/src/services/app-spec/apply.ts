@@ -8,7 +8,7 @@
 
 import { getAppOwnerId, mcpOriginsTakenByOthers, setClientMcpOrigins } from '../db/app-users'
 import { pool } from '../db/pool'
-import { createTemplate, createTemplateVersion, deleteTemplate } from '../db/templates'
+import { deleteTemplate, insertTemplate, insertTemplateVersion } from '../db/templates'
 import {
   type ResolvedAgent,
   type ResolvedSpec,
@@ -143,8 +143,8 @@ export async function applyAppSpec(
       return { version: current.version, hash, changed: false, plan: entries }
     }
     const nextVersion = (current?.version ?? 0) + 1
-    if (opts.dryRun) return { version: nextVersion, hash, changed: true, plan: entries }
 
+    // Checked before a dry run returns, so its plan is one the apply accepts.
     const dropped = existing.filter((a) => !resolved.agents[a.name])
     if (dropped.length > 0 && !opts.prune) {
       throw new SpecConflictError(
@@ -157,47 +157,65 @@ export async function applyAppSpec(
         `MCP servers already declared by another application: ${taken.join(', ')}`,
       )
     }
+    if (opts.dryRun) return { version: nextVersion, hash, changed: true, plan: entries }
 
     // First, so a workspace that can't be deleted yet stops the apply early.
+    // Deleting workspaces reaches outside the database, so it can't be part of
+    // the transaction below; an apply that fails after it has only removed
+    // agents the spec no longer declares.
     for (const agent of dropped) await removeAgent(clientId, agent)
 
     const ownerId = await getAppOwnerId(clientId)
-    const byName = new Map(existing.map((a) => [a.name, a]))
-    for (const [name, agent] of Object.entries(resolved.agents)) {
-      let templateId = byName.get(name)?.template_id
-      if (!templateId) {
-        templateId = (await createTemplate(ownerId, name, '')).id
-        await pool.query(
-          'INSERT INTO app_agents (client_id, name, template_id, runtime) VALUES ($1, $2, $3, $4)',
-          [clientId, name, templateId, JSON.stringify(agent.runtime)],
-        )
-      } else {
-        await pool.query('UPDATE app_agents SET runtime = $3 WHERE client_id = $1 AND name = $2', [
-          clientId,
-          name,
-          JSON.stringify(agent.runtime),
-        ])
-      }
-      // A new agent has no version yet; an existing one gets one when its template changes.
-      const before = current?.resolved.agents[name]?.template
-      if (!before || canonicalJson(before) !== canonicalJson(agent.template)) {
-        await createTemplateVersion(templateId, {
-          ...agent.template,
-          commands: agent.template.commands.map((c, i) => ({ ...c, sort_order: i })),
-          schedules: agent.template.schedules.map((s, i) => ({ ...s, sort_order: i })),
-        })
-      }
-    }
-
     const locked = structuredClone(document) as { agents: Record<string, { prompt?: string }> }
     for (const [name, prompt] of Object.entries(promptLocks)) locked.agents[name].prompt = prompt
 
-    await setClientMcpOrigins(clientId, resolved.mcp_origins)
-    await pool.query(
-      `INSERT INTO app_specs (client_id, version, hash, document, resolved)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [clientId, nextVersion, hash, JSON.stringify(locked), JSON.stringify(resolved)],
-    )
+    // The agents, their template versions, the MCP origins and the spec are
+    // written together: a workspace is never created from an agent whose
+    // template has no version yet.
+    const tx = await pool.connect()
+    try {
+      await tx.query('BEGIN')
+      const byName = new Map(existing.map((a) => [a.name, a]))
+      for (const [name, agent] of Object.entries(resolved.agents)) {
+        let templateId = byName.get(name)?.template_id
+        if (!templateId) {
+          templateId = await insertTemplate(tx, ownerId, name, '')
+          await tx.query(
+            'INSERT INTO app_agents (client_id, name, template_id, runtime) VALUES ($1, $2, $3, $4)',
+            [clientId, name, templateId, JSON.stringify(agent.runtime)],
+          )
+        } else {
+          await tx.query('UPDATE app_agents SET runtime = $3 WHERE client_id = $1 AND name = $2', [
+            clientId,
+            name,
+            JSON.stringify(agent.runtime),
+          ])
+        }
+        // A new agent has no version yet; an existing one gets one when its template changes.
+        const before = current?.resolved.agents[name]?.template
+        if (!before || canonicalJson(before) !== canonicalJson(agent.template)) {
+          await insertTemplateVersion(tx, templateId, {
+            ...agent.template,
+            commands: agent.template.commands.map((c, i) => ({ ...c, sort_order: i })),
+            schedules: agent.template.schedules.map((s, i) => ({ ...s, sort_order: i })),
+          })
+        }
+      }
+
+      await setClientMcpOrigins(tx, clientId, resolved.mcp_origins)
+      await tx.query(
+        `INSERT INTO app_specs (client_id, version, hash, document, resolved)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [clientId, nextVersion, hash, JSON.stringify(locked), JSON.stringify(resolved)],
+      )
+      await tx.query('COMMIT')
+    } catch (e) {
+      await tx.query('ROLLBACK')
+      throw e
+    } finally {
+      tx.release()
+    }
+
     // Workspaces that are idle take the change now; the sweep gets the rest.
     convergeAppWorkspaces(clientId).catch((e) =>
       console.error(`[app-spec] converging ${clientId} failed:`, e),
