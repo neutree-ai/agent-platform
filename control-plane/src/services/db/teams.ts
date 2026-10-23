@@ -8,7 +8,7 @@ export interface Team {
   created_by: string
   created_at: Date
   updated_at: Date
-  /** Set on an application's own team (migrations/151_app_teams.sql). */
+  /** Set on an application's own team (migrations/152_app_teams.sql). */
   app_id: string | null
 }
 
