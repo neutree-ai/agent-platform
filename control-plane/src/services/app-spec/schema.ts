@@ -102,11 +102,25 @@ const McpServer = z.strictObject({
   identify_caller: z.boolean().default(false),
 })
 
+// A folder's name is where it is mounted, /mnt/afs/<name>, and afs takes
+// names of at most 48 characters.
+const FolderName = Name.max(48, 'must be at most 48 characters')
+
+const FolderPermission = z.enum(['read_write', 'read_only'])
+
+// A folder each user gets: its workspace for `owner` owns it, and its
+// workspaces for the member agents mount it too.
+const SharedFolder = z.strictObject({
+  owner: Name,
+  members: z.record(Name, FolderPermission).optional(),
+})
+
 const AppSpecSchema = z
   .strictObject({
     apiVersion: z.literal(API_VERSION),
     mcp_servers: z.record(Name, McpServer).optional(),
     agents: z.record(Name, Agent),
+    shared_folders: z.record(FolderName, SharedFolder).optional(),
     // Reserved for capabilities layered on top of the agents.
     extensions: z.strictObject({}).optional(),
   })
@@ -128,6 +142,32 @@ const AppSpecSchema = z
             code: 'custom',
             path: ['agents', name, 'calls'],
             message: `${callee} is not another agent of the spec`,
+          })
+        }
+      }
+    }
+    for (const [name, folder] of Object.entries(spec.shared_folders ?? {})) {
+      if (!spec.agents[folder.owner]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['shared_folders', name, 'owner'],
+          message: `${folder.owner} is not an agent of the spec`,
+        })
+      }
+      for (const member of Object.keys(folder.members ?? {})) {
+        // The owner always has the folder read-write; listing it again could
+        // only contradict that.
+        if (member === folder.owner) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['shared_folders', name, 'members', member],
+            message: 'is the owner',
+          })
+        } else if (!spec.agents[member]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['shared_folders', name, 'members', member],
+            message: 'not an agent of the spec',
           })
         }
       }

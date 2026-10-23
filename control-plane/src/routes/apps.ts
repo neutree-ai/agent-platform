@@ -449,6 +449,17 @@ const PlanEntrySchema = z
   })
   .openapi('AppSpecPlanEntry')
 
+const FolderPlanEntrySchema = z
+  .object({
+    folder: z.string(),
+    action: z.enum(['create', 'update', 'delete', 'unchanged']),
+    changes: z
+      .array(z.string())
+      .optional()
+      .openapi({ description: 'What an update changes: owner, members' }),
+  })
+  .openapi('AppSpecFolderPlanEntry')
+
 const ApplyResultSchema = z
   .object({
     version: z.number().int().openapi({
@@ -459,6 +470,7 @@ const ApplyResultSchema = z
       .boolean()
       .openapi({ description: 'False when the spec resolves to the one already in force' }),
     plan: z.array(PlanEntrySchema),
+    shared_folders: z.array(FolderPlanEntrySchema),
   })
   .openapi('AppSpecApplyResult')
 
@@ -480,7 +492,8 @@ const putSpecRoute = createRoute({
     'References to prompts, skills, providers and environments are resolved now, and a ' +
     'prompt without a version is pinned to its current one. Applying a spec that resolves ' +
     'to the one in force changes nothing. `dry_run` returns the plan only; a spec that ' +
-    'drops agents is refused unless `prune` is given, which deletes them.',
+    'drops agents is refused unless `prune` is given, which deletes them. So is one that ' +
+    "drops a shared folder or gives it another owner: `prune` revokes each user's copy.",
   security: [{ appClientAuth: [] }],
   request: {
     query: z.object({ dry_run: FlagQuery, prune: FlagQuery }),
@@ -495,7 +508,8 @@ const putSpecRoute = createRoute({
       content: { 'application/json': { schema: SpecErrorSchema } },
     },
     409: {
-      description: 'The spec drops agents without prune, or declares a taken MCP origin',
+      description:
+        'The spec drops agents or revokes shared folders without prune, or declares a taken MCP origin',
       content: { 'application/json': { schema: ErrorSchema } },
     },
   },

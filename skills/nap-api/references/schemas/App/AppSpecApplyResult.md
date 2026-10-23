@@ -10,4 +10,5 @@
 | `hash` | string | Yes |  |
 | `changed` | boolean | Yes | False when the spec resolves to the one already in force |
 | `plan` | AppSpecPlanEntry[] | Yes |  |
+| `shared_folders` | AppSpecFolderPlanEntry[] | Yes |  |
 

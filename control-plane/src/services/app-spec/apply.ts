@@ -9,6 +9,7 @@
 import { getAppOwnerId, mcpOriginsTakenByOthers, setClientMcpOrigins } from '../db/app-users'
 import { pool } from '../db/pool'
 import { deleteTemplate, insertTemplate, insertTemplateVersion } from '../db/templates'
+import { type FolderPlanEntry, planFolders, revokedFolders } from './folders'
 import {
   type ResolvedAgent,
   type ResolvedSpec,
@@ -32,9 +33,13 @@ interface ApplyResult {
   /** False when the spec resolved to the one already in force. */
   changed: boolean
   plan: PlanEntry[]
+  shared_folders: FolderPlanEntry[]
 }
 
-/** The spec drops agents and `prune` wasn't given, or it claims taken origins. */
+/**
+ * The spec drops agents or revokes folders and `prune` wasn't given, or it
+ * claims taken origins.
+ */
 export class SpecConflictError extends Error {}
 
 interface StoredSpec {
@@ -121,8 +126,8 @@ async function removeAgent(clientId: string, agent: AppAgentRow): Promise<void> 
 /**
  * Plan the spec and, unless `dryRun`, apply it. Applies of one application
  * run one at a time. Throws SpecError when a reference doesn't resolve, and
- * SpecConflictError when the spec drops agents without `prune` or declares an
- * MCP origin another application has.
+ * SpecConflictError when the spec drops agents or revokes folders without
+ * `prune`, or declares an MCP origin another application has.
  */
 export async function applyAppSpec(
   clientId: string,
@@ -138,9 +143,19 @@ export async function applyAppSpec(
     const current = await getCurrentSpec(clientId)
     const existing = await listAppAgents(clientId)
     const entries = plan(current, existing, resolved)
+    const folderEntries = planFolders(
+      current?.resolved.shared_folders ?? {},
+      resolved.shared_folders ?? {},
+    )
 
     if (current && current.hash === hash) {
-      return { version: current.version, hash, changed: false, plan: entries }
+      return {
+        version: current.version,
+        hash,
+        changed: false,
+        plan: entries,
+        shared_folders: folderEntries,
+      }
     }
     const nextVersion = (current?.version ?? 0) + 1
 
@@ -151,13 +166,27 @@ export async function applyAppSpec(
         `The spec drops agents ${dropped.map((a) => a.name).join(', ')}; apply it with prune to delete them`,
       )
     }
+    const revoked = revokedFolders(folderEntries)
+    if (revoked.length > 0 && !opts.prune) {
+      throw new SpecConflictError(
+        `The spec drops or gives another owner to shared folders ${revoked.join(', ')}; apply it with prune to revoke each user's copy`,
+      )
+    }
     const taken = await mcpOriginsTakenByOthers(clientId, resolved.mcp_origins)
     if (taken.length > 0) {
       throw new SpecConflictError(
         `MCP servers already declared by another application: ${taken.join(', ')}`,
       )
     }
-    if (opts.dryRun) return { version: nextVersion, hash, changed: true, plan: entries }
+    if (opts.dryRun) {
+      return {
+        version: nextVersion,
+        hash,
+        changed: true,
+        plan: entries,
+        shared_folders: folderEntries,
+      }
+    }
 
     // First, so a workspace that can't be deleted yet stops the apply early.
     // Deleting workspaces reaches outside the database, so it can't be part of
@@ -220,7 +249,13 @@ export async function applyAppSpec(
     convergeAppWorkspaces(clientId).catch((e) =>
       console.error(`[app-spec] converging ${clientId} failed:`, e),
     )
-    return { version: nextVersion, hash, changed: true, plan: entries }
+    return {
+      version: nextVersion,
+      hash,
+      changed: true,
+      plan: entries,
+      shared_folders: folderEntries,
+    }
   } finally {
     await lock.query('SELECT pg_advisory_unlock(hashtext($1))', [`app-spec:${clientId}`])
     lock.release()

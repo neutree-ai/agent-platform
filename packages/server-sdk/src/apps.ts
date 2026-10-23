@@ -48,6 +48,13 @@ export interface SpecPlanEntry {
   changes?: string[]
 }
 
+export interface SpecFolderPlanEntry {
+  folder: string
+  action: 'create' | 'update' | 'delete' | 'unchanged'
+  /** For an update: what changes, `owner` and/or `members`. */
+  changes?: string[]
+}
+
 export interface SpecApplyResult {
   /** The version in force after the apply, or that a dry run would create. */
   version: number
@@ -55,6 +62,7 @@ export interface SpecApplyResult {
   /** False when the spec resolves to the one already in force. */
   changed: boolean
   plan: SpecPlanEntry[]
+  shared_folders: SpecFolderPlanEntry[]
 }
 
 export interface AppliedSpec {
@@ -240,7 +248,8 @@ export class AppClient {
   /**
    * Apply the spec: an object, or YAML text. `dryRun` returns the plan only;
    * a spec that drops agents is refused unless `prune` is given, which
-   * deletes them with their users' workspaces.
+   * deletes them with their users' workspaces. So is one that drops a shared
+   * folder or gives it another owner: `prune` revokes each user's copy.
    */
   async applySpec(
     spec: Record<string, unknown> | string,
