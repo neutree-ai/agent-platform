@@ -67,11 +67,18 @@ agents:
   diver:
     runtime: { agent_type: codex }
     model: { provider: deepseek, name: deepseek-v4 }
+shared_folders:
+  notes:                   # mounted at /mnt/afs/notes
+    owner: study           # the user's study workspace owns it
+    members:
+      diver: read_write    # or read_only
 ```
 
 An agent named in some agent's `calls` is reachable by its name from any of the same user's workspaces; `calls` doesn't restrict who calls it.
 
-Publishing the same prompt text or skill package again keeps its version, and applying a spec that resolves to the one in force changes nothing, so the deploy step can run them all every time. `applySpec(spec, { dryRun: true })` returns the plan alone; a spec that drops an agent needs `{ prune: true }`, which deletes it with its users' workspaces.
+Each user gets one copy of each shared folder, owned by the user's workspace for `owner` and mounted in the user's workspaces for the `members`. It is made once the owner's workspace exists, and each member is added once its workspace does, whichever you ensure first. Members the spec stops listing lose the folder, and so does any workspace it was granted to some other way. A folder that can't be set up shows in the `blocked` reason of the workspace it is about.
+
+Publishing the same prompt text or skill package again keeps its version, and applying a spec that resolves to the one in force changes nothing, so the deploy step can run them all every time. `applySpec(spec, { dryRun: true })` returns the plan alone; a spec that drops an agent needs `{ prune: true }`, which deletes it with its users' workspaces. So does a spec that drops a shared folder or gives it another owner: `prune` revokes each user's copy, contents and all.
 
 Each user gets a workspace per agent the first time you ask for it:
 

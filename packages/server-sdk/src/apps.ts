@@ -81,7 +81,7 @@ export interface SpecStatus {
     workspaces: number
     /** Workspaces on the agent's latest template version, with its current runtime. */
     up_to_date: number
-    /** Workspaces that can't follow the agent; `listAgents` says why. */
+    /** Workspaces that can't follow the agent or have their shared folders; `listAgents` says why. */
     blocked: number
   }>
 }
@@ -92,7 +92,10 @@ export interface AgentWorkspace {
   status: string
   template_version: number
   up_to_date: boolean
-  /** Why it can't follow its agent (skills the user can't see), while it can't. */
+  /**
+   * Why it can't follow its agent (skills the user can't see) or have its
+   * shared folders, while it can't.
+   */
   blocked: string | null
 }
 

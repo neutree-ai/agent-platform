@@ -611,7 +611,8 @@ const specStatusRoute = createRoute({
                   workspaces: z.number().int(),
                   up_to_date: z.number().int(),
                   blocked: z.number().int().openapi({
-                    description: "Workspaces that can't follow the agent; see each user's agents",
+                    description:
+                      "Workspaces that can't follow the agent or have their shared folders; see each user's agents",
                   }),
                 }),
               ),
@@ -646,7 +647,8 @@ const AgentWorkspaceSchema = z
       description: "On the agent's latest template version, with its current runtime",
     }),
     blocked: z.string().nullable().openapi({
-      description: "Why the workspace can't follow its agent, while it can't",
+      description:
+        "Why the workspace can't follow its agent or have its shared folders, while it can't",
     }),
   })
   .openapi('AppAgentWorkspace')
@@ -685,6 +687,7 @@ const ensureAgentRoute = createRoute({
   description:
     "Idempotent. Creates the workspace from the agent's template on the first call; " +
     'afterwards returns it, bringing it up to date first when it is behind and idle. ' +
+    "Either way, the user's shared folders are brought in line with the workspaces it has. " +
     'Call the API as the user (see the token route) to chat with it.',
   security: [{ appClientAuth: [] }],
   request: { params: AgentParam },
