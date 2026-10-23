@@ -6,7 +6,7 @@
 // layout are materialized into the workspace's own rows here.
 
 import { getTemplateVersion } from './db/templates'
-import { updateWorkspaceConfig } from './db/workspaces'
+import { getWorkspaceConfig, updateWorkspaceConfig } from './db/workspaces'
 import { skillRepo } from './skills-composition'
 import { materializeTemplateLayout, reconcileTemplateLayout } from './template-layout'
 import { materializeTemplateSchedules, reconcileTemplateSchedules } from './template-schedules'
@@ -58,8 +58,21 @@ export async function syncWorkspaceToTemplate(
   const notVisible = await skillsNotVisible(tv?.skill_ids ?? [], userId)
   if (notVisible.length > 0) return { notVisible }
 
+  // Only the skills the template brought are replaced: the ones the version
+  // the workspace is on lists go, the new version's come. Skills added to
+  // the workspace itself stay.
+  const config = await getWorkspaceConfig(workspaceId)
+  const from = config?.template_version
+    ? await getTemplateVersion(templateId, config.template_version)
+    : null
+  const fromTemplate = new Set(from?.skill_ids ?? [])
+  const own = (await skillRepo.getWorkspaceSkillIds(workspaceId)).filter(
+    (id) => !fromTemplate.has(id),
+  )
+  const skillIds = [...new Set([...own, ...(tv?.skill_ids ?? [])])]
+
   await updateWorkspaceConfig(workspaceId, { template_version: version })
-  if (tv) await skillRepo.setWorkspaceSkills(workspaceId, tv.skill_ids)
+  await skillRepo.setWorkspaceSkills(workspaceId, skillIds)
   // Template schedules are matched by name: new ones are added, removed ones
   // dropped, changed ones refreshed keeping the user's on/off toggle.
   await reconcileTemplateSchedules({ ...target, enabledOverrides: target.scheduleOverrides })
