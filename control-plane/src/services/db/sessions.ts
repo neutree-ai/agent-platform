@@ -544,7 +544,7 @@ interface UserActivitySummary {
    * Per-day counts over the last `days` days, oldest → today. Stat cards
    * and the heatmap both consume this same array.
    *
-   * `interactions` follows the platform's matview formula: count of `user`
+   * `interactions` follows the platform's admin-stats formula: count of `user`
    * messages plus the sum of session_event blocks attached to `assistant`
    * messages — same nomenclature as the admin dashboard so per-user and
    * platform-wide numbers add up.

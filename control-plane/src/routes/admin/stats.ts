@@ -155,7 +155,7 @@ stats.get('/mcp-usage', async (c) => {
 // that grow linearly with the append-only ledger, so reading the pre-rolled-up
 // snapshots (refreshed on a cadence by the scheduler's admin-stats-refresh
 // cron) keeps the dashboard cheap as the ledger grows. The user/workspace
-// names are joined live (small PK joins) so the matviews stay name-free.
+// names are joined live (small PK joins) so the snapshots stay name-free.
 const TOKEN_SINCE = "(current_date - interval '29 days')::date"
 const TOKEN_ALL_IN =
   '(s.input_tokens + s.output_tokens + s.cache_read_tokens + s.cache_creation_tokens)'

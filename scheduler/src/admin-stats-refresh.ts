@@ -15,17 +15,18 @@ export async function registerAdminStatsRefreshWorker(boss: PgBoss): Promise<voi
     return
   }
 
-  const queueOptions = {
-    // One queued or active job per queue prevents a backlog of redundant ticks.
-    policy: 'stately' as const,
-    retryLimit: 0,
-    expireInSeconds: 5 * 60,
-    retentionSeconds: 24 * 3600,
-  }
   for (const [name, cron, fullRebuild] of [
     [QUEUE_NAME, refreshCron, false],
     [REBUILD_QUEUE_NAME, rebuildCron, true],
   ] as const) {
+    const queueOptions = {
+      // One queued or active job per queue prevents a backlog of redundant ticks.
+      policy: 'stately' as const,
+      retryLimit: 0,
+      // A rebuild rescans the whole ledger and message history.
+      expireInSeconds: fullRebuild ? 2 * 3600 : 5 * 60,
+      retentionSeconds: 24 * 3600,
+    }
     await boss.createQueue(name, queueOptions).catch(() => {})
     await boss.updateQueue(name, queueOptions).catch(() => {})
     await boss.schedule(name, cron, {}, { tz: 'UTC' })

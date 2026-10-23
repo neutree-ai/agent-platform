@@ -36,7 +36,7 @@ const WS_STATUSES = new Set(['running', 'stopped', 'error'])
 
 // Global, paginated, sortable, searchable workspace list across all owners.
 // Read-only fleet view: owner, status, agent type, and usage aggregates
-// (interactions/tokens from the admin_* matviews, last activity from sessions).
+// (interactions/tokens from the admin_* snapshots, last activity from sessions).
 // Deliberately exposes NO session/message content — admin privacy red line.
 workspaces.get('/', async (c) => {
   const q = (c.req.query('q') ?? '').trim()

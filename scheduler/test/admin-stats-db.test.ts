@@ -44,7 +44,7 @@ test(
       }
     }
     for (const name of (await readdir(migrations)).filter((name) => name.endsWith('.sql')).sort()) {
-      if (name < '149_') await migrate(name)
+      if (name < '151_') await migrate(name)
     }
     await fixture.query(`
     INSERT INTO users (id, username, display_name)
@@ -120,7 +120,7 @@ test(
       const before = await snapshot()
       await fixture.query('REFRESH MATERIALIZED VIEW admin_token_daily_stats WITH NO DATA')
       before.set('admin_token_daily_stats', [])
-      await migrate('149_incremental_admin_stats.sql')
+      await migrate('151_incremental_admin_stats.sql')
       assert.deepEqual(await snapshot(), before)
       assert.equal(
         (await fixture.query('SELECT count(*)::int AS n FROM admin_stats_watermark')).rows[0].n,
