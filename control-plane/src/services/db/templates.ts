@@ -350,7 +350,7 @@ export async function getLatestTemplateVersion(
   return getTemplateVersion(templateId, rows[0].latest_version)
 }
 
-export interface TemplateVersionConfig {
+interface TemplateVersionConfig {
   agent_type?: string
   system_prompt?: string
   prompt_id?: string | null
