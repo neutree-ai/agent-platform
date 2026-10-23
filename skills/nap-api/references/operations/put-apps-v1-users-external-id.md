@@ -4,7 +4,7 @@
 **Provision a user of the application, or update its name and email**
 **Operation ID:** `put--apps-v1-users-{external_id}`
 
-Idempotent. The user belongs to the calling application, has no password and cannot sign in to NAP; it joins the teams the application declares. Call it whenever the user signs in to the application.
+Idempotent. The user belongs to the calling application, has no password and cannot sign in to NAP; it joins the application's team. Call it whenever the user signs in to the application.
 
 ## Parameters
 
