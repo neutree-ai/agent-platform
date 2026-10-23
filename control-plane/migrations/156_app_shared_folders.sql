@@ -2,11 +2,11 @@
 -- declares them (shared_folders). A folder is an afs share owned by the
 -- user's workspace for the folder's owner agent; a row here marks a share the
 -- spec made, so a folder the spec drops is revoked and no other share is
--- touched. A share that goes away (its owner workspace deleted, or revoked by
--- hand) takes its row with it, and is made again while the spec declares it.
+-- touched. Its application is its owner workspace's (app_workspaces). A share
+-- that goes away (its owner workspace deleted, or revoked by hand) takes its
+-- row with it, and is made again while the spec declares it.
 CREATE TABLE IF NOT EXISTS public.app_shared_folders (
     share_id text PRIMARY KEY REFERENCES public.afs_shares(id) ON DELETE CASCADE,
-    client_id text NOT NULL REFERENCES public.oauth_clients(id) ON DELETE CASCADE,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 

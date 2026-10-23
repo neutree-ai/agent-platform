@@ -8,6 +8,7 @@
 // ambiguous. A prompt without a version is pinned to its current one.
 
 import { createHash } from 'node:crypto'
+import type { AfsPermission } from '../db/afs-shares'
 import { getAppOwnerId } from '../db/app-users'
 import { listVisibleToUser as listVisibleEnvironments } from '../db/environments'
 import { listVisibleToUser as listVisibleProviders } from '../db/model-providers'
@@ -58,13 +59,11 @@ export interface ResolvedAgent {
   runtime: AgentRuntime
 }
 
-type FolderPermission = 'read_write' | 'read_only'
-
 /** A folder each user gets, by agent. */
 export interface ResolvedFolder {
   owner: string
   /** The other agents whose workspaces mount it. */
-  members: Record<string, FolderPermission>
+  members: Record<string, AfsPermission>
 }
 
 export interface ResolvedSpec {

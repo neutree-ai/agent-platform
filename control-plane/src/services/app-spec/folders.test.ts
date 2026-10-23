@@ -69,7 +69,13 @@ describe('planUserFolders', () => {
 
     expect(plan).toEqual([
       { kind: 'create', folder: 'notes', owner_workspace_id: 'ws-main' },
-      { kind: 'grant', folder: 'notes', workspace_id: 'ws-scout', permission: 'read_only' },
+      {
+        kind: 'grant',
+        folder: 'notes',
+        share: null,
+        workspace_id: 'ws-scout',
+        permission: 'read_only',
+      },
     ])
   })
 
@@ -88,7 +94,13 @@ describe('planUserFolders', () => {
     )
 
     expect(plan).toEqual([
-      { kind: 'grant', folder: 'notes', workspace_id: 'ws-diver', permission: 'read_write' },
+      {
+        kind: 'grant',
+        folder: 'notes',
+        share: share('notes', 'main'),
+        workspace_id: 'ws-diver',
+        permission: 'read_write',
+      },
     ])
   })
 
@@ -131,9 +143,15 @@ describe('planUserFolders', () => {
     )
 
     expect(plan).toEqual([
-      { kind: 'grant', folder: 'notes', workspace_id: 'ws-scout', permission: 'read_write' },
-      { kind: 'remove', folder: 'notes', workspace_id: 'ws-diver' },
-      { kind: 'remove', folder: 'notes', workspace_id: 'ws-other' },
+      {
+        kind: 'grant',
+        folder: 'notes',
+        share: share('notes', 'main'),
+        workspace_id: 'ws-scout',
+        permission: 'read_write',
+      },
+      { kind: 'remove', folder: 'notes', share: share('notes', 'main'), workspace_id: 'ws-diver' },
+      { kind: 'remove', folder: 'notes', share: share('notes', 'main'), workspace_id: 'ws-other' },
     ])
   })
 
@@ -193,7 +211,13 @@ describe('planUserFolders', () => {
       { kind: 'revoke', folder: 'notes', share: notes },
       { kind: 'revoke', folder: 'logs', share: logs },
       { kind: 'create', folder: 'notes', owner_workspace_id: 'ws-diver' },
-      { kind: 'grant', folder: 'notes', workspace_id: 'ws-main', permission: 'read_only' },
+      {
+        kind: 'grant',
+        folder: 'notes',
+        share: null,
+        workspace_id: 'ws-main',
+        permission: 'read_only',
+      },
     ])
   })
 })
