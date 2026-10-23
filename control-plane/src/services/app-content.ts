@@ -9,6 +9,7 @@
 // Publishing the same content again is a no-op: a prompt gets a new version
 // only when its text changes, a skill only when its package bytes do.
 
+import { deleteAppAgents } from './app-spec/apply'
 import { getAppOwnerId, getAppTeamId } from './db/app-users'
 import { pool } from './db/pool'
 import { createPrompt, deletePrompt, setPromptGrants, updatePrompt } from './db/prompts'
@@ -180,9 +181,14 @@ export async function deleteAppSkill(clientId: string, name: string): Promise<bo
   return true
 }
 
-/** Delete everything the application published, before the application itself. */
+/**
+ * Delete everything the application published, and its agents' templates,
+ * before the application itself.
+ */
 export async function deleteAppContent(clientId: string): Promise<void> {
   const ownerId = await getAppOwnerId(clientId)
+  // Templates go first: their current versions hold the skills.
+  await deleteAppAgents(clientId)
   const { rows } = await pool.query('SELECT id FROM skills WHERE user_id = $1', [ownerId])
   for (const { id } of rows as { id: string }[]) await skillsService.remove(ownerId, id)
   // Prompts go with the owner account (ON DELETE CASCADE).
