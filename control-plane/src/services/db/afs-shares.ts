@@ -1,6 +1,6 @@
 import { generateId, pool } from './pool'
 
-interface AfsShare {
+export interface AfsShare {
   id: string
   owner_workspace_id: string
   name: string
@@ -9,7 +9,7 @@ interface AfsShare {
   created_at: Date
 }
 
-type AfsPermission = 'read_only' | 'read_write'
+export type AfsPermission = 'read_only' | 'read_write'
 
 interface AfsShareMember {
   share_id: string

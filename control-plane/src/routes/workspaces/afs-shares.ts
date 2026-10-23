@@ -2,22 +2,16 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
 import { canAccessWorkspace } from '../../lib/workspace-access'
 import {
-  afsEnvForWorkspace,
-  createDir,
-  ensureDefaultFs,
-  mountAtWorkspace,
-  revokeDir,
-  unmountAtWorkspace,
-} from '../../services/afs'
+  ShareEnvironmentError,
+  ensureShare,
+  grantShare,
+  removeShareMember,
+  revokeShare,
+} from '../../services/afs-shares'
 import {
-  addAfsShareMember,
-  createAfsShare,
-  deleteAfsShare,
   getAfsShareById,
-  getAfsShareByName,
   listAfsShareMembers,
   listAfsSharesVisibleTo,
-  removeAfsShareMember,
 } from '../../services/db/afs-shares'
 import { getWorkspace } from '../../services/db/workspaces'
 
@@ -160,34 +154,8 @@ afsShares.openapi(
     const { name } = c.req.valid('json')
 
     try {
-      let share = await getAfsShareByName(id, name)
-      // Creating a share takes three writes: the record, the owner's mount, and
-      // the owner's membership. A request that failed after the first leaves a
-      // record with no mount behind it, so an existing record is only complete
-      // once the owner is a member; until then a retry picks up where it stopped.
-      let ownerIsMember = false
-      if (share) {
-        const members = await listAfsShareMembers(share.id)
-        ownerIsMember = members.some((m) => m.workspace_id === id)
-      }
-      if (!share || !ownerIsMember) {
-        const afsEnv = await afsEnvForWorkspace(id)
-        if (!share) {
-          await ensureDefaultFs(afsEnv)
-          const dir = await createDir(afsEnv)
-          share = await createAfsShare(id, name, dir.id, dir.accessKey)
-        } else {
-          // The earlier attempt may have mounted before it failed, and
-          // afs-fuse's Mount RPC rejects duplicate mountpoints.
-          try {
-            await unmountAtWorkspace(afsEnv, id, name)
-          } catch {
-            // Best-effort — usually there is nothing mounted.
-          }
-        }
-        await mountAtWorkspace(afsEnv, id, share.afs_dir_id, share.access_key, name, false)
-        await addAfsShareMember(share.id, id, 'read_write')
-      }
+      // The owner's pod must be running: its folder is mounted before this returns.
+      const share = await ensureShare(id, name, { mountNow: true })
       return c.json(
         {
           id: share.id,
@@ -241,21 +209,7 @@ afsShares.openapi(
     if (!share) return c.json({ error: 'Share not found' }, 404)
     if (share.owner_workspace_id !== id) return c.json({ error: 'Not owner' }, 403)
 
-    const afsEnv = await afsEnvForWorkspace(id)
-    const members = await listAfsShareMembers(share.id)
-    try {
-      await revokeDir(afsEnv, share.afs_dir_id, share.access_key)
-    } catch {
-      // Best-effort: still clean up DB + local mounts below.
-    }
-    for (const m of members) {
-      try {
-        await unmountAtWorkspace(afsEnv, m.workspace_id, share.name)
-      } catch {
-        // Mount may already be gone after revoke.
-      }
-    }
-    await deleteAfsShare(share.id)
+    await revokeShare(share)
     return c.json({ success: true }, 200)
   },
 )
@@ -362,37 +316,11 @@ afsShares.openapi(
       // Keep the same scope rule as grant_access MCP tool: same-user only.
       return c.json({ error: 'Target workspace belongs to another user' }, 403)
     }
-    // afs sharing scope is one environment: a share's dir + storage live in the
-    // owner's environment, so a member on a different environment could never
-    // mount it. Reject cross-environment grants with a clear reason.
-    const afsEnv = await afsEnvForWorkspace(id)
-    const targetEnv = await afsEnvForWorkspace(targetId)
-    if (targetEnv.environmentId !== afsEnv.environmentId) {
-      return c.json({ error: 'Target workspace is on a different environment' }, 400)
-    }
-
     try {
-      // If target is already a member, re-mount with the (possibly changed)
-      // permission. afs-fuse's Mount RPC rejects duplicate mountpoints, so
-      // we unmount first.
-      const existing = await listAfsShareMembers(share.id)
-      if (existing.some((m) => m.workspace_id === targetId)) {
-        try {
-          await unmountAtWorkspace(afsEnv, targetId, share.name)
-        } catch {
-          // Best-effort — continue even if stale unmount fails.
-        }
-      }
-      await mountAtWorkspace(
-        afsEnv,
-        targetId,
-        share.afs_dir_id,
-        share.access_key,
-        share.name,
-        readonly,
-      )
-      await addAfsShareMember(share.id, targetId, readonly ? 'read_only' : 'read_write')
+      // The target's pod must be running: the folder is mounted before this returns.
+      await grantShare(share, targetId, readonly ? 'read_only' : 'read_write', { mountNow: true })
     } catch (e) {
+      if (e instanceof ShareEnvironmentError) return c.json({ error: e.message }, 400)
       return c.json({ error: `afs mount failed: ${(e as Error).message}` }, 502)
     }
 
@@ -448,14 +376,7 @@ afsShares.openapi(
       return c.json({ error: 'Owner cannot leave their own share; revoke it instead' }, 403)
     }
 
-    const removed = await removeAfsShareMember(share.id, memberWorkspaceId)
-    if (removed) {
-      try {
-        await unmountAtWorkspace(await afsEnvForWorkspace(id), memberWorkspaceId, share.name)
-      } catch {
-        // Best-effort.
-      }
-    }
+    const removed = await removeShareMember(share, memberWorkspaceId)
     return c.json({ success: removed }, 200)
   },
 )
