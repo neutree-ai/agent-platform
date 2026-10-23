@@ -1,5 +1,15 @@
 export { AppClient } from './apps.js'
-export type { AppClientOptions, AppUser } from './apps.js'
+export type {
+  AgentWorkspace,
+  AppClientOptions,
+  AppliedSpec,
+  AppPrompt,
+  AppSkill,
+  AppUser,
+  SpecApplyResult,
+  SpecPlanEntry,
+  SpecStatus,
+} from './apps.js'
 export { CALLER_HEADER, CallerVerifier } from './caller.js'
 export type { Caller, CallerVerifierOptions } from './caller.js'
 export { NapClient, NapError, workspacePath } from './client.js'
