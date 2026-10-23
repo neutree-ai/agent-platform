@@ -188,11 +188,18 @@ export async function mcpOriginsTakenByOthers(
   return rows.map((r) => r.origin as string)
 }
 
-/** Replace the application's declared MCP origins. Check them with mcpOriginsTakenByOthers first. */
-export async function setClientMcpOrigins(clientId: string, origins: string[]): Promise<void> {
-  await pool.query('DELETE FROM oauth_client_mcp_origins WHERE client_id = $1', [clientId])
+/**
+ * Replace the application's declared MCP origins, inside the caller's
+ * transaction. Check them with mcpOriginsTakenByOthers first.
+ */
+export async function setClientMcpOrigins(
+  client: PoolClient,
+  clientId: string,
+  origins: string[],
+): Promise<void> {
+  await client.query('DELETE FROM oauth_client_mcp_origins WHERE client_id = $1', [clientId])
   if (origins.length > 0) {
-    await pool.query(
+    await client.query(
       `INSERT INTO oauth_client_mcp_origins (origin, client_id)
        SELECT unnest($2::text[]), $1`,
       [clientId, origins],

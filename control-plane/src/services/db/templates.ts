@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg'
 import { listWorkspaceCommands } from './commands'
 import { generateId, pool } from './pool'
 import { listSchedulesByWorkspace } from './schedules'
@@ -179,13 +180,25 @@ export async function createTemplate(
   description: string,
   visibility: TemplateVisibility = 'private',
 ): Promise<Template> {
+  const id = await insertTemplate(pool, ownerId, name, description, visibility)
+  return (await getTemplate(id))!
+}
+
+/** Insert a template, through `db` (a transaction's client, or the pool); returns its id. */
+export async function insertTemplate(
+  db: Pick<PoolClient, 'query'>,
+  ownerId: string,
+  name: string,
+  description: string,
+  visibility: TemplateVisibility = 'private',
+): Promise<string> {
   const id = generateId()
-  await pool.query(
+  await db.query(
     `INSERT INTO templates (id, name, description, owner_id, visibility)
      VALUES ($1, $2, $3, $4, $5)`,
     [id, name, description, ownerId, visibility],
   )
-  return (await getTemplate(id))!
+  return id
 }
 
 export async function updateTemplate(
@@ -337,53 +350,55 @@ export async function getLatestTemplateVersion(
   return getTemplateVersion(templateId, rows[0].latest_version)
 }
 
+export interface TemplateVersionConfig {
+  agent_type?: string
+  system_prompt?: string
+  prompt_id?: string | null
+  prompt_version?: number | null
+  /** Stored verbatim — text column. Codex stores TOML here, others JSON. */
+  mcp_config?: string
+  /** Stored verbatim — text column. Codex stores TOML here, others JSON. */
+  agent_settings?: string
+  compute_resources?: Record<string, unknown>
+  provider_id?: string | null
+  model?: string
+  small_model?: string
+  /** p3: skills pinned by UUID. `skill_names` is no longer accepted here. */
+  skill_ids?: string[]
+  /** Explicit command set, written verbatim into the version. */
+  commands?: Array<{
+    name: string
+    type?: 'plain' | 'struct'
+    prompt_id?: string | null
+    content?: string
+    sort_order?: number
+  }>
+  /** Explicit schedule set (recurring cron only), written verbatim. */
+  schedules?: Array<{
+    name: string
+    cron: string
+    timezone?: string
+    prompt?: string
+    prompt_id?: string | null
+    enabled_default?: boolean
+    sort_order?: number
+  }>
+  /**
+   * Snapshot source. With the matching `include_*` flag, the server reads that
+   * workspace's effective state into the new version (one-shot read, no
+   * persisted binding) and it overrides the explicit field for that category.
+   */
+  from_workspace_id?: string
+  include_commands?: boolean
+  include_schedules?: boolean
+  include_layout?: boolean
+  /** Explicit layout link (escape hatch); resolved from the source ws when snapshotting. */
+  layout_id?: string | null
+}
+
 export async function createTemplateVersion(
   templateId: string,
-  config: {
-    agent_type?: string
-    system_prompt?: string
-    prompt_id?: string | null
-    prompt_version?: number | null
-    /** Stored verbatim — text column. Codex stores TOML here, others JSON. */
-    mcp_config?: string
-    /** Stored verbatim — text column. Codex stores TOML here, others JSON. */
-    agent_settings?: string
-    compute_resources?: Record<string, unknown>
-    provider_id?: string | null
-    model?: string
-    small_model?: string
-    /** p3: skills pinned by UUID. `skill_names` is no longer accepted here. */
-    skill_ids?: string[]
-    /** Explicit command set, written verbatim into the version. */
-    commands?: Array<{
-      name: string
-      type?: 'plain' | 'struct'
-      prompt_id?: string | null
-      content?: string
-      sort_order?: number
-    }>
-    /** Explicit schedule set (recurring cron only), written verbatim. */
-    schedules?: Array<{
-      name: string
-      cron: string
-      timezone?: string
-      prompt?: string
-      prompt_id?: string | null
-      enabled_default?: boolean
-      sort_order?: number
-    }>
-    /**
-     * Snapshot source. With the matching `include_*` flag, the server reads that
-     * workspace's effective state into the new version (one-shot read, no
-     * persisted binding) and it overrides the explicit field for that category.
-     */
-    from_workspace_id?: string
-    include_commands?: boolean
-    include_schedules?: boolean
-    include_layout?: boolean
-    /** Explicit layout link (escape hatch); resolved from the source ws when snapshotting. */
-    layout_id?: string | null
-  },
+  config: TemplateVersionConfig,
 ): Promise<TemplateVersionWithSkills> {
   // Resolve the command set to store: explicit `commands`, or a one-shot
   // snapshot of the source workspace's effective (enabled) commands.
@@ -432,86 +447,16 @@ export async function createTemplateVersion(
     layoutIdToWrite = sel && (await getWorkspaceLayout(sel)) ? sel : null
   }
 
+  const resolved = {
+    ...config,
+    commands: commandsToWrite,
+    schedules: schedulesToWrite,
+    layout_id: layoutIdToWrite,
+  }
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-
-    const { rows } = await client.query(
-      'SELECT latest_version FROM templates WHERE id = $1 FOR UPDATE',
-      [templateId],
-    )
-    if (rows.length === 0) throw new Error('Template not found')
-
-    const newVersion = rows[0].latest_version + 1
-    const id = generateId()
-
-    await client.query(
-      `INSERT INTO template_versions (id, template_id, version, agent_type, system_prompt, prompt_id, prompt_version, mcp_config, agent_settings, compute_resources, provider_id, model, small_model, layout_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-      [
-        id,
-        templateId,
-        newVersion,
-        config.agent_type || 'claude-agent-sdk',
-        config.system_prompt || '',
-        config.prompt_id ?? null,
-        config.prompt_version ?? null,
-        config.mcp_config ?? '{}',
-        config.agent_settings ?? '{}',
-        JSON.stringify(config.compute_resources || {}),
-        config.provider_id ?? null,
-        config.model || '',
-        config.small_model || '',
-        layoutIdToWrite,
-      ],
-    )
-
-    if (config.skill_ids && config.skill_ids.length > 0) {
-      for (const skillId of config.skill_ids) {
-        await client.query(
-          'INSERT INTO template_version_skills (template_version_id, skill_id) VALUES ($1, $2)',
-          [id, skillId],
-        )
-      }
-    }
-
-    for (const cmd of commandsToWrite) {
-      await client.query(
-        `INSERT INTO template_version_commands (template_version_id, name, type, prompt_id, content, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          id,
-          cmd.name,
-          cmd.type ?? 'plain',
-          cmd.prompt_id ?? null,
-          cmd.content ?? '',
-          cmd.sort_order ?? 0,
-        ],
-      )
-    }
-
-    for (const s of schedulesToWrite) {
-      await client.query(
-        `INSERT INTO template_version_schedules (template_version_id, name, cron, timezone, prompt, prompt_id, enabled_default, sort_order)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          id,
-          s.name,
-          s.cron,
-          s.timezone ?? 'UTC',
-          s.prompt ?? '',
-          s.prompt_id ?? null,
-          s.enabled_default ?? false,
-          s.sort_order ?? 0,
-        ],
-      )
-    }
-
-    await client.query(
-      'UPDATE templates SET latest_version = $1, updated_at = NOW() WHERE id = $2',
-      [newVersion, templateId],
-    )
-
+    const newVersion = await insertTemplateVersion(client, templateId, resolved)
     await client.query('COMMIT')
     return (await getTemplateVersion(templateId, newVersion))!
   } catch (e) {
@@ -520,6 +465,94 @@ export async function createTemplateVersion(
   } finally {
     client.release()
   }
+}
+
+/**
+ * Write the template's next version inside the caller's transaction, taking
+ * `config` as it is: its commands, schedules and layout verbatim, with no
+ * snapshot of a workspace. Returns the version's number.
+ */
+export async function insertTemplateVersion(
+  client: PoolClient,
+  templateId: string,
+  config: TemplateVersionConfig,
+): Promise<number> {
+  const { rows } = await client.query(
+    'SELECT latest_version FROM templates WHERE id = $1 FOR UPDATE',
+    [templateId],
+  )
+  if (rows.length === 0) throw new Error('Template not found')
+
+  const newVersion = rows[0].latest_version + 1
+  const id = generateId()
+
+  await client.query(
+    `INSERT INTO template_versions (id, template_id, version, agent_type, system_prompt, prompt_id, prompt_version, mcp_config, agent_settings, compute_resources, provider_id, model, small_model, layout_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+    [
+      id,
+      templateId,
+      newVersion,
+      config.agent_type || 'claude-agent-sdk',
+      config.system_prompt || '',
+      config.prompt_id ?? null,
+      config.prompt_version ?? null,
+      config.mcp_config ?? '{}',
+      config.agent_settings ?? '{}',
+      JSON.stringify(config.compute_resources || {}),
+      config.provider_id ?? null,
+      config.model || '',
+      config.small_model || '',
+      config.layout_id ?? null,
+    ],
+  )
+
+  if (config.skill_ids && config.skill_ids.length > 0) {
+    for (const skillId of config.skill_ids) {
+      await client.query(
+        'INSERT INTO template_version_skills (template_version_id, skill_id) VALUES ($1, $2)',
+        [id, skillId],
+      )
+    }
+  }
+
+  for (const cmd of config.commands ?? []) {
+    await client.query(
+      `INSERT INTO template_version_commands (template_version_id, name, type, prompt_id, content, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        id,
+        cmd.name,
+        cmd.type ?? 'plain',
+        cmd.prompt_id ?? null,
+        cmd.content ?? '',
+        cmd.sort_order ?? 0,
+      ],
+    )
+  }
+
+  for (const s of config.schedules ?? []) {
+    await client.query(
+      `INSERT INTO template_version_schedules (template_version_id, name, cron, timezone, prompt, prompt_id, enabled_default, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        id,
+        s.name,
+        s.cron,
+        s.timezone ?? 'UTC',
+        s.prompt ?? '',
+        s.prompt_id ?? null,
+        s.enabled_default ?? false,
+        s.sort_order ?? 0,
+      ],
+    )
+  }
+
+  await client.query('UPDATE templates SET latest_version = $1, updated_at = NOW() WHERE id = $2', [
+    newVersion,
+    templateId,
+  ])
+  return newVersion
 }
 
 // ── Grants ──
