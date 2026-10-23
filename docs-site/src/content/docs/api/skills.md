@@ -13,6 +13,8 @@ Generated from the same OpenAPI document your instance serves, and split for on-
 
 It covers workspaces, prompts, templates, skills, credentials, service tokens, agent files, providers, tags, shares and schedules.
 
+It also carries a guide for building an application whose users each get agents: how to write the [App Spec](/guides/8-build-applications/), apply it on deploy and roll out changes safely. An agent helping you build such an application reads it before touching the spec.
+
 ### Install it into a local agent
 
 Copy the directory into the agent's skills folder — for Claude Code, `~/.claude/skills/` for yourself or `.claude/skills/` inside a project:
