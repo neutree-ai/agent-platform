@@ -1,6 +1,6 @@
 ---
 name: nap-api
-description: Manage NAP workspaces, prompts, templates, credentials, service tokens, agent files, providers, tags, shares, schedules via REST. Trigger when the user wants to script or automate NAP outside the UI — e.g. "create a workspace", "rotate a token", "bulk-upload prompts", "list agent files in workspace X", CI integration with NAP.
+description: Manage NAP workspaces, prompts, templates, credentials, service tokens, agent files, providers, tags, shares, schedules via REST, and build applications whose users each get NAP agents (the App Spec). Trigger when the user wants to script or automate NAP outside the UI — e.g. "create a workspace", "rotate a token", "bulk-upload prompts", "list agent files in workspace X", CI integration with NAP — or to give an application's users their own agents: "write the app spec", "declare our agents", "apply the spec on deploy".
 metadata:
   api-version: "0.1.0"
   openapi-version: "3.1.0"
@@ -51,6 +51,7 @@ Non-obvious capability routing (when the operation isn't where you'd first look)
 | Create / configure / start a workspace | `workspaces` resource — `POST /api/workspaces`, then `PUT /api/workspaces/{id}/config`. |
 | Bulk-manage prompts / templates / skills | `prompts`, `templates`, `skills` resources. |
 | Issue or rotate a token / credential | `credentials` resource and the service-token operations. |
+| Give each user of an application its own agents — declare them, roll out changes, create a user's workspace | The application protocol (`apps` resource, `/apps/v1/*`, client id + secret). Read `references/app-spec.md` first: it covers the spec, the deploy step and the pitfalls. |
 
 
 ## Example — drive the agent (async chat + poll)
@@ -99,6 +100,10 @@ You may send a new message while calls are outstanding — the session is not bu
 This applies to sessions started with `source` `api` or `web`. Sessions from schedules and chat connectors do not get results posted back: there the agent waits for its calls inside the one turn, and `pending_agent_calls` stays `0`.
 
 Continue the same conversation by POSTing again with this `session_id` in the body. For token-by-token output instead of polling, omit `mode` (or use `mode: "stream"`) and read the `text/event-stream` of UniversalEvent frames.
+
+## Building an application on NAP (App Spec)
+
+When an application's own users should each get NAP agents, the application declares those agents in one document, the App Spec, and NAP creates and updates every user's workspaces from it. Read **`references/app-spec.md`** before writing or changing a spec: it covers what to share with the application first, the publish → dry run → apply deploy step, prompt pinning, `calls`, shared folders, scaling, rolling out changes and why `prune` needs a person's yes.
 
 ## Handoff — local agent → NAP cloud agent
 

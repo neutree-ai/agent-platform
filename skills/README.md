@@ -41,7 +41,7 @@ skills/
 ├── specs/               # OpenAPI specs exported from source (regenerable)
 ├── templates/           # Eta template overrides applied during generation
 ├── assets/              # hand-authored static files overlaid onto generated skills
-│   └── nap-api/         # → copied into nap-api/ after generation (e.g. scripts/handoff.sh)
+│   └── nap-api/         # → copied into nap-api/ after generation (scripts/handoff.sh, references/app-spec.md)
 ├── nap-api/             # generated skill (SKILL.md + references/ + overlaid assets)
 └── nap-design-system/   # hand-authored skill (SKILL.md + references/)
 ```
@@ -49,9 +49,9 @@ skills/
 ## Customizations (generated skills)
 
 - `templates/authentication.md.eta` — replaces the generic bearer-scheme blurb with steps to create a token in NAP Web (**Integration → Tokens**).
-- `templates/skill.md.eta` — scenario-based `description` for recall, a concrete Base URL (`$NAP_BASE_URL` convention), a Conventions block (URL-encode path-bearing query params), a "Common Intents → Operation" map, an end-to-end async chat + poll example, and a Handoff section pointing at the shipped `scripts/handoff.sh` driver.
+- `templates/skill.md.eta` — scenario-based `description` for recall, a concrete Base URL (`$NAP_BASE_URL` convention), a Conventions block (URL-encode path-bearing query params), a "Common Intents → Operation" map, an end-to-end async chat + poll example, a pointer to the App Spec guide, and a Handoff section pointing at the shipped `scripts/handoff.sh` driver.
 - `templates/resource.md.eta` — per-resource orientation preambles (disambiguates the look-alike agent-files / agent-afs-files / afs / shares resources).
-- `assets/nap-api/` — static files (e.g. `scripts/handoff.sh`) overlaid into the skill **after** generation via `openapi-to-skills --assets`. Regeneration wipes the skill dir, so hand-authored files that ship with the skill must live here, not in `nap-api/` directly. An asset overrides a generated file of the same path.
+- `assets/nap-api/` — static files (e.g. `scripts/handoff.sh`, the App Spec guide `references/app-spec.md`) overlaid into the skill **after** generation via `openapi-to-skills --assets`. Regeneration wipes the skill dir, so hand-authored files that ship with the skill must live here, not in `nap-api/` directly. An asset overrides a generated file of the same path.
 
 The skill-specific blocks above are keyed by skill name (`nap-api`); other skills fall back to generic rendering.
 
