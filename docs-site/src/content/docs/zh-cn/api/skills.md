@@ -13,6 +13,8 @@ description: nap-api skill —— 让本地 agent 学会用 NAP 自己的 API �
 
 覆盖 workspace、prompt、模板、skill、凭证、service token、agent 文件、供应商、标签、共享、定时。
 
+另外还带了一份做应用的指南，适用于应用的每个用户都要有自己 agent 的场景：怎么写 [App Spec](/zh-cn/guides/8-build-applications/)、怎么在部署时 apply、怎么安全地发布改动。帮你做这类应用的 agent 改 spec 之前会先读它。
+
 ### 装到本地 agent 里
 
 把目录拷进 agent 的 skills 目录——Claude Code 的话，自己用是 `~/.claude/skills/`，项目内是 `.claude/skills/`：

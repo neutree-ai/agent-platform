@@ -156,6 +156,17 @@ export default defineConfig({
                 },
               ],
             },
+            {
+              label: 'Build on NAP',
+              translations: { 'zh-CN': '在 NAP 上做应用' },
+              items: [
+                {
+                  label: '8. Building Applications',
+                  translations: { 'zh-CN': '8. 在 NAP 上做应用' },
+                  slug: 'guides/8-build-applications',
+                },
+              ],
+            },
           ],
         },
         ...(hasUseCases
