@@ -214,6 +214,55 @@ export async function stageGenericFiles(
 /** Active socket connections keyed by connector ID */
 const activeConnectors = new Map<string, SocketModeClient>()
 
+const RECONNECT_BASE_MS = 2_000
+const RECONNECT_MAX_MS = 5 * 60_000
+
+/** Delay before reconnect attempt `n` (0-based): immediate first, then exponential, capped. */
+export function reconnectDelay(attempt: number): number {
+  if (attempt === 0) return 0
+  return Math.min(RECONNECT_BASE_MS * 2 ** (attempt - 1), RECONNECT_MAX_MS)
+}
+
+/**
+ * Reconnect a socket whenever it drops, retrying until it connects or the
+ * connector is stopped.
+ *
+ * The socket must be created with `autoReconnectEnabled: false`. The library's
+ * own reconnect gives up for good on errors it deems unrecoverable — including
+ * `invalid_auth`, HTTP errors and network errors, which Slack returns
+ * transiently during incidents — and nothing surfaces that it stopped, leaving
+ * the connector silently deaf until the process restarts.
+ */
+export function keepConnected(
+  socket: { on(event: 'disconnected', listener: () => void): unknown; start(): Promise<unknown> },
+  name: string,
+  isCurrent: () => boolean,
+): void {
+  let attempt = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  function schedule() {
+    if (timer || !isCurrent()) return
+    const delay = reconnectDelay(attempt)
+    attempt++
+    console.log(`[Slack] ${name}: disconnected, reconnecting in ${delay}ms (attempt ${attempt})`)
+    timer = setTimeout(async () => {
+      timer = null
+      if (!isCurrent()) return
+      try {
+        await socket.start()
+        attempt = 0
+        console.log(`[Slack] ${name}: reconnected`)
+      } catch (e) {
+        console.error(`[Slack] ${name}: reconnect failed:`, e)
+        schedule()
+      }
+    }, delay)
+  }
+
+  socket.on('disconnected', schedule)
+}
+
 /** Start all enabled Slack connectors (called once at startup) */
 export async function startAll() {
   const connectors = await db.getConnectorsByType('slack')
@@ -266,6 +315,8 @@ export async function startOne(connectorId: string) {
   const web = new WebClient(creds.bot_token)
   const socket = new SocketModeClient({
     appToken: creds.app_token,
+    // Reconnects are driven by keepConnected() below.
+    autoReconnectEnabled: false,
     pingPongLoggingEnabled: true,
     clientPingTimeout: 30000,
     serverPingTimeout: 30000,
@@ -756,6 +807,7 @@ Indexes are 1-based and match the attached images order.
 
   await socket.start()
   activeConnectors.set(connector.id, socket)
+  keepConnected(socket, connector.name, () => activeConnectors.get(connector.id) === socket)
   console.log(`[Slack] ${connector.name}: connected`)
 }
 
@@ -763,12 +815,13 @@ Indexes are 1-based and match the attached images order.
 export async function stopOne(connectorId: string) {
   const socket = activeConnectors.get(connectorId)
   if (!socket) return
+  // Deregister first so the disconnect below doesn't trigger keepConnected().
+  activeConnectors.delete(connectorId)
   try {
     await socket.disconnect()
   } catch (e) {
     console.error(`[Slack] Error disconnecting connector ${connectorId}:`, e)
   }
-  activeConnectors.delete(connectorId)
   console.log(`[Slack] Connector ${connectorId}: disconnected`)
 }
 

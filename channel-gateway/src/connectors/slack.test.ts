@@ -1,9 +1,12 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NapClient } from '../../../internal/client/src/index'
 import {
   appendAttachmentPaths,
   extractSlackText,
   genericSlackFiles,
+  keepConnected,
+  reconnectDelay,
   slackAttachmentPath,
   stageGenericFiles,
 } from './slack'
@@ -344,5 +347,75 @@ describe('generic Slack attachments', () => {
       ),
     ).rejects.toThrow('Workspace is stopped and auto-start is disabled')
     expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('reconnectDelay', () => {
+  it('retries immediately first, then backs off exponentially up to a cap', () => {
+    expect(reconnectDelay(0)).toBe(0)
+    expect(reconnectDelay(1)).toBe(2_000)
+    expect(reconnectDelay(2)).toBe(4_000)
+    expect(reconnectDelay(20)).toBe(5 * 60_000)
+  })
+})
+
+describe('keepConnected', () => {
+  function fakeSocket(results: Array<'ok' | 'fail'>) {
+    const socket = Object.assign(new EventEmitter(), {
+      start: vi.fn(async () => {
+        if (results.shift() === 'fail') throw new Error('invalid_auth')
+      }),
+    })
+    return socket
+  }
+
+  afterEach(() => vi.useRealTimers())
+
+  it('keeps retrying after failures until start succeeds', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const socket = fakeSocket(['fail', 'fail', 'ok'])
+    keepConnected(socket, 'test', () => true)
+
+    socket.emit('disconnected')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(socket.start).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(socket.start).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(socket.start).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(socket.start).toHaveBeenCalledTimes(3)
+  })
+
+  it('schedules one attempt when start fails and also emits disconnected', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const socket = fakeSocket([])
+    socket.start.mockImplementationOnce(async () => {
+      socket.emit('disconnected')
+      throw new Error('socket closed')
+    })
+    keepConnected(socket, 'test', () => true)
+
+    socket.emit('disconnected')
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(socket.start).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops once the connector is no longer current', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    let current = true
+    const socket = fakeSocket([])
+    keepConnected(socket, 'test', () => current)
+
+    current = false
+    socket.emit('disconnected')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(socket.start).not.toHaveBeenCalled()
   })
 })
