@@ -101,6 +101,20 @@ describe('POST /:id/afs/shares', () => {
     expect(addAfsShareMember).not.toHaveBeenCalled()
   })
 
+  it('makes an owner that is only a read-only member a read-write one', async () => {
+    vi.mocked(getAfsShareByName).mockResolvedValue(share as never)
+    vi.mocked(listAfsShareMembers).mockResolvedValue([
+      { share_id: 'share1', workspace_id: 'ws1', permission: 'read_only' },
+    ] as never)
+
+    const res = await create('team')
+
+    expect(res.status).toBe(201)
+    expect(createAfsShare).not.toHaveBeenCalled()
+    expect(mountAtWorkspace).toHaveBeenCalledWith(env, 'ws1', 'dir1', 'ak1', 'team', false)
+    expect(addAfsShareMember).toHaveBeenCalledWith('share1', 'ws1', 'read_write')
+  })
+
   it('fails when the mount fails, and the retry finishes the same share', async () => {
     vi.mocked(getAfsShareByName).mockResolvedValueOnce(null)
     vi.mocked(mountAtWorkspace).mockRejectedValueOnce(new Error('workspace is not running'))
