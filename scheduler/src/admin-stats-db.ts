@@ -31,6 +31,7 @@ export async function refreshAdminStats(forceFullRebuild = false): Promise<void>
   }
 
   const client = await pool.connect()
+  let brokenConnection: Error | undefined
   try {
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ')
     // Serialize ticks and nightly rebuilds before taking the transaction snapshot.
@@ -43,20 +44,30 @@ export async function refreshAdminStats(forceFullRebuild = false): Promise<void>
     await refreshTokens(client, fullRebuild, state[0]?.last_usage_id ?? '0')
     await client.query('COMMIT')
   } catch (error) {
-    await client.query('ROLLBACK')
+    await client.query('ROLLBACK').catch((rollbackError: Error) => {
+      brokenConnection = rollbackError
+    })
     throw error
   } finally {
-    client.release()
+    client.release(brokenConnection)
   }
 }
 
 async function refreshInteractions(client: PoolClient, fullRebuild: boolean): Promise<void> {
-  await client.query('DELETE FROM public.admin_workspace_stats')
-  await client.query(`
-    INSERT INTO public.admin_workspace_stats (workspace_id, interactions)
-    SELECT m.workspace_id, ${INTERACTIONS}
-      FROM public.messages m GROUP BY m.workspace_id
-  `)
+  // Ticks recompute only workspaces with recent messages; the nightly rebuild repairs
+  // deleted workspaces and late changes to older messages.
+  if (fullRebuild) await client.query('DELETE FROM public.admin_workspace_stats')
+  await client.query(
+    `INSERT INTO public.admin_workspace_stats AS stats (workspace_id, interactions)
+     SELECT m.workspace_id, ${INTERACTIONS}
+       FROM public.messages m
+      WHERE $1::boolean OR m.workspace_id IN (
+        SELECT workspace_id FROM public.messages WHERE created_at >= current_date - 7)
+      GROUP BY m.workspace_id
+     ON CONFLICT (workspace_id) DO UPDATE SET interactions = EXCLUDED.interactions
+       WHERE stats.interactions IS DISTINCT FROM EXCLUDED.interactions`,
+    [fullRebuild],
+  )
   await client.query(
     'DELETE FROM public.admin_daily_stats WHERE $1::boolean OR date >= current_date - 7',
     [fullRebuild],
@@ -123,15 +134,15 @@ async function refreshTokens(
   fullRebuild: boolean,
   lastId: string,
 ): Promise<void> {
-  // shortcut: commits delayed beyond the one-minute safety lag are repaired by the nightly rebuild.
+  // Rows younger than the one-minute safety lag (and every higher id) wait for the
+  // next tick, in full rebuilds too, so an in-flight lower id is not skipped for a day.
+  // shortcut: commits delayed beyond the lag are repaired by the nightly rebuild.
   const { rows } = await client.query<{ upper_id: string }>(
-    fullRebuild
-      ? 'SELECT COALESCE(max(id), 0) AS upper_id FROM public.workspace_usage_events'
-      : `SELECT greatest($1::bigint, COALESCE(
-           (SELECT min(id) - 1 FROM public.workspace_usage_events
-             WHERE created_at >= current_timestamp - interval '1 minute'),
-           (SELECT max(id) FROM public.workspace_usage_events), 0)) AS upper_id`,
-    fullRebuild ? [] : [lastId],
+    `SELECT greatest($1::bigint, COALESCE(
+       (SELECT min(id) - 1 FROM public.workspace_usage_events
+         WHERE created_at >= current_timestamp - interval '1 minute'),
+       (SELECT max(id) FROM public.workspace_usage_events), 0)) AS upper_id`,
+    [fullRebuild ? '0' : lastId],
   )
   const upperId = rows[0].upper_id
   for (const dimension of ['user', 'workspace', 'daily'] as const) {

@@ -26,9 +26,9 @@ const USER_SORT_COLUMNS: Record<string, string> = {
 
 // Paginated, sortable, searchable user list with per-user analytics
 // (owned-agent count, lifetime interactions, lifetime tokens, last activity).
-// Interactions/tokens come from the admin_* matviews (refreshed by the
+// Interactions/tokens come from the admin_* snapshots (refreshed by the
 // scheduler cron); the aggregates are computed independently so joining
-// workspaces × sessions never fans out and double-counts a matview row.
+// workspaces × sessions never fans out and double-counts a snapshot row.
 users.get('/', async (c) => {
   const q = (c.req.query('q') ?? '').trim()
   const sortCol = USER_SORT_COLUMNS[c.req.query('sort') ?? ''] ?? 'tokens'
