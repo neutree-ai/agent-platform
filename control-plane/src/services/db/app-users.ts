@@ -77,34 +77,52 @@ export async function upsertAppUser(
 }
 
 /** The id of the application's own team (migrations/151_app_teams.sql). */
-async function getAppTeamId(clientId: string): Promise<string | null> {
+export async function getAppTeamId(clientId: string): Promise<string | null> {
   const { rows } = await pool.query('SELECT id FROM teams WHERE app_id = $1', [clientId])
   return (rows[0]?.id as string) ?? null
 }
 
 /**
  * Create the application's team, named after it, with whoever registered the
- * application as its admin. Runs in the transaction that creates the
- * application.
+ * application as its admin, and the account the application owns its content
+ * under (migrations/152_app_owners.sql), as a member. Runs in the transaction
+ * that creates the application; returns the team's id.
  */
-export async function createAppTeam(
+export async function createAppAccounts(
   client: PoolClient,
   app: { id: string; name: string; description: string | null; createdBy: string },
 ): Promise<string> {
-  const id = generateId()
+  const teamId = generateId()
+  const ownerId = generateId()
   await client.query(
     `INSERT INTO teams (id, name, description, created_by, app_id)
      VALUES ($1, $2, $3, $4, $5)`,
-    [id, app.name, app.description, app.createdBy, app.id],
+    [teamId, app.name, app.description, app.createdBy, app.id],
   )
-  await client.query(`INSERT INTO team_members (team_id, user_id, role) VALUES ($1, $2, 'admin')`, [
-    id,
-    app.createdBy,
-  ])
-  return id
+  await client.query(
+    `INSERT INTO users (id, username, display_name, role, managed_by)
+     VALUES ($1, $2, $3, 'system', $4)`,
+    [ownerId, `app/${app.id}`, app.name, app.id],
+  )
+  await client.query(
+    `INSERT INTO team_members (team_id, user_id, role)
+     VALUES ($1, $2, 'admin'), ($1, $3, 'member')`,
+    [teamId, app.createdBy, ownerId],
+  )
+  return teamId
 }
 
-/** Keep the application's team named after it. */
+/** The account the application owns its prompts and skills under. */
+export async function getAppOwnerId(clientId: string): Promise<string> {
+  const { rows } = await pool.query(
+    "SELECT id FROM users WHERE managed_by = $1 AND role = 'system'",
+    [clientId],
+  )
+  if (!rows[0]) throw new Error(`application ${clientId} has no owner account`)
+  return rows[0].id as string
+}
+
+/** Keep the application's team and owner account named after it. */
 export async function renameAppTeam(
   clientId: string,
   patch: { name?: string; description?: string | null },
@@ -114,6 +132,10 @@ export async function renameAppTeam(
       patch.name,
       clientId,
     ])
+    await pool.query(
+      "UPDATE users SET display_name = $1 WHERE managed_by = $2 AND role = 'system'",
+      [patch.name, clientId],
+    )
   }
   if (patch.description !== undefined) {
     await pool.query('UPDATE teams SET description = $1, updated_at = now() WHERE app_id = $2', [

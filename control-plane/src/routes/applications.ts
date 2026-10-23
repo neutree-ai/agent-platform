@@ -6,8 +6,9 @@ import {
   ApplicationUpdateBodySchema,
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
+import { deleteAppContent } from '../services/app-content'
 import {
-  createAppTeam,
+  createAppAccounts,
   mcpOriginsTakenByOthers,
   renameAppTeam,
   setClientMcpOrigins,
@@ -94,7 +95,8 @@ applications.get('/', async (c) => {
             (SELECT t.id FROM teams t WHERE t.app_id = c.id) AS team_id,
             coalesce((SELECT array_agg(o.origin ORDER BY o.origin)
                         FROM oauth_client_mcp_origins o WHERE o.client_id = c.id), '{}') AS mcp_origins,
-            (SELECT count(*)::int FROM users m WHERE m.managed_by = c.id) AS user_count
+            (SELECT count(*)::int FROM users m
+              WHERE m.managed_by = c.id AND m.role <> 'system') AS user_count
        FROM oauth_clients c
        LEFT JOIN users u ON u.id = c.created_by
        ORDER BY c.created_at`,
@@ -155,7 +157,7 @@ applications.post('/', async (c) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [id, name, description, homepage.value, secretHash, redirectUris, user.sub],
     )
-    teamId = await createAppTeam(client, { id, name, description, createdBy: user.sub })
+    teamId = await createAppAccounts(client, { id, name, description, createdBy: user.sub })
     await client.query('COMMIT')
   } catch (err) {
     await client.query('ROLLBACK')
@@ -279,16 +281,19 @@ applications.delete('/:id', async (c) => {
   if (!requireAdmin(user)) return c.json({ error: 'Forbidden' }, 403)
 
   const id = c.req.param('id')
-  try {
-    const { rowCount } = await pool.query('DELETE FROM oauth_clients WHERE id = $1', [id])
-    if (!rowCount) return c.json({ error: 'not found' }, 404)
-  } catch (err) {
-    // users.managed_by is ON DELETE RESTRICT
-    if ((err as { code?: string }).code === '23503') {
-      return c.json({ error: 'the application still has users; delete them first' }, 409)
-    }
-    throw err
+  const { rows } = await pool.query(
+    `SELECT (SELECT count(*)::int FROM users u
+              WHERE u.managed_by = c.id AND u.role <> 'system') AS user_count
+       FROM oauth_clients c WHERE c.id = $1`,
+    [id],
+  )
+  if (!rows[0]) return c.json({ error: 'not found' }, 404)
+  if (rows[0].user_count > 0) {
+    return c.json({ error: 'the application still has users; delete them first' }, 409)
   }
+  // What it published goes with it; its team goes with the client row.
+  await deleteAppContent(id)
+  await pool.query('DELETE FROM oauth_clients WHERE id = $1', [id])
   return c.json({ success: true })
 })
 
