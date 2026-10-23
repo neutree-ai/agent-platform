@@ -63,11 +63,13 @@ agents:
     prompt: study          # pinned to its current version when applied; or study@3
     skills: [well-whale]
     mcp: { whale: {} }
-    calls: [diver]         # may call the user's diver agent
+    calls: [diver]         # calls the user's diver agent
   diver:
     runtime: { agent_type: codex }
     model: { provider: deepseek, name: deepseek-v4 }
 ```
+
+An agent named in some agent's `calls` is reachable by its name from any of the same user's workspaces; `calls` doesn't restrict who calls it.
 
 Publishing the same prompt text or skill package again keeps its version, and applying a spec that resolves to the one in force changes nothing, so the deploy step can run them all every time. `applySpec(spec, { dryRun: true })` returns the plan alone; a spec that drops an agent needs `{ prune: true }`, which deletes it with its users' workspaces.
 
