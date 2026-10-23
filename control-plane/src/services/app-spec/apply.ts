@@ -17,6 +17,7 @@ import {
   resolveAppSpec,
 } from './resolve'
 import type { ParsedSpec } from './schema'
+import { convergeAppWorkspaces, deleteAllAgentWorkspaces } from './workspaces'
 
 interface PlanEntry {
   agent: string
@@ -107,8 +108,9 @@ function plan(
   return entries.sort((a, b) => a.agent.localeCompare(b.agent))
 }
 
-/** Remove an agent the spec no longer declares, with its template. */
+/** Remove an agent the spec no longer declares, with its workspaces and template. */
 async function removeAgent(clientId: string, agent: AppAgentRow): Promise<void> {
+  await deleteAllAgentWorkspaces(clientId, agent.name)
   await pool.query('DELETE FROM app_agents WHERE client_id = $1 AND name = $2', [
     clientId,
     agent.name,
@@ -156,6 +158,7 @@ export async function applyAppSpec(
       )
     }
 
+    // First, so a workspace that can't be deleted yet stops the apply early.
     for (const agent of dropped) await removeAgent(clientId, agent)
 
     const ownerId = await getAppOwnerId(clientId)
@@ -194,6 +197,10 @@ export async function applyAppSpec(
       `INSERT INTO app_specs (client_id, version, hash, document, resolved)
        VALUES ($1, $2, $3, $4, $5)`,
       [clientId, nextVersion, hash, JSON.stringify(locked), JSON.stringify(resolved)],
+    )
+    // Workspaces that are idle take the change now; the sweep gets the rest.
+    convergeAppWorkspaces(clientId).catch((e) =>
+      console.error(`[app-spec] converging ${clientId} failed:`, e),
     )
     return { version: nextVersion, hash, changed: true, plan: entries }
   } finally {

@@ -7,7 +7,6 @@ import {
 } from '../../../../internal/types/api'
 import type { AppEnv } from '../../lib/types'
 import { canAccessWorkspace, canOwn } from '../../lib/workspace-access'
-import { attachStore, createStore } from '../../services/db/memory'
 import { getTemplateForUser, getTemplateVersion } from '../../services/db/templates'
 import { getUser } from '../../services/db/users'
 import { listSharedWorkspaceIds } from '../../services/db/workspace-shares'
@@ -18,15 +17,14 @@ import {
   updateWorkspace,
   updateWorkspaceConfig,
 } from '../../services/db/workspaces'
-import { isMemoryFuseAvailable } from '../../services/k8s'
 import { bumpWorkspaceSpec, placeWorkspace } from '../../services/placement'
 import { chooseEnvironment } from '../../services/placement-decision'
 import { skillRepo } from '../../services/skills-composition'
-import { materializeTemplateLayout } from '../../services/template-layout'
-import { materializeTemplateSchedules } from '../../services/template-schedules'
+import { bindWorkspaceToTemplate } from '../../services/template-workspace'
 import { UsageNotDrained } from '../../services/usage/teardown'
 import { applyWorkspaceConfigUpdate } from '../../services/workspace-config'
 import { destroyWorkspace } from '../../services/workspace-lifecycle'
+import { attachDefaultMemoryStore } from '../../services/workspace-memory'
 import { toApiWorkspace } from './_shared'
 
 const write = new OpenAPIHono<AppEnv>()
@@ -126,44 +124,20 @@ write.openapi(createRouteDef, async (c) => {
     })
 
     if (body.template_id && templateLatestVersion !== undefined) {
-      await updateWorkspaceConfig(workspace.id, {
-        template_id: body.template_id,
-        template_version: templateLatestVersion,
+      // Legacy templates may still reference skills the user can't see.
+      const { notVisible } = await bindWorkspaceToTemplate({
+        workspaceId: workspace.id,
+        userId: currentUser.sub,
+        templateId: body.template_id,
+        version: templateLatestVersion,
+        scheduleOverrides: body.schedule_overrides,
       })
-      if (templateVersion && templateVersion.skill_ids.length > 0) {
-        // Skills baked into the template must be visible to the user creating
-        // this workspace — link invariant guards templates created post-082,
-        // but legacy templates may still reference private skills.
-        const notVisible = await skillRepo.findSkillIdsNotVisibleToUser(
-          templateVersion.skill_ids,
-          currentUser.sub,
+      if (notVisible.length > 0) {
+        return c.json(
+          { error: `Template uses skills not visible to you: ${notVisible.join(', ')}` },
+          403,
         )
-        if (notVisible.length > 0) {
-          return c.json(
-            { error: `Template uses skills not visible to you: ${notVisible.join(', ')}` },
-            403,
-          )
-        }
-        await skillRepo.setWorkspaceSkills(workspace.id, templateVersion.skill_ids)
       }
-      // Materialize the template's schedules as real rows + pg-boss timers.
-      // `schedule_overrides` is the recipient's consent (name → enabled); absent
-      // entries fall back to each schedule's enabled_default.
-      await materializeTemplateSchedules({
-        workspaceId: workspace.id,
-        userId: currentUser.sub,
-        templateId: body.template_id,
-        version: templateLatestVersion,
-        enabledOverrides: body.schedule_overrides,
-      })
-      // Copy the template's referenced layout into a recipient-owned row and
-      // point the new workspace's profile at it (built-in default if none).
-      await materializeTemplateLayout({
-        workspaceId: workspace.id,
-        userId: currentUser.sub,
-        templateId: body.template_id,
-        version: templateLatestVersion,
-      })
     } else {
       const configPatch: Record<string, any> = {}
       if (body.provider_id) configPatch.provider_id = body.provider_id
@@ -197,35 +171,14 @@ write.openapi(createRouteDef, async (c) => {
       }
     }
 
-    // Auto-provision the workspace's default memory store and attach it.
-    // Its builtin Reflect schedule is NOT created here — reconcileReflectSchedule
-    // (called from startWorkspaceInstance) creates it the first time the
-    // workspace actually starts, which also covers workspaces whose store
-    // predates this feature, so there's only one code path that creates a
-    // Reflect schedule. Skipped for system workspaces (shared, no human
-    // owner to file the store under) and when the cluster doesn't ship the
-    // memory-fuse image (sidecar wouldn't be present — store would just be
-    // dead weight in the prompt).
-    if (!isSystem && isMemoryFuseAvailable() && placement.supports.persistentMemory) {
-      try {
-        // Reuse the workspace name verbatim so the store is identifiable from
-        // the user's locale without cp needing an i18n layer. Description is
-        // left empty — the user can edit either in the Memory app later.
-        const store = await createStore({
-          ownerUserId: currentUser.sub,
-          name: body.name,
-          originWorkspaceId: workspace.id,
-        })
-        await attachStore({
-          workspaceId: workspace.id,
-          storeId: store.id,
-          access: 'read_write',
-        })
-      } catch (e: any) {
-        // Don't fail ws creation if the memory bootstrap trips — user can
-        // still attach a store later via the global Memory app.
-        console.error(`[workspace ${workspace.id}] auto-attach memory store failed:`, e.message)
-      }
+    // System workspaces are shared, with no human owner to file a store under.
+    if (!isSystem) {
+      await attachDefaultMemoryStore({
+        workspaceId: workspace.id,
+        userId: currentUser.sub,
+        name: body.name,
+        persistentMemory: placement.supports.persistentMemory,
+      })
     }
 
     // Persist the auto-scaling shape (immutable after creation) before placing,
