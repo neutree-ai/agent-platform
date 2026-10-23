@@ -73,6 +73,8 @@ export interface SpecStatus {
     workspaces: number
     /** Workspaces on the agent's latest template version, with its current runtime. */
     up_to_date: number
+    /** Workspaces that can't follow the agent; `listAgents` says why. */
+    blocked: number
   }>
 }
 
@@ -82,6 +84,8 @@ export interface AgentWorkspace {
   status: string
   template_version: number
   up_to_date: boolean
+  /** Why it can't follow its agent (skills the user can't see), while it can't. */
+  blocked: string | null
 }
 
 // A token is replaced this long before it expires, so one handed out is never

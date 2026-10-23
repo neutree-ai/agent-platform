@@ -596,6 +596,9 @@ const specStatusRoute = createRoute({
                   template_version: z.number().int(),
                   workspaces: z.number().int(),
                   up_to_date: z.number().int(),
+                  blocked: z.number().int().openapi({
+                    description: "Workspaces that can't follow the agent; see each user's agents",
+                  }),
                 }),
               ),
             })
@@ -627,6 +630,9 @@ const AgentWorkspaceSchema = z
     template_version: z.number().int(),
     up_to_date: z.boolean().openapi({
       description: "On the agent's latest template version, with its current runtime",
+    }),
+    blocked: z.string().nullable().openapi({
+      description: "Why the workspace can't follow its agent, while it can't",
     }),
   })
   .openapi('AppAgentWorkspace')
