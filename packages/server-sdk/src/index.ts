@@ -7,6 +7,7 @@ export type {
   AppSkill,
   AppUser,
   SpecApplyResult,
+  SpecFolderPlanEntry,
   SpecPlanEntry,
   SpecStatus,
 } from './apps.js'

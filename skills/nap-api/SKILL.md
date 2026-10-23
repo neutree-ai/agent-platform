@@ -18,7 +18,7 @@ This API documentation is split into multiple files for on-demand loading.
 references/
 ├── resources/      # 18 resource index files
 ├── operations/     # 209 operation detail files
-└── schemas/        # 8 schema groups, 20 schema files
+└── schemas/        # 8 schema groups, 21 schema files
 ```
 
 **Navigation flow:**

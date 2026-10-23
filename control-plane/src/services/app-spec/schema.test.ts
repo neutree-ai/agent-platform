@@ -63,6 +63,42 @@ agents:
     ])
   })
 
+  it('checks that shared folders name agents of the spec', () => {
+    const agents = { ...minimal.agents, diver: minimal.agents.study }
+    const withFolders = (shared_folders: unknown) => ({ ...minimal, agents, shared_folders })
+    expect(
+      issues(withFolders({ notes: { owner: 'study', members: { diver: 'read_only' } } })),
+    ).toEqual([])
+    expect(issues(withFolders({ notes: { owner: 'study' } }))).toEqual([])
+    expect(
+      issues(withFolders({ notes: { owner: 'whale', members: { study: 'read_write' } } })),
+    ).toEqual(['shared_folders.notes.owner: whale is not an agent of the spec'])
+    expect(
+      issues(
+        withFolders({
+          notes: { owner: 'study', members: { study: 'read_only', orca: 'read_only' } },
+        }),
+      ),
+    ).toEqual([
+      'shared_folders.notes.members.study: is the owner',
+      'shared_folders.notes.members.orca: not an agent of the spec',
+    ])
+  })
+
+  it('checks shared folder names and permissions', () => {
+    const withFolders = (shared_folders: unknown) => ({ ...minimal, shared_folders })
+    expect(issues(withFolders({ Notes: { owner: 'study' } }))).toHaveLength(1)
+    expect(issues(withFolders({ ['n'.repeat(49)]: { owner: 'study' } }))[0]).toMatch(
+      /^shared_folders\.n{49}:/,
+    )
+    expect(
+      issues(withFolders({ notes: { owner: 'study', members: { study: 'write' } } }))[0],
+    ).toMatch(/^shared_folders\.notes\.members\.study/)
+    expect(issues(withFolders({ notes: { owner: 'study', mode: 'rw' } }))[0]).toMatch(
+      /^shared_folders\.notes/,
+    )
+  })
+
   it('checks schedules', () => {
     const agent = {
       ...minimal.agents.study,

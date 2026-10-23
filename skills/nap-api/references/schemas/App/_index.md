@@ -1,6 +1,6 @@
 # App Schemas
 
-8 schemas in this group.
+9 schemas in this group.
 
 | Schema | Type | Description |
 |--------|------|-------------|
@@ -9,6 +9,7 @@
 | [AppSkill](AppSkill.md) | object |  |
 | [AppSpecApplyResult](AppSpecApplyResult.md) | object |  |
 | [AppSpecPlanEntry](AppSpecPlanEntry.md) | object |  |
+| [AppSpecFolderPlanEntry](AppSpecFolderPlanEntry.md) | object |  |
 | [AppSpecCurrent](AppSpecCurrent.md) | object |  |
 | [AppSpecStatus](AppSpecStatus.md) | object |  |
 | [AppAgentWorkspace](AppAgentWorkspace.md) | object |  |
