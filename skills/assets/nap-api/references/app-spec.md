@@ -1,6 +1,6 @@
 # App Spec — building a multi-user application on NAP
 
-Read this when you are helping someone build an **application whose own users each get NAP agents**: a tutoring site where every student has a study agent, an ops console where every engineer has an on-call agent. The application keeps its users, pages and data; NAP runs the agents. The App Spec is the one document in which the application declares those agents.
+Read this when you are helping someone build an **application whose own users each get NAP agents**: one assistant per customer of a service, a research agent and a writing agent per member of a team. The application keeps its users, pages and data; NAP runs the agents. The App Spec is the one document in which the application declares those agents.
 
 If the task is to drive one person's own workspaces (create one, chat with it, upload files), you don't need any of this: use the `workspaces` / `chat` resources with a service token.
 
@@ -30,7 +30,7 @@ The spec can't grant the application anything. An NAP admin (or whoever register
 - every **environment** a `runtime.environment` names (omit it to use the built-in one);
 - any **skill** or **prompt** the application uses but doesn't publish itself.
 
-An unresolved reference is a 400 listing each one ("provider deepseek is not published by or shared with the application"). That message means *ask for a share*, not *change the spec*.
+An unresolved reference is a 400 listing each one ("provider main-provider is not published by or shared with the application"). That message means *ask for a share*, not *change the spec*.
 
 ## Repository layout and the deploy step
 
@@ -39,8 +39,8 @@ Keep the spec and its content in the application's repository and apply them on 
 ```
 nap/
 ├── spec.yaml
-├── prompts/study.md
-└── skills/well-whale/SKILL.md …
+├── prompts/assistant.md
+└── skills/report-writer/SKILL.md …
 ```
 
 1. **Publish content.** `PUT /apps/v1/prompts/{name}` (JSON `{ "content": "…" }`) and `PUT /apps/v1/skills/{name}` (body: a `.tar.gz` or `.zip` with `SKILL.md` at its root). Same text, same bytes → same version. Build skill archives **reproducibly** (sorted entries, fixed mtimes, no `._*` files) or every deploy creates a new skill version.
@@ -55,33 +55,33 @@ Never pass `prune=true` from an automated deploy by default. Make it an explicit
 apiVersion: nap.app/v1
 
 mcp_servers:
-  whale: { url: https://whale.example.com/mcp, identify_caller: true }
+  app-api: { url: https://api.example.com/mcp, identify_caller: true }
 
 agents:
-  study:
+  assistant:
     runtime:
       agent_type: claude-code
       max_concurrency: 4          # turns at once per replica
       max_steps: 200              # model round-trips per turn
       compute: { cpu_limit: "1", memory_limit: 2Gi }
-    model: { provider: deepseek, name: deepseek-v4, small: deepseek-v4-flash }
-    prompt: study                 # pinned to its current version at apply; or study@3
-    skills: [well-whale]
-    mcp: { whale: {} }
+    model: { provider: main-provider, name: large-model, small: small-model }
+    prompt: assistant             # pinned to its current version at apply; or assistant@3
+    skills: [report-writer]
+    mcp: { app-api: {} }
     settings: { permissions: { deny: [WebFetch] } }
-    commands: { review: { content: "Review today's notes and list what to revise" } }
+    commands: { summary: { content: "Summarize what we worked on today" } }
     schedules:
-      daily: { cron: "0 9 * * *", timezone: Asia/Shanghai, prompt: "Plan today", enabled: false }
-    calls: [diver]
-  diver:
+      weekly-digest: { cron: "0 9 * * 1", timezone: UTC, prompt: "Write this week's digest", enabled: false }
+    calls: [researcher]
+  researcher:
     runtime: { agent_type: codex }
-    model: { provider: deepseek, name: deepseek-v4 }
+    model: { provider: main-provider, name: large-model }
     settings: 'model_reasoning_effort = "high"'
 
 shared_folders:
   notes:                          # mounted at /mnt/afs/notes
-    owner: study
-    members: { diver: read_only }
+    owner: assistant
+    members: { researcher: read_only }
 ```
 
 Rules the server enforces, so write them right the first time:
@@ -92,7 +92,7 @@ Rules the server enforces, so write them right the first time:
 
 Choices that are yours to make:
 
-- **Prompt pinning.** `prompt: study` follows the prompt at each apply: publishing new text changes nothing until the next apply, which pins the newest version. `prompt: study@3` stays on 3 until you edit the spec. Use the unpinned form when the deploy publishes and applies together; pin when the prompt is edited somewhere else and you want to adopt versions deliberately.
+- **Prompt pinning.** `prompt: assistant` follows the prompt at each apply: publishing new text changes nothing until the next apply, which pins the newest version. `prompt: assistant@3` stays on 3 until you edit the spec. Use the unpinned form when the deploy publishes and applies together; pin when the prompt is edited somewhere else and you want to adopt versions deliberately.
 - **Skills are not pinned.** Workspaces load a skill's active version, so publishing a new package changes what every agent using it gets, without an apply; a running workspace picks it up the next time it loads its skills (on restart, or when a spec change reaches it). Treat a skill publish like a deploy.
 - **`settings`** is passed to the agent runtime untouched: an object for JSON-configured runtimes (claude-code takes Claude Code settings: `permissions.deny`, `env`, …), a string for runtimes configured in TOML (codex) or YAML (goose). The platform doesn't validate it; test it on one workspace before relying on it.
 - **`calls`** lists the agents this one hands work to. Each agent named there gets its name as slug and becomes callable by **any** of the same user's agents; the list is not an access control. Agents of different users never reach each other.

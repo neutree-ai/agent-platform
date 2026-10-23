@@ -44,34 +44,34 @@ Each user belongs to your application alone: it has no password and can't sign i
 Declare the agents each user gets in a spec, and apply it from your deploy step. Prompts and skills the spec names are ones you publish, or ones shared with your application's team.
 
 ```ts
-await platform.publishPrompt('study', await readFile('prompts/study.md', 'utf8'))
-await platform.publishSkill('well-whale', await readFile('skills/well-whale.tar.gz'))
+await platform.publishPrompt('assistant', await readFile('prompts/assistant.md', 'utf8'))
+await platform.publishSkill('report-writer', await readFile('skills/report-writer.tar.gz'))
 
 const result = await platform.applySpec(await readFile('nap.yaml', 'utf8'))
-console.log(result.plan) // [{ agent: 'study', action: 'update', changes: ['prompt_version'] }]
+console.log(result.plan) // [{ agent: 'assistant', action: 'update', changes: ['prompt_version'] }]
 ```
 
 ```yaml
 # nap.yaml
 apiVersion: nap.app/v1
 mcp_servers:
-  whale: { url: https://whale.example.com/mcp, identify_caller: true }
+  app-api: { url: https://api.example.com/mcp, identify_caller: true }
 agents:
-  study:
+  assistant:
     runtime: { agent_type: claude-code, max_concurrency: 4 }
-    model: { provider: deepseek, name: deepseek-v4 }
-    prompt: study          # pinned to its current version when applied; or study@3
-    skills: [well-whale]
-    mcp: { whale: {} }
-    calls: [diver]         # calls the user's diver agent
-  diver:
+    model: { provider: main-provider, name: large-model }
+    prompt: assistant      # pinned to its current version when applied; or assistant@3
+    skills: [report-writer]
+    mcp: { app-api: {} }
+    calls: [researcher]    # calls the user's researcher agent
+  researcher:
     runtime: { agent_type: codex }
-    model: { provider: deepseek, name: deepseek-v4 }
+    model: { provider: main-provider, name: large-model }
 shared_folders:
   notes:                   # mounted at /mnt/afs/notes
-    owner: study           # the user's study workspace owns it
+    owner: assistant       # the user's assistant workspace owns it
     members:
-      diver: read_write    # or read_only
+      researcher: read_write  # or read_only
 ```
 
 An agent named in some agent's `calls` is reachable by its name from any of the same user's workspaces; `calls` doesn't restrict who calls it.
@@ -83,7 +83,7 @@ Publishing the same prompt text or skill package again keeps its version, and ap
 Each user gets a workspace per agent the first time you ask for it:
 
 ```ts
-const { workspace_id } = await platform.ensureAgent(user.id, 'study')
+const { workspace_id } = await platform.ensureAgent(user.id, 'assistant')
 const nap = platform.as(user.id) // chat with it as the user
 ```
 
