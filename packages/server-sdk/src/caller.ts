@@ -1,5 +1,5 @@
 // The platform's caller statement. When a workspace calls an MCP server your
-// application declared (its mcp_origins), the platform's MCP proxy adds
+// application's spec declares with `identify_caller`, the platform's MCP proxy adds
 // `X-Platform-Caller`: a five-minute ES256 JWT, addressed to your application,
 // naming who is calling. Verify it here instead of trusting any plain header —
 // an agent can reach your server directly and send whatever headers it likes.

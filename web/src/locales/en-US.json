@@ -2149,12 +2149,11 @@
         "description": "Short description shown on the OAuth consent page",
         "homepageUrl": "https://example.com",
         "redirectUris": "https://example.com/api/auth/callback",
-        "mcpOrigins": "https://example.com",
         "customId": "Leave empty to auto-generate"
       },
       "help": {
         "redirectUrisHint": "One URL per line. Must be http(s). Leave empty for an application that only calls the API for the users it provisions.",
-        "mcpOriginsHint": "The application's own MCP servers, one per line. Agent calls to them go through the platform, which attaches a signed statement of who is calling.",
+        "mcpOriginsHint": "Declared in the application's spec. Agent calls to them go through the platform, which attaches a signed statement of who is calling.",
         "storeSecurely": "The client secret will only be shown once. Store it securely before closing.",
         "rotateWarning": "Rotating invalidates the existing secret. Existing refresh tokens remain valid.",
         "team": "Share providers, skills, prompts and environments with the team “{{name}}” to make them available to this application's users."

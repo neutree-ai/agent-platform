@@ -1884,8 +1884,9 @@ export const ApiApplicationSchema = z.object({
    */
   team_id: z.string(),
   /**
-   * Origins of MCP servers the application runs. Workspace calls to them go
-   * through the platform, which attaches a signed caller statement.
+   * Origins of the MCP servers the application runs, as its spec declares
+   * them. Workspace calls to them go through the platform, which attaches a
+   * signed caller statement.
    */
   mcp_origins: z.array(z.string()),
   /** Users the application provisioned through /apps/v1. */
@@ -1906,7 +1907,6 @@ export const ApiApplicationSecretSchema = z.object({
   homepage_url: z.string().nullable().optional(),
   redirect_uris: z.array(z.string()).optional(),
   team_id: z.string().optional(),
-  mcp_origins: z.array(z.string()).optional(),
   client_secret: z.string(),
 })
 
@@ -1919,7 +1919,6 @@ export const ApplicationCreateBodySchema = z.object({
   homepage_url: z.string().nullable().optional(),
   /** Empty for an application that only acts for the users it provisions. */
   redirect_uris: z.array(z.string()).default([]),
-  mcp_origins: z.array(z.string()).default([]),
 })
 
 export const ApplicationUpdateBodySchema = z
@@ -1928,7 +1927,6 @@ export const ApplicationUpdateBodySchema = z
     description: z.string().nullable(),
     homepage_url: z.string().nullable(),
     redirect_uris: z.array(z.string()),
-    mcp_origins: z.array(z.string()),
   })
   .partial()
 
