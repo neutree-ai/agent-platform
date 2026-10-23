@@ -1,4 +1,5 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
+import { stringify as toYaml } from 'yaml'
 import type { AppClientEnv } from '../lib/types'
 import { appAuth } from '../middleware/app-auth'
 import {
@@ -9,6 +10,8 @@ import {
   putAppPrompt,
   putAppSkill,
 } from '../services/app-content'
+import { SpecConflictError, applyAppSpec, getCurrentSpec } from '../services/app-spec/apply'
+import { SpecError, parseAppSpec } from '../services/app-spec/schema'
 import { getAppUser, upsertAppUser } from '../services/db/app-users'
 import { ensurePlatformToken } from '../services/db/shares'
 import type { User } from '../services/db/types'
@@ -73,7 +76,7 @@ const upsertRoute = createRoute({
   summary: 'Provision a user of the application, or update its name and email',
   description:
     'Idempotent. The user belongs to the calling application, has no password and ' +
-    'cannot sign in to NAP; it joins the teams the application declares. Call it ' +
+    "cannot sign in to NAP; it joins the application's team. Call it " +
     'whenever the user signs in to the application.',
   security: [{ appClientAuth: [] }],
   request: {
@@ -424,6 +427,141 @@ apps.openapi(deleteSkillRoute, async (c) => {
     throw err
   }
   return c.json({ success: true }, 200)
+})
+
+// ── Spec ───────────────────────────────────────────────────────────────────
+// The document declaring the application's agents. Each is a template the
+// application owns; its users' workspaces are created from it and follow it.
+
+const PlanEntrySchema = z
+  .object({
+    agent: z.string(),
+    action: z.enum(['create', 'update', 'delete', 'unchanged']),
+    changes: z.array(z.string()).optional().openapi({ description: 'Fields an update changes' }),
+  })
+  .openapi('AppSpecPlanEntry')
+
+const ApplyResultSchema = z
+  .object({
+    version: z.number().int().openapi({
+      description: 'The version in force after the apply, or that a dry run would create',
+    }),
+    hash: z.string(),
+    changed: z
+      .boolean()
+      .openapi({ description: 'False when the spec resolves to the one already in force' }),
+    plan: z.array(PlanEntrySchema),
+  })
+  .openapi('AppSpecApplyResult')
+
+const SpecErrorSchema = z.object({ error: z.string(), issues: z.array(z.string()) })
+
+const FlagQuery = z
+  .enum(['true', 'false'])
+  .optional()
+  .transform((v) => v === 'true')
+
+// ── PUT /v1/spec ───────────────────────────────────────────────────────────
+const putSpecRoute = createRoute({
+  method: 'put',
+  path: '/v1/spec',
+  tags: ['apps'],
+  summary: "Apply the application's spec",
+  description:
+    'The body is the whole spec, as JSON or as YAML (`Content-Type: application/yaml`). ' +
+    'References to prompts, skills, providers and environments are resolved now, and a ' +
+    'prompt without a version is pinned to its current one. Applying a spec that resolves ' +
+    'to the one in force changes nothing. `dry_run` returns the plan only; a spec that ' +
+    'drops agents is refused unless `prune` is given, which deletes them.',
+  security: [{ appClientAuth: [] }],
+  request: {
+    query: z.object({ dry_run: FlagQuery, prune: FlagQuery }),
+  },
+  responses: {
+    200: {
+      description: 'Applied, or planned',
+      content: { 'application/json': { schema: ApplyResultSchema } },
+    },
+    400: {
+      description: 'Not a valid spec, or a reference does not resolve',
+      content: { 'application/json': { schema: SpecErrorSchema } },
+    },
+    409: {
+      description: 'The spec drops agents without prune, or declares a taken MCP origin',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+apps.openapi(putSpecRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { dry_run, prune } = c.req.valid('query')
+  try {
+    const parsed = parseAppSpec(await c.req.text(), c.req.header('content-type'))
+    return c.json(await applyAppSpec(clientId, parsed, { dryRun: dry_run, prune }), 200)
+  } catch (err) {
+    if (err instanceof SpecError) {
+      return c.json({ error: 'Invalid spec', issues: err.issues }, 400)
+    }
+    if (err instanceof SpecConflictError) return c.json({ error: err.message }, 409)
+    throw err
+  }
+})
+
+// ── GET /v1/spec ───────────────────────────────────────────────────────────
+const getSpecRoute = createRoute({
+  method: 'get',
+  path: '/v1/spec',
+  tags: ['apps'],
+  summary: "Get the application's spec in force",
+  description:
+    'The spec as locked: each prompt reference carries the version it resolved to. ' +
+    'With `Accept: application/yaml` the body is the spec alone, in YAML.',
+  security: [{ appClientAuth: [] }],
+  responses: {
+    200: {
+      description: 'The spec in force',
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              version: z.number().int(),
+              hash: z.string(),
+              applied_at: z.string(),
+              spec: z.record(z.string(), z.unknown()),
+            })
+            .openapi('AppSpecCurrent'),
+        },
+        'application/yaml': { schema: z.string() },
+      },
+    },
+    404: {
+      description: 'No spec applied yet',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+apps.openapi(getSpecRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const current = await getCurrentSpec(clientId)
+  if (!current) return c.json({ error: 'No spec applied yet' }, 404)
+  const spec = current.document
+  if (/yaml/i.test(c.req.header('accept') ?? '')) {
+    return c.body(toYaml(spec), 200, {
+      'Content-Type': 'application/yaml',
+      'X-Spec-Version': String(current.version),
+    })
+  }
+  return c.json(
+    {
+      version: current.version,
+      hash: current.hash,
+      applied_at: new Date(current.created_at).toISOString(),
+      spec,
+    },
+    200,
+  )
 })
 
 export default apps
