@@ -1,7 +1,7 @@
 {
   "name": "@neutree-ai/server-sdk",
-  "version": "0.1.0",
-  "description": "Neutree Agent Platform server SDK — for the backend of an application built on the platform: provision its users and act as them, relay the UI SDK's session calls, verify the platform's caller statement on the application's MCP server, and read agent transcripts. No runtime dependencies; uses fetch and Web Crypto.",
+  "version": "0.2.0",
+  "description": "Neutree Agent Platform server SDK — for the backend of an application built on the platform: provision its users and act as them, publish its prompts and skills and apply the spec declaring each user's agents, relay the UI SDK's session calls, verify the platform's caller statement on the application's MCP server, and read agent transcripts. No runtime dependencies; uses fetch and Web Crypto.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
