@@ -148,15 +148,15 @@ export async function applyAppSpec(
       resolved.shared_folders ?? {},
     )
 
-    if (current && current.hash === hash) {
-      return {
-        version: current.version,
-        hash,
-        changed: false,
-        plan: entries,
-        shared_folders: folderEntries,
-      }
-    }
+    const result = (version: number, changed: boolean): ApplyResult => ({
+      version,
+      hash,
+      changed,
+      plan: entries,
+      shared_folders: folderEntries,
+    })
+
+    if (current && current.hash === hash) return result(current.version, false)
     const nextVersion = (current?.version ?? 0) + 1
 
     // Checked before a dry run returns, so its plan is one the apply accepts.
@@ -178,15 +178,7 @@ export async function applyAppSpec(
         `MCP servers already declared by another application: ${taken.join(', ')}`,
       )
     }
-    if (opts.dryRun) {
-      return {
-        version: nextVersion,
-        hash,
-        changed: true,
-        plan: entries,
-        shared_folders: folderEntries,
-      }
-    }
+    if (opts.dryRun) return result(nextVersion, true)
 
     // First, so a workspace that can't be deleted yet stops the apply early.
     // Deleting workspaces reaches outside the database, so it can't be part of
@@ -249,13 +241,7 @@ export async function applyAppSpec(
     convergeAppWorkspaces(clientId).catch((e) =>
       console.error(`[app-spec] converging ${clientId} failed:`, e),
     )
-    return {
-      version: nextVersion,
-      hash,
-      changed: true,
-      plan: entries,
-      shared_folders: folderEntries,
-    }
+    return result(nextVersion, true)
   } finally {
     await lock.query('SELECT pg_advisory_unlock(hashtext($1))', [`app-spec:${clientId}`])
     lock.release()

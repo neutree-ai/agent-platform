@@ -190,7 +190,7 @@ async function createAgentWorkspace(clientId: string, user: User, agent: string)
  */
 async function bringFoldersInLine(clientId: string, userId: string): Promise<void> {
   try {
-    await bringUserFoldersInLine(clientId, userId, { wait: true })
+    await bringUserFoldersInLine(clientId, userId)
   } catch (e) {
     console.error(`[app-spec] shared folders of user ${userId} failed:`, e)
   }

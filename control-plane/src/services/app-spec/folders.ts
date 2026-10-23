@@ -99,8 +99,18 @@ export interface UserFolders {
 type FolderStep =
   /** Make the folder, or finish one; afterwards the owner is a read-write member. */
   | { kind: 'create'; folder: string; owner_workspace_id: string }
-  | { kind: 'grant'; folder: string; workspace_id: string; permission: AfsPermission }
-  | { kind: 'remove'; folder: string; workspace_id: string }
+  /**
+   * A member's change, on the share found for the folder, or (null) on the one
+   * the folder's create step makes.
+   */
+  | {
+      kind: 'grant'
+      folder: string
+      share: AfsShare | null
+      workspace_id: string
+      permission: AfsPermission
+    }
+  | { kind: 'remove'; folder: string; share: AfsShare | null; workspace_id: string }
   /** A share made for a folder the spec no longer gives that owner. */
   | { kind: 'revoke'; folder: string; share: AfsShare }
 
@@ -127,6 +137,7 @@ export function planUserFolders(state: UserFolders): FolderStep[] {
       (s) => s.share.owner_workspace_id === owner.workspace_id && s.share.name === name,
     )
     if (existing) kept.add(existing.share.id)
+    const share = existing?.share ?? null
     const actual = existing?.members ?? {}
 
     // A share by that name the owner made itself is taken over, as creating
@@ -146,7 +157,7 @@ export function planUserFolders(state: UserFolders): FolderStep[] {
     }
     for (const [workspaceId, permission] of Object.entries(desired)) {
       if (actual[workspaceId] !== permission) {
-        steps.push({ kind: 'grant', folder: name, workspace_id: workspaceId, permission })
+        steps.push({ kind: 'grant', folder: name, share, workspace_id: workspaceId, permission })
       }
     }
     // The spec says who the members are: a workspace it doesn't list loses
@@ -154,7 +165,7 @@ export function planUserFolders(state: UserFolders): FolderStep[] {
     // was granted to it some other way.
     for (const workspaceId of Object.keys(actual).sort()) {
       if (workspaceId !== owner.workspace_id && !(workspaceId in desired)) {
-        steps.push({ kind: 'remove', folder: name, workspace_id: workspaceId })
+        steps.push({ kind: 'remove', folder: name, share, workspace_id: workspaceId })
       }
     }
   }
@@ -175,19 +186,10 @@ export function planUserFolders(state: UserFolders): FolderStep[] {
 async function takeSteps(state: UserFolders, steps: FolderStep[]): Promise<Map<string, string[]>> {
   const statusOf = new Map(state.workspaces.map((w) => [w.workspace_id, w.status]))
   const appWorkspaces = new Set(state.workspaces.map((w) => w.workspace_id))
-  const ownerOf = new Map<string, string>()
-  for (const [name, folder] of Object.entries(state.folders)) {
-    const owner = state.workspaces.find((w) => w.agent === folder.owner)
-    if (owner) ownerOf.set(name, owner.workspace_id)
-  }
-
-  // The share each folder is, by name: the one found, or the one made below.
-  const shareOf = new Map<string, AfsShare>()
-  for (const existing of state.shares) {
-    if (ownerOf.get(existing.share.name) === existing.share.owner_workspace_id) {
-      shareOf.set(existing.share.name, existing.share)
-    }
-  }
+  // Shares made by the create steps below, by folder, and the folders whose
+  // create failed: their members wait for it.
+  const made = new Map<string, AfsShare>()
+  const notMade = new Set<string>()
 
   const problems = new Map<string, string[]>()
   const report = (workspaceId: string, folder: string, error: unknown) => {
@@ -212,20 +214,20 @@ async function takeSteps(state: UserFolders, steps: FolderStep[]): Promise<Map<s
           mountNow: statusOf.get(step.owner_workspace_id) === 'running',
         })
         await pool.query(
-          `INSERT INTO app_shared_folders (share_id, client_id) VALUES ($1, $2)
-           ON CONFLICT (share_id) DO NOTHING`,
-          [share.id, state.client_id],
+          'INSERT INTO app_shared_folders (share_id) VALUES ($1) ON CONFLICT (share_id) DO NOTHING',
+          [share.id],
         )
-        shareOf.set(step.folder, share)
+        made.set(step.folder, share)
       } catch (e) {
         // Its members wait for it; the owner's reason says why.
-        shareOf.delete(step.folder)
+        notMade.add(step.folder)
         report(step.owner_workspace_id, step.folder, e)
       }
       continue
     }
 
-    const share = shareOf.get(step.folder)
+    if (notMade.has(step.folder)) continue
+    const share = made.get(step.folder) ?? step.share
     if (!share) continue
 
     if (step.kind === 'grant') {
@@ -288,11 +290,15 @@ interface ShareRow extends AfsShare {
  * folders, or that have folders left to revoke, are looked at.
  */
 async function loadUserFolders(clientId?: string, userId?: string): Promise<UserFolders[]> {
+  // Each application's spec in force only: its latest version, read through
+  // the (client_id, version) key rather than every version it has had.
   const { rows: specs } = await pool.query(
-    `SELECT DISTINCT ON (client_id) client_id, resolved->'shared_folders' AS folders
-       FROM app_specs
-      WHERE ($1::text IS NULL OR client_id = $1)
-      ORDER BY client_id, version DESC`,
+    `SELECT c.id AS client_id, s.folders
+       FROM oauth_clients c
+       CROSS JOIN LATERAL (
+         SELECT resolved->'shared_folders' AS folders FROM app_specs
+          WHERE client_id = c.id ORDER BY version DESC LIMIT 1) s
+      WHERE ($1::text IS NULL OR c.id = $1)`,
     [clientId ?? null],
   )
   const foldersOf = new Map<string, Record<string, ResolvedFolder>>()
@@ -302,8 +308,13 @@ async function loadUserFolders(clientId?: string, userId?: string): Promise<User
   }[]) {
     if (row.folders) foldersOf.set(row.client_id, row.folders)
   }
+  // A folder's application is its owner workspace's.
   const { rows: withFolders } = await pool.query(
-    'SELECT DISTINCT client_id FROM app_shared_folders WHERE ($1::text IS NULL OR client_id = $1)',
+    `SELECT DISTINCT aw.client_id
+       FROM app_shared_folders f
+       JOIN afs_shares s ON s.id = f.share_id
+       JOIN app_workspaces aw ON aw.workspace_id = s.owner_workspace_id
+      WHERE ($1::text IS NULL OR aw.client_id = $1)`,
     [clientId ?? null],
   )
   const clients = new Set([...foldersOf.keys(), ...withFolders.map((r) => r.client_id as string)])
@@ -367,19 +378,27 @@ function inLine(state: UserFolders): boolean {
 }
 
 /**
- * Bring the user's folders in line with the spec. Runs one at a time per
- * user, across control-plane replicas: with `wait`, after the one running;
- * without, not at all while one is running, since that one does the work.
+ * Bring the user's folders in line with the spec, waiting for a pass already
+ * running for the user. Runs one at a time per user, across control-plane
+ * replicas.
  */
-export async function bringUserFoldersInLine(
+export async function bringUserFoldersInLine(clientId: string, userId: string): Promise<void> {
+  // Read without the lock first: most of the time there's nothing to do.
+  const [before] = await loadUserFolders(clientId, userId)
+  if (!before || inLine(before)) return
+  await underUserLock(clientId, userId, { wait: true })
+}
+
+/**
+ * Take the user's steps under the user's lock: with `wait`, after the pass
+ * running; without, not at all while one is running, since that one does the
+ * work.
+ */
+async function underUserLock(
   clientId: string,
   userId: string,
   { wait }: { wait: boolean },
 ): Promise<void> {
-  // Read without the lock first: most of the time there's nothing to do.
-  const [before] = await loadUserFolders(clientId, userId)
-  if (!before || inLine(before)) return
-
   const lock = await pool.connect()
   const key = `app-folders:${clientId}:${userId}`
   let locked = false
@@ -405,10 +424,11 @@ export async function bringUserFoldersInLine(
 
 /** Bring every user's folders in line (one application's, with `clientId`). */
 export async function convergeAppFolders(clientId?: string): Promise<void> {
+  // Every user is read once here; one out of line is read again under its lock.
   for (const state of await loadUserFolders(clientId)) {
     if (inLine(state)) continue
     try {
-      await bringUserFoldersInLine(state.client_id, state.user_id, { wait: false })
+      await underUserLock(state.client_id, state.user_id, { wait: false })
     } catch (e) {
       console.error(`[app-spec] shared folders of user ${state.user_id} failed:`, e)
     }
