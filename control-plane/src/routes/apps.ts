@@ -12,6 +12,14 @@ import {
 } from '../services/app-content'
 import { SpecConflictError, applyAppSpec, getCurrentSpec } from '../services/app-spec/apply'
 import { SpecError, parseAppSpec } from '../services/app-spec/schema'
+import {
+  AgentNotFoundError,
+  AgentPlacementError,
+  agentStatuses,
+  deleteAgentWorkspace,
+  ensureAgentWorkspace,
+  listUserAgentWorkspaces,
+} from '../services/app-spec/workspaces'
 import { getAppUser, upsertAppUser } from '../services/db/app-users'
 import { ensurePlatformToken } from '../services/db/shares'
 import type { User } from '../services/db/types'
@@ -562,6 +570,161 @@ apps.openapi(getSpecRoute, async (c) => {
     },
     200,
   )
+})
+
+// ── GET /v1/spec/status ────────────────────────────────────────────────────
+const specStatusRoute = createRoute({
+  method: 'get',
+  path: '/v1/spec/status',
+  tags: ['apps'],
+  summary: "How far the users' workspaces have followed the spec",
+  description:
+    'Per agent: its template version, and how many of its workspaces are on it with the ' +
+    "agent's current runtime. A workspace takes a change once no turn is running in it.",
+  security: [{ appClientAuth: [] }],
+  responses: {
+    200: {
+      description: 'Status',
+      content: {
+        'application/json': {
+          schema: z
+            .object({
+              version: z.number().int().nullable(),
+              agents: z.array(
+                z.object({
+                  agent: z.string(),
+                  template_version: z.number().int(),
+                  workspaces: z.number().int(),
+                  up_to_date: z.number().int(),
+                }),
+              ),
+            })
+            .openapi('AppSpecStatus'),
+        },
+      },
+    },
+  },
+})
+
+apps.openapi(specStatusRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const current = await getCurrentSpec(clientId)
+  return c.json({ version: current?.version ?? null, agents: await agentStatuses(clientId) }, 200)
+})
+
+// ── Agents of a user ───────────────────────────────────────────────────────
+// Each user has one workspace per agent of the spec, created on first request.
+
+const AgentParam = ExternalIdParam.extend({
+  agent: z.string().openapi({ param: { name: 'agent', in: 'path' } }),
+})
+
+const AgentWorkspaceSchema = z
+  .object({
+    agent: z.string(),
+    workspace_id: z.string(),
+    status: z.string(),
+    template_version: z.number().int(),
+    up_to_date: z.boolean().openapi({
+      description: "On the agent's latest template version, with its current runtime",
+    }),
+  })
+  .openapi('AppAgentWorkspace')
+
+// ── GET /v1/users/{external_id}/agents ─────────────────────────────────────
+const listAgentsRoute = createRoute({
+  method: 'get',
+  path: '/v1/users/{external_id}/agents',
+  tags: ['apps'],
+  summary: "List the user's agent workspaces",
+  security: [{ appClientAuth: [] }],
+  request: { params: ExternalIdParam },
+  responses: {
+    200: {
+      description: 'Workspaces',
+      content: { 'application/json': { schema: z.array(AgentWorkspaceSchema) } },
+    },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+apps.openapi(listAgentsRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id } = c.req.valid('param')
+  const user = await getAppUser(clientId, external_id)
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  return c.json(await listUserAgentWorkspaces(clientId, user.id), 200)
+})
+
+// ── PUT /v1/users/{external_id}/agents/{agent} ─────────────────────────────
+const ensureAgentRoute = createRoute({
+  method: 'put',
+  path: '/v1/users/{external_id}/agents/{agent}',
+  tags: ['apps'],
+  summary: "Ensure the user's workspace for an agent",
+  description:
+    "Idempotent. Creates the workspace from the agent's template on the first call; " +
+    'afterwards returns it, bringing it up to date first when it is behind and idle. ' +
+    'Call the API as the user (see the token route) to chat with it.',
+  security: [{ appClientAuth: [] }],
+  request: { params: AgentParam },
+  responses: {
+    200: {
+      description: 'The workspace existed',
+      content: { 'application/json': { schema: AgentWorkspaceSchema } },
+    },
+    201: {
+      description: 'The workspace was created',
+      content: { 'application/json': { schema: AgentWorkspaceSchema } },
+    },
+    404: {
+      description: 'No such user, or no such agent in the spec',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+    409: {
+      description: 'No environment the user can use fits the agent',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
+})
+
+apps.openapi(ensureAgentRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id, agent } = c.req.valid('param')
+  const user = await getAppUser(clientId, external_id)
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  try {
+    const { workspace, created } = await ensureAgentWorkspace(clientId, user, agent)
+    return c.json(workspace, created ? 201 : 200)
+  } catch (err) {
+    if (err instanceof AgentNotFoundError) return c.json({ error: err.message }, 404)
+    if (err instanceof AgentPlacementError) return c.json({ error: err.message }, 409)
+    throw err
+  }
+})
+
+// ── DELETE /v1/users/{external_id}/agents/{agent} ──────────────────────────
+const deleteAgentRoute = createRoute({
+  method: 'delete',
+  path: '/v1/users/{external_id}/agents/{agent}',
+  tags: ['apps'],
+  summary: "Delete the user's workspace for an agent",
+  security: [{ appClientAuth: [] }],
+  request: { params: AgentParam },
+  responses: {
+    200: { description: 'Deleted', content: { 'application/json': { schema: SuccessSchema } } },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+apps.openapi(deleteAgentRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id, agent } = c.req.valid('param')
+  const user = await getAppUser(clientId, external_id)
+  if (!user || !(await deleteAgentWorkspace(clientId, user.id, agent))) {
+    return c.json({ error: 'Workspace not found' }, 404)
+  }
+  return c.json({ success: true }, 200)
 })
 
 export default apps

@@ -40,7 +40,7 @@ interface AgentTemplateConfig {
 }
 
 /** What an agent's workspaces take beyond their template. */
-interface AgentRuntime {
+export interface AgentRuntime {
   environment_id: string | null
   auto_scaling: {
     min_replicas: number

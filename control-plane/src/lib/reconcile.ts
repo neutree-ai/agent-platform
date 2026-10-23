@@ -1,5 +1,6 @@
 import { Cron } from 'croner'
 import { reloadUserWorkspaces } from '../routes/credentials'
+import { convergeAppWorkspaces } from '../services/app-spec/workspaces'
 import { drainAll } from '../services/chat/turn-gate'
 import {
   hardDeleteUserCredentials,
@@ -85,6 +86,14 @@ export function startReconcileLoop() {
     new Cron('0 * * * *', () => runIdleWorkspaceGC(gcDays))
     console.log(`[Reconcile] idle-workspace GC enabled — hourly sweep, threshold ${gcDays}d`)
   }
+
+  // Application workspaces that were busy when their agent changed take the
+  // change here, once idle. protect:true so a slow pass never stacks.
+  new Cron('*/30 * * * * *', { protect: true }, () =>
+    convergeAppWorkspaces().catch((e) =>
+      console.error('[Reconcile] app workspace sweep error:', e instanceof Error ? e.message : e),
+    ),
+  )
 
   // Status projection: derive every workspace's status from what its runner
   // reported into workspace_placements, and keep the remote forward proxies in
