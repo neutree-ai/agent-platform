@@ -53,12 +53,27 @@ function toApiTeam(t: TeamSummary): z.infer<typeof ApiTeamSchema> {
     updated_at: t.updated_at instanceof Date ? t.updated_at.toISOString() : String(t.updated_at),
     my_role: t.my_role,
     member_count: t.member_count,
+    app_id: t.app_id,
   }
 }
 
 function toApiTeamFromMembership(t: Team, role: TeamRole, memberCount: number) {
   return toApiTeam({ ...t, my_role: role, member_count: memberCount })
 }
+
+// An application's team is named after the application and goes away with it,
+// and the application's users are in it for as long as they exist. None of
+// that is changed through these routes.
+async function isAppTeam(teamId: string): Promise<boolean> {
+  return !!(await getTeam(teamId))?.app_id
+}
+
+async function isAppUser(userId: string): Promise<boolean> {
+  return !!(await getUser(userId))?.managed_by
+}
+
+const APP_TEAM_ERROR = 'This team belongs to an application; change the application instead'
+const APP_USER_ERROR = "An application's users belong to its team alone"
 
 function toApiMember(m: TeamMemberWithUser): z.infer<typeof ApiTeamMemberSchema> {
   return {
@@ -155,6 +170,10 @@ const patchRoute = createRoute({
     200: { description: 'Updated', content: { 'application/json': { schema: ApiTeamSchema } } },
     403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
     404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+    409: {
+      description: "An application's team",
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
   },
 })
 
@@ -165,6 +184,7 @@ teams.openapi(patchRoute, async (c) => {
   const membership = await getTeamMembership(id, user.sub)
   if (!membership) return c.json({ error: 'Team not found' }, 404)
   if (membership.role !== 'admin') return c.json({ error: 'Admin only' }, 403)
+  if (await isAppTeam(id)) return c.json({ error: APP_TEAM_ERROR }, 409)
   const updated = await updateTeam(id, body)
   if (!updated) return c.json({ error: 'Team not found' }, 404)
   const members = await listTeamMembers(id)
@@ -183,6 +203,10 @@ const deleteRoute = createRoute({
     200: { description: 'Deleted', content: { 'application/json': { schema: SuccessSchema } } },
     403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
     404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+    409: {
+      description: "An application's team",
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
   },
 })
 
@@ -192,6 +216,7 @@ teams.openapi(deleteRoute, async (c) => {
   const membership = await getTeamMembership(id, user.sub)
   if (!membership) return c.json({ error: 'Team not found' }, 404)
   if (membership.role !== 'admin') return c.json({ error: 'Admin only' }, 403)
+  if (await isAppTeam(id)) return c.json({ error: APP_TEAM_ERROR }, 409)
   const ok = await deleteTeam(id)
   if (!ok) return c.json({ error: 'Team not found' }, 404)
   return c.json({ success: true }, 200)
@@ -255,6 +280,7 @@ teams.openapi(addMemberRoute, async (c) => {
 
   const target = await getUser(body.user_id)
   if (!target) return c.json({ error: 'User not found' }, 400)
+  if (target.managed_by) return c.json({ error: APP_USER_ERROR }, 400)
 
   await addTeamMember(id, body.user_id, body.role ?? 'member')
   const added = await getTeamMembership(id, body.user_id)
@@ -294,6 +320,7 @@ teams.openapi(patchMemberRoute, async (c) => {
   const membership = await getTeamMembership(id, user.sub)
   if (!membership) return c.json({ error: 'Team not found' }, 404)
   if (membership.role !== 'admin') return c.json({ error: 'Admin only' }, 403)
+  if (await isAppUser(userId)) return c.json({ error: APP_USER_ERROR }, 409)
 
   // Prevent demoting the last admin so a team can never become unmanageable.
   if (body.role !== 'admin') {
@@ -336,6 +363,7 @@ teams.openapi(removeMemberRoute, async (c) => {
   // Don't let the last admin walk out and orphan the team.
   const target = await getTeamMembership(id, userId)
   if (!target) return c.json({ error: 'Member not found' }, 404)
+  if (await isAppUser(userId)) return c.json({ error: APP_USER_ERROR }, 409)
   if (target.role === 'admin') {
     const members = await listTeamMembers(id)
     const admins = members.filter((m) => m.role === 'admin')

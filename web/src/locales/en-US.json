@@ -2139,7 +2139,6 @@
         "description": "Description",
         "homepageUrl": "Homepage URL",
         "redirectUris": "Redirect URIs",
-        "teams": "Teams",
         "mcpOrigins": "MCP servers",
         "customId": "Client ID (optional)",
         "clientId": "Client ID",
@@ -2155,11 +2154,10 @@
       },
       "help": {
         "redirectUrisHint": "One URL per line. Must be http(s). Leave empty for an application that only calls the API for the users it provisions.",
-        "teamsHint": "Every user the application provisions joins these teams.",
         "mcpOriginsHint": "The application's own MCP servers, one per line. Agent calls to them go through the platform, which attaches a signed statement of who is calling.",
-        "noTeams": "You aren't in any team yet.",
         "storeSecurely": "The client secret will only be shown once. Store it securely before closing.",
-        "rotateWarning": "Rotating invalidates the existing secret. Existing refresh tokens remain valid."
+        "rotateWarning": "Rotating invalidates the existing secret. Existing refresh tokens remain valid.",
+        "team": "Share providers, skills, prompts and environments with the team “{{name}}” to make them available to this application's users."
       },
       "actions": {
         "create": "Create",
@@ -2399,7 +2397,8 @@
         "noInvites": "No active invite links. Generate one to invite people.",
         "inviteHelp": "Anyone with the link can join the team until it expires.",
         "expiresAt": "expires {{value}}",
-        "createdBy": "by {{name}}"
+        "createdBy": "by {{name}}",
+        "appTeam": "This is an application's team. It is named after the application, and the application's users join it on their own. Share providers, skills, prompts and environments with it to make them available to them."
       },
       "dialogs": {
         "createTitle": "New team",

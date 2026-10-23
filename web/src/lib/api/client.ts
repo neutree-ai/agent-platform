@@ -2114,7 +2114,6 @@ class ApiClient {
     description?: string | null
     homepage_url?: string | null
     redirect_uris: string[]
-    team_ids: string[]
     mcp_origins: string[]
   }): Promise<ApiApplicationSecret> {
     return this.request<ApiApplicationSecret>('/applications', {
@@ -2130,7 +2129,6 @@ class ApiClient {
       description?: string | null
       homepage_url?: string | null
       redirect_uris?: string[]
-      team_ids?: string[]
       mcp_origins?: string[]
     },
   ): Promise<void> {
