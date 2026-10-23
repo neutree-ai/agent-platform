@@ -2,7 +2,7 @@
 
 For the backend of an application built on the Neutree Agent Platform. Your application keeps its own users, pages and data; the platform runs an agent workspace for each user. This SDK covers the four places the two meet:
 
-- **`AppClient`** provisions your users on the platform and acts as them, with your application's client id and secret.
+- **`AppClient`** provisions your users on the platform and acts as them, with your application's client id and secret. It also publishes your prompts and skills and applies your spec: the agents each user gets.
 - **`createSessionRelay`** relays the [UI SDK](https://www.npmjs.com/package/@neutree-ai/ui-sdk)'s session calls from the browser to the platform, as the signed-in person.
 - **`CallerVerifier`** verifies, on your application's MCP server, which user, workspace and session a call comes from.
 - **`calledAgents` / `describeCall`** read an agent transcript.
@@ -15,10 +15,7 @@ npm install @neutree-ai/server-sdk
 
 ## Register the application
 
-An admin registers your application under **Applications** on the platform. That gives you a client id and secret. There you also declare:
-
-- **Teams** that every user your application provisions joins.
-- **MCP servers**: the origins of your own MCP servers. Agent calls to them go through the platform, which attaches a signed statement of who is calling.
+An admin registers your application under **Applications** on the platform. That gives you a client id and secret, and a team of the application's own: every user your application provisions joins it, and providers, skills, prompts and environments shared with it are available to them.
 
 ## Users
 
@@ -41,6 +38,47 @@ await nap.request('POST', '/api/workspaces', { name: 'Main' })
 ```
 
 Each user belongs to your application alone: it has no password and can't sign in to the platform itself. `platform.deleteUser(id)` removes one once it owns no workspaces.
+
+## Agents
+
+Declare the agents each user gets in a spec, and apply it from your deploy step. Prompts and skills the spec names are ones you publish, or ones shared with your application's team.
+
+```ts
+await platform.publishPrompt('study', await readFile('prompts/study.md', 'utf8'))
+await platform.publishSkill('well-whale', await readFile('skills/well-whale.tar.gz'))
+
+const result = await platform.applySpec(await readFile('nap.yaml', 'utf8'))
+console.log(result.plan) // [{ agent: 'study', action: 'update', changes: ['prompt_version'] }]
+```
+
+```yaml
+# nap.yaml
+apiVersion: nap.app/v1
+mcp_servers:
+  whale: { url: https://whale.example.com/mcp, identify_caller: true }
+agents:
+  study:
+    runtime: { agent_type: claude-code, max_concurrency: 4 }
+    model: { provider: deepseek, name: deepseek-v4 }
+    prompt: study          # pinned to its current version when applied; or study@3
+    skills: [well-whale]
+    mcp: { whale: {} }
+    calls: [diver]         # may call the user's diver agent
+  diver:
+    runtime: { agent_type: codex }
+    model: { provider: deepseek, name: deepseek-v4 }
+```
+
+Publishing the same prompt text or skill package again keeps its version, and applying a spec that resolves to the one in force changes nothing, so the deploy step can run them all every time. `applySpec(spec, { dryRun: true })` returns the plan alone; a spec that drops an agent needs `{ prune: true }`, which deletes it with its users' workspaces.
+
+Each user gets a workspace per agent the first time you ask for it:
+
+```ts
+const { workspace_id } = await platform.ensureAgent(user.id, 'study')
+const nap = platform.as(user.id) // chat with it as the user
+```
+
+When the spec changes an agent, its workspaces follow: each moves to the new version once no turn is running in it. `platform.specStatus()` shows how many are up to date.
 
 ## Session relay
 
@@ -75,7 +113,7 @@ The relay covers the session, its messages and stored images, queued follow-ups,
 
 ## Caller statement
 
-When an agent calls an MCP server your application declared, the platform adds `X-Platform-Caller`: a five-minute ES256 JWT addressed to your application. Verify it instead of trusting any plain header, since an agent can reach your server directly and send whatever headers it likes.
+When an agent calls an MCP server your spec declares with `identify_caller`, the platform adds `X-Platform-Caller`: a five-minute ES256 JWT addressed to your application. Verify it instead of trusting any plain header, since an agent can reach your server directly and send whatever headers it likes.
 
 ```ts
 import { CallerVerifier } from '@neutree-ai/server-sdk'

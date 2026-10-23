@@ -71,4 +71,53 @@ describe('AppClient', () => {
     expect(url).toBe('https://nap.test/api/workspaces')
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer tok-1')
   })
+
+  it('applies a YAML spec as YAML, and an object as JSON', async () => {
+    const { app, fetchMock } = setup()
+    fetchMock.mockImplementation(async () =>
+      json({ version: 1, hash: 'h', changed: true, plan: [] }),
+    )
+
+    await app.applySpec('apiVersion: nap.app/v1\n', { dryRun: true })
+    await app.applySpec({ apiVersion: 'nap.app/v1', agents: {} }, { prune: true })
+
+    const [yamlUrl, yamlInit] = fetchMock.mock.calls[0]
+    expect(yamlUrl).toBe('https://nap.test/apps/v1/spec?dry_run=true')
+    expect((yamlInit?.headers as Record<string, string>)['Content-Type']).toBe('application/yaml')
+    expect(yamlInit?.body).toBe('apiVersion: nap.app/v1\n')
+    const [jsonUrl, jsonInit] = fetchMock.mock.calls[1]
+    expect(jsonUrl).toBe('https://nap.test/apps/v1/spec?prune=true')
+    expect(JSON.parse(jsonInit?.body as string)).toEqual({ apiVersion: 'nap.app/v1', agents: {} })
+  })
+
+  it('returns null for the spec before the first apply', async () => {
+    const { app, fetchMock } = setup()
+    fetchMock.mockImplementation(async () => json({ error: 'No spec applied yet' }, 404))
+
+    expect(await app.getSpec()).toBeNull()
+  })
+
+  it('publishes a skill package as raw bytes', async () => {
+    const { app, fetchMock } = setup()
+    fetchMock.mockImplementation(async () => json({ name: 'demo', version: 1 }, 201))
+    const pkg = new Uint8Array([31, 139, 8])
+
+    await app.publishSkill('demo', pkg, { description: 'A demo' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://nap.test/apps/v1/skills/demo?description=A%20demo')
+    expect(init?.body).toBe(pkg)
+  })
+
+  it("ensures a user's agent workspace", async () => {
+    const { app, fetchMock } = setup()
+    fetchMock.mockImplementation(async () => json({ agent: 'study', workspace_id: 'w1' }, 201))
+
+    const ws = await app.ensureAgent('stu 1', 'study')
+
+    expect(ws.workspace_id).toBe('w1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://nap.test/apps/v1/users/stu%201/agents/study')
+    expect(init?.method).toBe('PUT')
+  })
 })
