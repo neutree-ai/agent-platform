@@ -67,6 +67,7 @@ The platform exposes a set of MCP tools for exactly this, so the agent manages s
 - `create_sandbox` — bring one up
 - `sandbox_run_command` — run something in it
 - `sandbox_read_file` / `sandbox_write_files` — read and write inside it
+- `sandbox_upload_directory` — copy a whole Workspace directory into it, binary files included, without the agent reading and rewriting each file
 - `kill_sandbox` — tear it down
 
 So when the agent wants to run code and look at the result, it calls these itself and you configure nothing. **The sandbox is there from the start, not an extension to enable.**

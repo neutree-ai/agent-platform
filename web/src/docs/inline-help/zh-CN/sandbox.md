@@ -27,4 +27,5 @@ Sandbox 是隔离的容器环境，用于运行代码、执行命令和文件操
 - `create_sandbox` — 创建沙箱
 - `sandbox_run_command` — 执行命令
 - `sandbox_read_file` / `sandbox_write_files` — 文件读写
+- `sandbox_upload_directory` — 把 Workspace 里的一个目录整个传进 Sandbox
 - `kill_sandbox` — 销毁沙箱

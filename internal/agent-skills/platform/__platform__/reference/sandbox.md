@@ -12,3 +12,7 @@ sandbox_run_command: <your command>, cwd: "/home/user"
 ```
 
 Use `/tmp` for ephemeral scratch files and `/home/user` (or any path you `mkdir`) for project work.
+
+## Bringing workspace files in
+
+To run a project from `/workspace` in a sandbox, use `sandbox_upload_directory` (`path` relative to `/workspace`, absolute `dest` in the sandbox). It copies the whole directory, binary files included, in one call — don't read files just to pass their content to `sandbox_write_files`. Upload again after editing; `replace: true` also removes files you deleted.

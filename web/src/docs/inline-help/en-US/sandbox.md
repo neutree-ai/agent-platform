@@ -27,4 +27,5 @@ A Sandbox can be created and managed automatically by an agent through MCP tools
 - `create_sandbox` — Create a Sandbox
 - `sandbox_run_command` — Execute a command
 - `sandbox_read_file` / `sandbox_write_files` — Read and write files
+- `sandbox_upload_directory` — Copy a whole Workspace directory into the Sandbox
 - `kill_sandbox` — Destroy a Sandbox
