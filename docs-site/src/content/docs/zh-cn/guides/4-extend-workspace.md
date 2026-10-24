@@ -67,6 +67,7 @@ Sandbox 不是 Workspace 自身的运行环境，而是 Agent **按需创建的�
 - `create_sandbox` ——按需创建一个
 - `sandbox_run_command` ——在里面执行命令
 - `sandbox_read_file` / `sandbox_write_files` ——读写 sandbox 内的文件
+- `sandbox_upload_directory` ——把 Workspace 里的一个目录整个传进 sandbox，二进制文件也行，Agent 不用逐个读出再写入
 - `kill_sandbox` ——用完销毁
 
 也就是说，Agent 想"跑一段代码看结果"时，它会自己调用这些工具——你不需要做任何配置。**Sandbox 是开箱即用的能力，不是需要你启用的扩展。**
