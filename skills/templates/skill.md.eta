@@ -28,7 +28,7 @@ const intentRows = intents[it.meta.name];
 -%>
 ---
 name: <%= it.meta.name %>
-description: <%= description %>
+description: <%= JSON.stringify(description) %>
 <% if (it.meta.license) { -%>
 license: <%= it.meta.license.name %><%= it.meta.license.url ? ` (${it.meta.license.url})` : "" %>
 <% } -%>
