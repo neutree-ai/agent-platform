@@ -1,6 +1,6 @@
 ---
 name: nap-api
-description: Manage NAP workspaces, prompts, templates, credentials, service tokens, agent files, providers, tags, shares, schedules via REST, and build applications whose users each get NAP agents (the App Spec). Trigger when the user wants to script or automate NAP outside the UI — e.g. "create a workspace", "rotate a token", "bulk-upload prompts", "list agent files in workspace X", CI integration with NAP — or to give an application's users their own agents: "write the app spec", "declare our agents", "apply the spec on deploy".
+description: "Manage NAP workspaces, prompts, templates, credentials, service tokens, agent files, providers, tags, shares, schedules via REST, and build applications whose users each get NAP agents (the App Spec). Trigger when the user wants to script or automate NAP outside the UI — e.g. \"create a workspace\", \"rotate a token\", \"bulk-upload prompts\", \"list agent files in workspace X\", CI integration with NAP — or to give an application's users their own agents: \"write the app spec\", \"declare our agents\", \"apply the spec on deploy\"."
 metadata:
   api-version: "0.1.0"
   openapi-version: "3.1.0"
