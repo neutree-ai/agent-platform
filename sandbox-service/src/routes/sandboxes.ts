@@ -365,7 +365,7 @@ sandboxes.openapi(
     path: '/{id}/renew',
     tags: tag,
     security,
-    summary: 'Extend sandbox expiration',
+    summary: 'Extend sandbox expiration by a delta',
     request: {
       params: IdParam,
       body: { content: { 'application/json': { schema: RenewSandboxBodySchema } } },
@@ -384,7 +384,10 @@ sandboxes.openapi(
       const info = await withOwnership(c, c.req.param('id'))
       if (!info) return c.json({ error: 'Sandbox not found' }, 404)
       const body = c.req.valid('json')
-      const result = await sandbox.renewSandbox(c.req.param('id'), body.timeoutSeconds ?? 3600)
+      const result = await sandbox.renewSandbox(
+        c.req.param('id'),
+        body.extendSeconds ?? body.timeoutSeconds ?? 3600,
+      )
       try {
         await launches.recordRenew(c.req.param('id'), result.expiresAt)
       } catch (e) {

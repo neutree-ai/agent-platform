@@ -79,13 +79,14 @@ export async function createSandbox(
   })
 }
 
+/** Add `extendSeconds` to the sandbox's current expiry (from now if already expired). */
 export async function renewSandbox(
   token: string,
   sandboxId: string,
-  timeoutSeconds: number,
+  extendSeconds: number,
 ): Promise<{ expiresAt: string }> {
   return request<{ expiresAt: string }>(token, 'POST', `/api/sandboxes/${sandboxId}/renew`, {
-    timeoutSeconds,
+    extendSeconds,
   })
 }
 

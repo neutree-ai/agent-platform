@@ -46,10 +46,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(opts),
     }),
-  renewSandbox: (id: string, timeoutSeconds?: number) =>
+  renewSandbox: (id: string, extendSeconds?: number) =>
     request<{ expiresAt: string }>(`/api/sandboxes/${id}/renew`, {
       method: 'POST',
-      body: JSON.stringify({ timeoutSeconds }),
+      body: JSON.stringify({ extendSeconds }),
     }),
   deleteSandbox: (id: string) =>
     request<{ success: boolean }>(`/api/sandboxes/${id}`, { method: 'DELETE' }),

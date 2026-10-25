@@ -573,11 +573,11 @@ curl "$BASE/api/sandboxes/${detail.id}/files?path=/etc/hostname" \\
 curl "$BASE/api/sandboxes/${detail.id}/endpoint/3000" \\
   -H "Authorization: Bearer $TOKEN"
 
-# Renew
+# Renew (add one hour to the current expiry)
 curl -X POST "$BASE/api/sandboxes/${detail.id}/renew" \\
   -H "Authorization: Bearer $TOKEN" \\
   -H "Content-Type: application/json" \\
-  -d '{"timeoutSeconds":3600}'
+  -d '{"extendSeconds":3600}'
 
 # Delete
 curl -X DELETE "$BASE/api/sandboxes/${detail.id}" \\

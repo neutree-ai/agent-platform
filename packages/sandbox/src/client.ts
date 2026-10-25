@@ -90,10 +90,11 @@ export class SandboxClient {
     await this.fetch(`/sandboxes/${id}`, { method: 'DELETE' })
   }
 
-  async renew(id: string, timeoutSeconds: number): Promise<{ expiresAt: string }> {
+  /** Add `extendSeconds` to the sandbox's current expiry. */
+  async renew(id: string, extendSeconds: number): Promise<{ expiresAt: string }> {
     return this.fetchJson(`/sandboxes/${id}/renew`, {
       method: 'POST',
-      body: JSON.stringify({ timeoutSeconds }),
+      body: JSON.stringify({ extendSeconds }),
     })
   }
 
