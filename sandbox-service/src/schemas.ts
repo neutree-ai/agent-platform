@@ -46,7 +46,15 @@ export const CreateSandboxBodySchema = z
 
 export const RenewSandboxBodySchema = z
   .object({
-    timeoutSeconds: z.number().int().positive().optional(),
+    extendSeconds: z.number().int().positive().optional().openapi({
+      description:
+        'Seconds to add to the current expiry (default 3600). An already-expired sandbox extends from now.',
+      example: 3600,
+    }),
+    timeoutSeconds: z.number().int().positive().optional().openapi({
+      deprecated: true,
+      description: 'Deprecated alias of `extendSeconds`.',
+    }),
   })
   .openapi('RenewSandboxBody')
 

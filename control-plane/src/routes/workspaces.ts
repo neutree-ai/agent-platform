@@ -8,7 +8,6 @@ import {
   markSessionSeen,
 } from '../services/db/workspaces'
 import workspaceBrowsers from './workspace-browsers'
-import workspaceSandboxes from './workspace-sandboxes'
 import {} from './workspaces/_shared'
 
 const workspaces = new Hono<AppEnv>()
@@ -50,8 +49,7 @@ workspaces.post('/:id/seen', async (c) => {
   return c.json({ success: true, changed: count > 0 })
 })
 
-// Mount sandbox and browser sub-routes
-workspaces.route('/', workspaceSandboxes)
+// Mount browser sub-routes
 workspaces.route('/', workspaceBrowsers)
 
 export default workspaces

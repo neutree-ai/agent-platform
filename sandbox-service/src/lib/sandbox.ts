@@ -141,18 +141,24 @@ export async function deleteSandbox(sandboxId: string): Promise<void> {
   return getManager().killSandbox(sandboxId)
 }
 
+/**
+ * Push a sandbox's expiry `extendSeconds` past its current expiry. A sandbox
+ * that has already expired (or carries no expiry) extends from now, so the
+ * result is always at least `extendSeconds` away.
+ */
 export async function renewSandbox(
   sandboxId: string,
-  timeoutSeconds: number,
+  extendSeconds: number,
 ): Promise<{ expiresAt: string }> {
   const sbx = await connectSandbox(sandboxId)
   try {
-    const result = await sbx.renew(timeoutSeconds)
+    const info = await sbx.getInfo()
+    const current = info.expiresAt ? new Date(info.expiresAt).getTime() : Number.NaN
+    const base = Number.isFinite(current) ? Math.max(Date.now(), current) : Date.now()
+    const expiresAt = new Date(base + extendSeconds * 1000).toISOString()
+    const result = await sbx.sandboxes.renewSandboxExpiration(sandboxId, { expiresAt })
     return {
-      expiresAt:
-        result.expiresAt instanceof Date
-          ? result.expiresAt.toISOString()
-          : (result.expiresAt ?? ''),
+      expiresAt: result.expiresAt instanceof Date ? result.expiresAt.toISOString() : expiresAt,
     }
   } finally {
     await sbx.close()

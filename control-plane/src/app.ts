@@ -61,6 +61,7 @@ import transfersRoutes from './routes/transfers'
 import wecomAuthRoutes from './routes/wecom-auth'
 import workspaceProtocolRoutes from './routes/workspace'
 import workspaceLayoutsRoutes from './routes/workspace-layouts'
+import workspaceSandboxesRoutes from './routes/workspace-sandboxes'
 import workspacesRoutes from './routes/workspaces'
 import workspacesAfsSharesRoutes from './routes/workspaces/afs-shares'
 import { createAgentRoutes } from './routes/workspaces/agent'
@@ -326,6 +327,7 @@ app.route('/api/workspaces', workspacesTemplatesRoutes)
 app.route('/api/workspaces', workspacesSessionsRoutes)
 app.route('/api/workspaces', workspacesUsageRoutes)
 app.route('/api/workspaces', workspacesRoutes)
+app.route('/api/workspaces', workspaceSandboxesRoutes)
 app.route('/api/workspaces', workspacesCommandsRoutes)
 app.route('/api/workspaces', workspacesChatRoutes)
 app.route('/api/workspaces', createAgentRoutes({ upgradeWebSocket }))

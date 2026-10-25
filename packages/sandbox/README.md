@@ -60,7 +60,7 @@ await client.delete(sbx.id)
 | `list(filter?)` | List sandboxes |
 | `get(id)` | Get sandbox info |
 | `delete(id)` | Delete a sandbox |
-| `renew(id, timeoutSeconds)` | Extend sandbox expiration |
+| `renew(id, extendSeconds)` | Add `extendSeconds` to the current expiry |
 | `exec(id, command, opts?)` | Execute a command |
 | `readFile(id, path)` | Read a file |
 | `writeFiles(id, files)` | Write files |

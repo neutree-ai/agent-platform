@@ -162,15 +162,19 @@ For coding tasks (e.g. git clone, npm install, dev server), use a longer timeout
         'Extend a sandbox expiry. Use this instead of creating a replacement when a task runs longer than the original timeout.',
       inputSchema: z.object({
         sandbox_id: z.string().describe('ID of the target sandbox'),
-        timeout_seconds: z
+        extend_seconds: z
           .number()
-          .describe('New lifetime in seconds, counted from now (e.g. 3600 for one more hour)'),
+          .int()
+          .positive()
+          .describe(
+            'Seconds to add to the current expiry (e.g. 3600 for one more hour). An already-expired sandbox extends from now.',
+          ),
       }),
     },
-    async ({ sandbox_id, timeout_seconds }) => {
+    async ({ sandbox_id, extend_seconds }) => {
       try {
         const token = await getToken()
-        const result = await sandbox.renewSandbox(token, sandbox_id, timeout_seconds)
+        const result = await sandbox.renewSandbox(token, sandbox_id, extend_seconds)
         return jsonResult({ sandbox_id, expires_at: result.expiresAt })
       } catch (e: any) {
         return errorResult(`Error renewing sandbox: ${e.message}`)
