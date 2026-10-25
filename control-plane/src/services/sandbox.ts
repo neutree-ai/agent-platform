@@ -10,6 +10,15 @@ function buildHeaders(token: string): Record<string, string> {
   }
 }
 
+class SandboxServiceError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+  }
+}
+
 async function request<T>(token: string, method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${SANDBOX_SERVICE_URL}${path}`, {
     method,
@@ -18,7 +27,10 @@ async function request<T>(token: string, method: string, path: string, body?: un
   })
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText)
-    throw new Error(`Sandbox service ${method} ${path} failed (${res.status}): ${text}`)
+    throw new SandboxServiceError(
+      `Sandbox service ${method} ${path} failed (${res.status}): ${text}`,
+      res.status,
+    )
   }
   const ct = res.headers.get('content-type') ?? ''
   if (ct.includes('application/json')) {
@@ -88,6 +100,16 @@ export async function renewSandbox(
   return request<{ expiresAt: string }>(token, 'POST', `/api/sandboxes/${sandboxId}/renew`, {
     extendSeconds,
   })
+}
+
+/** Null when the sandbox does not exist or belongs to someone other than the token's user. */
+export async function getSandbox(token: string, sandboxId: string): Promise<SandboxInfo | null> {
+  try {
+    return await request<SandboxInfo>(token, 'GET', `/api/sandboxes/${sandboxId}`)
+  } catch (e) {
+    if (e instanceof SandboxServiceError && e.status === 404) return null
+    throw e
+  }
 }
 
 export async function listSandboxes(

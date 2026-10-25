@@ -16,7 +16,7 @@
 | Status | Description |
 |--------|-------------|
 | 200 | Killed |
-| 404 | Workspace not found |
+| 404 | Workspace or sandbox not found |
 | 500 | Sandbox service error |
 
 **Success Response Schema** (inline):
