@@ -16,6 +16,17 @@ async function getOwnerToken(workspace: { user_id: string }): Promise<string> {
   return token
 }
 
+// The owner token reaches every sandbox the owner has, across workspaces, so
+// per-sandbox routes also check the sandbox was created for this workspace.
+async function isWorkspaceSandbox(
+  token: string,
+  workspaceId: string,
+  sandboxId: string,
+): Promise<boolean> {
+  const info = await sandbox.getSandbox(token, sandboxId)
+  return info?.metadata?.workspace_id === workspaceId
+}
+
 const workspaceSandboxes = new OpenAPIHono<AppEnv>()
 
 const ErrorSchema = z.object({ error: z.string() })
@@ -42,6 +53,10 @@ const SandboxParam = z.object({
 
 const notFound = {
   description: 'Workspace not found',
+  content: { 'application/json': { schema: ErrorSchema } },
+}
+const sandboxNotFound = {
+  description: 'Workspace or sandbox not found',
   content: { 'application/json': { schema: ErrorSchema } },
 }
 const serverError = {
@@ -183,7 +198,7 @@ const renewRoute = createRoute({
         },
       },
     },
-    404: notFound,
+    404: sandboxNotFound,
     500: serverError,
   },
 })
@@ -200,6 +215,9 @@ workspaceSandboxes.openapi(renewRoute, async (c) => {
   try {
     const body = c.req.valid('json') ?? {}
     const token = await getOwnerToken(workspace)
+    if (!(await isWorkspaceSandbox(token, id, sandboxId))) {
+      return c.json({ error: 'Sandbox not found' }, 404)
+    }
     const result = await sandbox.renewSandbox(token, sandboxId, body.extend_seconds ?? 3600)
     return c.json({ sandbox_id: sandboxId, expires_at: result.expiresAt }, 200)
   } catch (e: any) {
@@ -233,7 +251,7 @@ const endpointRoute = createRoute({
       description: 'Invalid port number',
       content: { 'application/json': { schema: ErrorSchema } },
     },
-    404: notFound,
+    404: sandboxNotFound,
     500: serverError,
   },
 })
@@ -249,6 +267,9 @@ workspaceSandboxes.openapi(endpointRoute, async (c) => {
 
   try {
     const token = await getOwnerToken(workspace)
+    if (!(await isWorkspaceSandbox(token, id, sandboxId))) {
+      return c.json({ error: 'Sandbox not found' }, 404)
+    }
     const port = Number.parseInt(c.req.valid('param').port, 10)
     if (!Number.isFinite(port) || port < 1 || port > 65535) {
       return c.json({ error: 'Invalid port number' }, 400)
@@ -271,7 +292,7 @@ const deleteRoute = createRoute({
   request: { params: SandboxParam },
   responses: {
     200: { description: 'Killed', content: { 'application/json': { schema: SuccessSchema } } },
-    404: notFound,
+    404: sandboxNotFound,
     500: serverError,
   },
 })
@@ -287,6 +308,9 @@ workspaceSandboxes.openapi(deleteRoute, async (c) => {
 
   try {
     const token = await getOwnerToken(workspace)
+    if (!(await isWorkspaceSandbox(token, id, sandboxId))) {
+      return c.json({ error: 'Sandbox not found' }, 404)
+    }
     await sandbox.deleteSandbox(token, sandboxId)
     return c.json({ success: true }, 200)
   } catch (e: any) {

@@ -18,7 +18,7 @@
 |--------|-------------|
 | 200 | Endpoint URL |
 | 400 | Invalid port number |
-| 404 | Workspace not found |
+| 404 | Workspace or sandbox not found |
 | 500 | Sandbox service error |
 
 **Success Response Schema** (inline):
