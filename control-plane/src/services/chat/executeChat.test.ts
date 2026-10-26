@@ -47,12 +47,13 @@ vi.mock('../db/teamwork', () => ({ addTeamworkSession: vi.fn().mockResolvedValue
 vi.mock('../db/workspaces', () => ({ getWorkspace: vi.fn() }))
 vi.mock('../../lib/sse', () => ({
   createInterceptedSSEResponse: vi.fn().mockReturnValue(new Response('ok')),
+  isDraining: vi.fn().mockReturnValue(false),
 }))
 
 const { executeChat } = await import('./executeChat')
 const { getSession, transitionSessionStatus } = await import('../db/sessions')
 const { turnDemand, __resetTurnGate } = await import('./turn-gate')
-const { createInterceptedSSEResponse } = await import('../../lib/sse')
+const { createInterceptedSSEResponse, isDraining } = await import('../../lib/sse')
 const { syncReadyReplicas, __resetReplicaRouter } = await import('../replica-router')
 
 const WS = 'ws1'
@@ -149,6 +150,19 @@ describe('executeChat one turn per session', () => {
     vi.mocked(getSession).mockImplementation(async (id: string) =>
       id === 'gone' ? null : ({ id, workspace_id: WS, replica_ordinal: 0 } as never),
     )
+  })
+
+  it('turns away a turn once the process is draining', async () => {
+    vi.mocked(isDraining).mockReturnValueOnce(true)
+
+    const resp = await chat('s1')
+
+    expect(resp.status).toBe(503)
+    expect(await resp.json()).toMatchObject({ code: 'restarting' })
+    expect(fetch).not.toHaveBeenCalled()
+    // Neither the session nor an admission slot is held.
+    expect(claimRows.has('s1')).toBe(false)
+    expect(turnDemand(WS).active).toBe(0)
   })
 
   it('turns away a second turn while one is running', async () => {

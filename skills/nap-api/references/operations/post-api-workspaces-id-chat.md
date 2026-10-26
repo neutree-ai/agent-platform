@@ -82,7 +82,8 @@ running server-side. Returns the session id to poll for results. |
 | 409 | Another turn is running in the session (`code: "session_busy"`).
 A session runs one turn at a time; send again once it has ended. |
 | 502 | Agent unavailable |
-| 503 | Workspace not running |
+| 503 | Workspace not running, or the control plane is restarting
+(`code: "restarting"`) — retry shortly. |
 
 **Success Response Schema** (inline):
 
