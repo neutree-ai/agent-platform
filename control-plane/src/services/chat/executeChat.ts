@@ -1,5 +1,5 @@
 import { ensureTokenForSession, mintToken } from '../../lib/session-token'
-import { type TurnHooks, createInterceptedSSEResponse } from '../../lib/sse'
+import { type TurnHooks, createInterceptedSSEResponse, isDraining } from '../../lib/sse'
 import { resolveAgentAddress } from '../../lib/workspace-address'
 import { addMessage, insertUserMessageBlocks } from '../db/messages'
 import {
@@ -74,6 +74,14 @@ export async function executeChat(opts: ExecuteChatOpts): Promise<Response> {
   const { id: workspaceId } = workspace
   const sessionId = opts.sessionId
   let userMessageText: string | null = opts.message
+
+  // A process on its way out must not start a turn: the replacement replica's
+  // recovery has already run, so a turn begun here has no one to pick it up
+  // once this process exits, and its session claim is left to expire. Turned
+  // away now, the caller retries and lands on a live replica.
+  if (isDraining()) {
+    return jsonError('Control plane is restarting, please retry', 503, 'restarting')
+  }
 
   // Reject cross-workspace session ids before we touch the agent. Without
   // this a caller could drive messages belonging to another workspace's

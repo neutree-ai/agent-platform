@@ -135,7 +135,10 @@ const chatRoute = createRoute({
       content: { 'application/json': { schema: ErrorSchema } },
     },
     503: {
-      description: 'Workspace not running',
+      description: [
+        'Workspace not running, or the control plane is restarting',
+        '(`code: "restarting"`) — retry shortly.',
+      ].join('\n'),
       content: { 'application/json': { schema: ErrorSchema } },
     },
   },
