@@ -14,8 +14,10 @@ const INTERACTIONS = `(count(*) FILTER (WHERE m.role = 'user') +
   COALESCE(sum(m.event_count) FILTER (WHERE m.role = 'assistant'), 0))::integer`
 
 export async function refreshAdminStats(forceFullRebuild = false): Promise<void> {
-  const { rows } = await pool.query<{ relkind: string }>(
-    "SELECT relkind FROM pg_class WHERE oid = to_regclass('public.admin_workspace_stats')",
+  const { rows } = await pool.query<{ relkind: string; workspace_daily_available: boolean }>(
+    `SELECT relkind,
+            to_regclass('public.admin_workspace_daily_interactions') IS NOT NULL AS workspace_daily_available
+       FROM pg_class WHERE oid = to_regclass('public.admin_workspace_stats')`,
   )
   if (rows[0]?.relkind === 'm') {
     // The scheduler can be upgraded before the control-plane applies the migration.
@@ -36,12 +38,26 @@ export async function refreshAdminStats(forceFullRebuild = false): Promise<void>
     await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ')
     // Serialize ticks and nightly rebuilds before taking the transaction snapshot.
     await client.query('LOCK TABLE public.admin_stats_watermark IN EXCLUSIVE MODE')
-    const { rows: state } = await client.query<{ last_usage_id: string }>(
-      'SELECT last_usage_id FROM public.admin_stats_watermark WHERE id = 1',
+    const workspaceDailyAvailable = rows[0]?.workspace_daily_available === true
+    const { rows: state } = await client.query<{
+      last_usage_id: string
+      workspace_daily_initialized?: boolean
+    }>(
+      `SELECT last_usage_id${workspaceDailyAvailable ? ', workspace_daily_initialized' : ''}
+         FROM public.admin_stats_watermark WHERE id = 1`,
     )
     const fullRebuild = forceFullRebuild || state.length === 0
-    await refreshInteractions(client, fullRebuild)
+    await refreshInteractions(
+      client,
+      fullRebuild,
+      workspaceDailyAvailable ? fullRebuild || !state[0]?.workspace_daily_initialized : undefined,
+    )
     await refreshTokens(client, fullRebuild, state[0]?.last_usage_id ?? '0')
+    if (workspaceDailyAvailable && !state[0]?.workspace_daily_initialized) {
+      await client.query(
+        'UPDATE public.admin_stats_watermark SET workspace_daily_initialized = true WHERE id = 1',
+      )
+    }
     await client.query('COMMIT')
   } catch (error) {
     await client.query('ROLLBACK').catch((rollbackError: Error) => {
@@ -53,9 +69,44 @@ export async function refreshAdminStats(forceFullRebuild = false): Promise<void>
   }
 }
 
-async function refreshInteractions(client: PoolClient, fullRebuild: boolean): Promise<void> {
-  // Ticks recompute only workspaces with recent messages; the nightly rebuild repairs
-  // deleted workspaces and late changes to older messages.
+async function refreshWorkspaceInteractions(
+  client: PoolClient,
+  fullRebuild: boolean,
+  dailyRebuild: boolean | undefined,
+): Promise<void> {
+  if (dailyRebuild !== undefined) {
+    // shortcut: changes outside the recent window (including NULL dates) are
+    // repaired by the nightly rebuild, without scanning historical messages on ticks.
+    await client.query(
+      'DELETE FROM public.admin_workspace_daily_interactions WHERE $1::boolean OR day >= current_date - 7',
+      [dailyRebuild],
+    )
+    await client.query(
+      `INSERT INTO public.admin_workspace_daily_interactions (workspace_id, day, interactions)
+       SELECT m.workspace_id, m.created_at::date,
+              count(*) FILTER (WHERE m.role = 'user') +
+              COALESCE(sum(m.event_count) FILTER (WHERE m.role = 'assistant'), 0)
+         FROM public.messages m
+        WHERE $1::boolean OR m.created_at >= current_date - 7
+        GROUP BY m.workspace_id, m.created_at::date`,
+      [dailyRebuild],
+    )
+    // Keep zero-interaction groups, but remove workspaces whose last day was deleted.
+    await client.query(
+      `DELETE FROM public.admin_workspace_stats stats
+        WHERE NOT EXISTS (SELECT 1 FROM public.admin_workspace_daily_interactions daily
+                           WHERE daily.workspace_id = stats.workspace_id)`,
+    )
+    await client.query(
+      `INSERT INTO public.admin_workspace_stats AS stats (workspace_id, interactions)
+       SELECT workspace_id, sum(interactions)::integer
+         FROM public.admin_workspace_daily_interactions GROUP BY workspace_id
+       ON CONFLICT (workspace_id) DO UPDATE SET interactions = EXCLUDED.interactions
+         WHERE stats.interactions IS DISTINCT FROM EXCLUDED.interactions`,
+    )
+    return
+  }
+  // Scheduler-first upgrade: use the existing refresh until the migration arrives.
   if (fullRebuild) await client.query('DELETE FROM public.admin_workspace_stats')
   await client.query(
     `INSERT INTO public.admin_workspace_stats AS stats (workspace_id, interactions)
@@ -68,6 +119,14 @@ async function refreshInteractions(client: PoolClient, fullRebuild: boolean): Pr
        WHERE stats.interactions IS DISTINCT FROM EXCLUDED.interactions`,
     [fullRebuild],
   )
+}
+
+async function refreshInteractions(
+  client: PoolClient,
+  fullRebuild: boolean,
+  workspaceDailyRebuild: boolean | undefined,
+): Promise<void> {
+  await refreshWorkspaceInteractions(client, fullRebuild, workspaceDailyRebuild)
   await client.query(
     'DELETE FROM public.admin_daily_stats WHERE $1::boolean OR date >= current_date - 7',
     [fullRebuild],
