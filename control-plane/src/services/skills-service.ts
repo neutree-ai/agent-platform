@@ -291,7 +291,11 @@ export class SkillsService {
     return result.value
   }
 
-  /** Upload a complete tarball; creates source + skill + first version. */
+  /**
+   * Upload a complete tarball. Upsert on (user, name): the first upload creates
+   * source + skill + first version; a re-upload appends a version and
+   * activates it.
+   */
   async uploadSkill(
     input: UploadSkillInput,
   ): Promise<{ source: SkillSource; skill: SkillMeta; version: SkillVersion }> {
@@ -309,6 +313,9 @@ export class SkillsService {
       signal: input.signal,
     })
     this.unwrap(result)
+    // A re-upload whose content matches the active version is a no-op, so
+    // only reload dependent workspaces when the active version moved.
+    if (result.value.changed) await this.notifyAffectedWorkspaces(result.value.skill.id)
     return result.value
   }
 

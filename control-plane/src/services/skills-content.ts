@@ -337,7 +337,9 @@ export async function scsUploadSkill(args: {
   body: ReadableStream<Uint8Array>
   contentLength?: number
   signal?: AbortSignal
-}): Promise<ScsResult<{ source: SkillSource; skill: SkillMeta; version: SkillVersion }>> {
+}): Promise<
+  ScsResult<{ source: SkillSource; skill: SkillMeta; version: SkillVersion; changed: boolean }>
+> {
   const params = new URLSearchParams({
     user_id: args.meta.user_id,
     name: args.meta.name,

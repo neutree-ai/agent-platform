@@ -860,6 +860,15 @@ const UploadQuery = z.object({
   category: z.string().optional(),
 })
 
+// `changed` is false when a re-upload's content matches the active version
+// (content-hash dedupe), so callers can skip the dependent-workspace reload.
+const UploadResultSchema = z.object({
+  source: SourceSchema,
+  skill: SkillSchema,
+  version: VersionSchema,
+  changed: z.boolean(),
+})
+
 const uploadRoute = createRoute({
   method: 'post',
   path: '/skills/upload',
@@ -879,7 +888,7 @@ const uploadRoute = createRoute({
       description: 'Re-uploaded (existing skill, new version appended + activated)',
       content: {
         'application/json': {
-          schema: z.object({ source: SourceSchema, skill: SkillSchema, version: VersionSchema }),
+          schema: UploadResultSchema,
         },
       },
     },
@@ -887,7 +896,7 @@ const uploadRoute = createRoute({
       description: 'Created (new source + skill + initial version)',
       content: {
         'application/json': {
-          schema: z.object({ source: SourceSchema, skill: SkillSchema, version: VersionSchema }),
+          schema: UploadResultSchema,
         },
       },
     },
@@ -944,7 +953,8 @@ app.openapi(uploadRoute, async (c) => {
         publishedBy: q.user_id,
       })
       const activated = await setActiveVersion(client, existing.id, version.id)
-      return { source: existingSource, skill: activated ?? existing, version }
+      const changed = existing.active_version_id !== version.id
+      return { source: existingSource, skill: activated ?? existing, version, changed }
     })
     return c.json(result, 200)
   }
@@ -972,7 +982,7 @@ app.openapi(uploadRoute, async (c) => {
       publishedBy: q.user_id,
     })
     const activated = await setActiveVersion(client, skill.id, version.id)
-    return { source, skill: activated ?? skill, version }
+    return { source, skill: activated ?? skill, version, changed: true }
   })
   return c.json(result, 201)
 })
