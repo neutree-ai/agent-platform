@@ -974,7 +974,7 @@ describe('SkillsService.uploadSkill', () => {
     const fakeSkill = { id: 'sk-1' } as unknown as SkillMeta
     const fakeVersion = { id: 'v-1' } as unknown as SkillVersion
     vi.mocked(scsUploadSkill).mockResolvedValue(
-      ok({ source: fakeSource, skill: fakeSkill, version: fakeVersion }),
+      ok({ source: fakeSource, skill: fakeSkill, version: fakeVersion, changed: true }),
     )
     const body = new ReadableStream<Uint8Array>({
       start(c) {
@@ -1000,6 +1000,46 @@ describe('SkillsService.uploadSkill', () => {
       category: null,
     })
     expect(call.contentLength).toBe(3)
+  })
+
+  it('enqueues dependent reload when the active version moved', async () => {
+    const h = setup()
+    vi.mocked(scsUploadSkill).mockResolvedValue(
+      ok({
+        source: { id: 'src-1' } as unknown as SkillSource,
+        skill: { id: 'sk-1' } as unknown as SkillMeta,
+        version: { id: 'v-2' } as unknown as SkillVersion,
+        changed: true,
+      }),
+    )
+    await h.service.uploadSkill({
+      userId: 'alice',
+      name: 'u',
+      description: '',
+      visibility: 'private',
+      body: new ReadableStream<Uint8Array>(),
+    })
+    expect(h.reloadQueue.calls).toEqual(['sk-1'])
+  })
+
+  it('skips the reload when re-uploaded content matches the active version', async () => {
+    const h = setup()
+    vi.mocked(scsUploadSkill).mockResolvedValue(
+      ok({
+        source: { id: 'src-1' } as unknown as SkillSource,
+        skill: { id: 'sk-1' } as unknown as SkillMeta,
+        version: { id: 'v-1' } as unknown as SkillVersion,
+        changed: false,
+      }),
+    )
+    await h.service.uploadSkill({
+      userId: 'alice',
+      name: 'u',
+      description: '',
+      visibility: 'private',
+      body: new ReadableStream<Uint8Array>(),
+    })
+    expect(h.reloadQueue.calls).toEqual([])
   })
 })
 
