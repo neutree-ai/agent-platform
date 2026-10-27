@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server'
 import { AcpBridge } from '../../../internal/acp-adapter/acp-bridge.js'
 import { writePlatformPrompt } from '../../../internal/platform-prompt/src/index.js'
 import {
+  CP_URL,
   WORKSPACE_DIR,
   WORKSPACE_ID,
   applyProviderEnv,
@@ -36,12 +37,37 @@ process.on('unhandledRejection', (reason) => {
 
 // ── Load config from CP ──
 
-try {
-  if (await loadConfig()) {
-    console.log('[agent] Config loaded from CP')
+// cp can be briefly unreachable while the pod boots (cp restarting, a node
+// coming back before its service routing is ready). Without the config the
+// provider key never reaches the agent and every turn fails, so retry, and if
+// cp stays away exit for a kubelet restart rather than serve a workspace that
+// cannot run.
+const CONFIG_MAX_RETRIES = 5
+const CONFIG_RETRY_DELAY_MS = 3000
+if (CP_URL && WORKSPACE_ID) {
+  let loaded = false
+  for (let attempt = 1; attempt <= CONFIG_MAX_RETRIES && !loaded; attempt++) {
+    try {
+      loaded = await loadConfig()
+    } catch (e) {
+      console.error('[agent] Failed to fetch config from CP:', e)
+    }
+    if (!loaded && attempt < CONFIG_MAX_RETRIES) {
+      console.warn(
+        `[agent] Config load attempt ${attempt}/${CONFIG_MAX_RETRIES} failed, retrying in ${CONFIG_RETRY_DELAY_MS}ms...`,
+      )
+      await new Promise((r) => setTimeout(r, CONFIG_RETRY_DELAY_MS))
+    }
   }
-} catch (e) {
-  console.error('[agent] Failed to fetch config from CP:', e)
+  if (!loaded) {
+    console.error(
+      `[agent] BOOT_FAILED workspace=${WORKSPACE_ID} config load failed after ${CONFIG_MAX_RETRIES} attempts — exiting for kubelet restart`,
+    )
+    process.exit(1)
+  }
+  console.log('[agent] Config loaded from CP')
+} else {
+  await loadConfig()
 }
 
 try {
