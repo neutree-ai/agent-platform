@@ -7,7 +7,8 @@
 //
 //  1. Read env (CP_URL, WORKSPACE_ID, GRPC_LISTEN_ADDR).
 //  2. Pull the initial attachment set from cp via the unauthenticated
-//     /internal/workspaces/<id>/memory-attachments endpoint and Mount each.
+//     /internal/workspaces/<id>/memory-attachments endpoint and Mount each,
+//     retrying in the background until cp answers.
 //  3. Start the gRPC server and wait for SIGTERM/SIGINT.
 //  4. On signal: gracefully stop gRPC, then unmount everything.
 package main
@@ -71,11 +72,15 @@ func main() {
 		Logger:      log,
 	})
 
-	if err := bootPull(ctx, log, cpURL, workspaceID, workspaceToken, mgr, contentCache); err != nil {
-		// Boot pull failures shouldn't kill the daemon — cp can still push
-		// mounts later via gRPC, and the daemon will recover. Log and proceed.
-		log.Warn("boot pull failed; continuing without initial mounts", "error", err)
-	}
+	// cp can be unreachable while the pod boots (cp restarting, a node coming
+	// back before its service routing is ready). cp only pushes mounts on
+	// attach/detach, so a pull that never succeeds leaves the workspace with
+	// no mounts until the pod is rebuilt — keep retrying in the background
+	// while gRPC serves. Mount is idempotent, so a push that lands first is
+	// harmless.
+	go retryUntilSuccess(ctx, log, time.Second, 30*time.Second, func(ctx context.Context) error {
+		return bootPull(ctx, log, cpURL, workspaceID, workspaceToken, mgr, contentCache)
+	})
 
 	srv := grpcserver.New(mgr, log)
 	go func() {
@@ -89,6 +94,33 @@ func main() {
 	log.Info("shutting down")
 	mgr.Close()
 	log.Info("exited")
+}
+
+// retryUntilSuccess runs fn until it returns nil or ctx is done, doubling the
+// wait between attempts from initial up to maxDelay.
+func retryUntilSuccess(
+	ctx context.Context,
+	log *slog.Logger,
+	initial, maxDelay time.Duration,
+	fn func(context.Context) error,
+) {
+	delay := initial
+	for attempt := 1; ; attempt++ {
+		err := fn(ctx)
+		if err == nil {
+			return
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		log.Warn("boot pull failed; retrying", "attempt", attempt, "retry_in", delay, "error", err)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+		delay = min(delay*2, maxDelay)
+	}
 }
 
 func bootPull(
