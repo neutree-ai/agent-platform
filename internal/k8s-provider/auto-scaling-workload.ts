@@ -8,6 +8,7 @@ import {
   resourceName,
   scaleWorkload,
   swallow404,
+  withTimeout,
   workspaceLabels,
   workspacePvcName,
   workspaceSelector,
@@ -15,11 +16,14 @@ import {
 import type { WorkspaceWorkload } from './workload'
 import {
   CURRENT_TEMPLATE_VERSION,
+  type InstanceSpecMarkers,
+  RESTART_TOKEN_ANNOTATION,
   TEMPLATE_VERSION_ANNOTATION,
   buildHeadlessServiceSpec,
   buildStatefulSetSpec,
   readyReplicaIdsFromPods,
   resolveStatefulSetStatus,
+  workloadSpecMarkers,
   workloadTemplateVersion,
 } from './workspace-spec'
 
@@ -48,6 +52,36 @@ export class AutoScalingWorkload implements WorkspaceWorkload {
       swallow404(e)
       return null
     }
+  }
+
+  /** The drift markers of the workspace's StatefulSet; null when it has none. */
+  async getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
+    const sts = await this.getStatefulSet(workspaceId)
+    return sts ? workloadSpecMarkers(sts) : null
+  }
+
+  /** Every workspace StatefulSet in the namespace, indexed by workspace id. */
+  async listStatefulSets(timeoutMs = 30_000): Promise<Map<string, k8s.V1StatefulSet>> {
+    const sets = new Map<string, k8s.V1StatefulSet>()
+    // Environments that can't host the shape have provably zero StatefulSets.
+    if (!this.cfg.multiReplica) return sets
+    const response = await withTimeout(
+      this.appsApi.listNamespacedStatefulSet(
+        this.cfg.namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        workspaceSelector(this.cfg),
+      ),
+      timeoutMs,
+      'listStatefulSets',
+    )
+    for (const sts of response.body.items) {
+      const wsId = sts.metadata?.labels?.['workspace-id']
+      if (wsId) sets.set(wsId, sts)
+    }
+    return sets
   }
 
   /** Create-or-converge the StatefulSet, headless Service and shared RWX PVC. */
@@ -92,6 +126,13 @@ export class AutoScalingWorkload implements WorkspaceWorkload {
       spec.resources,
       this.cfg,
     )
+    const template = desired.spec?.template
+    if (template && spec.restartToken !== undefined) {
+      template.metadata = {
+        ...template.metadata,
+        annotations: { ...template.metadata?.annotations, [RESTART_TOKEN_ANNOTATION]: spec.restartToken },
+      }
+    }
     const existing = await this.getStatefulSet(workspaceId)
     if (!existing) {
       await createOrAdopt(() =>

@@ -472,6 +472,35 @@ export function resolveDeploymentStatus(dep: k8s.V1Deployment | undefined): Reco
 }
 
 /**
+ * Pod-template annotation carrying {@link WorkspaceSpec.restartToken}. The
+ * auto-scaling shape converges its StatefulSet in place, so a re-apply whose
+ * template is otherwise unchanged — a restart, or a rollout of a moving image
+ * tag — would roll nothing. A new token changes the template, and the
+ * StatefulSet rolls its replicas one at a time.
+ */
+export const RESTART_TOKEN_ANNOTATION = 'agent-platform/restart-token'
+
+/** What a drift check compares a running workload against its desired spec by. */
+export interface InstanceSpecMarkers {
+  templateVersion: number | null
+  agentImage: string | null
+  hasMemoryFuseSidecar: boolean
+}
+
+/** The drift markers of either workload shape: template version, agent image, sidecar. */
+export function workloadSpecMarkers(
+  workload: k8s.V1Deployment | k8s.V1StatefulSet,
+): InstanceSpecMarkers {
+  const containers = workload.spec?.template?.spec?.containers ?? []
+  const agent = containers.find((c) => c.name === 'agent')
+  return {
+    templateVersion: workloadTemplateVersion(workload),
+    agentImage: agent?.image ?? null,
+    hasMemoryFuseSidecar: containers.some((c) => c.name === MEMORY_FUSE_CONTAINER_NAME),
+  }
+}
+
+/**
  * Read the template version stamped on a workspace workload (the
  * workspace-version annotation), or null if absent/unparseable. Both workload
  * shapes carry it, so drift checks read one value regardless of shape.
