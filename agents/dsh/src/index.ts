@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { serve } from '@hono/node-server'
-import { DshBridge } from '../../../internal/dsh-adapter/index.js'
 import { loadConfigAtBoot } from '../../../internal/acp-adapter/boot.js'
+import { DshBridge } from '../../../internal/dsh-adapter/index.js'
 import { writePlatformPrompt } from '../../../internal/platform-prompt/src/index.js'
 import {
   CP_URL,
