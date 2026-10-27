@@ -155,3 +155,13 @@ export async function expandWorkspacePvc(
     throw e
   }
 }
+
+/** Reject a k8s list that outruns its budget, so a pass cannot hang on one. */
+export function withTimeout<T>(call: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    call,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+    ),
+  ])
+}

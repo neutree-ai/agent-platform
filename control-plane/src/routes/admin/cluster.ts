@@ -143,10 +143,10 @@ cluster.get('/', async (c) => {
 /**
  * Batch "rebuild stale" sweep — the fleet/ops counterpart of the per-workspace
  * POST /workspaces/:id/rebuild action, built on the SAME drift core. For every
- * agent workspace whose Deployment drifts from the current platform template,
- * reconcile (rebuild) it; for ones already in sync, roll the pods so a moving
- * `:latest` image is re-pulled. Workspaces with a live streaming turn are
- * skipped so a rollout never kills an in-flight session.
+ * agent workspace whose workload (Deployment or StatefulSet) drifts from the
+ * current platform template, reconcile (rebuild) it; for ones already in sync,
+ * roll the pods so a moving `:latest` image is re-pulled. Workspaces with a live
+ * streaming turn are skipped so a rollout never kills an in-flight session.
  *
  * Admin-authorized; also callable headless by the rollout pipeline via the
  * static x-plugin-admin-token bypass (see index.ts).
@@ -167,20 +167,24 @@ cluster.post('/rebuild-stale', async (c) => {
 
   const wantImage = agentType ? k8sService.getAgentImage(agentType) : null
 
-  const deployments = await k8sService.listWorkspaceDeployments()
+  const workloads = await k8sService.listWorkspaceWorkloads()
   const targets: string[] = []
   let stoppedSkipped = 0
-  for (const [wsId, dep] of deployments) {
+  for (const [wsId, workload] of workloads) {
     if (wantImage) {
-      const image = dep.spec?.template?.spec?.containers?.find((x) => x.name === 'agent')?.image
+      const image = workload.spec?.template?.spec?.containers?.find(
+        (x) => x.name === 'agent',
+      )?.image
       if (image !== wantImage) continue
     }
     // Skip stopped workspaces. rebuildInstance is delete+recreate, and the
     // recreated Deployment defaults to replicas=1 — so reconciling a stopped
     // (replicas=0) workspace would resurrect it. Stopped workspaces pick up
     // the new template on their next start (reconcile-on-start), so the sweep
-    // must leave them as-is.
-    if ((dep.spec?.replicas ?? 0) === 0) {
+    // must leave them as-is. An auto-scaling workspace scaled to zero is skipped
+    // the same way: it has no pod to roll, and its next replica pulls the image
+    // fresh.
+    if ((workload.spec?.replicas ?? 0) === 0) {
       stoppedSkipped++
       continue
     }

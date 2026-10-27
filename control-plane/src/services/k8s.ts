@@ -39,12 +39,13 @@ export function getInstanceStatus(workspaceId: string) {
 }
 
 /**
- * Every workspace Deployment in the cluster. The admin rebuild-stale sweep reads
- * these to find workloads still running an outdated image — a question about
- * live infra detail, not about a workspace's status.
+ * Every workspace workload in the cluster, Deployments and StatefulSets alike.
+ * The admin rebuild-stale sweep reads these to find workloads still running an
+ * outdated image — a question about live infra detail, not about a workspace's
+ * status.
  */
-export function listWorkspaceDeployments(timeoutMs?: number) {
-  return defaultProvider.listWorkspaceDeployments(timeoutMs)
+export function listWorkspaceWorkloads(timeoutMs?: number) {
+  return defaultProvider.listWorkspaceWorkloads(timeoutMs)
 }
 
 /**

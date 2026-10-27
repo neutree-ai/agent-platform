@@ -10,6 +10,7 @@ import {
   resourceName,
   scaleWorkload,
   swallow404,
+  withTimeout,
   workspaceLabels,
   workspacePvcName,
   workspaceSelector,
@@ -17,10 +18,11 @@ import {
 import type { WorkspaceWorkload } from './workload'
 import {
   AGENT_PORT,
-  MEMORY_FUSE_CONTAINER_NAME,
+  type InstanceSpecMarkers,
   WORKSPACE_SERVICE_PORTS,
   buildDeploymentSpec,
   resolveDeploymentStatus,
+  workloadSpecMarkers,
   workloadTemplateVersion,
 } from './workspace-spec'
 
@@ -37,13 +39,6 @@ export interface K8sResourceStatus {
   pods: { total: number; ready: number }
   warnings: Array<{ reason: string; message: string }>
   conditions: Array<{ type: string; status: boolean; message?: string }>
-}
-
-/** What a drift check compares a running Deployment against its desired spec by. */
-export interface InstanceSpecMarkers {
-  templateVersion: number | null
-  agentImage: string | null
-  hasMemoryFuseSidecar: boolean
 }
 
 const SERVICE_MISSING_MESSAGE =
@@ -364,21 +359,10 @@ export class StaticWorkload implements WorkspaceWorkload {
     return ids
   }
 
-  /**
-   * Read the markers a drift check compares against the desired spec: template
-   * version (annotation), agent image (the `agent` container), and memory-fuse
-   * sidecar presence. Null when no Deployment exists for the workspace.
-   */
+  /** The drift markers of the workspace's Deployment; null when it has none. */
   async getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
     const dep = await this.getDeployment(workspaceId)
-    if (!dep) return null
-    const containers = dep.spec?.template?.spec?.containers ?? []
-    const agent = containers.find((c) => c.name === 'agent')
-    return {
-      templateVersion: workloadTemplateVersion(dep),
-      agentImage: agent?.image ?? null,
-      hasMemoryFuseSidecar: containers.some((c) => c.name === MEMORY_FUSE_CONTAINER_NAME),
-    }
+    return dep ? workloadSpecMarkers(dep) : null
   }
 
   /** Detailed live status of a workspace's Kubernetes objects, for the UI. */
@@ -517,14 +501,4 @@ export class StaticWorkload implements WorkspaceWorkload {
     }
     return warnings.slice(0, 5)
   }
-}
-
-/** Reject a k8s list that outruns its budget, so a pass cannot hang on one. */
-function withTimeout<T>(call: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    call,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
-    ),
-  ])
 }

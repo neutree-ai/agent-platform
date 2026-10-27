@@ -76,6 +76,14 @@ export interface WorkspaceSpec {
    * Ignored for `'static'`, which is always 1.
    */
   replicas?: number
+  /**
+   * Changes only when the workspace is deliberately re-applied (restart,
+   * rebuild, rollout), never on a replica-count change. A provider that
+   * converges a workload in place stamps it on the pod template, so a new token
+   * replaces the pods — and re-pulls a moving image tag — even when nothing else
+   * in the template changed.
+   */
+  restartToken?: string
 
   // ── Reserved: accepted by the contract, unused by the k8s provider ──
   /** Explicit container image, if a backend takes one directly instead of agentType. */

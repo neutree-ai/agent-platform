@@ -9,13 +9,10 @@ import { type RuntimeMode, assertNever } from '../types/runtime-mode'
 import { WORKSPACE_TOKEN_ENV } from '../types/workspace-token'
 import { AutoScalingWorkload } from './auto-scaling-workload'
 import { type K8sConfig, defaultCfg } from './config'
-import {
-  type InstanceSpecMarkers,
-  type K8sResourceStatus,
-  StaticWorkload,
-} from './static-workload'
+import { type K8sResourceStatus, StaticWorkload } from './static-workload'
 import { swallow404, workspaceLabels, workspaceSelector, workspaceTokenSecretName } from './support'
 import type { WorkspaceWorkload } from './workload'
+import type { InstanceSpecMarkers } from './workspace-spec'
 
 export type { InstanceSpecMarkers, K8sResourceStatus }
 
@@ -284,19 +281,31 @@ export class KubernetesProvider implements EnvironmentProvider {
 
   // ── Live infra reads ──
   // Detail about the objects themselves rather than a workspace's state, for the
-  // workspace UI and the admin drift sweep. Deployment-shaped, so they come
-  // straight off the static workload.
+  // workspace UI and the admin drift sweep. The drift reads cover both shapes;
+  // the UI status is Deployment-shaped and comes straight off the static workload.
 
-  getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
-    return this.static.getInstanceSpecMarkers(workspaceId)
+  /** Drift markers of whichever shape the workspace has; tried in turn, like {@link observe}. */
+  async getInstanceSpecMarkers(workspaceId: string): Promise<InstanceSpecMarkers | null> {
+    const markers = await this.static.getInstanceSpecMarkers(workspaceId)
+    if (markers || !this.cfg.multiReplica) return markers
+    return this.autoScaling.getInstanceSpecMarkers(workspaceId)
   }
 
   getInstanceStatus(workspaceId: string): Promise<K8sResourceStatus> {
     return this.static.getInstanceStatus(workspaceId)
   }
 
-  listWorkspaceDeployments(timeoutMs?: number): Promise<Map<string, k8s.V1Deployment>> {
-    return this.static.listDeployments(timeoutMs)
+  /** Every workspace workload of both shapes, by workspace id. A workspace is only ever one. */
+  async listWorkspaceWorkloads(
+    timeoutMs?: number,
+  ): Promise<Map<string, k8s.V1Deployment | k8s.V1StatefulSet>> {
+    const [deployments, sets] = await Promise.all([
+      this.static.listDeployments(timeoutMs),
+      this.autoScaling.listStatefulSets(timeoutMs),
+    ])
+    const workloads = new Map<string, k8s.V1Deployment | k8s.V1StatefulSet>(deployments)
+    for (const [wsId, sts] of sets) workloads.set(wsId, sts)
+    return workloads
   }
 }
 

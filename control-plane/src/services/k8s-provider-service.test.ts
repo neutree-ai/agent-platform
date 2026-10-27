@@ -60,12 +60,15 @@ type Call = { method: string; args: unknown[] }
  */
 function makeApis(opts: {
   deployments?: k8s.V1Deployment[]
+  statefulSets?: k8s.V1StatefulSet[]
   services?: k8s.V1Service[]
   serviceCreateFails?: boolean
+  multiReplica?: boolean
 }) {
   const calls: Call[] = []
   const services = [...(opts.services ?? [])]
   const deployments = [...(opts.deployments ?? [])]
+  const statefulSets = [...(opts.statefulSets ?? [])]
   const record = (method: string, ...args: unknown[]) => calls.push({ method, args })
 
   const appsApi = {
@@ -108,8 +111,25 @@ function makeApis(opts: {
       deployments.splice(i, 1)
       return { body: {} }
     },
-    readNamespacedStatefulSet: async () => {
-      throw apiError(404)
+    listNamespacedStatefulSet: async () => {
+      record('listNamespacedStatefulSet')
+      return { body: { items: statefulSets } }
+    },
+    readNamespacedStatefulSet: async (name: string) => {
+      const sts = statefulSets.find((s) => s.metadata?.name === name)
+      if (!sts) throw apiError(404)
+      return { body: sts }
+    },
+    createNamespacedStatefulSet: async (_ns: string, sts: k8s.V1StatefulSet) => {
+      record('createNamespacedStatefulSet', sts)
+      statefulSets.push(sts)
+      return { body: sts }
+    },
+    patchNamespacedStatefulSet: async (name: string, _ns: string, patch: unknown) => {
+      record('patchNamespacedStatefulSet', patch)
+      const sts = statefulSets.find((s) => s.metadata?.name === name)
+      if (!sts) throw apiError(404)
+      return { body: sts }
     },
     patchNamespacedStatefulSetScale: async (name: string) => {
       record('patchNamespacedStatefulSetScale', name)
@@ -157,7 +177,10 @@ function makeApis(opts: {
     listNamespacedPod: async () => ({ body: { items: [] } }),
   } as unknown as k8s.CoreV1Api
 
-  const provider = new KubernetesProvider(appsApi, coreApi, {} as k8s.KubeConfig, cfg)
+  const provider = new KubernetesProvider(appsApi, coreApi, {} as k8s.KubeConfig, {
+    ...cfg,
+    multiReplica: opts.multiReplica ?? false,
+  })
   return {
     provider,
     calls,
@@ -310,5 +333,85 @@ describe('creating a workspace orders the Service before the Deployment', () => 
     const { provider, deployments } = makeApis({ serviceCreateFails: true })
     await expect(provider.apply('ws1', freshSpec)).rejects.toThrow('range is full')
     expect(deployments).toHaveLength(0)
+  })
+})
+
+// The auto-scaling shape converges its StatefulSet in place, so a restart or a
+// rollout of a moving image tag only replaces pods if the template changes. The
+// spec's restart token is that change; scaling carries the token over and must
+// leave the template alone.
+describe('auto-scaling restart token', () => {
+  const autoScalingSpec = (restartToken?: string) => ({
+    agentType: 'codex',
+    resources: {},
+    version: 1,
+    runtimeMode: 'auto-scaling' as const,
+    replicas: 2,
+    ...(restartToken !== undefined ? { restartToken } : {}),
+  })
+  const templateOf = (sts: k8s.V1StatefulSet) => sts.spec?.template
+  const patchedTemplate = (call: Call | undefined) =>
+    (call?.args[0] as { spec: { template: k8s.V1PodTemplateSpec } }).spec.template
+
+  it('stamps the token on the pod template of a new StatefulSet', async () => {
+    const { provider, calls } = makeApis({ multiReplica: true })
+    await provider.apply('ws1', autoScalingSpec('7'))
+    const created = calls.find((c) => c.method === 'createNamespacedStatefulSet')
+    const annotations = templateOf(created?.args[0] as k8s.V1StatefulSet)?.metadata?.annotations
+    expect(annotations?.['agent-platform/restart-token']).toBe('7')
+  })
+
+  it('changes the template only when the token changes', async () => {
+    const { provider, calls } = makeApis({ multiReplica: true })
+    await provider.apply('ws1', autoScalingSpec('7'))
+    const created = templateOf(
+      calls.find((c) => c.method === 'createNamespacedStatefulSet')?.args[0] as k8s.V1StatefulSet,
+    )
+    await provider.apply('ws1', autoScalingSpec('7'))
+    await provider.apply('ws1', autoScalingSpec('8'))
+    const [same, restarted] = calls.filter((c) => c.method === 'patchNamespacedStatefulSet')
+    expect(patchedTemplate(same)).toEqual(created)
+    expect(
+      patchedTemplate(restarted)?.metadata?.annotations?.['agent-platform/restart-token'],
+    ).toBe('8')
+  })
+})
+
+describe('drift reads cover both workload shapes', () => {
+  const statefulSet = (wsId: string, image: string): k8s.V1StatefulSet =>
+    ({
+      metadata: {
+        name: `nap-${wsId}`,
+        labels: { 'workspace-id': wsId },
+        annotations: { 'agent-platform/workspace-version': '8' },
+      },
+      spec: { replicas: 2, template: { spec: { containers: [{ name: 'agent', image }] } } },
+    }) as unknown as k8s.V1StatefulSet
+
+  it('getInstanceSpecMarkers falls back to the StatefulSet', async () => {
+    const { provider } = makeApis({
+      multiReplica: true,
+      statefulSets: [statefulSet('ws1', 'nap-agent-codex:latest')],
+    })
+    expect(await provider.getInstanceSpecMarkers('ws1')).toEqual({
+      templateVersion: 8,
+      agentImage: 'nap-agent-codex:latest',
+      hasMemoryFuseSidecar: false,
+    })
+  })
+
+  it('listWorkspaceWorkloads returns Deployments and StatefulSets together', async () => {
+    const { provider } = makeApis({
+      multiReplica: true,
+      deployments: [deployment('ws1', 1, 1)],
+      statefulSets: [statefulSet('ws2', 'nap-agent-codex:latest')],
+    })
+    expect([...(await provider.listWorkspaceWorkloads()).keys()].sort()).toEqual(['ws1', 'ws2'])
+  })
+
+  it('listWorkspaceWorkloads skips the StatefulSet list where the shape cannot exist', async () => {
+    const { provider, methods } = makeApis({ deployments: [deployment('ws1', 1, 1)] })
+    expect([...(await provider.listWorkspaceWorkloads()).keys()]).toEqual(['ws1'])
+    expect(methods()).not.toContain('listNamespacedStatefulSet')
   })
 })

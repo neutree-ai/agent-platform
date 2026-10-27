@@ -198,10 +198,14 @@ export async function bumpWorkspaceSpec(workspaceId: string): Promise<void> {
     const live = rows[0]?.replicas
     if (typeof live === 'number') spec.replicas = live
   }
+  // The new version doubles as the restart token. setDesiredReplicas advances
+  // the version too but carries the token over, so scaling never rolls the pods.
   await pool.query(
     `UPDATE workspace_placements
         SET spec_version = spec_version + 1,
-            spec = jsonb_set($2::jsonb, '{version}', to_jsonb(spec_version + 1))
+            spec = jsonb_set(
+              jsonb_set($2::jsonb, '{version}', to_jsonb(spec_version + 1)),
+              '{restartToken}', to_jsonb((spec_version + 1)::text))
       WHERE workspace_id = $1`,
     [workspaceId, JSON.stringify(spec)],
   )
