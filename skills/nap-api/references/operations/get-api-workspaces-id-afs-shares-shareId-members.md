@@ -1,7 +1,7 @@
 # GET /api/workspaces/{id}/afs/shares/{shareId}/members
 
 **Resource:** [afs](../resources/afs.md)
-**List share members.**
+**List share members. The owner sees every member; a member sees the ones of its own owner's.**
 **Operation ID:** `get--api-workspaces-{id}-afs-shares-{shareId}-members`
 
 ## Parameters
@@ -31,6 +31,11 @@
 | `workspace_id` | string | Yes |  |
 | `permission` | enum: read_only, read_write | Yes |  |
 | `mounted_at` | string | Yes |  |
+| `source` | enum: direct, team | Yes |  |
+| `mount_name` | string | Yes |  |
+| `workspace_name` | string | Yes |  |
+| `user_id` | string | Yes |  |
+| `user_display_name` | string | Yes |  |
 
 ## Security
 

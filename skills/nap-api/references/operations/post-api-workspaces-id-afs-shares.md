@@ -27,6 +27,7 @@
 | 201 | Created |
 | 400 | Invalid name |
 | 404 | Not found |
+| 409 | A folder is already mounted at that name |
 | 502 | afs unavailable |
 
 **Success Response Schema** (inline):
@@ -39,6 +40,12 @@
 | `afs_dir_id` | string | Yes |  |
 | `role` | enum: owner, member | Yes |  |
 | `my_permission` | enum: read_only, read_write | Yes |  |
+| `mount_name` | string | Yes | Where this workspace has the folder: /mnt/afs/<mount_name>. |
+| `source` | enum: direct, team | Yes | 'team': this workspace has the folder through a grant to a team. |
+| `owner_user_id` | string | Yes |  |
+| `owner_display_name` | string | Yes |  |
+| `other_member_count` | number | Yes | Workspaces other than the owner's that have it. |
+| `grant_count` | number | Yes | Teams the folder is granted to. |
 | `created_at` | string | Yes |  |
 
 ## Security
