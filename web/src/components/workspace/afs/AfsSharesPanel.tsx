@@ -21,11 +21,12 @@ import {
 } from '@/lib/api/agent-files'
 import { formatFullTime, formatRelativeTime } from '@/lib/relative-time'
 import { filesRefresh } from '@/plugins/files'
-import { Folder, FolderPlus, MoreVertical } from 'lucide-react'
+import { Folder, FolderInput, FolderPlus, MoreVertical, Users } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ManageMembersDialog } from './ManageMembersDialog'
+import { MountTeamShareDialog } from './MountTeamShareDialog'
 import { NewShareDialog } from './NewShareDialog'
 
 interface AfsSharesPanelProps {
@@ -47,6 +48,7 @@ export function AfsSharesPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [newOpen, setNewOpen] = useState(false)
+  const [mountOpen, setMountOpen] = useState(false)
   const [manageTarget, setManageTarget] = useState<AfsShareSummary | null>(null)
   const [pendingAction, setPendingAction] = useState<{
     type: 'delete' | 'leave'
@@ -96,13 +98,22 @@ export function AfsSharesPanel({
   }
 
   const q = searchQuery.trim().toLowerCase()
-  const filtered = q ? shares.filter((s) => s.name.toLowerCase().includes(q)) : shares
+  const filtered = q ? shares.filter((s) => s.mount_name.toLowerCase().includes(q)) : shares
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* New-share action strip — same h-8 / hairline rhythm as the file
           listing column header, so afs-root and folder views feel cohesive. */}
-      <div className="sticky top-0 z-[1] flex h-8 shrink-0 items-center justify-end border-b border-foreground/[0.08] bg-card px-3">
+      <div className="sticky top-0 z-[1] flex h-8 shrink-0 items-center justify-end gap-1 border-b border-foreground/[0.08] bg-card px-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 px-2 text-xs hover:bg-foreground/[0.06]"
+          onClick={() => setMountOpen(true)}
+        >
+          <FolderInput className="h-3.5 w-3.5" />
+          {t('components.afsShares.mountTeamShare')}
+        </Button>
         <Button
           variant="ghost"
           size="sm"
@@ -177,11 +188,26 @@ export function AfsSharesPanel({
                 <div
                   key={s.id}
                   className="group flex select-none items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-foreground/[0.04]"
-                  onDoubleClick={() => onOpenShare(s.name)}
+                  onDoubleClick={() => onOpenShare(s.mount_name)}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <Folder className="h-4 w-4 shrink-0 text-chart-1" />
-                    <span className="truncate font-medium">{s.name}</span>
+                    <span className="truncate font-medium">{s.mount_name}</span>
+                    {s.source === 'team' && (
+                      <span className="truncate text-xs text-muted-foreground">
+                        {t('components.afsShares.sharedBy', { owner: s.owner_display_name })}
+                      </span>
+                    )}
+                    {s.role === 'owner' && s.grant_count > 0 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="text-xs">
+                          {t('components.afsShares.sharedWithTeams', { count: s.grant_count })}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                     <Badge
                       variant="outline"
                       className={`h-4 px-1.5 text-[10px] font-normal ${badgeTone}`}
@@ -247,6 +273,13 @@ export function AfsSharesPanel({
 
       <NewShareDialog open={newOpen} onOpenChange={setNewOpen} onSubmit={handleCreate} />
 
+      <MountTeamShareDialog
+        open={mountOpen}
+        onOpenChange={setMountOpen}
+        workspaceId={workspaceId}
+        onMounted={refresh}
+      />
+
       <ConfirmDialog
         open={!!pendingAction}
         onOpenChange={(o) => !o && setPendingAction(null)}
@@ -261,7 +294,7 @@ export function AfsSharesPanel({
                 pendingAction.type === 'delete'
                   ? 'components.afsShares.confirmDelete'
                   : 'components.afsShares.confirmLeave',
-                { name: pendingAction.share.name },
+                { name: pendingAction.share.mount_name },
               )
             : undefined
         }

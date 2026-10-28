@@ -6,6 +6,7 @@ import {
   ApplicationUpdateBodySchema,
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
+import { reconcileTeamMounts } from '../services/afs-shares'
 import { deleteAppContent } from '../services/app-content'
 import { createAppAccounts, renameAppTeam } from '../services/db/app-users'
 import { generateId, pool } from '../services/db/pool'
@@ -251,6 +252,8 @@ applications.delete('/:id', async (c) => {
   // What it published goes with it; its team goes with the client row.
   await deleteAppContent(id)
   await pool.query('DELETE FROM oauth_clients WHERE id = $1', [id])
+  // Folders granted to the team go with it, and the mounts they allowed.
+  await reconcileTeamMounts()
   return c.json({ success: true })
 })
 

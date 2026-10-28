@@ -1,6 +1,12 @@
 // Shared folders: an afs directory one workspace owns, mounted at
 // /mnt/afs/<name> in it and in every workspace it is granted to.
 //
+// The owner grants a folder to its own other workspaces directly. Other users
+// get it through teams: the owner grants it to a team they are in, and a
+// member of that team mounts it in a workspace of theirs, at up to the grant's
+// permission. A team mount lasts while a grant to one of the workspace owner's
+// teams allows it; reconcileTeamMounts takes away what no longer is.
+//
 // A folder's membership rows are what a workspace's afs sidecar mounts when its
 // pod starts. A pod that is already running doesn't look again, so a grant
 // that should take effect now tells it to mount: that's `mountNow`. Without
@@ -19,15 +25,34 @@ import {
   type AfsPermission,
   type AfsShare,
   addAfsShareMember,
+  addAfsTeamMount,
   createAfsShare,
   deleteAfsShare,
+  deleteAfsShareGrant,
+  getAfsGrantCeiling,
   getAfsShareByName,
+  listAfsMountNames,
   listAfsShareMembers,
+  listAfsSharesOwnedBy,
+  listAfsTeamMountsWithCeiling,
+  memberMountName,
   removeAfsShareMember,
+  setAfsMemberPermission,
+  upsertAfsShareGrant,
 } from './db/afs-shares'
+import { getTeamMembership } from './db/teams'
+import type { Workspace } from './db/types'
 
 /** The workspace is on another environment than the folder's owner, so it could never mount it. */
 export class ShareEnvironmentError extends Error {}
+
+/** No grant lets the workspace's owner have the folder, or not at that permission. */
+export class ShareAccessError extends Error {}
+
+/** The workspace already has a folder mounted at that name. */
+export class ShareNameConflictError extends Error {}
+
+const PERMISSION_RANK: Record<AfsPermission, number> = { read_only: 0, read_write: 1 }
 
 interface MountOptions {
   /** Tell the workspace's pod to mount now, rather than when it next starts. */
@@ -60,6 +85,10 @@ export async function ensureShare(
 
   const afsEnv = await afsEnvForWorkspace(ownerWorkspaceId)
   if (!share) {
+    // A team mount may already be there under the name.
+    if ((await listAfsMountNames(ownerWorkspaceId)).includes(name)) {
+      throw new ShareNameConflictError(`A folder is already mounted at /mnt/afs/${name}`)
+    }
     await ensureDefaultFs(afsEnv)
     const dir = await createDir(afsEnv)
     share = await createAfsShare(ownerWorkspaceId, name, dir.id, dir.accessKey)
@@ -110,10 +139,12 @@ export async function grantShare(
     // If the target is already a member, re-mount with the (possibly changed)
     // permission. afs-fuse's Mount RPC rejects duplicate mountpoints, so
     // we unmount first.
-    const existing = await listAfsShareMembers(share.id)
-    if (existing.some((m) => m.workspace_id === workspaceId)) {
+    const existing = (await listAfsShareMembers(share.id)).find(
+      (m) => m.workspace_id === workspaceId,
+    )
+    if (existing) {
       try {
-        await unmountAtWorkspace(afsEnv, workspaceId, share.name)
+        await unmountAtWorkspace(afsEnv, workspaceId, memberMountName(existing, share))
       } catch {
         // Best-effort — continue even if stale unmount fails.
       }
@@ -132,10 +163,15 @@ export async function grantShare(
 
 /** Take the folder away from a member. False when it wasn't one. */
 export async function removeShareMember(share: AfsShare, workspaceId: string): Promise<boolean> {
+  const member = (await listAfsShareMembers(share.id)).find((m) => m.workspace_id === workspaceId)
   const removed = await removeAfsShareMember(share.id, workspaceId)
-  if (removed) {
+  if (removed && member) {
     try {
-      await unmountAtWorkspace(await afsEnvForWorkspace(workspaceId), workspaceId, share.name)
+      await unmountAtWorkspace(
+        await afsEnvForWorkspace(workspaceId),
+        workspaceId,
+        memberMountName(member, share),
+      )
     } catch {
       // Best-effort: a pod that isn't running has nothing mounted, and won't
       // mount it again now that the membership is gone.
@@ -155,10 +191,152 @@ export async function revokeShare(share: AfsShare): Promise<void> {
   }
   for (const m of members) {
     try {
-      await unmountAtWorkspace(afsEnv, m.workspace_id, share.name)
+      await unmountAtWorkspace(afsEnv, m.workspace_id, memberMountName(m, share))
     } catch {
       // Mount may already be gone after revoke.
     }
   }
   await deleteAfsShare(share.id)
+}
+
+/** Revoke every folder the workspace owns. Called before the workspace is deleted. */
+export async function revokeSharesOwnedBy(workspaceId: string): Promise<void> {
+  for (const share of await listAfsSharesOwnedBy(workspaceId)) {
+    try {
+      await revokeShare(share)
+    } catch (e) {
+      console.error(`[afs] revoke share ${share.id} of ws=${workspaceId} failed:`, e)
+    }
+  }
+}
+
+// ── Team grants ─────────────────────────────────────────────────────────────
+
+/**
+ * Grant the folder to a team, or change the grant's permission. The owner,
+ * `userId`, must be in the team. Lowering a grant takes effect on the mounts
+ * it allowed.
+ */
+export async function grantShareToTeam(
+  share: AfsShare,
+  teamId: string,
+  permission: AfsPermission,
+  userId: string,
+): Promise<void> {
+  if (!(await getTeamMembership(teamId, userId))) {
+    throw new ShareAccessError('You can only share with a team you are in')
+  }
+  await upsertAfsShareGrant(share.id, teamId, permission, userId)
+  await reconcileTeamMounts()
+}
+
+/** Take the folder's grant from a team, and the mounts only it allowed. */
+export async function revokeShareFromTeam(share: AfsShare, teamId: string): Promise<boolean> {
+  const removed = await deleteAfsShareGrant(share.id, teamId)
+  if (removed) await reconcileTeamMounts()
+  return removed
+}
+
+/**
+ * Mount another user's folder in the workspace through a grant to one of the
+ * workspace owner's teams, or change the permission of such a mount. Throws
+ * ShareAccessError when no grant allows it at that permission,
+ * ShareEnvironmentError when the workspace is on another environment, and
+ * ShareNameConflictError when the workspace has a folder at that name.
+ */
+export async function mountShareForTeam(
+  share: AfsShare,
+  workspace: Workspace,
+  permission: AfsPermission,
+  mountName: string | undefined,
+  { mountNow }: MountOptions,
+): Promise<{ mount_name: string }> {
+  const ceiling = await getAfsGrantCeiling(share.id, workspace.user_id)
+  if (!ceiling) throw new ShareAccessError('The folder is not shared with any of your teams')
+  if (PERMISSION_RANK[permission] > PERMISSION_RANK[ceiling]) {
+    throw new ShareAccessError('The folder is shared with your teams read-only')
+  }
+
+  const afsEnv = await afsEnvForWorkspace(share.owner_workspace_id)
+  const targetEnv = await afsEnvForWorkspace(workspace.id)
+  if (targetEnv.environmentId !== afsEnv.environmentId) {
+    throw new ShareEnvironmentError('Target workspace is on a different environment')
+  }
+
+  const existing = (await listAfsShareMembers(share.id)).find(
+    (m) => m.workspace_id === workspace.id,
+  )
+  if (existing && existing.source !== 'team') {
+    throw new ShareAccessError('The workspace already has this folder')
+  }
+  const current = existing ? memberMountName(existing, share) : undefined
+  const name = mountName ?? current ?? share.name
+  if (name !== current && (await listAfsMountNames(workspace.id)).includes(name)) {
+    throw new ShareNameConflictError(`A folder is already mounted at /mnt/afs/${name}`)
+  }
+
+  if (mountNow) {
+    if (current) {
+      try {
+        await unmountAtWorkspace(afsEnv, workspace.id, current)
+      } catch {
+        // Best-effort — continue even if stale unmount fails.
+      }
+    }
+    await mountAtWorkspace(
+      afsEnv,
+      workspace.id,
+      share.afs_dir_id,
+      share.access_key,
+      name,
+      permission === 'read_only',
+    )
+  }
+  await addAfsTeamMount(share.id, workspace.id, permission, name)
+  return { mount_name: name }
+}
+
+/**
+ * Bring every team mount in line with the grants: one no grant allows any more
+ * is unmounted and removed, and a read-write one only read-only grants allow
+ * is mounted again read-only. Called whenever grants or team memberships
+ * change. Each mount is handled on its own; one that fails is logged.
+ */
+export async function reconcileTeamMounts(): Promise<void> {
+  for (const m of await listAfsTeamMountsWithCeiling()) {
+    if (m.ceiling && PERMISSION_RANK[m.permission] <= PERMISSION_RANK[m.ceiling]) continue
+    try {
+      const afsEnv = await afsEnvForWorkspace(m.workspace_id)
+      if (!m.ceiling) {
+        await removeAfsShareMember(m.share.id, m.workspace_id)
+      } else {
+        await setAfsMemberPermission(m.share.id, m.workspace_id, m.ceiling)
+      }
+      try {
+        await unmountAtWorkspace(afsEnv, m.workspace_id, m.mount_name)
+      } catch {
+        // Best-effort: a pod that isn't running has nothing mounted, and
+        // mounts what its membership says when it next starts.
+      }
+      if (m.ceiling) {
+        try {
+          await mountAtWorkspace(
+            afsEnv,
+            m.workspace_id,
+            m.share.afs_dir_id,
+            m.share.access_key,
+            m.mount_name,
+            true,
+          )
+        } catch {
+          // Likewise: a stopped pod mounts it read-only when it starts.
+        }
+      }
+    } catch (e) {
+      console.error(
+        `[afs] reconcile team mount share=${m.share.id} ws=${m.workspace_id} failed:`,
+        e,
+      )
+    }
+  }
 }

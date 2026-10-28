@@ -1,6 +1,7 @@
 import * as jobs from '../lib/jobs'
 import { fireDeleteHooks } from '../lib/service-hooks'
 import { interruptAllSessions } from '../routes/workspaces/_shared'
+import { revokeSharesOwnedBy } from './afs-shares'
 import { getWorkspacePlacementEnv } from './db/environments'
 import { listSchedulesByWorkspace } from './db/schedules'
 import { resetAllSessionsIdle } from './db/sessions'
@@ -56,6 +57,11 @@ export async function destroyWorkspace(workspace: Workspace, force = false): Pro
   }
 
   await fireDeleteHooks(workspace.id)
+
+  // Its folders go with it, and must be taken from the workspaces that have
+  // them: the rows would go with the workspace, but not the directories or
+  // the mounts in running pods.
+  await revokeSharesOwnedBy(workspace.id)
 
   // Before either teardown path, and after the work above — which the settle
   // wait absorbs rather than adds to.

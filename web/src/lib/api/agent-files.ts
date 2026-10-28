@@ -179,13 +179,25 @@ export async function revokeFileExportToken(workspaceId: string, token: string):
   }
 }
 
+export type AfsPermission = 'read_only' | 'read_write'
+
 export interface AfsShareSummary {
   id: string
   name: string
   owner_workspace_id: string
   afs_dir_id: string
   role: 'owner' | 'member'
-  my_permission: 'read_only' | 'read_write'
+  my_permission: AfsPermission
+  /** Where this workspace has the folder: /mnt/afs/<mount_name>. */
+  mount_name: string
+  /** 'team': this workspace has another user's folder through a team. */
+  source: 'direct' | 'team'
+  owner_user_id: string
+  owner_display_name: string
+  /** Workspaces other than the owner's that have it. */
+  other_member_count: number
+  /** Teams it is granted to. */
+  grant_count: number
   created_at: string
 }
 
@@ -221,8 +233,13 @@ export async function deleteAfsShare(workspaceId: string, shareId: string): Prom
 
 export interface AfsShareMember {
   workspace_id: string
-  permission: 'read_only' | 'read_write'
+  permission: AfsPermission
   mounted_at: string
+  source: 'direct' | 'team'
+  mount_name: string
+  workspace_name: string
+  user_id: string
+  user_display_name: string
 }
 
 export async function listAfsShareMembers(
@@ -266,4 +283,88 @@ export async function removeAfsShareMember(
     const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
     throw new Error(err.error ?? `remove member failed: ${resp.status}`)
   }
+}
+
+async function afsJson<T>(resp: Response, what: string): Promise<T> {
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
+    throw new Error(err.error ?? `${what} failed: ${resp.status}`)
+  }
+  return (await resp.json()) as T
+}
+
+export interface AfsShareGrant {
+  team_id: string
+  team_name: string
+  /** The highest permission team members can mount it at. */
+  permission: AfsPermission
+  granted_at: string
+}
+
+export async function listAfsShareGrants(
+  workspaceId: string,
+  shareId: string,
+): Promise<AfsShareGrant[]> {
+  const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares/${shareId}/grants`)
+  return (await afsJson<{ grants: AfsShareGrant[] }>(resp, 'list grants')).grants ?? []
+}
+
+export async function putAfsShareGrant(
+  workspaceId: string,
+  shareId: string,
+  teamId: string,
+  permission: AfsPermission,
+): Promise<void> {
+  const resp = await fetch(
+    `/api/workspaces/${workspaceId}/afs/shares/${shareId}/grants/${encodeURIComponent(teamId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission }),
+    },
+  )
+  await afsJson(resp, 'share with team')
+}
+
+export async function deleteAfsShareGrant(
+  workspaceId: string,
+  shareId: string,
+  teamId: string,
+): Promise<void> {
+  const resp = await fetch(
+    `/api/workspaces/${workspaceId}/afs/shares/${shareId}/grants/${encodeURIComponent(teamId)}`,
+    { method: 'DELETE' },
+  )
+  await afsJson(resp, 'stop sharing with team')
+}
+
+export interface AfsAvailableShare {
+  id: string
+  name: string
+  owner_user_id: string
+  owner_display_name: string
+  /** The highest permission it can be mounted at. */
+  ceiling: AfsPermission
+  team_names: string[]
+  created_at: string
+}
+
+/** Other users' folders shared with a team of the workspace owner's, not mounted here yet. */
+export async function listAvailableAfsShares(workspaceId: string): Promise<AfsAvailableShare[]> {
+  const resp = await fetch(`/api/workspaces/${workspaceId}/afs/available`)
+  return (await afsJson<{ shares: AfsAvailableShare[] }>(resp, 'list team folders')).shares ?? []
+}
+
+export async function mountAfsShare(
+  workspaceId: string,
+  shareId: string,
+  permission: AfsPermission,
+  mountName?: string,
+): Promise<{ share_id: string; permission: AfsPermission; mount_name: string }> {
+  const resp = await fetch(`/api/workspaces/${workspaceId}/afs/mounts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ share_id: shareId, permission, mount_name: mountName }),
+  })
+  return afsJson(resp, 'mount folder')
 }
