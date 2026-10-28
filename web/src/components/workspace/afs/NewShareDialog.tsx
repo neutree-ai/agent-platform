@@ -8,11 +8,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AFS_FOLDER_NAME_RE } from '@/lib/api/agent-files'
 import { isCommitEnter } from '@/lib/keyboard'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-const NAME_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
 
 interface NewShareDialogProps {
   open: boolean
@@ -35,7 +34,7 @@ export function NewShareDialog({ open, onOpenChange, onSubmit }: NewShareDialogP
   }, [open])
 
   async function handleSubmit() {
-    if (!NAME_RE.test(name)) {
+    if (!AFS_FOLDER_NAME_RE.test(name)) {
       setError(t('components.afsShares.newDialog.invalidName'))
       return
     }

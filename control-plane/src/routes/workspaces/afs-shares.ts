@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import type { AppEnv } from '../../lib/types'
-import { canAccessWorkspace } from '../../lib/workspace-access'
+import { canAccessWorkspace, isWorkspaceOwner } from '../../lib/workspace-access'
 import {
   ShareAccessError,
   ShareEnvironmentError,
@@ -17,7 +17,6 @@ import {
   getAfsShareById,
   listAfsShareGrants,
   listAfsShareMemberDetails,
-  listAfsShareMembers,
   listAfsSharesAvailableTo,
   listAfsSharesVisibleTo,
 } from '../../services/db/afs-shares'
@@ -42,10 +41,8 @@ const ShareTeamParam = ShareParam.extend({
 })
 
 const PermissionSchema = z.enum(['read_only', 'read_write'])
-const MountNameSchema = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9-]{0,47}$/)
-  .describe('Where the folder is mounted, /mnt/afs/<mount_name>.')
+// A folder's name, and where it is mounted: /mnt/afs/<name>.
+const FolderNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/)
 
 const AfsShareSummarySchema = z.object({
   id: z.string(),
@@ -101,7 +98,7 @@ const GrantTeamBodySchema = z.object({ permission: PermissionSchema })
 const MountBodySchema = z.object({
   share_id: z.string(),
   permission: PermissionSchema.default('read_only'),
-  mount_name: MountNameSchema.optional().describe(
+  mount_name: FolderNameSchema.optional().describe(
     "Where to mount it, /mnt/afs/<mount_name>; the folder's own name when omitted.",
   ),
 })
@@ -127,10 +124,9 @@ function summaryJson(s: Awaited<ReturnType<typeof listAfsSharesVisibleTo>>[numbe
 }
 
 const CreateBodySchema = z.object({
-  name: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9-]{0,47}$/)
-    .describe('Human-readable folder name; lowercase letters/digits/hyphens, ≤48 chars.'),
+  name: FolderNameSchema.describe(
+    'Human-readable folder name; lowercase letters/digits/hyphens, ≤48 chars.',
+  ),
 })
 
 const GrantBodySchema = z.object({
@@ -231,7 +227,7 @@ afsShares.openapi(
     try {
       // The owner's pod must be running: its folder is mounted before this returns.
       const share = await ensureShare(id, name, { mountNow: true })
-      const created = (await listAfsSharesVisibleTo(id)).find((s) => s.id === share.id)!
+      const [created] = await listAfsSharesVisibleTo(id, share.id)
       return c.json(summaryJson(created), 201)
     } catch (e) {
       if (e instanceof ShareNameConflictError) return c.json({ error: e.message }, 409)
@@ -308,17 +304,14 @@ afsShares.openapi(
     if (!r.ok) return c.json({ error: 'Workspace not found' }, 404)
     const share = await getAfsShareById(shareId)
     if (!share) return c.json({ error: 'Share not found' }, 404)
+    const all = await listAfsShareMemberDetails(share.id)
     // Caller must be owner OR current member of this share.
-    if (share.owner_workspace_id !== id) {
-      const members = await listAfsShareMembers(share.id)
-      if (!members.some((m) => m.workspace_id === id)) {
-        return c.json({ error: 'Not a member' }, 404)
-      }
+    const isOwner = share.owner_workspace_id === id
+    if (!isOwner && !all.some((m) => m.workspace_id === id)) {
+      return c.json({ error: 'Not a member' }, 404)
     }
     // Another user's member doesn't get to see who else has the folder.
-    const members = (await listAfsShareMemberDetails(share.id)).filter(
-      (m) => share.owner_workspace_id === id || m.user_id === r.workspace.user_id,
-    )
+    const members = isOwner ? all : all.filter((m) => m.user_id === r.workspace.user_id)
     return c.json(
       {
         members: members.map((m) => ({
@@ -326,7 +319,7 @@ afsShares.openapi(
           permission: m.permission,
           mounted_at: iso(m.mounted_at),
           source: m.source,
-          mount_name: m.mount_name ?? share.name,
+          mount_name: m.mount_name,
           workspace_name: m.workspace_name,
           user_id: m.user_id,
           user_display_name: m.user_display_name,
@@ -472,7 +465,7 @@ async function resolveOwnedShare(
   const share = await getAfsShareById(shareId)
   if (!share) return { ok: false, status: 404, error: 'Share not found' }
   if (share.owner_workspace_id !== id) return { ok: false, status: 403, error: 'Not owner' }
-  if (r.workspace.user_id !== user.sub) {
+  if (!isWorkspaceOwner(r.workspace, user)) {
     return { ok: false, status: 403, error: "Only the workspace's owner can share its folders" }
   }
   return { ok: true, share }
@@ -687,9 +680,7 @@ afsShares.openapi(
       return c.json({ error: 'Share not found' }, 404)
     }
     try {
-      const mounted = await mountShareForTeam(share, r.workspace, permission, mount_name, {
-        mountNow: r.workspace.status === 'running',
-      })
+      const mounted = await mountShareForTeam(share, r.workspace, permission, mount_name)
       return c.json({ share_id: share.id, permission, mount_name: mounted.mount_name }, 201)
     } catch (e) {
       if (e instanceof ShareAccessError) return c.json({ error: e.message }, 403)

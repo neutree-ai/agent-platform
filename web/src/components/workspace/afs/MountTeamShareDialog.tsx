@@ -10,15 +10,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import {
+  AFS_FOLDER_NAME_RE,
   type AfsAvailableShare,
   type AfsPermission,
   listAvailableAfsShares,
@@ -28,8 +22,7 @@ import { cn } from '@/lib/utils'
 import { Folder } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-const NAME_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
+import { AfsPermissionSelect, afsPermissionKey } from './AfsPermissionSelect'
 
 interface MountTeamShareDialogProps {
   open: boolean
@@ -77,7 +70,7 @@ export function MountTeamShareDialog({
 
   async function handleMount() {
     if (!selected) return
-    if (!NAME_RE.test(mountName)) {
+    if (!AFS_FOLDER_NAME_RE.test(mountName)) {
       setError(t('components.afsShares.newDialog.invalidName'))
       return
     }
@@ -134,9 +127,7 @@ export function MountTeamShareDialog({
                       </div>
                     </div>
                     <Badge variant="outline" className="h-4 px-1.5 text-[10px] font-normal">
-                      {s.ceiling === 'read_only'
-                        ? t('components.afsShares.perm.ro')
-                        : t('components.afsShares.perm.rw')}
+                      {t(afsPermissionKey(s.ceiling))}
                     </Badge>
                   </button>
                 ))}
@@ -164,22 +155,12 @@ export function MountTeamShareDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label>{t('components.afsShares.mountDialog.permissionLabel')}</Label>
-                  <Select
+                  <AfsPermissionSelect
                     value={permission}
-                    onValueChange={(v) => setPermission(v as AfsPermission)}
-                  >
-                    <SelectTrigger className="h-8 w-28">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="read_only">{t('components.afsShares.perm.ro')}</SelectItem>
-                      {selected.ceiling === 'read_write' && (
-                        <SelectItem value="read_write">
-                          {t('components.afsShares.perm.rw')}
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                    onChange={setPermission}
+                    max={selected.ceiling}
+                    className="h-8 w-28"
+                  />
                 </div>
               </div>
             )}
