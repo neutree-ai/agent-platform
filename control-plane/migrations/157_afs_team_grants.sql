@@ -26,6 +26,10 @@ ALTER TABLE public.afs_share_members
         CHECK (source IN ('direct', 'team'));
 
 -- Where the folder is mounted in the member's workspace, /mnt/afs/<mount_name>.
--- Null: at the folder's own name. A team mount chooses one, since folders of
--- different owners can share a name.
+-- The folder's own name, except for a team mount, which may choose another,
+-- since folders of different owners can share a name.
 ALTER TABLE public.afs_share_members ADD COLUMN IF NOT EXISTS mount_name text;
+UPDATE public.afs_share_members m SET mount_name = s.name
+  FROM public.afs_shares s
+ WHERE s.id = m.share_id AND m.mount_name IS NULL;
+ALTER TABLE public.afs_share_members ALTER COLUMN mount_name SET NOT NULL;

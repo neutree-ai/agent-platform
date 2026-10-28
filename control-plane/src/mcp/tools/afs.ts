@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { afsEnvForWorkspace, mountAtWorkspace } from '../../services/afs'
-import { ensureShare, revokeShare } from '../../services/afs-shares'
 import {
-  addAfsShareMember,
-  getAfsShareByName,
-  listAfsShareMembers,
-} from '../../services/db/afs-shares'
+  ShareEnvironmentError,
+  ensureShare,
+  grantShare,
+  revokeShare,
+} from '../../services/afs-shares'
+import { getAfsShareByName } from '../../services/db/afs-shares'
 import { getWorkspace, resolveWorkspaceBySlug } from '../../services/db/workspaces'
 import { textResult } from './shared'
 
@@ -83,25 +83,15 @@ Default readonly=true is correct for most hand-off cases. Only pass readonly=fal
         const share = await getAfsShareByName(workspaceId, name)
         if (!share) return textResult(`Error: no folder named "${name}" — call share_folder first`)
 
-        // afs sharing scope is one environment; a cross-environment target could
-        // never mount this share's dir.
-        const afsEnv = await afsEnvForWorkspace(workspaceId)
-        const targetEnv = await afsEnvForWorkspace(target.id)
-        if (targetEnv.environmentId !== afsEnv.environmentId) {
-          return textResult('Error: target agent is on a different environment')
-        }
-        await mountAtWorkspace(
-          afsEnv,
-          target.id,
-          share.afs_dir_id,
-          share.access_key,
-          name,
-          readonly,
-        )
-        await addAfsShareMember(share.id, target.id, readonly ? 'read_only' : 'read_write')
+        await grantShare(share, target.id, readonly ? 'read_only' : 'read_write', {
+          mountNow: true,
+        })
 
         return textResult(JSON.stringify({ path: `/mnt/afs/${name}`, target: slug, readonly }))
       } catch (e) {
+        if (e instanceof ShareEnvironmentError) {
+          return textResult('Error: target agent is on a different environment')
+        }
         return textResult(`Error: ${(e as Error).message}`)
       }
     },
@@ -122,9 +112,8 @@ Default readonly=true is correct for most hand-off cases. Only pass readonly=fal
         const share = await getAfsShareByName(workspaceId, name)
         if (!share) return textResult(`Error: no share named "${name}"`)
 
-        const members = await listAfsShareMembers(share.id)
-        await revokeShare(share)
-        return textResult(JSON.stringify({ revoked: name, members: members.length }))
+        const members = await revokeShare(share)
+        return textResult(JSON.stringify({ revoked: name, members }))
       } catch (e) {
         return textResult(`Error: ${(e as Error).message}`)
       }

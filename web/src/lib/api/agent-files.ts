@@ -181,6 +181,25 @@ export async function revokeFileExportToken(workspaceId: string, token: string):
 
 export type AfsPermission = 'read_only' | 'read_write'
 
+/** A folder's name, and where it is mounted: /mnt/afs/<name>. */
+export const AFS_FOLDER_NAME_RE = /^[a-z0-9][a-z0-9-]{0,47}$/
+
+async function afsJson<T>(resp: Response, what: string): Promise<T> {
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
+    throw new Error(err.error ?? `${what} failed: ${resp.status}`)
+  }
+  return (await resp.json()) as T
+}
+
+function sendJson(method: string, body?: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }
+}
+
 export interface AfsShareSummary {
   id: string
   name: string
@@ -203,32 +222,19 @@ export interface AfsShareSummary {
 
 export async function listAfsShares(workspaceId: string): Promise<AfsShareSummary[]> {
   const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares`)
-  if (!resp.ok) throw new Error(`list afs shares failed: ${resp.status}`)
-  const json = (await resp.json()) as { shares: AfsShareSummary[] }
-  return json.shares ?? []
+  return (await afsJson<{ shares: AfsShareSummary[] }>(resp, 'list afs shares')).shares
 }
 
 export async function createAfsShare(workspaceId: string, name: string): Promise<AfsShareSummary> {
-  const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  })
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
-    throw new Error(err.error ?? `create share failed: ${resp.status}`)
-  }
-  return (await resp.json()) as AfsShareSummary
+  const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares`, sendJson('POST', { name }))
+  return afsJson(resp, 'create share')
 }
 
 export async function deleteAfsShare(workspaceId: string, shareId: string): Promise<void> {
   const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares/${shareId}`, {
     method: 'DELETE',
   })
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
-    throw new Error(err.error ?? `delete share failed: ${resp.status}`)
-  }
+  await afsJson(resp, 'delete share')
 }
 
 export interface AfsShareMember {
@@ -247,9 +253,7 @@ export async function listAfsShareMembers(
   shareId: string,
 ): Promise<AfsShareMember[]> {
   const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares/${shareId}/members`)
-  if (!resp.ok) throw new Error(`list members failed: ${resp.status}`)
-  const json = (await resp.json()) as { members: AfsShareMember[] }
-  return json.members ?? []
+  return (await afsJson<{ members: AfsShareMember[] }>(resp, 'list members')).members
 }
 
 export async function addAfsShareMember(
@@ -257,17 +261,12 @@ export async function addAfsShareMember(
   shareId: string,
   targetWorkspaceId: string,
   readonly: boolean,
-): Promise<AfsShareMember> {
-  const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares/${shareId}/members`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ workspace_id: targetWorkspaceId, readonly }),
-  })
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
-    throw new Error(err.error ?? `grant failed: ${resp.status}`)
-  }
-  return (await resp.json()) as AfsShareMember
+): Promise<void> {
+  const resp = await fetch(
+    `/api/workspaces/${workspaceId}/afs/shares/${shareId}/members`,
+    sendJson('POST', { workspace_id: targetWorkspaceId, readonly }),
+  )
+  await afsJson(resp, 'grant')
 }
 
 export async function removeAfsShareMember(
@@ -279,18 +278,7 @@ export async function removeAfsShareMember(
     `/api/workspaces/${workspaceId}/afs/shares/${shareId}/members/${memberWorkspaceId}`,
     { method: 'DELETE' },
   )
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
-    throw new Error(err.error ?? `remove member failed: ${resp.status}`)
-  }
-}
-
-async function afsJson<T>(resp: Response, what: string): Promise<T> {
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: `status ${resp.status}` }))
-    throw new Error(err.error ?? `${what} failed: ${resp.status}`)
-  }
-  return (await resp.json()) as T
+  await afsJson(resp, 'remove member')
 }
 
 export interface AfsShareGrant {
@@ -306,7 +294,7 @@ export async function listAfsShareGrants(
   shareId: string,
 ): Promise<AfsShareGrant[]> {
   const resp = await fetch(`/api/workspaces/${workspaceId}/afs/shares/${shareId}/grants`)
-  return (await afsJson<{ grants: AfsShareGrant[] }>(resp, 'list grants')).grants ?? []
+  return (await afsJson<{ grants: AfsShareGrant[] }>(resp, 'list grants')).grants
 }
 
 export async function putAfsShareGrant(
@@ -317,11 +305,7 @@ export async function putAfsShareGrant(
 ): Promise<void> {
   const resp = await fetch(
     `/api/workspaces/${workspaceId}/afs/shares/${shareId}/grants/${encodeURIComponent(teamId)}`,
-    {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ permission }),
-    },
+    sendJson('PUT', { permission }),
   )
   await afsJson(resp, 'share with team')
 }
@@ -352,7 +336,7 @@ export interface AfsAvailableShare {
 /** Other users' folders shared with a team of the workspace owner's, not mounted here yet. */
 export async function listAvailableAfsShares(workspaceId: string): Promise<AfsAvailableShare[]> {
   const resp = await fetch(`/api/workspaces/${workspaceId}/afs/available`)
-  return (await afsJson<{ shares: AfsAvailableShare[] }>(resp, 'list team folders')).shares ?? []
+  return (await afsJson<{ shares: AfsAvailableShare[] }>(resp, 'list team folders')).shares
 }
 
 export async function mountAfsShare(
@@ -361,10 +345,9 @@ export async function mountAfsShare(
   permission: AfsPermission,
   mountName?: string,
 ): Promise<{ share_id: string; permission: AfsPermission; mount_name: string }> {
-  const resp = await fetch(`/api/workspaces/${workspaceId}/afs/mounts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ share_id: shareId, permission, mount_name: mountName }),
-  })
+  const resp = await fetch(
+    `/api/workspaces/${workspaceId}/afs/mounts`,
+    sendJson('POST', { share_id: shareId, permission, mount_name: mountName }),
+  )
   return afsJson(resp, 'mount folder')
 }

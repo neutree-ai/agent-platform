@@ -19,31 +19,31 @@ interface AfsShareMember {
   workspace_id: string
   permission: AfsPermission
   source: AfsMemberSource
-  /** Null: mounted at the folder's own name. */
-  mount_name: string | null
+  /** Where the member has the folder: /mnt/afs/<mount_name>. */
+  mount_name: string
   mounted_at: Date
 }
 
-/** Where a member has the folder: /mnt/afs/<this>. */
-export function memberMountName(
-  member: Pick<AfsShareMember, 'mount_name'>,
-  share: Pick<AfsShare, 'name'>,
-): string {
-  return member.mount_name ?? share.name
+/**
+ * The highest permission the grants of share `s.id` give the user `userExpr`
+ * evaluates to, through the teams the user is in; null when none does.
+ */
+function ceilingSql(userExpr: string): string {
+  return `(SELECT CASE
+            WHEN bool_or(g.permission = 'read_write') THEN 'read_write'
+            WHEN count(*) > 0 THEN 'read_only'
+          END
+     FROM afs_share_grants g
+     JOIN team_members tm ON tm.team_id = g.team_id
+    WHERE g.share_id = s.id AND tm.user_id = ${userExpr})`
 }
 
-/**
- * The highest permission the grants of share `s.id` give user `owner.u`,
- * through the teams the user is in; null when none does. Put in a query that
- * has `s` (afs_shares) and `owner` (a lateral giving the user as `u`).
- */
-const CEILING_SQL = `(SELECT CASE
-          WHEN bool_or(g.permission = 'read_write') THEN 'read_write'
-          WHEN count(*) > 0 THEN 'read_only'
-        END
-   FROM afs_share_grants g
-   JOIN team_members tm ON tm.team_id = g.team_id
-  WHERE g.share_id = s.id AND tm.user_id = owner.u)`
+/** Whether the grants still allow a team mount `m` of share `s` in workspace `w`. */
+const TEAM_MOUNT_ALLOWED_SQL = `(CASE ${ceilingSql('w.user_id')}
+    WHEN 'read_write' THEN true
+    WHEN 'read_only' THEN m.permission = 'read_only'
+    ELSE false
+  END)`
 
 export async function createAfsShare(
   ownerWorkspaceId: string,
@@ -95,10 +95,14 @@ interface AfsShareSummary extends AfsShare {
 }
 
 /**
- * Every share where `workspaceId` is either the owner or an active member.
- * Returns rows annotated with role and the permission this workspace holds.
+ * Every share where `workspaceId` is either the owner or an active member
+ * (only `shareId`, when given). Returns rows annotated with role and the
+ * permission this workspace holds.
  */
-export async function listAfsSharesVisibleTo(workspaceId: string): Promise<AfsShareSummary[]> {
+export async function listAfsSharesVisibleTo(
+  workspaceId: string,
+  shareId?: string,
+): Promise<AfsShareSummary[]> {
   const { rows } = await pool.query(
     `SELECT s.*,
             CASE WHEN s.owner_workspace_id = $1 THEN 'owner' ELSE 'member' END AS role,
@@ -116,19 +120,35 @@ export async function listAfsSharesVisibleTo(workspaceId: string): Promise<AfsSh
        JOIN users ou ON ou.id = ow.user_id
        LEFT JOIN afs_share_members m
          ON m.share_id = s.id AND m.workspace_id = $1
-      WHERE s.owner_workspace_id = $1 OR m.workspace_id IS NOT NULL
+      WHERE (s.owner_workspace_id = $1 OR m.workspace_id IS NOT NULL)
+        AND ($2::text IS NULL OR s.id = $2)
       ORDER BY s.created_at DESC`,
-    [workspaceId],
+    [workspaceId, shareId ?? null],
   )
   return rows as AfsShareSummary[]
 }
 
-export async function removeAfsShareMember(shareId: string, workspaceId: string): Promise<boolean> {
-  const r = await pool.query(
-    'DELETE FROM afs_share_members WHERE share_id = $1 AND workspace_id = $2',
+/** Remove the member. Where it had the folder mounted, or null when it wasn't one. */
+export async function removeAfsShareMember(
+  shareId: string,
+  workspaceId: string,
+): Promise<string | null> {
+  const { rows } = await pool.query(
+    'DELETE FROM afs_share_members WHERE share_id = $1 AND workspace_id = $2 RETURNING mount_name',
     [shareId, workspaceId],
   )
-  return (r.rowCount ?? 0) > 0
+  return (rows[0]?.mount_name as string) ?? null
+}
+
+export async function getAfsShareMember(
+  shareId: string,
+  workspaceId: string,
+): Promise<AfsShareMember | null> {
+  const { rows } = await pool.query(
+    'SELECT * FROM afs_share_members WHERE share_id = $1 AND workspace_id = $2',
+    [shareId, workspaceId],
+  )
+  return (rows[0] as AfsShareMember) ?? null
 }
 
 export async function addAfsShareMember(
@@ -137,8 +157,8 @@ export async function addAfsShareMember(
   permission: AfsPermission,
 ): Promise<void> {
   await pool.query(
-    `INSERT INTO afs_share_members (share_id, workspace_id, permission)
-     VALUES ($1, $2, $3)
+    `INSERT INTO afs_share_members (share_id, workspace_id, permission, mount_name)
+     SELECT $1, $2, $3, name FROM afs_shares WHERE id = $1
      ON CONFLICT (share_id, workspace_id)
        DO UPDATE SET permission = EXCLUDED.permission, source = 'direct'`,
     [shareId, workspaceId, permission],
@@ -176,13 +196,10 @@ export async function setAfsMemberPermission(
 /** The names the workspace has folders mounted at, under /mnt/afs. */
 export async function listAfsMountNames(workspaceId: string): Promise<string[]> {
   const { rows } = await pool.query(
-    `SELECT COALESCE(m.mount_name, s.name) AS name
-       FROM afs_share_members m
-       JOIN afs_shares s ON s.id = m.share_id
-      WHERE m.workspace_id = $1`,
+    'SELECT mount_name FROM afs_share_members WHERE workspace_id = $1',
     [workspaceId],
   )
-  return rows.map((r) => r.name as string)
+  return rows.map((r) => r.mount_name as string)
 }
 
 interface AfsMountForWorkspace {
@@ -206,17 +223,13 @@ export async function listAfsMountsForWorkspace(
   // never mounts a folder its owner's access to was taken away from while it
   // was down; reconcileTeamMounts deletes the row.
   const { rows } = await pool.query(
-    `SELECT s.id AS share_id, COALESCE(m.mount_name, s.name) AS share_name,
+    `SELECT s.id AS share_id, m.mount_name AS share_name,
             s.afs_dir_id, s.access_key, m.permission
        FROM afs_share_members m
        JOIN afs_shares s ON s.id = m.share_id
        JOIN workspaces w ON w.id = m.workspace_id
-      CROSS JOIN LATERAL (SELECT w.user_id AS u) owner
-      CROSS JOIN LATERAL (SELECT ${CEILING_SQL} AS ceiling) c
       WHERE m.workspace_id = $1
-        AND (m.source = 'direct'
-          OR c.ceiling = 'read_write'
-          OR (c.ceiling = 'read_only' AND m.permission = 'read_only'))`,
+        AND (m.source = 'direct' OR ${TEAM_MOUNT_ALLOWED_SQL})`,
     [workspaceId],
   )
   return rows as AfsMountForWorkspace[]
@@ -296,9 +309,7 @@ export async function getAfsGrantCeiling(
   userId: string,
 ): Promise<AfsPermission | null> {
   const { rows } = await pool.query(
-    `SELECT ${CEILING_SQL} AS ceiling
-       FROM afs_shares s CROSS JOIN LATERAL (SELECT $2::text AS u) owner
-      WHERE s.id = $1`,
+    `SELECT ${ceilingSql('$2')} AS ceiling FROM afs_shares s WHERE s.id = $1`,
     [shareId, userId],
   )
   return (rows[0]?.ceiling as AfsPermission | null) ?? null
@@ -350,21 +361,24 @@ interface AfsTeamMountCheck {
   workspace_id: string
   permission: AfsPermission
   mount_name: string
+  /** The highest permission its grants give the workspace's owner now; null when none. */
   ceiling: AfsPermission | null
 }
 
-/** Every team mount, with the highest permission its grants give the workspace's owner now. */
-export async function listAfsTeamMountsWithCeiling(): Promise<AfsTeamMountCheck[]> {
+/**
+ * The team mounts (of `shareId` only, when given) that the grants no longer
+ * allow as they are.
+ */
+export async function listAfsTeamMountsOutOfLine(shareId?: string): Promise<AfsTeamMountCheck[]> {
   const { rows } = await pool.query(
     `SELECT s.id, s.owner_workspace_id, s.name, s.afs_dir_id, s.access_key, s.created_at,
-            m.workspace_id, m.permission, COALESCE(m.mount_name, s.name) AS mount_name,
-            c.ceiling
+            m.workspace_id, m.permission, m.mount_name, ${ceilingSql('w.user_id')} AS ceiling
        FROM afs_share_members m
        JOIN afs_shares s ON s.id = m.share_id
        JOIN workspaces w ON w.id = m.workspace_id
-      CROSS JOIN LATERAL (SELECT w.user_id AS u) owner
-      CROSS JOIN LATERAL (SELECT ${CEILING_SQL} AS ceiling) c
-      WHERE m.source = 'team'`,
+      WHERE m.source = 'team' AND ($1::text IS NULL OR s.id = $1)
+        AND NOT ${TEAM_MOUNT_ALLOWED_SQL}`,
+    [shareId ?? null],
   )
   return rows.map((r) => ({
     share: {

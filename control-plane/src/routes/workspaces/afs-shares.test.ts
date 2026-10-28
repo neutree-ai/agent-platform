@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../lib/workspace-access', () => ({ canAccessWorkspace: vi.fn() }))
+vi.mock('../../lib/workspace-access', () => ({
+  canAccessWorkspace: vi.fn(),
+  isWorkspaceOwner: (w: { user_id: string }, u: { sub: string }) => w.user_id === u.sub,
+}))
 vi.mock('../../services/db/workspaces', () => ({ getWorkspace: vi.fn() }))
 vi.mock('../../services/afs', () => ({
   afsEnvForWorkspace: vi.fn(),
@@ -10,9 +13,7 @@ vi.mock('../../services/afs', () => ({
   revokeDir: vi.fn(),
   unmountAtWorkspace: vi.fn(),
 }))
-vi.mock('../../services/db/afs-shares', async (importOriginal) => ({
-  memberMountName: (await importOriginal<typeof import('../../services/db/afs-shares')>())
-    .memberMountName,
+vi.mock('../../services/db/afs-shares', () => ({
   addAfsShareMember: vi.fn(),
   addAfsTeamMount: vi.fn(),
   createAfsShare: vi.fn(),
@@ -24,11 +25,12 @@ vi.mock('../../services/db/afs-shares', async (importOriginal) => ({
   listAfsMountNames: vi.fn(),
   listAfsShareGrants: vi.fn(),
   listAfsShareMemberDetails: vi.fn(),
+  getAfsShareMember: vi.fn(),
   listAfsShareMembers: vi.fn(),
   listAfsSharesAvailableTo: vi.fn(),
   listAfsSharesOwnedBy: vi.fn(),
   listAfsSharesVisibleTo: vi.fn(),
-  listAfsTeamMountsWithCeiling: vi.fn(),
+  listAfsTeamMountsOutOfLine: vi.fn(),
   removeAfsShareMember: vi.fn(),
   setAfsMemberPermission: vi.fn(),
   upsertAfsShareGrant: vi.fn(),
@@ -52,11 +54,12 @@ import {
   getAfsGrantCeiling,
   getAfsShareById,
   getAfsShareByName,
+  getAfsShareMember,
   listAfsMountNames,
   listAfsShareMemberDetails,
   listAfsShareMembers,
   listAfsSharesVisibleTo,
-  listAfsTeamMountsWithCeiling,
+  listAfsTeamMountsOutOfLine,
   removeAfsShareMember,
   setAfsMemberPermission,
   upsertAfsShareGrant,
@@ -99,7 +102,7 @@ beforeEach(() => {
   vi.mocked(createAfsShare).mockResolvedValue(share as never)
   vi.mocked(listAfsShareMembers).mockResolvedValue([])
   vi.mocked(listAfsMountNames).mockResolvedValue([])
-  vi.mocked(listAfsTeamMountsWithCeiling).mockResolvedValue([])
+  vi.mocked(listAfsTeamMountsOutOfLine).mockResolvedValue([])
   vi.mocked(listAfsSharesVisibleTo).mockResolvedValue([
     {
       ...share,
@@ -130,9 +133,11 @@ describe('POST /:id/afs/shares', () => {
 
   it('returns a complete share as it is', async () => {
     vi.mocked(getAfsShareByName).mockResolvedValue(share as never)
-    vi.mocked(listAfsShareMembers).mockResolvedValue([
-      { share_id: 'share1', workspace_id: 'ws1', permission: 'read_write' },
-    ] as never)
+    vi.mocked(getAfsShareMember).mockResolvedValue({
+      share_id: 'share1',
+      workspace_id: 'ws1',
+      permission: 'read_write',
+    } as never)
 
     const res = await create('team')
 
@@ -144,9 +149,11 @@ describe('POST /:id/afs/shares', () => {
 
   it('makes an owner that is only a read-only member a read-write one', async () => {
     vi.mocked(getAfsShareByName).mockResolvedValue(share as never)
-    vi.mocked(listAfsShareMembers).mockResolvedValue([
-      { share_id: 'share1', workspace_id: 'ws1', permission: 'read_only' },
-    ] as never)
+    vi.mocked(getAfsShareMember).mockResolvedValue({
+      share_id: 'share1',
+      workspace_id: 'ws1',
+      permission: 'read_only',
+    } as never)
 
     const res = await create('team')
 
@@ -288,7 +295,7 @@ describe('team grants', () => {
 
   it('unmounts the mounts no grant allows any more once a grant goes', async () => {
     vi.mocked(deleteAfsShareGrant).mockResolvedValue(true)
-    vi.mocked(listAfsTeamMountsWithCeiling).mockResolvedValue([teamMount({ ceiling: null })])
+    vi.mocked(listAfsTeamMountsOutOfLine).mockResolvedValue([teamMount({ ceiling: null })])
 
     const res = await teamApp('alice').request('/ws1/afs/shares/share1/grants/t1', json('DELETE'))
 
@@ -301,11 +308,7 @@ describe('team grants', () => {
 
   it('mounts a read-write mount again read-only when only read-only grants are left', async () => {
     vi.mocked(getTeamMembership).mockResolvedValue({ role: 'member' } as never)
-    vi.mocked(listAfsTeamMountsWithCeiling).mockResolvedValue([
-      teamMount({ ceiling: 'read_only' }),
-      // Already within what is allowed: left alone.
-      teamMount({ permission: 'read_only', ceiling: 'read_only', mount_name: 'other' }),
-    ])
+    vi.mocked(listAfsTeamMountsOutOfLine).mockResolvedValue([teamMount({ ceiling: 'read_only' })])
 
     const res = await teamApp('alice').request(
       '/ws1/afs/shares/share1/grants/t1',
@@ -322,7 +325,7 @@ describe('team grants', () => {
 
   it('keeps reconciling the other mounts when one fails', async () => {
     vi.mocked(deleteAfsShareGrant).mockResolvedValue(true)
-    vi.mocked(listAfsTeamMountsWithCeiling).mockResolvedValue([
+    vi.mocked(listAfsTeamMountsOutOfLine).mockResolvedValue([
       teamMount({ ceiling: null }),
       teamMount({ ceiling: null, mount_name: 'second' }),
     ])
@@ -407,9 +410,12 @@ describe('POST /:id/afs/mounts', () => {
   it('mounts again at the same name when the permission changes', async () => {
     vi.mocked(getAfsGrantCeiling).mockResolvedValue('read_write')
     vi.mocked(listAfsMountNames).mockResolvedValue(['alice-team'])
-    vi.mocked(listAfsShareMembers).mockResolvedValue([
-      { workspace_id: 'ws2', permission: 'read_only', source: 'team', mount_name: 'alice-team' },
-    ] as never)
+    vi.mocked(getAfsShareMember).mockResolvedValue({
+      workspace_id: 'ws2',
+      permission: 'read_only',
+      source: 'team',
+      mount_name: 'alice-team',
+    } as never)
 
     const res = await mount('ws2', { share_id: 'share1', permission: 'read_write' })
 
@@ -444,14 +450,10 @@ describe('members of a team-shared folder', () => {
   beforeEach(() => {
     vi.mocked(getWorkspace).mockImplementation(async (id) => (workspaces[id] ?? null) as never)
     vi.mocked(getAfsShareById).mockResolvedValue(share as never)
-    vi.mocked(listAfsShareMembers).mockResolvedValue([
-      { workspace_id: 'ws1', permission: 'read_write', source: 'direct', mount_name: null },
-      { workspace_id: 'ws2', permission: 'read_only', source: 'team', mount_name: 'alice-team' },
-    ] as never)
     vi.mocked(listAfsShareMemberDetails).mockResolvedValue([
-      { workspace_id: 'ws1', user_id: 'alice', mount_name: null, mounted_at: new Date() },
+      { workspace_id: 'ws1', user_id: 'alice', mount_name: 'team', mounted_at: new Date() },
       { workspace_id: 'ws2', user_id: 'bob', mount_name: 'alice-team', mounted_at: new Date() },
-      { workspace_id: 'ws4', user_id: 'dave', mount_name: null, mounted_at: new Date() },
+      { workspace_id: 'ws4', user_id: 'dave', mount_name: 'team', mounted_at: new Date() },
     ] as never)
   })
 
@@ -471,7 +473,7 @@ describe('members of a team-shared folder', () => {
   })
 
   it('unmounts a member that leaves at its own mount name', async () => {
-    vi.mocked(removeAfsShareMember).mockResolvedValue(true)
+    vi.mocked(removeAfsShareMember).mockResolvedValue('alice-team')
 
     const res = await teamApp('bob').request('/ws2/afs/shares/share1/members/ws2', json('DELETE'))
 

@@ -10,7 +10,6 @@ import {
   TeamPatchBodySchema,
 } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
-import { reconcileTeamMounts } from '../services/afs-shares'
 import { createTeamInvite, deleteTeamInvite, listTeamInvites } from '../services/db/team-invites'
 import {
   type Team,
@@ -19,16 +18,15 @@ import {
   type TeamSummary,
   addTeamMember,
   createTeam,
-  deleteTeam,
   getTeam,
   getTeamMembership,
   listTeamMembers,
   listTeamsForUser,
-  removeTeamMember,
   updateTeam,
   updateTeamMemberRole,
 } from '../services/db/teams'
 import { getUser } from '../services/db/users'
+import { deleteTeam, removeTeamMember } from '../services/teams'
 
 const teams = new OpenAPIHono<AppEnv>()
 
@@ -220,7 +218,6 @@ teams.openapi(deleteRoute, async (c) => {
   if (await isAppTeam(id)) return c.json({ error: APP_TEAM_ERROR }, 409)
   const ok = await deleteTeam(id)
   if (!ok) return c.json({ error: 'Team not found' }, 404)
-  await reconcileTeamMounts()
   return c.json({ success: true }, 200)
 })
 
@@ -376,7 +373,6 @@ teams.openapi(removeMemberRoute, async (c) => {
 
   const ok = await removeTeamMember(id, userId)
   if (!ok) return c.json({ error: 'Member not found' }, 404)
-  await reconcileTeamMounts()
   return c.json({ success: true }, 200)
 })
 
