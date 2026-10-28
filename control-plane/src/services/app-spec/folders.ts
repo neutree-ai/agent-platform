@@ -335,7 +335,8 @@ async function loadUserFolders(clientId?: string, userId?: string): Promise<User
        FROM afs_shares s
        JOIN app_workspaces aw ON aw.workspace_id = s.owner_workspace_id
        LEFT JOIN app_shared_folders f ON f.share_id = s.id
-       LEFT JOIN afs_share_members m ON m.share_id = s.id
+       -- Team mounts are the grants', not the spec's.
+       LEFT JOIN afs_share_members m ON m.share_id = s.id AND m.source = 'direct'
       WHERE aw.client_id = ANY($1) AND ($2::text IS NULL OR aw.user_id = $2)
         AND (f.share_id IS NOT NULL OR s.name = ANY($3))
       GROUP BY s.id, aw.client_id, aw.user_id, f.share_id`,

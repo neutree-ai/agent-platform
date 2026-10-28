@@ -1329,6 +1329,7 @@
         "prefix": "This will permanently delete workspace ",
         "suffix": " and all associated data including sessions, files, and configurations. This action cannot be undone."
       },
+      "sharedFolders": "Its {{folders}} shared folder(s) will be deleted too, and unmounted from {{workspaces}} other workspace(s).",
       "confirm": {
         "labelPrefix": "Type ",
         "labelSuffix": " to confirm"
@@ -1596,6 +1597,26 @@
         "add": "Add",
         "selectWs": "Select workspace",
         "noCandidates": "No eligible workspaces"
+      },
+      "mountTeamShare": "Mount team folder",
+      "sharedBy": "from {{owner}}",
+      "sharedWithTeams": "Shared with {{count}} team(s)",
+      "mountDialog": {
+        "title": "Mount a team folder",
+        "empty": "No folders to mount. Folders other members share with your teams show up here.",
+        "from": "{{owner}} · shared with {{teams}}",
+        "mountNameLabel": "Mount at",
+        "permissionLabel": "Permission",
+        "mount": "Mount",
+        "mounting": "Mounting…"
+      },
+      "teams": {
+        "title": "Share with teams",
+        "hint": "Team members can mount this folder in their own workspaces, up to the permission set here.",
+        "remove": "Stop sharing",
+        "selectTeam": "Select a team",
+        "noCandidates": "No teams to share with",
+        "add": "Share"
       }
     },
     "workspaceFiles": {

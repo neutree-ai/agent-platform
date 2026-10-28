@@ -16,11 +16,13 @@ vi.mock('./db/sessions', () => ({ resetAllSessionsIdle: vi.fn() }))
 vi.mock('./db/workspaces', () => ({ deleteWorkspace: vi.fn(), updateWorkspace: vi.fn() }))
 vi.mock('./placement', () => ({ setDesiredPhase: vi.fn() }))
 vi.mock('./k8s', () => ({ destroy: vi.fn() }))
+vi.mock('./afs-shares', () => ({ revokeSharesOwnedBy: vi.fn() }))
 vi.mock('./usage/teardown', () => ({
   drainAfterStop: vi.fn(),
   drainBeforeDelete: vi.fn(),
 }))
 
+import { revokeSharesOwnedBy } from './afs-shares'
 import { getWorkspacePlacementEnv } from './db/environments'
 import { deleteWorkspace, updateWorkspace } from './db/workspaces'
 import * as k8s from './k8s'
@@ -41,6 +43,17 @@ describe('destroyWorkspace', () => {
     expect(k8s.destroy).toHaveBeenCalledWith('ws1')
     expect(deleteWorkspace).toHaveBeenCalledWith('ws1')
     expect(setDesiredPhase).not.toHaveBeenCalled()
+  })
+
+  it("revokes the workspace's folders before its row goes", async () => {
+    vi.mocked(getWorkspacePlacementEnv).mockResolvedValue({ isBuiltin: true } as never)
+
+    await destroyWorkspace(ws)
+
+    expect(revokeSharesOwnedBy).toHaveBeenCalledWith('ws1')
+    expect(vi.mocked(revokeSharesOwnedBy).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deleteWorkspace).mock.invocationCallOrder[0],
+    )
   })
 
   it('treats a null placement env as built-in (synchronous teardown)', async () => {

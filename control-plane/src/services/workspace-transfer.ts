@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg'
 import type { ApiTransferPlan, TransferCopySelection } from '../../../internal/types/api'
 import { interruptAllSessions } from '../routes/workspaces/_shared'
+import { afsEnvForWorkspace, unmountAtWorkspace } from './afs'
 import { generateId, pool } from './db/pool'
 import { resetAllSessionsIdle } from './db/sessions'
 import { ensurePlatformToken } from './db/shares'
@@ -118,6 +119,16 @@ export async function executeTransfer(args: {
       if (copied) copiedSkills.set(s.id, copied)
     }
 
+    // The workspaces that have its folders lose them; their pods are told
+    // after the commit.
+    const { rows: severedMounts } = await pool.query(
+      `SELECT m.workspace_id, COALESCE(m.mount_name, s.name) AS mount_name
+         FROM afs_share_members m
+         JOIN afs_shares s ON s.id = m.share_id
+        WHERE s.owner_workspace_id = $1 AND m.workspace_id <> $1`,
+      [workspace.id],
+    )
+
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
@@ -149,7 +160,7 @@ export async function executeTransfer(args: {
       client.release()
     }
 
-    await afterTransfer(workspace, from, to)
+    await afterTransfer(workspace, from, to, severedMounts)
     return plan
   } catch (e) {
     for (const skillId of copiedSkills.values()) {
@@ -384,6 +395,15 @@ async function rewriteReferences(
   // recipient starts unshared.
   await client.query('DELETE FROM workspace_team_shares WHERE workspace_id = $1', [ws])
 
+  // Folder grants. They were the sender's grants to the sender's teams; the
+  // recipient's folders start ungranted.
+  await client.query(
+    `DELETE FROM afs_share_grants g
+      USING afs_shares s
+      WHERE s.id = g.share_id AND s.owner_workspace_id = $1`,
+    [ws],
+  )
+
   // Filesystem shares with other workspaces, in both directions.
   await client.query(
     `DELETE FROM afs_share_members m
@@ -431,7 +451,26 @@ async function rewriteReferences(
  * After the commit: best-effort follow-ups. The transfer stands whatever
  * happens here, so failures are logged, not thrown.
  */
-async function afterTransfer(workspace: Workspace, from: User, to: User): Promise<void> {
+async function afterTransfer(
+  workspace: Workspace,
+  from: User,
+  to: User,
+  severedMounts: { workspace_id: string; mount_name: string }[],
+): Promise<void> {
+  // Its folders were taken from the workspaces that had them; a running pod
+  // still has them mounted until told.
+  for (const m of severedMounts) {
+    try {
+      await unmountAtWorkspace(
+        await afsEnvForWorkspace(m.workspace_id),
+        m.workspace_id,
+        m.mount_name,
+      )
+    } catch {
+      // Best-effort: a stopped pod mounts only what its memberships say.
+    }
+  }
+
   // Schedules now fire as the recipient, with the recipient's platform token.
   await ensurePlatformToken(to.id).catch((e) =>
     console.warn(`[transfer] ensurePlatformToken user=${to.id}:`, e?.message ?? e),

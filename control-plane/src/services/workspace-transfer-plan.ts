@@ -307,12 +307,17 @@ export async function planTransfer(
     )
   }
 
-  // Filesystem shares with the sender's other workspaces, both directions.
+  // Filesystem shares with other workspaces, both directions, and the
+  // workspace's folders granted to teams.
   const { rows: afs } = await pool.query(
-    `SELECT DISTINCT s.id, s.name FROM afs_share_members m
+    `SELECT s.id, s.name FROM afs_share_members m
        JOIN afs_shares s ON s.id = m.share_id
       WHERE (s.owner_workspace_id = $1 AND m.workspace_id <> $1)
-         OR (m.workspace_id = $1 AND s.owner_workspace_id <> $1)`,
+         OR (m.workspace_id = $1 AND s.owner_workspace_id <> $1)
+     UNION
+     SELECT s.id, s.name FROM afs_share_grants g
+       JOIN afs_shares s ON s.id = g.share_id
+      WHERE s.owner_workspace_id = $1`,
     [ws],
   )
   for (const s of afs) items.push(item('afs_share', 'remove', s))

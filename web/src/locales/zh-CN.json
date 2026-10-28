@@ -1354,6 +1354,7 @@
         "prefix": "这将永久删除工作空间 ",
         "suffix": " 以及相关的所有数据，包括会话、文件和配置。此操作不可撤销。"
       },
+      "sharedFolders": "删除后，它的 {{folders}} 个共享文件夹会一并删除，并从 {{workspaces}} 个其他工作空间中卸载。",
       "confirm": {
         "labelPrefix": "请输入 ",
         "labelSuffix": " 以确认"
@@ -1621,6 +1622,26 @@
         "add": "添加",
         "selectWs": "选择 workspace",
         "noCandidates": "没有可添加的 workspace"
+      },
+      "mountTeamShare": "挂载团队共享",
+      "sharedBy": "来自 {{owner}}",
+      "sharedWithTeams": "已共享给 {{count}} 个团队",
+      "mountDialog": {
+        "title": "挂载团队共享",
+        "empty": "暂无可挂载的文件夹。其他成员把文件夹共享给你所在的团队后，会显示在这里。",
+        "from": "{{owner}} · 共享给 {{teams}}",
+        "mountNameLabel": "挂载位置",
+        "permissionLabel": "权限",
+        "mount": "挂载",
+        "mounting": "挂载中…"
+      },
+      "teams": {
+        "title": "共享给团队",
+        "hint": "团队成员可以把这个文件夹挂载到自己的工作空间，权限不超过这里设置的上限。",
+        "remove": "取消共享",
+        "selectTeam": "选择团队",
+        "noCandidates": "没有可共享的团队",
+        "add": "共享"
       }
     },
     "workspaceFiles": {

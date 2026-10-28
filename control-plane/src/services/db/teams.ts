@@ -1,3 +1,4 @@
+import { removeOwnerAfsGrantsForTeam } from './afs-shares'
 import { generateId, pool } from './pool'
 import { removeOwnerSharesForTeam } from './workspace-shares'
 
@@ -157,8 +158,10 @@ export async function removeTeamMember(teamId: string, userId: string): Promise<
     teamId,
     userId,
   ])
-  // A workspace may only be shared with a team its owner is in, so the
-  // leaving member's workspaces stop being shared with this team.
+  // A workspace or folder may only be shared with a team its owner is in, so
+  // the leaving member's workspaces and folders stop being shared with this
+  // team. The mounts that loses are taken away by reconcileTeamMounts.
   await removeOwnerSharesForTeam(teamId, userId)
+  await removeOwnerAfsGrantsForTeam(teamId, userId)
   return (r.rowCount ?? 0) > 0
 }

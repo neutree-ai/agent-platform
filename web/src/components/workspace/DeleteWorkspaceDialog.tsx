@@ -10,9 +10,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { useDeleteWorkspace } from '@/hooks/useWorkspaces'
+import { listAfsShares } from '@/lib/api/agent-files'
 import type { Workspace } from '@/lib/api/types'
 import { AlertTriangle } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 interface DeleteWorkspaceDialogProps {
@@ -29,6 +30,26 @@ export function DeleteWorkspaceDialog({
   const { t } = useTranslation()
   const [confirmName, setConfirmName] = useState('')
   const deleteMutation = useDeleteWorkspace()
+  // Its shared folders go with it, from every workspace that has them.
+  const [sharedFolders, setSharedFolders] = useState<{ folders: number; workspaces: number }>({
+    folders: 0,
+    workspaces: 0,
+  })
+
+  useEffect(() => {
+    if (!open) return
+    listAfsShares(workspace.id)
+      .then((shares) => {
+        const owned = shares.filter(
+          (s) => s.role === 'owner' && (s.other_member_count > 0 || s.grant_count > 0),
+        )
+        setSharedFolders({
+          folders: owned.length,
+          workspaces: owned.reduce((n, s) => n + s.other_member_count, 0),
+        })
+      })
+      .catch(() => setSharedFolders({ folders: 0, workspaces: 0 }))
+  }, [open, workspace.id])
 
   return (
     <Dialog
@@ -51,6 +72,14 @@ export function DeleteWorkspaceDialog({
             <span className="font-medium text-foreground">{workspace.name}</span>
             {t('components.deleteWorkspace.description.suffix')}
           </p>
+          {sharedFolders.folders > 0 && (
+            <p className="rounded-md border border-destructive/30 bg-destructive/[0.06] px-3 py-2 text-xs text-destructive">
+              {t('components.deleteWorkspace.sharedFolders', {
+                folders: sharedFolders.folders,
+                workspaces: sharedFolders.workspaces,
+              })}
+            </p>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">
               {t('components.deleteWorkspace.confirm.labelPrefix')}
