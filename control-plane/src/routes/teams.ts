@@ -14,6 +14,7 @@ import { createTeamInvite, deleteTeamInvite, listTeamInvites } from '../services
 import {
   type Team,
   type TeamMemberWithUser,
+  TeamMembershipError,
   type TeamRole,
   type TeamSummary,
   addTeamMember,
@@ -61,10 +62,12 @@ function toApiTeamFromMembership(t: Team, role: TeamRole, memberCount: number) {
 }
 
 // An application's team is named after the application and goes away with it,
-// and the application's users are in it for as long as they exist. None of
-// that is changed through these routes.
+// and the application's users are in it for as long as they exist. The teams
+// an application creates for its users are managed by the application, through
+// /apps/v1/teams. None of that is changed through these routes.
 async function isAppTeam(teamId: string): Promise<boolean> {
-  return !!(await getTeam(teamId))?.app_id
+  const team = await getTeam(teamId)
+  return !!(team?.app_id || team?.owner_app_id)
 }
 
 async function isAppUser(userId: string): Promise<boolean> {
@@ -72,7 +75,7 @@ async function isAppUser(userId: string): Promise<boolean> {
 }
 
 const APP_TEAM_ERROR = 'This team belongs to an application; change the application instead'
-const APP_USER_ERROR = "An application's users belong to its team alone"
+const APP_USER_ERROR = "An application's users belong to its own teams alone"
 
 function toApiMember(m: TeamMemberWithUser): z.infer<typeof ApiTeamMemberSchema> {
   return {
@@ -119,11 +122,14 @@ const createRouteDef = createRoute({
       description: 'Created team',
       content: { 'application/json': { schema: ApiTeamSchema } },
     },
+    403: { description: 'Forbidden', content: { 'application/json': { schema: ErrorSchema } } },
   },
 })
 
 teams.openapi(createRouteDef, async (c) => {
   const user = c.get('user')
+  // An application's users get their teams from the application.
+  if (user.app) return c.json({ error: APP_USER_ERROR }, 403)
   const body = c.req.valid('json')
   const team = await createTeam(user.sub, body.name, body.description)
   return c.json(toApiTeamFromMembership(team, 'admin', 1), 201)
@@ -281,7 +287,12 @@ teams.openapi(addMemberRoute, async (c) => {
   if (!target) return c.json({ error: 'User not found' }, 400)
   if (target.managed_by) return c.json({ error: APP_USER_ERROR }, 400)
 
-  await addTeamMember(id, body.user_id, body.role ?? 'member')
+  try {
+    await addTeamMember(id, body.user_id, body.role ?? 'member')
+  } catch (err) {
+    if (err instanceof TeamMembershipError) return c.json({ error: err.message }, 400)
+    throw err
+  }
   const added = await getTeamMembership(id, body.user_id)
   if (!added) return c.json({ error: 'Failed to add member' }, 400)
   return c.json(

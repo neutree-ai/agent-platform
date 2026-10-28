@@ -20,6 +20,7 @@
 | Status | Description |
 |--------|-------------|
 | 201 | Created team |
+| 403 | Forbidden |
 
 **Success Response Schema** (inline):
 

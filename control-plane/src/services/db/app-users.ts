@@ -6,7 +6,7 @@
 
 import type { PoolClient } from 'pg'
 import { generateId, pool } from './pool'
-import { addTeamMember } from './teams'
+import { type Team, addTeamMember } from './teams'
 import type { User } from './types'
 
 function appIdentityProvider(clientId: string): string {
@@ -143,6 +143,72 @@ export async function renameAppTeam(
       clientId,
     ])
   }
+}
+
+// Teams the application creates for its users (migrations/158_app_owned_teams.sql),
+// named by the application's own id for each.
+
+export async function getAppOwnedTeam(clientId: string, externalId: string): Promise<Team | null> {
+  const { rows } = await pool.query(
+    'SELECT * FROM teams WHERE owner_app_id = $1 AND external_id = $2',
+    [clientId, externalId],
+  )
+  return (rows[0] as Team) ?? null
+}
+
+/** Create the team, or set its name and description if it already exists. */
+export async function upsertAppOwnedTeam(
+  clientId: string,
+  externalId: string,
+  name: string,
+  description: string | null,
+): Promise<{ team: Team; created: boolean }> {
+  const { rows } = await pool.query(
+    `INSERT INTO teams (id, name, description, created_by, owner_app_id, external_id)
+     SELECT $1, $2, $3, c.created_by, c.id, $5
+       FROM oauth_clients c WHERE c.id = $4
+     ON CONFLICT (owner_app_id, external_id) WHERE owner_app_id IS NOT NULL
+     DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = now()
+     RETURNING *, (xmax = 0) AS created`,
+    [generateId(), name, description, clientId, externalId],
+  )
+  if (!rows[0]) throw new Error(`application ${clientId} not found`)
+  const { created, ...team } = rows[0] as Team & { created: boolean }
+  return { team, created }
+}
+
+export async function listAppOwnedTeams(
+  clientId: string,
+): Promise<(Team & { member_count: number })[]> {
+  const { rows } = await pool.query(
+    `SELECT t.*,
+            (SELECT COUNT(*)::int FROM team_members m WHERE m.team_id = t.id) AS member_count
+       FROM teams t
+      WHERE t.owner_app_id = $1
+      ORDER BY t.created_at ASC`,
+    [clientId],
+  )
+  return rows as (Team & { member_count: number })[]
+}
+
+/** The members of one of the application's teams, with the application's own id for each. */
+export async function listAppOwnedTeamMembers(
+  clientId: string,
+  teamId: string,
+): Promise<{ user: User; externalId: string }[]> {
+  const { rows } = await pool.query(
+    `SELECT u.*, i.external_id AS app_external_id
+       FROM team_members m
+       JOIN users u ON u.id = m.user_id AND u.managed_by = $1
+       JOIN user_identities i ON i.user_id = u.id AND i.provider = $3
+      WHERE m.team_id = $2
+      ORDER BY m.joined_at ASC`,
+    [clientId, teamId, appIdentityProvider(clientId)],
+  )
+  return rows.map(({ app_external_id, ...user }) => ({
+    user: user as User,
+    externalId: app_external_id as string,
+  }))
 }
 
 /** The application that declared an MCP origin, if any. */

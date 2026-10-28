@@ -109,6 +109,17 @@ describe('AppClient', () => {
     expect(init?.body).toBe(pkg)
   })
 
+  it('adds a user to a team by both external ids', async () => {
+    const { app, fetchMock } = setup()
+    fetchMock.mockImplementation(async () => json({ success: true }))
+
+    await app.addTeamMember('org 1', 'stu 1')
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://nap.test/apps/v1/teams/org%201/members/stu%201')
+    expect(init?.method).toBe('PUT')
+  })
+
   it("ensures a user's agent workspace", async () => {
     const { app, fetchMock } = setup()
     fetchMock.mockImplementation(async () => json({ agent: 'study', workspace_id: 'w1' }, 201))

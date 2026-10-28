@@ -169,6 +169,17 @@ const nap = platform.as(user.id)   // 以这个用户身份对话、读写文件
 
 删用户时，先删它的 Agent Workspace，再删用户。
 
+## 用户的 team
+
+应用里一起协作的用户，比如你产品里同一个组织的成员，可以互相共享文件夹。用你自己的 id 给他们建一个应用的 team：
+
+```ts
+const team = await platform.upsertTeam(org.id, { name: org.name })
+await platform.addTeamMember(org.id, user.id)
+```
+
+这类 team 只能放应用自己的用户，也只有应用能改；它们不是管理员向应用共享资源的那个应用 team。成员以自己的身份（`platform.as(user.id)`）调文件夹共享 API，把自己的文件夹共享给 team（用 `team.id` 指定），其他成员再把它挂进自己的 Workspace。移出成员或删除 team 时，经由这个 team 得到的挂载会一并卸载。
+
 ## 修改 spec
 
 改 spec、部署、看 plan。apply 之后，受影响的 Workspace 会在**没有对话在跑的时候**跟上：空闲的马上更新，忙的在空下来后半分钟左右更新。换了 Agent 内核或计算资源会重启 Workspace；其他改动原地重新加载，文件和会话都在。
