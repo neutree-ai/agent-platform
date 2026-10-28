@@ -1,8 +1,8 @@
 // The application protocol (/apps/v1): an application registered on the
 // platform provisions its own users and acts as them, with its client id and
 // secret alone. Each of its users is a platform user that can't sign in to the
-// platform itself. The application also publishes prompts and skills, and
-// declares in its spec the agents each user gets.
+// platform itself. The application groups its users into teams, publishes
+// prompts and skills, and declares in its spec the agents each user gets.
 
 import { NapClient, NapError } from './client.js'
 
@@ -22,6 +22,16 @@ export interface AppUser {
   username: string
   display_name: string
   email: string | null
+  created_at: string
+}
+
+export interface AppTeam {
+  /** The platform's team id, as folder sharing names it. */
+  id: string
+  /** Your application's id for the team. */
+  external_id: string
+  name: string
+  description: string | null
   created_at: string
 }
 
@@ -200,6 +210,55 @@ export class AppClient {
       token: () => this.userToken(externalId),
       fetch: this.options.fetch,
     })
+  }
+
+  // ── Teams ───────────────────────────────────────────────────────────────
+
+  /**
+   * Create a team of your users, or update its name and description.
+   * Idempotent. Users share folders with it through `as(externalId)`.
+   */
+  async upsertTeam(
+    externalId: string,
+    team: { name: string; description?: string | null },
+  ): Promise<AppTeam> {
+    const res = await this.call('PUT', `/teams/${encodeURIComponent(externalId)}`, {
+      name: team.name,
+      description: team.description ?? null,
+    })
+    return (await res.json()) as AppTeam
+  }
+
+  async listTeams(): Promise<(AppTeam & { member_count: number })[]> {
+    return (await (await this.call('GET', '/teams')).json()) as (AppTeam & {
+      member_count: number
+    })[]
+  }
+
+  /** Delete the team; folders mounted through it are unmounted. */
+  async deleteTeam(externalId: string): Promise<void> {
+    await this.call('DELETE', `/teams/${encodeURIComponent(externalId)}`)
+  }
+
+  async listTeamMembers(teamExternalId: string): Promise<AppUser[]> {
+    const res = await this.call('GET', `/teams/${encodeURIComponent(teamExternalId)}/members`)
+    return (await res.json()) as AppUser[]
+  }
+
+  /** Add a provisioned user to the team. Idempotent. */
+  async addTeamMember(teamExternalId: string, userExternalId: string): Promise<void> {
+    await this.call(
+      'PUT',
+      `/teams/${encodeURIComponent(teamExternalId)}/members/${encodeURIComponent(userExternalId)}`,
+    )
+  }
+
+  /** Remove the user; the folders they shared with or mounted through the team go too. */
+  async removeTeamMember(teamExternalId: string, userExternalId: string): Promise<void> {
+    await this.call(
+      'DELETE',
+      `/teams/${encodeURIComponent(teamExternalId)}/members/${encodeURIComponent(userExternalId)}`,
+    )
   }
 
   // ── Content ─────────────────────────────────────────────────────────────

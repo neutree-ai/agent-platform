@@ -2,7 +2,12 @@ import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi'
 import { ApiTeamInvitePreviewSchema } from '../../../internal/types/api'
 import type { AppEnv } from '../lib/types'
 import { getTeamInviteByToken } from '../services/db/team-invites'
-import { addTeamMember, getTeam, getTeamMembership } from '../services/db/teams'
+import {
+  TeamMembershipError,
+  addTeamMember,
+  getTeam,
+  getTeamMembership,
+} from '../services/db/teams'
 import { getUser } from '../services/db/users'
 
 const invites = new OpenAPIHono<AppEnv>()
@@ -80,6 +85,10 @@ const acceptRoute = createRoute({
       },
     },
     404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+    409: {
+      description: "An application's user can't join this team",
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
     410: { description: 'Expired', content: { 'application/json': { schema: ErrorSchema } } },
   },
 })
@@ -97,7 +106,12 @@ invites.openapi(acceptRoute, async (c) => {
   if (existing) {
     return c.json({ team_id: team.id, already_member: true }, 200)
   }
-  await addTeamMember(team.id, user.sub, 'member')
+  try {
+    await addTeamMember(team.id, user.sub, 'member')
+  } catch (err) {
+    if (err instanceof TeamMembershipError) return c.json({ error: err.message }, 409)
+    throw err
+  }
   return c.json({ team_id: team.id, already_member: false }, 200)
 })
 

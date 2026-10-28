@@ -20,8 +20,16 @@ import {
   ensureAgentWorkspace,
   listUserAgentWorkspaces,
 } from '../services/app-spec/workspaces'
-import { getAppUser, upsertAppUser } from '../services/db/app-users'
+import {
+  getAppOwnedTeam,
+  getAppUser,
+  listAppOwnedTeamMembers,
+  listAppOwnedTeams,
+  upsertAppOwnedTeam,
+  upsertAppUser,
+} from '../services/db/app-users'
 import { ensurePlatformToken } from '../services/db/shares'
+import { type Team, addTeamMember } from '../services/db/teams'
 import type { User } from '../services/db/types'
 import { deleteUser } from '../services/db/users'
 import { issueAppUserToken } from '../services/oauth-provider'
@@ -30,13 +38,14 @@ import {
   InvalidInputError,
   MAX_SKILL_PACKAGE_BYTES,
 } from '../services/skills-errors'
+import { deleteTeam, removeTeamMember } from '../services/teams'
 
 // Application protocol (/apps/v1/*). An application registered under
 // /api/applications provisions its own users here and obtains short-lived
-// tokens to call the rest of the API as each of them, and publishes the
-// prompts and skills its users' agents use. Every route is scoped to the
-// calling application: an external id or a name another application uses, or
-// a NAP account, is simply not found.
+// tokens to call the rest of the API as each of them, groups them into teams,
+// and publishes the prompts and skills its users' agents use. Every route is
+// scoped to the calling application: an external id or a name another
+// application uses, or a NAP account, is simply not found.
 const apps = new OpenAPIHono<AppClientEnv>()
 
 apps.use('/v1/*', appAuth)
@@ -201,6 +210,243 @@ apps.openapi(tokenRoute, async (c) => {
   if (!user) return c.json({ error: 'User not found' }, 404)
   const { access_token, expires_in } = await issueAppUserToken(user, clientId)
   return c.json({ access_token, token_type: 'Bearer' as const, expires_in }, 200)
+})
+
+// ── Teams ──────────────────────────────────────────────────────────────────
+// Teams the application groups its users into, named by its own id for each.
+// Only its users can be members, and only the application changes them. A
+// user shares a folder with such a team the way they would with any team;
+// providers, skills and the rest an administrator shares come through the
+// application's own team, which every one of its users is in.
+
+const TeamExternalIdParam = z.object({
+  external_id: z
+    .string()
+    .regex(/^[A-Za-z0-9._@+-]{1,128}$/)
+    .openapi({
+      param: { name: 'external_id', in: 'path' },
+      description: "The application's own id for the team",
+    }),
+})
+
+const TeamMemberParams = TeamExternalIdParam.extend({
+  user_external_id: z
+    .string()
+    .regex(/^[A-Za-z0-9._@+-]{1,128}$/)
+    .openapi({
+      param: { name: 'user_external_id', in: 'path' },
+      description: "The application's own id for the user",
+    }),
+})
+
+const AppTeamSchema = z
+  .object({
+    id: z.string().openapi({ description: 'NAP team id, as the rest of the API names it' }),
+    external_id: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
+    created_at: z.string(),
+  })
+  .openapi('AppTeam')
+
+function toAppTeam(team: Team): z.infer<typeof AppTeamSchema> {
+  return {
+    id: team.id,
+    external_id: team.external_id ?? '',
+    name: team.name,
+    description: team.description,
+    created_at: new Date(team.created_at).toISOString(),
+  }
+}
+
+// ── GET /v1/teams ──────────────────────────────────────────────────────────
+const listTeamsRoute = createRoute({
+  method: 'get',
+  path: '/v1/teams',
+  tags: ['apps'],
+  summary: "List the application's teams",
+  security: [{ appClientAuth: [] }],
+  responses: {
+    200: {
+      description: 'Teams',
+      content: {
+        'application/json': {
+          schema: z.array(AppTeamSchema.extend({ member_count: z.number().int() })),
+        },
+      },
+    },
+  },
+})
+
+apps.openapi(listTeamsRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const teams = await listAppOwnedTeams(clientId)
+  return c.json(
+    teams.map((t) => ({ ...toAppTeam(t), member_count: t.member_count })),
+    200,
+  )
+})
+
+// ── PUT /v1/teams/{external_id} ────────────────────────────────────────────
+const upsertTeamRoute = createRoute({
+  method: 'put',
+  path: '/v1/teams/{external_id}',
+  tags: ['apps'],
+  summary: 'Create a team of the application, or update its name and description',
+  description: 'Idempotent. The team starts with no members.',
+  security: [{ appClientAuth: [] }],
+  request: {
+    params: TeamExternalIdParam,
+    body: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            name: z.string().trim().min(1).max(200),
+            description: z.string().max(2000).nullable().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'The team already existed and was updated',
+      content: { 'application/json': { schema: AppTeamSchema } },
+    },
+    201: {
+      description: 'The team was created',
+      content: { 'application/json': { schema: AppTeamSchema } },
+    },
+  },
+})
+
+apps.openapi(upsertTeamRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id } = c.req.valid('param')
+  const body = c.req.valid('json')
+  const { team, created } = await upsertAppOwnedTeam(
+    clientId,
+    external_id,
+    body.name,
+    body.description ?? null,
+  )
+  return c.json(toAppTeam(team), created ? 201 : 200)
+})
+
+// ── DELETE /v1/teams/{external_id} ─────────────────────────────────────────
+const deleteTeamRoute = createRoute({
+  method: 'delete',
+  path: '/v1/teams/{external_id}',
+  tags: ['apps'],
+  summary: 'Delete a team of the application',
+  description: 'Folders shared with the team stop being mounted through it.',
+  security: [{ appClientAuth: [] }],
+  request: { params: TeamExternalIdParam },
+  responses: {
+    200: {
+      description: 'Deleted',
+      content: { 'application/json': { schema: SuccessSchema } },
+    },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+apps.openapi(deleteTeamRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id } = c.req.valid('param')
+  const team = await getAppOwnedTeam(clientId, external_id)
+  if (!team || !(await deleteTeam(team.id))) return c.json({ error: 'Team not found' }, 404)
+  return c.json({ success: true }, 200)
+})
+
+// ── GET /v1/teams/{external_id}/members ────────────────────────────────────
+const listTeamMembersRoute = createRoute({
+  method: 'get',
+  path: '/v1/teams/{external_id}/members',
+  tags: ['apps'],
+  summary: 'List the members of a team of the application',
+  security: [{ appClientAuth: [] }],
+  request: { params: TeamExternalIdParam },
+  responses: {
+    200: {
+      description: 'Members',
+      content: { 'application/json': { schema: z.array(AppUserSchema) } },
+    },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+apps.openapi(listTeamMembersRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id } = c.req.valid('param')
+  const team = await getAppOwnedTeam(clientId, external_id)
+  if (!team) return c.json({ error: 'Team not found' }, 404)
+  const members = await listAppOwnedTeamMembers(clientId, team.id)
+  return c.json(
+    members.map((m) => toAppUser(m.user, m.externalId)),
+    200,
+  )
+})
+
+// ── PUT /v1/teams/{external_id}/members/{user_external_id} ─────────────────
+const addTeamMemberRoute = createRoute({
+  method: 'put',
+  path: '/v1/teams/{external_id}/members/{user_external_id}',
+  tags: ['apps'],
+  summary: 'Add a user of the application to one of its teams',
+  description: 'Idempotent. Provision the user first.',
+  security: [{ appClientAuth: [] }],
+  request: { params: TeamMemberParams },
+  responses: {
+    200: {
+      description: 'The user is a member',
+      content: { 'application/json': { schema: SuccessSchema } },
+    },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+apps.openapi(addTeamMemberRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id, user_external_id } = c.req.valid('param')
+  const team = await getAppOwnedTeam(clientId, external_id)
+  if (!team) return c.json({ error: 'Team not found' }, 404)
+  const user = await getAppUser(clientId, user_external_id)
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  await addTeamMember(team.id, user.id)
+  return c.json({ success: true }, 200)
+})
+
+// ── DELETE /v1/teams/{external_id}/members/{user_external_id} ──────────────
+const removeTeamMemberRoute = createRoute({
+  method: 'delete',
+  path: '/v1/teams/{external_id}/members/{user_external_id}',
+  tags: ['apps'],
+  summary: 'Remove a user from a team of the application',
+  description:
+    'Folders the user shared with the team stop being shared with it, and folders ' +
+    'the user mounted through the team are unmounted.',
+  security: [{ appClientAuth: [] }],
+  request: { params: TeamMemberParams },
+  responses: {
+    200: {
+      description: 'Removed',
+      content: { 'application/json': { schema: SuccessSchema } },
+    },
+    404: { description: 'Not found', content: { 'application/json': { schema: ErrorSchema } } },
+  },
+})
+
+apps.openapi(removeTeamMemberRoute, async (c) => {
+  const { clientId } = c.get('appPrincipal')
+  const { external_id, user_external_id } = c.req.valid('param')
+  const team = await getAppOwnedTeam(clientId, external_id)
+  if (!team) return c.json({ error: 'Team not found' }, 404)
+  const user = await getAppUser(clientId, user_external_id)
+  if (!user || !(await removeTeamMember(team.id, user.id))) {
+    return c.json({ error: 'Member not found' }, 404)
+  }
+  return c.json({ success: true }, 200)
 })
 
 // ── Content ────────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ export type {
   AppliedSpec,
   AppPrompt,
   AppSkill,
+  AppTeam,
   AppUser,
   SpecApplyResult,
   SpecFolderPlanEntry,

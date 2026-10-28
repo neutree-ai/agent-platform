@@ -169,6 +169,17 @@ In the browser, chat goes through your backend: the server SDK's session relay f
 
 To remove a user, delete its agent workspaces first, then the user.
 
+## Teams of users
+
+Users of the application who work together, such as the members of one organization in your product, can share folders with each other. Group them into a team of the application, named by your own id for it:
+
+```ts
+const team = await platform.upsertTeam(org.id, { name: org.name })
+await platform.addTeamMember(org.id, user.id)
+```
+
+Only the application's own users can be in these teams, and only the application changes them; they aren't the application's team that an admin shares resources with. A member shares a folder of theirs with the team, and another member mounts it in one of their workspaces, through the folder sharing API as themselves (`platform.as(user.id)`), naming the team by `team.id`. Removing a member, or deleting the team, unmounts what the team gave them.
+
 ## Changing the spec
 
 Edit the spec, deploy, read the plan. After an apply, every affected workspace takes the change **once no turn is running in it**: idle ones right away, busy ones within about half a minute of going idle. A new agent core or compute shape restarts the workspace; everything else reloads in place, keeping files and sessions.

@@ -1,10 +1,11 @@
 # App Schemas
 
-9 schemas in this group.
+10 schemas in this group.
 
 | Schema | Type | Description |
 |--------|------|-------------|
 | [AppUser](AppUser.md) | object |  |
+| [AppTeam](AppTeam.md) | object |  |
 | [AppPrompt](AppPrompt.md) | object |  |
 | [AppSkill](AppSkill.md) | object |  |
 | [AppSpecApplyResult](AppSpecApplyResult.md) | object |  |
