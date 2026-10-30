@@ -8,6 +8,7 @@ import {
   WORKSPACE_DIR,
   WORKSPACE_ID,
   cpAuthHeaders,
+  getMaxSteps,
   getSkillManager,
   hasMcpServers,
   loadAcpMcpServers,
@@ -39,6 +40,7 @@ const { app, injectWebSocket, setBridgeFactory, getLiveBridgeCount } = createAcp
   loadConfig,
   loadSkills,
   loadCredentials,
+  getMaxSteps,
   restartBridge: () => {
     if (!_restartBridge) throw new Error('restartBridge not set')
     return _restartBridge()
