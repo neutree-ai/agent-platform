@@ -50,6 +50,16 @@ export interface AcpAgentServerConfig {
    * pull. Must not throw; failures are logged and swallowed.
    */
   recordUsage?: (sessionId: string, usage: unknown) => void
+  /**
+   * The workspace's step budget: how many tool calls one turn may start. The
+   * call past the budget interrupts the turn, which ends as an error naming
+   * the budget. Read at the start of each turn; omitted means no budget.
+   */
+  getMaxSteps?: () => number
+}
+
+function stepBudgetMessage(maxSteps: number): string {
+  return `Reached this turn's step budget (${maxSteps} tool calls). Raise the workspace's max steps, or send a new message to continue from here.`
 }
 
 // ── Session sink: replaceable SSE writer that survives UI refresh ──
@@ -231,6 +241,24 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
     destroyBridge(sessionId)
   }
 
+  /** Ask the session's agent to end its turn in flight; false when it has no bridge. */
+  function interruptTurn(sessionId: string): boolean {
+    const bridge = sessionBridges.get(sessionId)
+    if (!bridge) return false
+    const turn = latestTurn.get(sessionId)
+    const cancelled = bridge.cancel(sessionId)
+    if (turn === undefined) {
+      cancelled.catch(() => {})
+    } else {
+      cancelled.catch((e) => forceEndTurn(sessionId, turn, `failed (${e?.message ?? e})`))
+      setTimeout(
+        () => forceEndTurn(sessionId, turn, `unanswered after ${INTERRUPT_GRACE_MS}ms`),
+        INTERRUPT_GRACE_MS,
+      ).unref()
+    }
+    return true
+  }
+
   // Destroy idle bridges now; defer busy ones until their turn completes.
   function destroyIdleBridges() {
     let destroyed = 0
@@ -360,6 +388,12 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
       const translator = new AcpEventTranslator(sessionId)
       let currentSessionId: string | undefined
       let currentBridge: AgentBridge | undefined
+      const maxSteps = config.getMaxSteps?.()
+      let steps = 0
+      // Set once the turn starts a tool call past its budget and is interrupted
+      // for it, so the end of the turn reports the budget instead of an
+      // ordinary interrupt.
+      let stepBudgetError: string | null = null
       // True when this turn ran on a bridge pulled from the cache rather than a
       // fresh spawn. Only reused bridges can be "process-alive but session-dead"
       // (see the prompt rebuild path below); a just-loaded/created bridge that
@@ -491,6 +525,19 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
         }
         const sessionHandler: AcpSessionHandler = {
           onUpdate(update) {
+            if (
+              update.sessionUpdate === 'tool_call' &&
+              currentSessionId &&
+              maxSteps !== undefined &&
+              !stepBudgetError &&
+              ++steps > maxSteps
+            ) {
+              stepBudgetError = stepBudgetMessage(maxSteps)
+              console.warn(
+                `[agent] Step budget (${maxSteps}) exceeded, interrupting session=${currentSessionId}`,
+              )
+              interruptTurn(currentSessionId)
+            }
             for (const evt of translator.translateUpdate(update)) {
               turnProducedOutput = true
               sink.write('message', JSON.stringify(evt))
@@ -577,15 +624,25 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
           await sink.write('message', JSON.stringify(evt))
         }
 
-        const reason = result.stopReason === 'cancelled' ? 'interrupted' : 'completed'
         const stats = translator.buildStats(result)
-        await sink.write('message', JSON.stringify(translator.sessionEnded(reason, stats)))
+        if (stepBudgetError) {
+          await sink.write('message', JSON.stringify(translator.error(stepBudgetError)))
+          await sink.write('message', JSON.stringify(translator.sessionEnded('error', stats)))
+        } else {
+          const reason = result.stopReason === 'cancelled' ? 'interrupted' : 'completed'
+          await sink.write('message', JSON.stringify(translator.sessionEnded(reason, stats)))
+        }
       } catch (err: any) {
         if (currentSessionId && forcedInterrupts.delete(currentSessionId)) {
           for (const evt of translator.finalize()) {
             await sink.write('message', JSON.stringify(evt))
           }
-          await sink.write('message', JSON.stringify(translator.sessionEnded('interrupted')))
+          if (stepBudgetError) {
+            await sink.write('message', JSON.stringify(translator.error(stepBudgetError)))
+            await sink.write('message', JSON.stringify(translator.sessionEnded('error')))
+          } else {
+            await sink.write('message', JSON.stringify(translator.sessionEnded('interrupted')))
+          }
         } else {
           // ACP agents (Codex/Claude) surface upstream errors as JSON-RPC
           // -32603 with a generic "Internal error" message; the actionable
@@ -706,22 +763,8 @@ export function createAcpAgentApp(config: AcpAgentServerConfig) {
   app.post('/sessions/:id/interrupt', (c) => {
     const sessionId = c.req.param('id')
     console.log(`[agent] Interrupt request session=${sessionId}`)
-    const bridge = sessionBridges.get(sessionId)
-    if (bridge) {
-      const turn = latestTurn.get(sessionId)
-      const cancelled = bridge.cancel(sessionId)
-      if (turn === undefined) {
-        cancelled.catch(() => {})
-      } else {
-        cancelled.catch((e) => forceEndTurn(sessionId, turn, `failed (${e?.message ?? e})`))
-        setTimeout(
-          () => forceEndTurn(sessionId, turn, `unanswered after ${INTERRUPT_GRACE_MS}ms`),
-          INTERRUPT_GRACE_MS,
-        ).unref()
-      }
-      return c.json({ success: true, interrupted: true })
-    }
-    return c.json({ success: false, interrupted: false })
+    const interrupted = interruptTurn(sessionId)
+    return c.json({ success: interrupted, interrupted })
   })
 
   // Reload config from CP

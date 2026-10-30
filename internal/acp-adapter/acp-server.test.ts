@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UniversalEvent } from '../types/events.js'
-import { type AgentBridge, type PromptResponse, hasChildProcess } from './acp-bridge.js'
+import {
+  type AcpSessionHandler,
+  type AgentBridge,
+  type PromptResponse,
+  type SessionUpdate,
+  hasChildProcess,
+} from './acp-bridge.js'
 import { type AcpAgentServerConfig, createAcpAgentApp } from './acp-server.js'
 
 const SESSION = 'session-1'
@@ -17,11 +23,14 @@ function fakeBridge(opts: { cancel?: () => Promise<void> } = {}) {
     resolve: (r: PromptResponse) => void
     reject: (e: Error) => void
   } | null = null
+  let handler: AcpSessionHandler | null = null
   const bridge: AgentBridge = {
     start: async () => {},
     createSession: async () => SESSION,
     loadSession: async (id) => id,
-    registerHandler: () => {},
+    registerHandler: (_id, h) => {
+      handler = h
+    },
     unregisterHandler: () => {},
     waitForMcpReady: async () => {},
     prompt: () =>
@@ -36,10 +45,16 @@ function fakeBridge(opts: { cancel?: () => Promise<void> } = {}) {
     bridge,
     promptStarted: () => settle !== null,
     finish: (stopReason: PromptResponse['stopReason']) => settle?.resolve({ stopReason }),
+    toolCall: (toolCallId: string) =>
+      handler?.onUpdate({
+        sessionUpdate: 'tool_call',
+        toolCallId,
+        title: 'run',
+      } as SessionUpdate),
   }
 }
 
-function createApp(bridges: AgentBridge[]) {
+function createApp(bridges: AgentBridge[], extra: Partial<AcpAgentServerConfig> = {}) {
   const config: AcpAgentServerConfig = {
     agentType: 'test',
     capabilities: {} as AcpAgentServerConfig['capabilities'],
@@ -49,6 +64,7 @@ function createApp(bridges: AgentBridge[]) {
     loadConfig: async () => true,
     loadSkills: async () => ({ ok: true, failed: [] }),
     loadCredentials: async () => true,
+    ...extra,
   }
   const { app, setBridgeFactory } = createAcpAgentApp(config)
   setBridgeFactory(async () => {
@@ -163,6 +179,64 @@ describe('interrupt', () => {
     expect(bridge.bridge.destroy).not.toHaveBeenCalled()
     bridge.finish('end_turn')
     expect(ended(await events(second))).toEqual(['completed'])
+  })
+})
+
+describe('step budget', () => {
+  beforeEach(() => {
+    process.env.INTERRUPT_GRACE_MS = '50'
+  })
+
+  function errors(evts: UniversalEvent[]) {
+    return evts.filter((e) => e.type === 'error').map((e) => (e as { message: string }).message)
+  }
+
+  it('interrupts the turn at the tool call past the budget and reports the budget', async () => {
+    const agent = fakeBridge()
+    const app = createApp([agent.bridge], { getMaxSteps: () => 2 })
+
+    const res = await chat(app)
+    await vi.waitFor(() => expect(agent.promptStarted()).toBe(true))
+    agent.toolCall('a')
+    agent.toolCall('b')
+    expect(agent.bridge.cancel).not.toHaveBeenCalled()
+    agent.toolCall('c')
+    agent.toolCall('d')
+    expect(agent.bridge.cancel).toHaveBeenCalledTimes(1)
+    agent.finish('cancelled')
+
+    const evts = await events(res)
+    expect(ended(evts)).toEqual(['error'])
+    expect(errors(evts)).toEqual([expect.stringContaining('step budget (2 tool calls)')])
+  })
+
+  it('reports the budget when the agent never answers the interrupt', async () => {
+    const stuck = fakeBridge()
+    const app = createApp([stuck.bridge], { getMaxSteps: () => 1 })
+
+    const res = await chat(app)
+    await vi.waitFor(() => expect(stuck.promptStarted()).toBe(true))
+    stuck.toolCall('a')
+    stuck.toolCall('b')
+
+    const evts = await events(res)
+    expect(ended(evts)).toEqual(['error'])
+    expect(errors(evts)).toEqual([expect.stringContaining('step budget (1 tool calls)')])
+    expect(stuck.bridge.destroy).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves a turn within its budget alone', async () => {
+    const agent = fakeBridge()
+    const app = createApp([agent.bridge], { getMaxSteps: () => 2 })
+
+    const res = await chat(app)
+    await vi.waitFor(() => expect(agent.promptStarted()).toBe(true))
+    agent.toolCall('a')
+    agent.toolCall('b')
+    agent.finish('end_turn')
+
+    expect(ended(await events(res))).toEqual(['completed'])
+    expect(agent.bridge.cancel).not.toHaveBeenCalled()
   })
 })
 
