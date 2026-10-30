@@ -176,6 +176,7 @@ export async function loadConfig(): Promise<boolean> {
     return false
   }
   const config = await resp.json()
+  _maxSteps = readMaxSteps(config.max_steps)
 
   if (config.user_display_name) {
     _userDisplayName = config.user_display_name
@@ -339,9 +340,29 @@ export async function loadConfig(): Promise<boolean> {
   }
 
   console.log(
-    `[agent] Config written: model=${config.model} provider=${config.provider_type} prompt=${prompt.length}chars catalog=${profile.catalogPath ? 'yes' : 'no'}`,
+    `[agent] Config written: model=${config.model} provider=${config.provider_type} prompt=${prompt.length}chars catalog=${profile.catalogPath ? 'yes' : 'no'} maxSteps=${_maxSteps}`,
   )
   return true
+}
+
+/**
+ * The step budget used when the workspace sets none. Codex has no budget of
+ * its own, so this matches the claude-code core's default.
+ */
+export const DEFAULT_MAX_STEPS = 100
+let _maxSteps = DEFAULT_MAX_STEPS
+
+// Guards a malformed config payload, not the operator's choice of number: a
+// workspace that asks for a big budget gets it.
+function readMaxSteps(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return DEFAULT_MAX_STEPS
+  const n = Math.floor(raw)
+  return n >= 1 ? n : DEFAULT_MAX_STEPS
+}
+
+/** The workspace's step budget, enforced per turn by the ACP adapter. */
+export function getMaxSteps(): number {
+  return _maxSteps
 }
 
 let _skillManager: SkillManager | null = null
