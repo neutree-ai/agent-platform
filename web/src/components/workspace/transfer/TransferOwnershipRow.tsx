@@ -2,14 +2,18 @@ import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { api } from '@/lib/api/client'
 import type { Workspace } from '@/lib/api/types'
+import { copyToClipboard } from '@/lib/utils'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowRightLeft, X } from 'lucide-react'
+import { ArrowRightLeft, Link, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { TransferWorkspaceDialog, useWorkspaceTransfer } from './TransferWorkspaceDialog'
 
-/** Danger-zone row: offer the workspace to another user, or cancel a pending offer. */
+/**
+ * Danger-zone row: offer the workspace to another user, or — while an offer is
+ * pending — copy its accept link to send to the recipient, or withdraw it.
+ */
 export function TransferOwnershipRow({ workspace }: { workspace: Workspace }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -28,6 +32,14 @@ export function TransferOwnershipRow({ workspace }: { workspace: Workspace }) {
       ),
   })
 
+  const copyLink = async () => {
+    if (!pending) return
+    await copyToClipboard(`${location.origin}/transfers/${encodeURIComponent(pending.id)}`)
+    toast.success(
+      t('components.workspaceTransfer.toasts.linkCopied', { name: pending.to_user.display_name }),
+    )
+  }
+
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -45,20 +57,31 @@ export function TransferOwnershipRow({ workspace }: { workspace: Workspace }) {
         </p>
       </div>
       {pending ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 shrink-0 gap-1.5 px-2.5 text-xs"
-          disabled={cancelMutation.isPending}
-          onClick={() => cancelMutation.mutate()}
-        >
-          {cancelMutation.isPending ? (
-            <Spinner size="sm" />
-          ) : (
-            <X className="h-3 w-3" strokeWidth={2} />
-          )}
-          {t('components.workspaceTransfer.cancel')}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-2.5 text-xs"
+            onClick={copyLink}
+          >
+            <Link className="h-3 w-3" strokeWidth={2} />
+            {t('components.workspaceTransfer.copyLink')}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-2.5 text-xs"
+            disabled={cancelMutation.isPending}
+            onClick={() => cancelMutation.mutate()}
+          >
+            {cancelMutation.isPending ? (
+              <Spinner size="sm" />
+            ) : (
+              <X className="h-3 w-3" strokeWidth={2} />
+            )}
+            {t('components.workspaceTransfer.cancel')}
+          </Button>
+        </div>
       ) : (
         <Button
           variant="outline"
