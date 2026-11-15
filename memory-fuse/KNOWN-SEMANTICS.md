@@ -43,6 +43,13 @@ do nothing**. Files are always reported as `root:root`, mode `0644` (files) /
   frontmatter (`---` block with non-empty `name:` and a `metadata.type:` of
   `user|feedback|project|reference`); otherwise `close(2)` fails with `EINVAL`.
   `MEMORY.md` is exempt (it's the index). See `internal/memfs/frontmatter.go`.
+  A **new** file whose content is rejected still fails `close(2)` with `EINVAL`,
+  but its content is kept in the daemon (never pushed) so a following rename
+  can land it: the content is validated again against the destination name.
+  This is what lets an atomic save of `MEMORY.md` through a temp sibling
+  (`MEMORY.md.tmp.<pid>.<hex>`, `sedXXXXXX`) work, since the index content is
+  only valid under the index's own name. Rejected writes to an existing memory
+  are dropped and the server copy is re-read.
 - **vim and other probe-heavy editors may still struggle.** rename(2) support
   fixes the *atomic-save* pattern (write a complete temp file, rename it over the
   target) — which covers `sed -i`, most save libraries, and `mv` itself. But
