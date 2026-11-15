@@ -299,7 +299,7 @@ func (r *Root) Rmdir(_ context.Context, name string) syscall.Errno {
 }
 
 func (r *Root) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
-	return renameChild(ctx, "/", name, newParent, newName, flags, r)
+	return renameChild(ctx, &r.Inode, "/", name, newParent, newName, flags, r)
 }
 
 func (r *Root) Statfs(_ context.Context, out *fuse.StatfsOut) syscall.Errno {
@@ -347,7 +347,7 @@ func (d *dirNode) Rmdir(_ context.Context, name string) syscall.Errno {
 }
 
 func (d *dirNode) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
-	return renameChild(ctx, nodePath(&d.Inode), name, newParent, newName, flags, d.root)
+	return renameChild(ctx, &d.Inode, nodePath(&d.Inode), name, newParent, newName, flags, d.root)
 }
 
 type fileNode struct {
@@ -357,9 +357,14 @@ type fileNode struct {
 	// server's sha of `buf` when last fetched (or "" for a brand-new file
 	// not yet pushed). dirty=true means buf differs from server and needs
 	// flushing. mu serialises load/write/flush against concurrent reads.
+	//
+	// staged=true means buf holds content that was rejected by the validator
+	// at this (new, never-pushed) path and kept only locally, so a rename can
+	// still land it under a name it is valid for — see stageRejected.
 	mu      sync.Mutex
 	loaded  bool
 	dirty   bool
+	staged  bool
 	baseSHA string
 	buf     []byte
 }
@@ -488,7 +493,11 @@ func (f *fileNode) commit(ctx context.Context) syscall.Errno {
 		f.root.log.Warn("memory frontmatter validation rejected", "path", path, "error", err)
 		f.mu.Lock()
 		f.dirty = false
-		f.loaded = false
+		if f.stageRejected(path, base) {
+			f.staged = true
+		} else {
+			f.loaded = false
+		}
 		f.mu.Unlock()
 		return syscall.EINVAL
 	}
@@ -511,6 +520,7 @@ func (f *fileNode) commit(ctx context.Context) syscall.Errno {
 	f.mu.Lock()
 	f.baseSHA = m.ContentSHA256
 	f.dirty = false
+	f.staged = false
 	f.mu.Unlock()
 	if c := f.root.opt.Cache; c != nil && m.ContentSHA256 != "" {
 		// Same content we just sent — keep the cache warm so a re-read in
@@ -525,6 +535,22 @@ func (f *fileNode) commit(ctx context.Context) syscall.Errno {
 	}
 	f.root.refreshOnce(ctx)
 	return 0
+}
+
+// stageRejected reports whether content the validator rejected at `path`
+// should be kept in this node rather than dropped. Only a file with no server
+// row yet qualifies: atomic saves write the full new content to a temp sibling
+// (`MEMORY.md.tmp.<pid>.<hex>`, `sedXXXXXX`) and rename it over the target, and
+// the content is valid only under the target's name — the index carries no
+// frontmatter. Nothing staged is ever pushed at the temp path; renameChild
+// validates it again against where it lands. An existing memory keeps the
+// drop-and-refetch behaviour so reads never show content the server lacks.
+func (f *fileNode) stageRejected(path, base string) bool {
+	if base != "" {
+		return false
+	}
+	_, onServer := f.root.snap.file(path)
+	return !onServer
 }
 
 // ensureLoaded populates buf+baseSHA on first access. Three sources, in
@@ -685,7 +711,7 @@ func rmdirChild(parentPath, name string, root *Root) syscall.Errno {
 // backend is flat so a directory rename would be a prefix bulk-move — we return
 // EXDEV for those to let userspace fall back to copy+unlink. The library
 // (rawBridge.Rename) performs the in-kernel inode move on a 0 return.
-func renameChild(ctx context.Context, oldParentPath, oldName string, newParent fs.InodeEmbedder, newName string, flags uint32, root *Root) syscall.Errno {
+func renameChild(ctx context.Context, oldParent *fs.Inode, oldParentPath, oldName string, newParent fs.InodeEmbedder, newName string, flags uint32, root *Root) syscall.Errno {
 	if flags&fs.RENAME_EXCHANGE != 0 {
 		return syscall.ENOSYS // atomic exchange unsupported
 	}
@@ -697,12 +723,19 @@ func renameChild(ctx context.Context, oldParentPath, oldName string, newParent f
 	if root.snap.isDir(from) {
 		return syscall.EXDEV // nudge userspace into recursive copy+unlink
 	}
+	overwrite := flags&renameNoReplace == 0
 	if _, ok := root.snap.file(from); !ok {
+		if ch := oldParent.GetChild(oldName); ch != nil {
+			if f, ok := ch.Operations().(*fileNode); ok {
+				if errno, landed := f.landStaged(ctx, to, overwrite); landed {
+					return errno
+				}
+			}
+		}
 		// Nothing server-backed at `from` — e.g. a freshly Create'd file that was
 		// never flushed. We can't move what cp doesn't have.
 		return syscall.ENOENT
 	}
-	overwrite := flags&renameNoReplace == 0
 	if _, err := root.opt.Backend.MoveMemory(ctx, from, to, overwrite, ""); err != nil {
 		switch {
 		case errors.Is(err, cpclient.ErrConflict):
@@ -725,6 +758,56 @@ func renameChild(ctx context.Context, oldParentPath, oldName string, newParent f
 	}
 	root.refreshOnce(ctx)
 	return 0
+}
+
+// landStaged writes a staged node's content to `to` in place of a move, since
+// nothing for it exists on the server to move. landed=false means the node
+// has nothing staged and the caller should fall through. The content is
+// validated against `to`, and replaces the memory there (keeping its history)
+// with the destination's current sha as precondition.
+func (f *fileNode) landStaged(ctx context.Context, to string, overwrite bool) (errno syscall.Errno, landed bool) {
+	f.mu.Lock()
+	if !f.staged {
+		f.mu.Unlock()
+		return 0, false
+	}
+	body := append([]byte(nil), f.buf...)
+	f.mu.Unlock()
+
+	root := f.root
+	base := ""
+	if m, ok := root.snap.file(to); ok {
+		if !overwrite {
+			return syscall.EEXIST, true
+		}
+		base = m.ContentSHA256
+	}
+	if err := validateMemoryContent(to, body); err != nil {
+		root.log.Warn("memory frontmatter validation rejected", "path", to, "error", err)
+		return syscall.EINVAL, true
+	}
+	m, err := root.opt.Backend.PutMemory(ctx, to, string(body), base)
+	if err != nil {
+		var pre *cpclient.ErrPrecondition
+		if errors.As(err, &pre) {
+			root.log.Warn("memory rename sha mismatch", "path", to, "expected", base, "current", pre.CurrentSHA256)
+			root.refreshOnce(ctx)
+			return syscall.EIO, true
+		}
+		root.log.Error("memory rename failed", "to", to, "error", err)
+		return syscall.EIO, true
+	}
+	f.mu.Lock()
+	f.staged = false
+	f.baseSHA = m.ContentSHA256
+	f.mu.Unlock()
+	if c := root.opt.Cache; c != nil && m.ContentSHA256 != "" {
+		if err := c.Put(root.opt.StoreID, to, m.ContentSHA256, body); err != nil {
+			root.log.Warn("cache put on rename failed", "path", to, "error", err)
+		}
+	}
+	root.refreshOnce(ctx)
+	return 0, true
 }
 
 // fillStatfs reports a large, mostly-free volume so tools that probe free space
