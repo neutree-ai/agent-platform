@@ -14,12 +14,16 @@ const GET_ACTIVITY_DIGEST_MAX_SESSIONS = 10
  * workspace turn gets is deliberately withheld. `list_recent_activity`
  * decides its own bounded time window from the store's checkpoint so the
  * agent never has to compute or pass a timestamp itself.
+ *
+ * `sessionId` is null on a request that arrives before cp has bound the
+ * turn's session to its token (see registerTools). Listing tools needs no
+ * session; a call that needs one reports it rather than guessing a window.
  */
 export function registerReflectTools(
   server: McpServer,
   workspaceId: string,
   storeId: string,
-  sessionId: string,
+  sessionId: string | null,
 ) {
   server.registerTool(
     'list_recent_activity',
@@ -36,6 +40,9 @@ export function registerReflectTools(
     async ({ limit }) => {
       const store = await getStoreById(storeId)
       if (!store) return errorResult(`Error: store ${storeId} not found`)
+      if (!sessionId) {
+        return errorResult("Error: this turn's session hasn't started yet; call again in a moment")
+      }
       const session = await getSession(sessionId)
       if (!session) return errorResult(`Error: session ${sessionId} not found`)
 

@@ -34,11 +34,17 @@ interface McpRequestContext {
  * browser, sandbox, other MCP servers, or Builder Mode — to keep a
  * consolidation turn's blast radius small. See memory-store-plan.md 3.3 for
  * why this isn't done via Builder Mode's cap model instead.
+ *
+ * The switch keys on `reflectStoreId` alone, not on the session being bound
+ * yet: an agent may list its tools before cp has seen `session.started` (the
+ * claude-code CLI connects its MCP servers at process start, ahead of the
+ * session id), and whatever it lists then is the toolset it keeps for the
+ * whole turn.
  */
 export function registerTools(server: McpServer, ctx: McpRequestContext) {
   const { workspaceId, sessionId, taskId, reflectStoreId, headers } = ctx
 
-  if (reflectStoreId && sessionId) {
+  if (reflectStoreId) {
     registerReflectTools(server, workspaceId, reflectStoreId, sessionId)
     return
   }
