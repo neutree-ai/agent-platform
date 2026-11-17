@@ -7,7 +7,9 @@
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes |  |
-| `status` | any | No | Sandbox status as reported by the runtime |
-| `expiresAt` | string,null | No |  |
-| `metadata` | object | No |  |
+| `status` | enum: creating, running, paused... | Yes |  |
+| `image` | string,null | Yes |  |
+| `createdAt` | string,null | Yes |  |
+| `expiresAt` | string,null | Yes |  |
+| `metadata` | object | Yes |  |
 

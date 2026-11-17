@@ -26,6 +26,7 @@
 | Status | Description |
 |--------|-------------|
 | 200 | New expiry |
+| 400 | Not supported by the sandbox backend, or invalid input |
 | 404 | Workspace or sandbox not found |
 | 500 | Sandbox service error |
 

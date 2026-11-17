@@ -22,12 +22,14 @@
 | `resource` | object | No | Resource limits, e.g. { "cpu": "2", "memory": "4Gi" } |
 | `timeout_seconds` | integer | No | Lifetime in seconds from now (default 3600) |
 | `env` | object | No |  |
+| `entrypoint` | string[] | No | Command to run instead of the image's own entrypoint. Rejected by sandbox backends that cannot override it. |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
 | 201 | Created sandbox |
+| 400 | Not supported by the sandbox backend, or invalid input |
 | 404 | Workspace not found |
 | 500 | Sandbox service error |
 

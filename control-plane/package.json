@@ -32,6 +32,7 @@
     "ldapts": "^8.1.4",
     "multiplex": "^6.7.0",
     "neu-browser-mcp": "^0.2.3",
+    "neu-sandbox-mcp": "^0.1.1",
     "pg": "^8.13.0",
     "pg-boss": "^12.14.0",
     "prom-client": "^15.1.3",

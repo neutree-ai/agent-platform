@@ -386,16 +386,15 @@ export interface BrowserListResponse {
 
 export interface SandboxInfo {
   id: string
-  image?: { uri: string }
-  status: { state: string; reason: string; message: string; lastTransitionAt: string }
-  expiresAt: string
-  createdAt: string
-  metadata?: Record<string, string>
+  status: 'creating' | 'running' | 'paused' | 'stopped' | 'failed' | 'unknown'
+  image: string | null
+  createdAt: string | null
+  expiresAt: string | null
+  metadata: Record<string, string>
 }
 
 export interface SandboxListResponse {
   items: SandboxInfo[]
-  pagination: { page: number; pageSize: number; totalItems: number; totalPages: number }
 }
 
 // ── AgentInfo (from GET /info) ──

@@ -17,8 +17,20 @@
 | Status | Description |
 |--------|-------------|
 | 200 | Command status |
+| 400 | Not supported by the sandbox backend, or invalid input |
 | 404 | Workspace or sandbox not found |
 | 500 | Sandbox service error |
+
+**Success Response Schema** (inline):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `command_id` | string | Yes |  |
+| `running` | boolean | Yes |  |
+| `exit_code` | number,null | Yes |  |
+| `error` | string | No |  |
+| `started_at` | string,null | No |  |
+| `finished_at` | string,null | No |  |
 
 ## Security
 
