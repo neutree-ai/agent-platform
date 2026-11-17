@@ -68,7 +68,10 @@ export interface SessionRelay<Ctx> {
 }
 
 const DEFAULT_MAX_BODY = 20 * 1024 * 1024
-const JSON_TYPE = { 'Content-Type': 'application/json' }
+// A new object for every answer and call: a server may write into the headers
+// it is handed (@hono/node-server adds the answer's Content-Length), and one
+// shared object would carry that length on to every answer after it.
+const jsonType = () => ({ 'Content-Type': 'application/json' })
 
 // The platform's answer as it is: status, type, body. A stream is passed on as
 // it comes.
@@ -84,7 +87,7 @@ function relay(res: Response): Response {
 }
 
 const errorResponse = (status: number, error: string) =>
-  new Response(JSON.stringify({ error }), { status, headers: JSON_TYPE })
+  new Response(JSON.stringify({ error }), { status, headers: jsonType() })
 
 // The body as text, or null once it passes `max` bytes; a huge one is never held.
 async function readCapped(request: Request, max: number): Promise<string | null> {
@@ -210,7 +213,7 @@ export function createSessionRelay<Ctx = void>(
         if (!res.ok) return relay(res)
         const base = `${basePath}/workspaces/${encodeURIComponent(workspace)}`
         return new Response(JSON.stringify(imagesHere(await res.json(), base)), {
-          headers: JSON_TYPE,
+          headers: jsonType(),
         })
       },
     },
@@ -247,7 +250,7 @@ export function createSessionRelay<Ctx = void>(
         return relay(
           await target.client.forward('PUT', `${session(target, params[1])}/pending`, {
             body,
-            headers: JSON_TYPE,
+            headers: jsonType(),
           }),
         )
       },
@@ -265,7 +268,7 @@ export function createSessionRelay<Ctx = void>(
         relay(
           await target.client.forward('POST', `${session(target, params[1])}/interrupt`, {
             body: '{}',
-            headers: JSON_TYPE,
+            headers: jsonType(),
           }),
         ),
     },
@@ -278,7 +281,7 @@ export function createSessionRelay<Ctx = void>(
         const res = await target.client.forward(
           'POST',
           `${workspacePath(target.workspaceId)}/chat`,
-          { body, headers: JSON_TYPE, signal: request.signal },
+          { body, headers: jsonType(), signal: request.signal },
         )
         if (!options.onTurn || !res.ok || !res.body) return relay(res)
 
@@ -332,7 +335,7 @@ export function createSessionRelay<Ctx = void>(
           await target.client.forward(
             'POST',
             `${agent(target)}/sessions/${encodeURIComponent(params[1])}/respond`,
-            { body: await request.text(), headers: JSON_TYPE },
+            { body: await request.text(), headers: jsonType() },
           ),
         ),
     },

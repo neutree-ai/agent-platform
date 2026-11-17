@@ -178,6 +178,44 @@ describe('session relay', () => {
     expect(calls[0].path).toBe('/_proxy/agent/alice-ws/sessions/s1/pending-question')
   })
 
+  // @hono/node-server writes an answer's Content-Length into the headers
+  // object the answer was made with. Were that object shared, every later
+  // answer would carry the first one's length, and be cut short or hang.
+  it('gives each answer headers of its own', async () => {
+    const { client } = platform((path) =>
+      path.includes('session_id=short')
+        ? Response.json([])
+        : Response.json([{ id: 'm1', role: 'user', content: 'x'.repeat(1000) }]),
+    )
+    const relay = relayFor(client)
+    const RealResponse = Response
+    const given: Record<string, string>[] = []
+    vi.stubGlobal(
+      'Response',
+      class extends RealResponse {
+        constructor(body?: BodyInit | null, init?: ResponseInit) {
+          super(body, init)
+          const headers = init?.headers
+          if (headers && !(headers instanceof Headers) && !Array.isArray(headers)) {
+            given.push(headers)
+            headers['Content-Length'] ??= String(typeof body === 'string' ? body.length : 0)
+          }
+        }
+      },
+    )
+
+    try {
+      await relay.handle(call('/workspaces/mine/messages?session_id=short'), { person: 'alice' })
+      await relay.handle(call('/workspaces/mine/messages?session_id=long'), { person: 'alice' })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+
+    expect(given).toHaveLength(2)
+    expect(given[0]).not.toBe(given[1])
+    expect(Number(given[1]['Content-Length'])).toBeGreaterThan(1000)
+  })
+
   it('answers 404 to a path it does not relay', async () => {
     const { client } = platform()
     const relay = relayFor(client)
