@@ -285,6 +285,11 @@ const PERMANENT_OAUTH_ERRORS = new Set(['invalid_grant', 'invalid_client', 'unau
 // counter via `upsertToken`.
 const REFRESH_FAIL_GRACE_SECONDS = 600
 const REFRESH_FAIL_MIN_COUNT = 3
+// A failure streak that started longer ago than this is stale: the failures
+// were isolated rather than persistent, so the next failure starts a new
+// streak instead of adding to it. Without this, a couple of leftover failures
+// from one day push a single blip the next day straight past both thresholds.
+const REFRESH_FAIL_STREAK_RESET_SECONDS = 3600
 
 /**
  * Decide whether persistent refresh failures warrant dropping the stored token
@@ -423,7 +428,8 @@ export async function getToken(userId: string, serverOrigin: string): Promise<OA
  * time of the first failure in the current streak. Returns the running count
  * and first-failure timestamp so the caller can decide whether the failures
  * have persisted past the grace window. A successful refresh resets both via
- * `upsertToken`.
+ * `upsertToken`; a streak older than REFRESH_FAIL_STREAK_RESET_SECONDS is
+ * restarted rather than extended.
  */
 async function recordRefreshFailure(
   userId: string,
@@ -431,11 +437,19 @@ async function recordRefreshFailure(
 ): Promise<{ failCount: number; firstFailAt: Date | null }> {
   const { rows } = await pool.query(
     `UPDATE mcp_oauth_tokens
-       SET refresh_fail_count = refresh_fail_count + 1,
-           refresh_fail_first_at = COALESCE(refresh_fail_first_at, NOW())
+       SET refresh_fail_count = CASE
+             WHEN refresh_fail_first_at IS NULL
+               OR refresh_fail_first_at < NOW() - make_interval(secs => $3) THEN 1
+             ELSE refresh_fail_count + 1
+           END,
+           refresh_fail_first_at = CASE
+             WHEN refresh_fail_first_at IS NULL
+               OR refresh_fail_first_at < NOW() - make_interval(secs => $3) THEN NOW()
+             ELSE refresh_fail_first_at
+           END
      WHERE user_id = $1 AND server_origin = $2
      RETURNING refresh_fail_count, refresh_fail_first_at`,
-    [userId, serverOrigin],
+    [userId, serverOrigin, REFRESH_FAIL_STREAK_RESET_SECONDS],
   )
   const row = rows[0]
   if (!row) return { failCount: 0, firstFailAt: null }
@@ -457,22 +471,36 @@ export async function listTokensForUser(userId: string): Promise<OAuthToken[]> {
 
 // ── High-level: get valid token (with auto-refresh) ──
 
+// Refreshes in flight, keyed by user + server origin. OAuth-proxy MCP servers
+// rotate the refresh token on every use and reject the old one, so concurrent
+// requests that each refreshed with the same stored refresh token would all
+// but one get `invalid_grant`. Concurrent callers join the in-flight refresh
+// instead of starting their own.
+const refreshInflight = new Map<string, Promise<string | null>>()
+
 /**
  * Get a valid access token, refreshing if expired. Returns null if no token or
  * refresh fails.
  *
- * `forceRefresh` skips the local expiry check and refreshes unconditionally —
- * used when an upstream 401 proves the stored token is invalid even though cp
- * still considers it within its TTL (clock skew, upstream session shorter than
- * the advertised expires_in, revocation).
+ * `rejectedAccessToken` is the token an upstream just answered 401 for. It
+ * skips the local expiry check and refreshes unconditionally — the 401 proves
+ * the token is invalid even though cp still considers it within its TTL (clock
+ * skew, upstream session shorter than the advertised expires_in, revocation).
+ * If the stored token no longer matches it, another request already replaced
+ * it, and the stored one is returned without a further refresh.
  */
 export async function getValidAccessToken(
   userId: string,
   serverOrigin: string,
-  forceRefresh = false,
+  rejectedAccessToken?: string,
 ): Promise<string | null> {
   const token = await getToken(userId, serverOrigin)
   if (!token) return null
+
+  const forceRefresh = rejectedAccessToken !== undefined
+  if (forceRefresh && token.access_token !== rejectedAccessToken) {
+    return token.access_token
+  }
 
   // Effective expiry: use stored expires_at, else fall back to updated_at + TTL.
   // Older rows predating the fallback default may have NULL expires_at; treat
@@ -490,29 +518,64 @@ export async function getValidAccessToken(
 
   // Try refresh
   if (!token.refresh_token) return stillValid ? token.access_token : null
+
+  const refreshToken = token.refresh_token
+  const key = `${userId}\n${serverOrigin}`
+  let inflight = refreshInflight.get(key)
+  if (!inflight) {
+    inflight = refreshStoredToken(
+      userId,
+      serverOrigin,
+      token.access_token,
+      refreshToken,
+      msLeft,
+      stillValid && !forceRefresh,
+    )
+    refreshInflight.set(key, inflight)
+    inflight.finally(() => refreshInflight.delete(key)).catch(() => {})
+  }
+  return inflight
+}
+
+async function refreshStoredToken(
+  userId: string,
+  serverOrigin: string,
+  accessToken: string,
+  refreshToken: string,
+  msLeft: number,
+  serveCurrentOnFailure: boolean,
+): Promise<string | null> {
   const { rows: clientRows } = await pool.query(
     'SELECT server_origin, metadata, client_id, client_secret FROM mcp_oauth_clients WHERE server_origin = $1',
     [serverOrigin],
   )
-  if (clientRows.length === 0) return stillValid ? token.access_token : null
+  if (clientRows.length === 0) return serveCurrentOnFailure ? accessToken : null
   const client = clientRows[0] as OAuthClient
 
   try {
-    const refreshed = await refreshAccessToken(client, token.refresh_token)
+    const refreshed = await refreshAccessToken(client, refreshToken)
     await upsertToken(userId, serverOrigin, refreshed)
     return refreshed.access_token
   } catch (e) {
     // A proactive (within-margin) refresh failure is not fatal while the
     // current token is still valid: serve it and let a later request retry.
-    // forceRefresh callers are excluded — they hold proof the token is bad.
-    if (stillValid && !forceRefresh) {
+    // Forced refreshes are excluded — they hold proof the token is bad.
+    if (serveCurrentOnFailure) {
       console.warn(
         `[mcp-oauth] proactive refresh failed for ${serverOrigin}; serving still-valid token (${Math.round(msLeft / 1000)}s left):`,
         e instanceof Error ? e.message : e,
       )
-      return token.access_token
+      return accessToken
     }
     if (e instanceof McpRefreshError && e.permanent) {
+      // The refresh token we used may have been rotated by a concurrent
+      // refresh that this process could not join (another replica). The
+      // stored row then already holds the replacement: use it rather than
+      // counting a failure against a token that is fine.
+      const current = await getToken(userId, serverOrigin)
+      if (current?.refresh_token && current.refresh_token !== refreshToken) {
+        return current.access_token
+      }
       // A "permanent" OAuth code may actually be an upstream transient (a TLS
       // blip while the broker refreshes the provider token, reported back as
       // `invalid_grant`). Don't drop the row on the first failure — hold it

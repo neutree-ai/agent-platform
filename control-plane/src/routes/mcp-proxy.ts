@@ -72,9 +72,10 @@ mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
   const targetUrl = `${origin}${rest}`
 
   // Get fresh OAuth token (auto-refreshes if expired)
+  let accessToken: string | null = null
   let authHeader: string | undefined
   try {
-    const accessToken = await getValidAccessToken(userId, origin)
+    accessToken = await getValidAccessToken(userId, origin)
     if (accessToken) {
       authHeader = `Bearer ${accessToken}`
     }
@@ -180,9 +181,9 @@ mcpProxy.all('/v1/mcp/:encodedOrigin/*', async (c) => {
     // upstream session shorter than the advertised expires_in, revocation).
     // Force a refresh and retry once — critical for short-lived tokens such as
     // google-workspace-mcp's.
-    if (upstreamResp.status === 401 && authHeader) {
+    if (upstreamResp.status === 401 && accessToken) {
       try {
-        const refreshed = await getValidAccessToken(userId, origin, true)
+        const refreshed = await getValidAccessToken(userId, origin, accessToken)
         if (refreshed) {
           // Drain the rejected response so its upstream socket is released.
           upstreamResp.body?.cancel().catch(() => {})
