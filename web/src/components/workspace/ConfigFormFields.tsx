@@ -58,7 +58,6 @@ const AGENT_SETTINGS_DEFAULTS: Record<string, Record<string, any>> = {
     permissions: { allow: [], deny: [] },
     enableAllProjectMcpServers: true,
   },
-  codex: {},
 }
 
 /**
@@ -72,8 +71,10 @@ function supportsAgentSettings(agentType: string): boolean {
 
 function defaultAgentSettings(agentType: string): string {
   switch (agentType) {
-    // Goose settings are YAML — an empty string means "no extra settings"
-    // (a JSON `{}` would be skipped agent-side but reads as the wrong dialect).
+    // Codex (TOML) and Goose (YAML) settings are not JSON — an empty string
+    // means "no extra settings" (a JSON `{}` would be skipped agent-side but
+    // reads as the wrong dialect).
+    case 'codex':
     case 'goose':
       return ''
     // dsh builds its whole plugin tree from platform config; user settings have

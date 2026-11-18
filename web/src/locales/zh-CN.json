@@ -3917,7 +3917,7 @@
         "systemPrompt": "系统 Prompt",
         "skills": "Skills",
         "mcpConfig": "MCP 配置",
-        "agentSettings": "Agent 设置（JSON）",
+        "agentSettings": "Agent 设置",
         "computeResources": "计算资源"
       }
     },
