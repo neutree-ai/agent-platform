@@ -27,7 +27,8 @@
 |-------|------|----------|-------------|
 | `sandbox_id` | string | Yes |  |
 | `port` | number | Yes |  |
-| `url` | string | Yes |  |
+| `url` | string | Yes | Runtime-internal proxy URL |
+| `public_url` | string | No | URL reachable from outside the cluster (https://{sandboxId}-{port}.<sandbox host>/); present when the control plane has SANDBOX_PUBLIC_URL set |
 
 ## Security
 
