@@ -142,6 +142,67 @@ test(
       )
     })
     await t.test(
+      'daily-cache migration preserves reads with an existing token watermark',
+      async () => {
+        const before = await snapshot()
+        for (const name of (await readdir(migrations))
+          .filter((name) => name.endsWith('.sql'))
+          .sort()) {
+          if (name >= '152_') await migrate(name)
+        }
+        assert.deepEqual(await snapshot(), before)
+        assert.equal(
+          (await fixture.query('SELECT workspace_daily_initialized FROM admin_stats_watermark'))
+            .rows[0].workspace_daily_initialized,
+          false,
+        )
+        // The previous scheduler's watermark upsert leaves the new initialization flag alone.
+        await fixture.query(`
+        INSERT INTO admin_stats_watermark (id, last_usage_id) VALUES (1, 0)
+        ON CONFLICT (id) DO UPDATE SET last_usage_id = admin_stats_watermark.last_usage_id
+      `)
+        assert.deepEqual(await snapshot(), before)
+      },
+    )
+    const dailySnapshot = async () =>
+      normalized((await fixture.query('SELECT * FROM admin_workspace_daily_interactions')).rows)
+    await t.test(
+      'daily-cache initialization rolls back and retries independently of tokens',
+      async () => {
+        const before = await snapshot()
+        await fixture.query(`
+        ALTER TABLE admin_workspace_daily_interactions
+          ADD CONSTRAINT reject_initialization CHECK (interactions < 0) NOT VALID
+      `)
+        await assert.rejects(refreshAdminStats(), { code: '23514' })
+        assert.deepEqual(await dailySnapshot(), [])
+        assert.deepEqual(await snapshot(), before)
+        assert.equal(
+          (await fixture.query('SELECT workspace_daily_initialized FROM admin_stats_watermark'))
+            .rows[0].workspace_daily_initialized,
+          false,
+        )
+        await fixture.query(
+          'ALTER TABLE admin_workspace_daily_interactions DROP CONSTRAINT reject_initialization',
+        )
+        await Promise.all([refreshAdminStats(), refreshAdminStats()])
+        await assertMatchesFull()
+        assert.equal(
+          (await fixture.query('SELECT workspace_daily_initialized FROM admin_stats_watermark'))
+            .rows[0].workspace_daily_initialized,
+          true,
+        )
+        assert.deepEqual(
+          (
+            await fixture.query(
+              'SELECT workspace_id, interactions FROM admin_workspace_daily_interactions WHERE day IS NULL',
+            )
+          ).rows,
+          [{ workspace_id: 'w2', interactions: '1' }],
+        )
+      },
+    )
+    await t.test(
       'increments, historical token arrivals, null timestamps and retries match full totals',
       async () => {
         const oldDay = (
@@ -149,7 +210,14 @@ test(
             'SELECT xmin::text FROM admin_daily_stats WHERE date = current_date - 30',
           )
         ).rows[0].xmin
+        const oldWorkspaceDay = (
+          await fixture.query(
+            'SELECT xmin::text FROM admin_workspace_daily_interactions WHERE day = current_date - 30',
+          )
+        ).rows[0].xmin
         await fixture.query(`
+      INSERT INTO messages (id, workspace_id, role, created_at)
+        VALUES ('new-user', 'w1', 'user', current_date + interval '1 hour');
       INSERT INTO session_events (id, message_id, session_id, kind, payload)
         VALUES ('new-today', 'today_assistant', 's2', 'text', '{}'),
                ('new-boundary', 'boundary', 's3', 'text', '{}');
@@ -169,9 +237,103 @@ test(
           ).rows[0].xmin,
           oldDay,
         )
+        assert.equal(
+          (
+            await fixture.query(
+              'SELECT xmin::text FROM admin_workspace_daily_interactions WHERE day = current_date - 30',
+            )
+          ).rows[0].xmin,
+          oldWorkspaceDay,
+        )
         const beforeRetry = await snapshot()
+        const dailyBeforeRetry = await dailySnapshot()
         await refreshAdminStats()
         assert.deepEqual(await snapshot(), beforeRetry)
+        assert.deepEqual(await dailySnapshot(), dailyBeforeRetry)
+      },
+    )
+    await t.test(
+      'recent deletions remove empty days and workspaces but keep zero-interaction groups',
+      async () => {
+        await fixture.query(`
+        INSERT INTO workspaces (id, user_id, name, created_at)
+          VALUES ('deleted', 'u1', 'Deleted', current_date),
+                 ('zero', 'u1', 'Zero', current_date),
+                 ('null-only', 'u1', 'Null only', current_date);
+        INSERT INTO messages (id, workspace_id, role, created_at)
+          VALUES ('delete-boundary', 'deleted', 'user', current_date - 7),
+                 ('delete-today', 'deleted', 'user', current_date),
+                 ('zero-system', 'zero', 'system', current_date),
+                 ('null-only-user', 'null-only', 'user', NULL);
+      `)
+        // NULL dates are initialized/repaired by the full rebuild.
+        await refreshAdminStats(true)
+        await assertMatchesFull()
+        assert.deepEqual(
+          (
+            await fixture.query(
+              "SELECT interactions FROM admin_workspace_stats WHERE workspace_id = 'zero'",
+            )
+          ).rows,
+          [{ interactions: 0 }],
+        )
+        await fixture.query("DELETE FROM messages WHERE id = 'delete-boundary'")
+        await refreshAdminStats()
+        await assertMatchesFull()
+        assert.equal(
+          (
+            await fixture.query(
+              "SELECT * FROM admin_workspace_daily_interactions WHERE workspace_id = 'deleted' AND day = current_date - 7",
+            )
+          ).rowCount,
+          0,
+        )
+        await fixture.query("DELETE FROM messages WHERE id = 'delete-today'")
+        await refreshAdminStats()
+        await assertMatchesFull()
+        assert.equal(
+          (
+            await fixture.query(
+              "SELECT * FROM admin_workspace_stats WHERE workspace_id = 'deleted'",
+            )
+          ).rowCount,
+          0,
+        )
+        assert.deepEqual(
+          (
+            await fixture.query(
+              "SELECT interactions FROM admin_workspace_stats WHERE workspace_id = 'null-only'",
+            )
+          ).rows,
+          [{ interactions: 1 }],
+        )
+      },
+    )
+    await t.test(
+      'the window includes midnight seven days ago and excludes the instant before it',
+      async () => {
+        await fixture.query(`
+        INSERT INTO messages (id, workspace_id, role, created_at, event_count)
+          VALUES ('edge-inside', 'w2', 'assistant', current_date - 7, 1),
+                 ('edge-outside', 'w2', 'assistant', current_date - 7 - interval '1 microsecond', 1)
+      `)
+        await refreshAdminStats(true)
+        await fixture.query(
+          "UPDATE messages SET event_count = 2 WHERE id IN ('edge-inside', 'edge-outside')",
+        )
+        await refreshAdminStats()
+        const expected = await fixture.query(`
+        SELECT workspace_id, (count(*) FILTER (WHERE role = 'user') +
+          COALESCE(sum(CASE WHEN id = 'edge-outside' THEN 1 ELSE event_count END)
+                   FILTER (WHERE role = 'assistant'), 0))::integer AS interactions
+          FROM messages GROUP BY workspace_id
+      `)
+        assert.deepEqual(
+          normalized((await fixture.query('SELECT * FROM admin_workspace_stats')).rows),
+          normalized(expected.rows),
+        )
+        await refreshAdminStats(true)
+        await assertMatchesFull()
       },
     )
     await t.test(
@@ -215,14 +377,29 @@ test(
         } finally {
           await delayed.end()
         }
-        await fixture.query("DELETE FROM messages WHERE session_id = 's1'")
+        const beforeHistoryChange = (await snapshot()).get('admin_workspace_stats')
+        await fixture.query(`
+          UPDATE messages SET event_count = event_count + 1 WHERE id = 'outside';
+          DELETE FROM messages WHERE session_id = 's1' OR workspace_id = 'null-only';
+        `)
         await fixture.query("DELETE FROM sessions WHERE id = 's1'")
+        await refreshAdminStats()
+        assert.deepEqual((await snapshot()).get('admin_workspace_stats'), beforeHistoryChange)
         await refreshAdminStats(true)
         await assertMatchesFull()
+        assert.equal(
+          (
+            await fixture.query(
+              "SELECT * FROM admin_workspace_stats WHERE workspace_id = 'null-only'",
+            )
+          ).rowCount,
+          0,
+        )
       },
     )
     await t.test('failed updates roll back snapshots and watermark together', async () => {
       const before = await snapshot()
+      const dailyBefore = await dailySnapshot()
       const watermark = (await fixture.query('SELECT * FROM admin_stats_watermark')).rows
       await fixture.query(`
       ALTER TABLE admin_token_daily_stats ADD CONSTRAINT reject_refresh CHECK (input_tokens < 0) NOT VALID;
@@ -231,6 +408,7 @@ test(
     `)
       await assert.rejects(refreshAdminStats(), { code: '23514' })
       assert.deepEqual(await snapshot(), before)
+      assert.deepEqual(await dailySnapshot(), dailyBefore)
       assert.deepEqual((await fixture.query('SELECT * FROM admin_stats_watermark')).rows, watermark)
       await fixture.query('ALTER TABLE admin_token_daily_stats DROP CONSTRAINT reject_refresh')
       await refreshAdminStats()
@@ -246,6 +424,41 @@ test(
       )
       await refreshAdminStats(true)
       await assertMatchesFull()
+      assert.deepEqual(await dailySnapshot(), [])
+      await fixture.query('UPDATE admin_stats_watermark SET workspace_daily_initialized = false')
+      await refreshAdminStats()
+      assert.equal(
+        (await fixture.query('SELECT workspace_daily_initialized FROM admin_stats_watermark'))
+          .rows[0].workspace_daily_initialized,
+        true,
+      )
+      // An initialized empty cache must not trigger another historical scan on every tick.
+      await fixture.query(`
+        INSERT INTO workspaces (id, user_id, name, created_at)
+          VALUES ('after-empty', 'u1', 'After empty', current_date - 30);
+        INSERT INTO messages (id, workspace_id, role, created_at)
+          VALUES ('backfilled', 'after-empty', 'user', current_date - 30)
+      `)
+      await refreshAdminStats()
+      assert.deepEqual(await dailySnapshot(), [])
+      await refreshAdminStats(true)
+      await assertMatchesFull()
     })
+    await t.test(
+      'missing token state also rebuilds an already-initialized daily cache',
+      async () => {
+        await fixture.query(`
+        DELETE FROM admin_stats_watermark;
+        UPDATE messages SET event_count = 3, role = 'assistant' WHERE id = 'backfilled';
+      `)
+        await refreshAdminStats()
+        await assertMatchesFull()
+        assert.equal(
+          (await fixture.query('SELECT workspace_daily_initialized FROM admin_stats_watermark'))
+            .rows[0].workspace_daily_initialized,
+          true,
+        )
+      },
+    )
   },
 )
