@@ -1,4 +1,8 @@
-import type { SweepCursors, UsageRecord } from '../../../../internal/agent-usage/src/index'
+import type {
+  StoredSweepCursors,
+  SweepCursors,
+  UsageRecord,
+} from '../../../../internal/agent-usage/src/index'
 import { pool } from './pool'
 
 /**
@@ -282,12 +286,13 @@ export async function getSessionUsageOwner(
   return rows[0]?.user_id ?? null
 }
 
-export async function getUsageCursor(workspaceId: string): Promise<SweepCursors> {
+/** The stored cursor, handed back to the agent as is; it may predate the current shape. */
+export async function getUsageCursor(workspaceId: string): Promise<StoredSweepCursors> {
   const { rows } = await pool.query(
     'SELECT cursor FROM workspace_usage_cursor WHERE workspace_id = $1',
     [workspaceId],
   )
-  return (rows[0]?.cursor as SweepCursors) ?? {}
+  return (rows[0]?.cursor as StoredSweepCursors) ?? {}
 }
 
 export async function setUsageCursor(workspaceId: string, cursor: SweepCursors): Promise<void> {

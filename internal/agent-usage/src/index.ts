@@ -68,8 +68,42 @@ export interface FileFingerprint {
   mtimeMs: number
 }
 
-/** Cursor = fingerprint per transcript path; control-plane owns and persists it. */
-export type SweepCursors = Record<string, FileFingerprint>
+/** Fingerprint per transcript path. */
+export type FileCursors = Record<string, FileFingerprint>
+
+/**
+ * Sweep cursor; control-plane owns and persists it, and hands it back on the
+ * next pull without looking inside.
+ *
+ * Every transcript whose mtime is before `settledBefore` has been ingested as it
+ * stands, so it needs no entry of its own; only files at or after the watermark
+ * are tracked in `files`. That keeps the cursor proportional to recent activity
+ * rather than to a workspace's whole transcript history. A file that changes
+ * gets a fresh mtime, which puts it back above the watermark.
+ */
+export interface SweepCursors {
+  /** Epoch ms. Files with an older mtime are already in the ledger. */
+  settledBefore: number
+  files: FileCursors
+}
+
+/**
+ * A cursor as a caller may hand it back: the current shape, or the earlier flat
+ * per-file map (including `{}`), which reads as a cursor with no watermark.
+ */
+export type StoredSweepCursors = SweepCursors | FileCursors
+
+export function normalizeCursors(c: StoredSweepCursors | undefined): SweepCursors {
+  if (
+    c &&
+    typeof (c as SweepCursors).settledBefore === 'number' &&
+    typeof (c as SweepCursors).files === 'object' &&
+    (c as SweepCursors).files !== null
+  ) {
+    return c as SweepCursors
+  }
+  return { settledBefore: 0, files: (c as FileCursors | undefined) ?? {} }
+}
 
 /**
  * How long a transcript must sit untouched before its trailing entry counts as
