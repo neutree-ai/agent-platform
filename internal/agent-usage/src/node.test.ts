@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
@@ -26,11 +26,21 @@ function writeClaude(session: string, lines: string[], sub?: string[]): string {
   return file
 }
 
-function writeCodex(name: string, lines: string[]): void {
+function writeCodex(name: string, lines: string[]): string {
   const dir = join(home, '.codex', 'sessions', '2026', '05', '30')
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, `rollout-2026-05-30T00-00-00-${name}.jsonl`), lines.join('\n'))
+  const file = join(dir, `rollout-2026-05-30T00-00-00-${name}.jsonl`)
+  writeFileSync(file, lines.join('\n'))
+  return file
 }
+
+/** Backdate a file's mtime by `ms`. */
+function age(file: string, ms: number): void {
+  const t = new Date(Date.now() - ms)
+  utimesSync(file, t, t)
+}
+
+const DAY = 24 * 60 * 60_000
 
 const assistant = (id: string, out: number, cacheRead = 0) =>
   JSON.stringify({
@@ -94,7 +104,7 @@ describe('sweepUsage', () => {
     // its cursor advanced — else the next sweep sees it `unchanged` and m2 is
     // stranded forever. Threading fresh.cursors into the next sweep is the real
     // production path (cp persists & re-sends the cursor).
-    expect(file in fresh.cursors).toBe(false)
+    expect(file in fresh.cursors.files).toBe(false)
 
     // next sweep with the returned cursor + file now quiescent: m2 emitted
     const settled = await sweepUsage({ homeDir: home, cursors: fresh.cursors, ...SETTLED })
@@ -169,6 +179,77 @@ describe('sweepUsage', () => {
     const next = await sweepUsage({ homeDir: home, cursors: full.cursors, maxFiles: 1, ...SETTLED })
     expect(next.records.map((r) => r.dedupKey)).toEqual(['codex:c:30'])
     expect(next.hasMore).toBe(false)
-    expect(Object.keys(next.cursors)).toHaveLength(3)
+    expect(Object.keys(next.cursors.files)).toHaveLength(3)
+  })
+
+  describe('cursor watermark', () => {
+    test('a full sweep moves old files under the watermark and drops their entries', async () => {
+      const old = writeCodex('old', [codexMeta('old'), codexTC(10, 10)])
+      age(old, DAY)
+      const recent = writeCodex('recent', [codexMeta('recent'), codexTC(20, 20)])
+
+      const first = await sweepUsage({ homeDir: home, ...SETTLED })
+      expect(first.records).toHaveLength(2)
+      expect(first.cursors.settledBefore).toBeGreaterThan(Date.now() - DAY)
+      expect(Object.keys(first.cursors.files)).toEqual([recent])
+
+      const second = await sweepUsage({ homeDir: home, cursors: first.cursors, ...SETTLED })
+      expect(second.records).toHaveLength(0)
+    })
+
+    test('a file below the watermark that changes is read again', async () => {
+      const file = writeCodex('resumed', [codexMeta('resumed'), codexTC(10, 10)])
+      age(file, DAY)
+      const first = await sweepUsage({ homeDir: home, ...SETTLED })
+      expect(first.cursors.files).toEqual({})
+
+      writeCodex('resumed', [codexMeta('resumed'), codexTC(10, 10), codexTC(30, 30)])
+      const second = await sweepUsage({ homeDir: home, cursors: first.cursors, ...SETTLED })
+      expect(second.records.map((r) => r.dedupKey)).toContain('codex:resumed:30')
+    })
+
+    test('does not advance while the cap leaves changed files behind', async () => {
+      for (let i = 0; i < 3; i++) {
+        age(writeCodex(`b-${i}`, [codexMeta(`b-${i}`), codexTC(10, 10)]), DAY)
+      }
+      const b1 = await sweepUsage({ homeDir: home, maxFiles: 1, ...SETTLED })
+      expect(b1.hasMore).toBe(true)
+      expect(b1.cursors.settledBefore).toBe(0)
+
+      const b2 = await sweepUsage({ homeDir: home, cursors: b1.cursors, maxFiles: 1, ...SETTLED })
+      const b3 = await sweepUsage({ homeDir: home, cursors: b2.cursors, maxFiles: 1, ...SETTLED })
+      expect(b3.hasMore).toBe(false)
+      expect(b3.cursors.settledBefore).toBeGreaterThan(0)
+      const keys = [...b1.records, ...b2.records, ...b3.records].map((r) => r.dedupKey)
+      expect(new Set(keys).size).toBe(3)
+    })
+
+    test('does not advance when part of the tree could not be listed', async () => {
+      const file = writeCodex('hidden', [codexMeta('hidden'), codexTC(10, 10)])
+      age(file, DAY)
+      const dir = join(home, '.codex', 'sessions', '2026', '05', '30')
+      chmodSync(dir, 0o000)
+      try {
+        const swept = await sweepUsage({ homeDir: home, ...SETTLED })
+        expect(swept.cursors.settledBefore).toBe(0)
+      } finally {
+        chmodSync(dir, 0o755)
+      }
+      const after = await sweepUsage({ homeDir: home, ...SETTLED })
+      expect(after.records.map((r) => r.dedupKey)).toEqual(['codex:hidden:10'])
+    })
+
+    test('accepts a flat per-file cursor from before the watermark', async () => {
+      const file = writeCodex('legacy', [codexMeta('legacy'), codexTC(10, 10)])
+      age(file, DAY)
+      const first = await sweepUsage({ homeDir: home, ...SETTLED })
+      const flat = { [file]: { dev: 0, ino: 0, size: 0, mtimeMs: 0 } }
+      // A stale flat entry reads as changed: re-read once, then settled.
+      const second = await sweepUsage({ homeDir: home, cursors: flat, ...SETTLED })
+      expect(second.records).toHaveLength(first.records.length)
+      expect(second.cursors.settledBefore).toBeGreaterThan(0)
+      expect(second.cursors.files).toEqual({})
+      expect((await sweepUsage({ homeDir: home, cursors: {}, ...SETTLED })).records).toHaveLength(1)
+    })
   })
 })
