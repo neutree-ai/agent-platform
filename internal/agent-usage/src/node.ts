@@ -11,9 +11,16 @@
  * The per-file fingerprint only lets us skip unchanged files. A torn last line
  * (file being appended) fails JSON.parse and is skipped; the claude parser also
  * defers a trailing in-flight assistant message until the file goes quiescent.
+ *
+ * All filesystem access is async with bounded concurrency. The transcript trees
+ * live on the workspace volume (often network-backed) and a long-lived workspace
+ * accumulates tens of thousands of rollouts, each of which is stat'ed on every
+ * sweep; doing that synchronously would block the agent's event loop for the
+ * whole sweep, starving its health endpoint and in-flight turns.
  */
 
-import { type Dirent, existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import type { Dirent } from 'node:fs'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import {
   type FileFingerprint,
@@ -58,9 +65,30 @@ export interface SweepOpts {
   onWarn?: WarnFn
 }
 
-function fingerprint(path: string): FileFingerprint | null {
+/** Max concurrent filesystem calls (stat / readdir) issued by one sweep. */
+const IO_CONCURRENCY = 16
+
+/** Map `items` through `fn` with at most `limit` calls in flight; keeps input order. */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      out[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
+async function fingerprint(path: string): Promise<FileFingerprint | null> {
   try {
-    const s = statSync(path)
+    const s = await stat(path)
     return { dev: s.dev, ino: s.ino, size: s.size, mtimeMs: s.mtimeMs }
   } catch {
     return null
@@ -71,39 +99,68 @@ function unchanged(a: FileFingerprint | undefined, b: FileFingerprint): boolean 
   return !!a && a.dev === b.dev && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs
 }
 
-function readLines(path: string): string[] {
-  return readFileSync(path, 'utf8').split('\n')
+async function readLines(path: string): Promise<string[]> {
+  return (await readFile(path, 'utf8')).split('\n')
 }
 
-function listJsonl(dir: string): string[] {
-  if (!existsSync(dir)) return []
+async function safeReaddir(dir: string): Promise<string[]> {
   try {
-    return readdirSync(dir)
-      .filter((f) => f.endsWith('.jsonl'))
-      .map((f) => join(dir, f))
+    return await readdir(dir)
   } catch {
     return []
   }
 }
 
+async function listJsonl(dir: string): Promise<string[]> {
+  return (await safeReaddir(dir)).filter((f) => f.endsWith('.jsonl')).map((f) => join(dir, f))
+}
+
+async function listSubagents(dir: string): Promise<string[]> {
+  return (await listJsonl(dir)).filter((f) => basename(f).startsWith('agent-'))
+}
+
+/** A claude transcript file and the session its records are attributed to. */
+interface ClaudeFile {
+  file: string
+  sessionId: string
+}
+
+/**
+ * Collect claude transcripts under .claude/projects/<slug>/<session>.jsonl, each
+ * followed by its sub-agent transcripts (<session>/subagents/agent-*.jsonl),
+ * which are attributed to the parent session.
+ */
+async function listClaudeFiles(projectsDir: string): Promise<ClaudeFile[]> {
+  const perSlug = await mapLimit(await safeReaddir(projectsDir), IO_CONCURRENCY, async (slug) => {
+    const slugDir = join(projectsDir, slug)
+    const sessions = await listJsonl(slugDir)
+    const perSession = await mapLimit(sessions, IO_CONCURRENCY, async (file) => {
+      const sessionId = basename(file, '.jsonl')
+      const subs = await listSubagents(join(slugDir, sessionId, 'subagents'))
+      return [{ file, sessionId }, ...subs.map((sub) => ({ file: sub, sessionId }))]
+    })
+    return perSession.flat()
+  })
+  return perSlug.flat()
+}
+
 /** Recursively collect codex rollout files under .codex/sessions. */
-function listCodexRollouts(sessionsDir: string): string[] {
-  const out: string[] = []
-  const walk = (dir: string) => {
+async function listCodexRollouts(sessionsDir: string): Promise<string[]> {
+  const walk = async (dir: string): Promise<string[]> => {
     let entries: Dirent[]
     try {
-      entries = readdirSync(dir, { withFileTypes: true })
+      entries = await readdir(dir, { withFileTypes: true })
     } catch {
-      return
+      return []
     }
-    for (const e of entries) {
+    const nested = await mapLimit(entries, IO_CONCURRENCY, async (e) => {
       const p = join(dir, e.name)
-      if (e.isDirectory()) walk(p)
-      else if (e.name.startsWith('rollout-') && e.name.endsWith('.jsonl')) out.push(p)
-    }
+      if (e.isDirectory()) return walk(p)
+      return e.name.startsWith('rollout-') && e.name.endsWith('.jsonl') ? [p] : []
+    })
+    return nested.flat()
   }
-  if (existsSync(sessionsDir)) walk(sessionsDir)
-  return out
+  return walk(sessionsDir)
 }
 
 /**
@@ -111,7 +168,7 @@ function listCodexRollouts(sessionsDir: string): string[] {
  * fingerprints. Always scans BOTH `.claude` and `.codex` regardless of the
  * current agent core — a workspace's PVC accumulates both across core switches.
  */
-export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
+export async function sweepUsage(opts: SweepOpts): Promise<UsageSweepResponse> {
   const warn = opts.onWarn
   const now = opts.now ?? Date.now()
   const settleGraceMs = opts.settleGraceMs ?? DEFAULT_SETTLE_GRACE_MS
@@ -120,6 +177,18 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
   const records: UsageRecord[] = []
   let processed = 0
   let hasMore = false
+
+  const claudeFiles = await listClaudeFiles(join(opts.homeDir, '.claude', 'projects'))
+  const codexFiles = await listCodexRollouts(join(opts.homeDir, '.codex', 'sessions'))
+  // goose (ACP adapter usage log): .acp-usage/<sessionId>.jsonl
+  const acpFiles = await listJsonl(join(opts.homeDir, '.acp-usage'))
+
+  // Stat every file up front, concurrently. The claim pass below then walks the
+  // files in a fixed order, so the maxFiles budget is spent deterministically.
+  const allFiles = [...claudeFiles.map((c) => c.file), ...codexFiles, ...acpFiles]
+  const fingerprints = new Map<string, FileFingerprint | null>()
+  const stats = await mapLimit(allFiles, IO_CONCURRENCY, fingerprint)
+  allFiles.forEach((file, i) => fingerprints.set(file, stats[i]))
 
   // Decide whether to read a file, and maintain the returned cursor:
   //   - vanished         → null, no cursor entry (dropped)
@@ -130,7 +199,7 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
   // Only changed files consume the maxFiles budget; unchanged files are always
   // retained regardless of the cap.
   const claimChanged = (file: string): FileFingerprint | null => {
-    const fp = fingerprint(file)
+    const fp = fingerprints.get(file)
     if (!fp) return null
     if (unchanged(prev[file], fp)) {
       cursors[file] = fp
@@ -148,12 +217,12 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
   // A changed claude file → parse it, attributing its records to `sessionId`
   // (the parent session for sub-agent files). Trailing in-flight message is
   // emitted only once the file goes quiescent.
-  const addClaudeFile = (file: string, sessionId: string) => {
+  const addClaudeFile = async (file: string, sessionId: string) => {
     const fp = claimChanged(file)
     if (!fp) return
     const includeTrailing = now - fp.mtimeMs > settleGraceMs
     records.push(
-      ...parseClaudeTranscript(readLines(file), {
+      ...parseClaudeTranscript(await readLines(file), {
         sessionId,
         includeTrailing,
         onWarn: warn,
@@ -173,28 +242,17 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
   }
 
   // ── claude: .claude/projects/<slug>/<session>.jsonl  (+ <session>/subagents/) ──
-  const projectsDir = join(opts.homeDir, '.claude', 'projects')
-  if (existsSync(projectsDir)) {
-    for (const slug of safeReaddir(projectsDir)) {
-      const slugDir = join(projectsDir, slug)
-      for (const file of listJsonl(slugDir)) {
-        const sessionId = basename(file, '.jsonl')
-        addClaudeFile(file, sessionId)
-        // sub-agent transcripts → attribute to the parent session
-        for (const sub of listSubagents(join(slugDir, sessionId, 'subagents'))) {
-          addClaudeFile(sub, sessionId)
-        }
-      }
-    }
+  for (const { file, sessionId } of claudeFiles) {
+    await addClaudeFile(file, sessionId)
   }
 
   // ── codex: .codex/sessions/YYYY/MM/DD/rollout-*.jsonl ──
-  for (const file of listCodexRollouts(join(opts.homeDir, '.codex', 'sessions'))) {
+  for (const file of codexFiles) {
     if (claimChanged(file) === null) continue
     // session id falls out of session_meta; filename is a fallback
     const fallbackId = basename(file, '.jsonl').replace(/^rollout-[0-9T-]+-/, '')
     records.push(
-      ...parseCodexRollout(readLines(file), {
+      ...parseCodexRollout(await readLines(file), {
         sessionId: fallbackId,
         defaultModel: opts.fallbackModel,
         onWarn: warn,
@@ -205,10 +263,10 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
   // ── goose (ACP adapter usage log): .acp-usage/<sessionId>.jsonl ──
   // Written by the goose agent's recordUsage hook (goose's own SQLite session
   // store isn't parseable under the zero-dep rule). One line per prompt turn.
-  for (const file of listJsonl(join(opts.homeDir, '.acp-usage'))) {
+  for (const file of acpFiles) {
     if (claimChanged(file) === null) continue
     records.push(
-      ...parseAcpUsageLog(readLines(file), {
+      ...parseAcpUsageLog(await readLines(file), {
         sessionId: basename(file, '.jsonl'),
         defaultModel: opts.fallbackModel,
         onWarn: warn,
@@ -217,16 +275,4 @@ export function sweepUsage(opts: SweepOpts): UsageSweepResponse {
   }
 
   return { records, cursors, hasMore }
-}
-
-function safeReaddir(dir: string): string[] {
-  try {
-    return readdirSync(dir)
-  } catch {
-    return []
-  }
-}
-
-function listSubagents(dir: string): string[] {
-  return listJsonl(dir).filter((f) => basename(f).startsWith('agent-'))
 }

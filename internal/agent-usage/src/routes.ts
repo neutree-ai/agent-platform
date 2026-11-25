@@ -35,28 +35,45 @@ export interface UsageRouteDeps {
  * The caller (cp) passes its persisted `cursors` and an optional `maxFiles` cap;
  * when `hasMore` comes back true it pulls again to drain the rest (bounds the
  * per-call work for large backlogs).
+ *
+ * One sweep runs at a time. A pull that arrives while one is in flight gets 503
+ * and is retried by the caller later: every sweep stats the whole transcript
+ * tree, so letting pulls stack up (the caller may give up and pull again before
+ * a slow sweep finishes) would multiply that load without returning anything
+ * the next pull cannot.
  */
 export function registerUsageRoutes(app: RouteApp, prefix: string, deps: UsageRouteDeps): void {
+  let sweeping = false
   app.post(`${prefix}`, async (c: any) => {
-    let cursors: SweepCursors | undefined
-    let maxFiles: number | undefined
+    if (sweeping) return c.json({ error: 'usage sweep already in progress' }, 503)
+    sweeping = true
     try {
-      const body = await c.req.json()
-      cursors = body?.cursors
-      maxFiles = typeof body?.maxFiles === 'number' ? body.maxFiles : undefined
-    } catch {
-      cursors = undefined // empty body → full sweep
-    }
-    try {
-      const result = sweepUsage({
-        homeDir: deps.homeDir,
-        cursors,
-        maxFiles,
-        fallbackModel: deps.fallbackModel?.(),
-      })
-      return c.json(result)
-    } catch (e) {
-      return c.json({ error: e instanceof Error ? e.message : String(e) }, 500)
+      return await handlePull(c, deps)
+    } finally {
+      sweeping = false
     }
   })
+}
+
+async function handlePull(c: any, deps: UsageRouteDeps) {
+  let cursors: SweepCursors | undefined
+  let maxFiles: number | undefined
+  try {
+    const body = await c.req.json()
+    cursors = body?.cursors
+    maxFiles = typeof body?.maxFiles === 'number' ? body.maxFiles : undefined
+  } catch {
+    cursors = undefined // empty body → full sweep
+  }
+  try {
+    const result = await sweepUsage({
+      homeDir: deps.homeDir,
+      cursors,
+      maxFiles,
+      fallbackModel: deps.fallbackModel?.(),
+    })
+    return c.json(result)
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, 500)
+  }
 }
