@@ -69,8 +69,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends -o Acquire::Ret
     && rm -rf /var/lib/apt/lists/*
 
 # gogcli (pinned)
-RUN curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://github.com/steipete/gogcli/releases/download/v0.12.0/gogcli_0.12.0_linux_${TARGETARCH}.tar.gz \
-    | tar xz -C /usr/local/bin gog
+RUN curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors https://github.com/steipete/gogcli/releases/download/v0.41.0/gogcli_0.41.0_linux_${TARGETARCH}.tar.gz \
+    | tar xz -C /usr/local/bin ./gog
 
 # gh CLI (latest) — resolve the version from the releases-page redirect
 # instead of api.github.com, whose anonymous rate limit 403s on shared IPs.
