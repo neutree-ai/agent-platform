@@ -127,6 +127,20 @@ spec:
                   name: ${APP_PREFIX}-cp-secret
                   key: BROWSER_USE_API_KEY
                   optional: true
+            # Where sandboxes come from. Empty means the sandbox service
+            # below; a hosted backend reads its settings after it.
+            - name: SANDBOX_BACKEND
+              value: "${SANDBOX_BACKEND}"
+            - name: DAYTONA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ${APP_PREFIX}-cp-secret
+                  key: DAYTONA_API_KEY
+                  optional: true
+            - name: DAYTONA_TARGET
+              value: "${DAYTONA_TARGET}"
+            - name: DAYTONA_PREVIEW
+              value: "${DAYTONA_PREVIEW}"
             - name: SANDBOX_SERVICE_URL
               value: "http://${APP_PREFIX}-sandbox:3006"
             - name: SANDBOX_PUBLIC_URL

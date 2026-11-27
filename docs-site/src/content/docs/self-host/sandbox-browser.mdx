@@ -93,6 +93,29 @@ The setting applies to the whole platform: every workspace uses the same backend
 
 With a hosted backend, agents no longer use the Agent Browser service, so `BROWSER_ENABLED` can stay `false`. The workspace browser panel still talks to that service and does not show browsers created on a hosted backend; users open the live view from the link the agent gives them.
 
+## Optional: hosted sandbox backend
+
+By default sandboxes run on the Code Sandbox service this page installs. To run them at a hosted vendor instead, set the backend and that vendor's key:
+
+```bash
+SANDBOX_BACKEND=daytona
+DAYTONA_API_KEY=
+DAYTONA_PREVIEW=           # signed (default) or public
+DAYTONA_TARGET=            # region; blank for the organization's default
+```
+
+| Backend | Vendor | Key |
+| --- | --- | --- |
+| `daytona` | [Daytona](https://www.daytona.io) | `DAYTONA_API_KEY` |
+
+The setting applies to the whole platform: every workspace uses the same backend and the same key, and each workspace only sees the sandboxes it created. The cluster needs outbound access to the vendor. Code, uploaded files and any credentials put in a sandbox leave the cluster, so choose this deliberately.
+
+With `DAYTONA_PREVIEW=signed`, the URL of a port inside a sandbox expires after an hour; ask for a new one when it does. With `public`, anyone who has the URL can reach the port.
+
+A hosted backend does not offer everything the sandbox service does: for example, Daytona returns a command's output as a single stream, and has no resource requests. Agents only get the tools the backend supports.
+
+With a hosted backend, `SANDBOX_ENABLED` can stay `false`. The workspace sandbox panel shows sandboxes from the hosted backend too.
+
 ## Debugging
 
 - Login redirect reports `400 invalid_client` — the matching row is missing in `oauth_clients`. Confirm the seed Job ran and succeeded: `kubectl -n <ns> logs job/nap-seed-oauth-clients`; the log prints `registered "sandbox-service" → ...`. Re-run manually: `install.sh --seed-only`.
