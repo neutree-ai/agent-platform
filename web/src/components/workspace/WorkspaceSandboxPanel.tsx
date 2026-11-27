@@ -136,17 +136,17 @@ function SandboxCard({
 }) {
   const { t } = useTranslation()
   const deleteMutation = useDeleteSandbox(workspaceId)
-  const state = sandbox.status.state
-  const isRunning = state === 'Running'
+  const state = sandbox.status
+  const isRunning = state === 'running'
   const remaining = sandbox.expiresAt ? formatRemaining(sandbox.expiresAt) : null
   const expires = sandbox.expiresAt ? formatExpires(sandbox.expiresAt, language) : null
 
   return (
     <ResourceCard
       name={<code className="font-mono text-sm">{sandbox.id.slice(0, 12)}</code>}
-      description={sandbox.image?.uri || t('components.workspaceSandbox.unknownImage')}
+      description={sandbox.image || t('components.workspaceSandbox.unknownImage')}
       type={
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1.5 capitalize">
           <span
             aria-hidden
             className={`h-1.5 w-1.5 rounded-full ${

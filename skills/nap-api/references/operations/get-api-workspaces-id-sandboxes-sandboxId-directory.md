@@ -17,8 +17,24 @@
 | Status | Description |
 |--------|-------------|
 | 200 | Directory entries |
+| 400 | Not supported by the sandbox backend, or invalid input |
 | 404 | Workspace or sandbox not found |
 | 500 | Sandbox service error |
+
+**Success Response Schema** (inline):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `files` | object[] | Yes |  |
+
+**`files` fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `path` | string | Yes |  |
+| `type` | string | No |  |
+| `size` | number | No |  |
+| `modified_at` | string | No |  |
 
 ## Security
 

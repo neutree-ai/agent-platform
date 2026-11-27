@@ -18,6 +18,12 @@
 | 404 | Workspace not found |
 | 500 | Sandbox service error |
 
+**Success Response Schema** (inline):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | WorkspaceSandbox[] | Yes |  |
+
 ## Security
 
 - **bearerAuth**

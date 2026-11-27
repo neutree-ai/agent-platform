@@ -23,13 +23,14 @@
 | `cwd` | string | No |  |
 | `env` | object | No |  |
 | `timeout_seconds` | number | No |  |
-| `background` | boolean | No | Return as soon as the command starts; poll with the returned command_id |
+| `background` | boolean | No | Return as soon as the command starts; poll with the returned command_id. Rejected by sandbox backends without background commands. |
 
 ## Responses
 
 | Status | Description |
 |--------|-------------|
-| 200 | Command result |
+| 200 | Command result, or the ID of the started background command |
+| 400 | Not supported by the sandbox backend, or invalid input |
 | 404 | Workspace or sandbox not found |
 | 500 | Sandbox service error |
 

@@ -93,6 +93,38 @@ KERNEL_API_KEY=            # browser-use 对应 BROWSER_USE_API_KEY
 
 使用托管后端后，agent 不再使用 Agent Browser 服务，`BROWSER_ENABLED` 可以保持 `false`。workspace 的浏览器面板仍然连接 Agent Browser 服务，不会显示托管后端上的浏览器；用户通过 agent 给出的链接打开实时画面。
 
+## 可选：托管 sandbox 后端
+
+默认情况下，sandbox 运行在本页安装的 Code Sandbox 服务上。要改为在托管厂商那里运行，设置后端和该厂商的 key：
+
+```bash
+SANDBOX_BACKEND=daytona
+DAYTONA_API_KEY=
+DAYTONA_PREVIEW=           # signed（默认）或 public
+DAYTONA_TARGET=            # 区域；留空用组织默认区域
+```
+
+| 后端 | 厂商 | Key |
+| --- | --- | --- |
+| `daytona` | [Daytona](https://www.daytona.io) | `DAYTONA_API_KEY` |
+
+该设置对整个平台生效：所有 workspace 共用同一个后端和同一个 key，每个 workspace 只能看到自己创建的 sandbox。集群需要能访问厂商的公网服务。代码、上传的文件以及放进 sandbox 的凭据都会离开集群，请确认后再启用。
+
+`DAYTONA_PREVIEW=signed` 时，sandbox 内端口的访问地址一小时后失效，失效后重新获取即可。设为 `public` 时，拿到地址的人都能访问该端口。
+
+托管后端不一定具备 sandbox 服务的全部能力，例如 Daytona 把命令的输出合成一路返回，也不支持单独设置资源 requests。agent 只会拿到后端支持的工具。
+
+托管后端的费用都记在同一个账号上，建议限制每个 workspace 的用量：
+
+```bash
+SANDBOX_MAX_PER_WORKSPACE=3          # 每个 workspace 同时可持有的 sandbox 数
+SANDBOX_MAX_LIFETIME_SECONDS=7200    # 单个 sandbox 最长存活时间，续期也算在内
+```
+
+两项默认留空（不限制），对任何后端都生效。
+
+使用托管后端后，`SANDBOX_ENABLED` 可以保持 `false`。workspace 的 sandbox 面板同样会显示托管后端上的 sandbox。
+
 ## 排障
 
 - 登录跳转报 `400 invalid_client` —— `oauth_clients` 中缺少匹配行。确认 seed Job 已运行且成功：`kubectl -n <ns> logs job/nap-seed-oauth-clients`；日志会打印 `registered "sandbox-service" → ...`。手动重跑：`install.sh --seed-only`。

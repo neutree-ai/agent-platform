@@ -1,7 +1,7 @@
 # GET /api/workspaces/{id}/sandboxes/{sandboxId}/endpoint/{port}
 
 **Resource:** [workspaces](../resources/workspaces.md)
-**Get the URL of a port exposed by a sandbox**
+**Get the preview URL of a port inside a sandbox. When `headers` is present, requests to the URL must carry them; when `expires_at` is present, the URL stops working then.**
 **Operation ID:** `get--api-workspaces-{id}-sandboxes-{sandboxId}-endpoint-{port}`
 
 ## Parameters
@@ -17,7 +17,7 @@
 | Status | Description |
 |--------|-------------|
 | 200 | Endpoint URL |
-| 400 | Invalid port number |
+| 400 | Invalid port number, or the sandbox backend offers no previews |
 | 404 | Workspace or sandbox not found |
 | 500 | Sandbox service error |
 
@@ -27,8 +27,9 @@
 |-------|------|----------|-------------|
 | `sandbox_id` | string | Yes |  |
 | `port` | number | Yes |  |
-| `url` | string | Yes | Runtime-internal proxy URL |
-| `public_url` | string | No | URL reachable from outside the cluster (https://{sandboxId}-{port}.<sandbox host>/); present when the control plane has SANDBOX_PUBLIC_URL set |
+| `url` | string | Yes |  |
+| `headers` | object | No |  |
+| `expires_at` | string | No |  |
 
 ## Security
 

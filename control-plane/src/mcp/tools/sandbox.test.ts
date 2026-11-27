@@ -9,17 +9,26 @@ vi.mock('../../services/db/workspaces', () => ({
 vi.mock('../../services/db/shares', () => ({
   getPlatformToken: vi.fn(async () => 'platform-token'),
 }))
+// The platform's sandbox service, reached over HTTP: answers that every sandbox
+// belongs to ws1, and records each exec it is sent.
+const fetchMock = vi.fn()
+vi.stubGlobal('fetch', fetchMock)
 vi.mock('../../services/db/export-tokens', () => ({
   createExportToken: vi.fn(async () => ({ token: 'exp123' })),
   deleteExportToken: vi.fn(async () => true),
 }))
 vi.mock('../../lib/dufs', () => ({ classifyDufsPath: vi.fn() }))
 vi.mock('../../lib/workspace-address', () => ({ getWorkspaceAddress: () => 'http://ws1.agents' }))
-vi.mock('../../services/sandbox', () => ({ runCommand: vi.fn() }))
 
 const exportTokens = await import('../../services/db/export-tokens')
 const dufs = await import('../../lib/dufs')
-const sandbox = await import('../../services/sandbox')
+
+let execResult = { stdout: '12\n', stderr: '', exitCode: 0 }
+const execs: { url: string; auth: string | null; body: any }[] = []
+
+function json(body: unknown) {
+  return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
+}
 
 /** Load the tools under a given environment and return a connected client. */
 async function clientUnder(env: Record<string, string>) {
@@ -47,7 +56,21 @@ const FILES = { FILES_PUBLIC_URL: 'https://files.example.com/x' }
 
 beforeEach(() => {
   vi.mocked(dufs.classifyDufsPath).mockResolvedValue('dir')
-  vi.mocked(sandbox.runCommand).mockResolvedValue({ stdout: '12\n', stderr: '', exit_code: 0 })
+  execResult = { stdout: '12\n', stderr: '', exitCode: 0 }
+  execs.length = 0
+  fetchMock.mockImplementation(async (input: string, init: RequestInit = {}) => {
+    const url = new URL(input)
+    if (url.pathname.endsWith('/exec')) {
+      execs.push({
+        url: url.pathname,
+        auth: new Headers(init.headers).get('authorization'),
+        body: JSON.parse(String(init.body)),
+      })
+      return json(execResult)
+    }
+    const id = url.pathname.split('/')[3]
+    return json({ id, status: { state: 'Running' }, metadata: { workspace_id: 'ws1' } })
+  })
 })
 
 afterEach(() => {
@@ -73,8 +96,9 @@ describe('sandbox_upload_directory', () => {
     })
     expect(dufs.classifyDufsPath).toHaveBeenCalledWith('http://ws1.agents/files/films/intro')
     expect(exportTokens.createExportToken).toHaveBeenCalledWith('ws1', 'films/intro', 300, 'dir')
-    const [token, sandboxId, command] = vi.mocked(sandbox.runCommand).mock.calls[0]
-    expect([token, sandboxId]).toEqual(['platform-token', 'sbx1'])
+    expect(execs[0].url).toBe('/api/sandboxes/sbx1/exec')
+    expect(execs[0].auth).toBe('Bearer platform-token')
+    const command = execs[0].body.command
     expect(command).toContain("'https://files.example.com/x/exp123/?zip'")
     expect(command).toContain("-d '/home/user/films/intro'")
     expect(command).not.toContain("rm -rf '/home")
@@ -84,15 +108,11 @@ describe('sandbox_upload_directory', () => {
   it('clears dest first when asked to replace', async () => {
     const client = await clientUnder(FILES)
     await upload(client, { sandbox_id: 'sbx1', path: 'src', dest: '/app', replace: true })
-    expect(vi.mocked(sandbox.runCommand).mock.calls[0][2]).toContain("rm -rf '/app'")
+    expect(execs[0].body.command).toContain("rm -rf '/app'")
   })
 
   it('revokes the token and reports stderr when the sandbox command fails', async () => {
-    vi.mocked(sandbox.runCommand).mockResolvedValue({
-      stdout: '',
-      stderr: 'curl: (6) Could not resolve host\n',
-      exit_code: 6,
-    })
+    execResult = { stdout: '', stderr: 'curl: (6) Could not resolve host\n', exitCode: 6 }
     const client = await clientUnder(FILES)
     const res = await upload(client, { sandbox_id: 'sbx1', path: 'src', dest: '/app' })
 
@@ -124,6 +144,30 @@ describe('sandbox_upload_directory', () => {
     const client = await clientUnder({})
     const res = await upload(client, { sandbox_id: 's', path: 'src', dest: '/app' })
     expect(res.text).toBe('Error: FILES_PUBLIC_URL env var is not set on the control plane')
+  })
+})
+
+describe('sandbox tools', () => {
+  it('registers the package tools plus the upload tool, with previews when configured', async () => {
+    const client = await clientUnder({ SANDBOX_PUBLIC_URL: 'https://sandbox.example.com' })
+    const names = (await client.listTools()).tools.map((t) => t.name)
+    expect(names).toContain('create_sandbox')
+    expect(names).toContain('sandbox_get_command_logs')
+    expect(names).toContain('sandbox_get_preview_url')
+    expect(names.at(-1)).toBe('sandbox_upload_directory')
+  })
+
+  it('refuses a sandbox of another workspace', async () => {
+    fetchMock.mockImplementation(async () =>
+      json({ id: 'other', status: { state: 'Running' }, metadata: { workspace_id: 'ws2' } }),
+    )
+    const client = await clientUnder(FILES)
+    const res = await upload(client, { sandbox_id: 'other', path: 'src', dest: '/app' })
+    expect(res).toEqual({
+      text: 'Error uploading directory: Sandbox other not found',
+      isError: true,
+    })
+    expect(execs).toHaveLength(0)
   })
 })
 
