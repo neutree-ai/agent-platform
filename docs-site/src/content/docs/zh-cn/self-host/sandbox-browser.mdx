@@ -114,6 +114,15 @@ DAYTONA_TARGET=            # 区域；留空用组织默认区域
 
 托管后端不一定具备 sandbox 服务的全部能力，例如 Daytona 把命令的输出合成一路返回，也不支持单独设置资源 requests。agent 只会拿到后端支持的工具。
 
+托管后端的费用都记在同一个账号上，建议限制每个 workspace 的用量：
+
+```bash
+SANDBOX_MAX_PER_WORKSPACE=3          # 每个 workspace 同时可持有的 sandbox 数
+SANDBOX_MAX_LIFETIME_SECONDS=7200    # 单个 sandbox 最长存活时间，续期也算在内
+```
+
+两项默认留空（不限制），对任何后端都生效。
+
 使用托管后端后，`SANDBOX_ENABLED` 可以保持 `false`。workspace 的 sandbox 面板同样会显示托管后端上的 sandbox。
 
 ## 排障

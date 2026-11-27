@@ -114,6 +114,15 @@ With `DAYTONA_PREVIEW=signed`, the URL of a port inside a sandbox expires after 
 
 A hosted backend does not offer everything the sandbox service does: for example, Daytona returns a command's output as a single stream, and has no resource requests. Agents only get the tools the backend supports.
 
+The backend is billed to one account, so cap what each workspace may use:
+
+```bash
+SANDBOX_MAX_PER_WORKSPACE=3          # live sandboxes a workspace may hold at once
+SANDBOX_MAX_LIFETIME_SECONDS=7200    # longest a sandbox may live, renewals included
+```
+
+Both are blank (no limit) by default and apply to any backend.
+
 With a hosted backend, `SANDBOX_ENABLED` can stay `false`. The workspace sandbox panel shows sandboxes from the hosted backend too.
 
 ## Debugging

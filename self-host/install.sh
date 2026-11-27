@@ -212,6 +212,8 @@ export SANDBOX_BACKEND="${SANDBOX_BACKEND:-}"
 export DAYTONA_API_KEY="${DAYTONA_API_KEY:-}"
 export DAYTONA_TARGET="${DAYTONA_TARGET:-}"
 export DAYTONA_PREVIEW="${DAYTONA_PREVIEW:-}"
+export SANDBOX_MAX_PER_WORKSPACE="${SANDBOX_MAX_PER_WORKSPACE:-}"
+export SANDBOX_MAX_LIFETIME_SECONDS="${SANDBOX_MAX_LIFETIME_SECONDS:-}"
 
 # --- Service public URLs + OAuth redirect URIs ---------------------------
 # Every URL a browser (or an OAuth callback) has to reach from outside the
@@ -355,6 +357,12 @@ check_sandbox_backend() {
       ;;
     *) die "SANDBOX_BACKEND=${SANDBOX_BACKEND} is not supported — use nap or daytona" ;;
   esac
+  local v
+  for v in SANDBOX_MAX_PER_WORKSPACE SANDBOX_MAX_LIFETIME_SECONDS; do
+    case "${!v}" in
+      ""|*[!0-9]*|0) [ -z "${!v}" ] || die "${v}=${!v} must be a positive integer" ;;
+    esac
+  done
 }
 
 # --- Render templates ------------------------------------------------------
@@ -408,6 +416,7 @@ render_manifests() {
   VARS+='${BROWSER_NODE_PORT}${BROWSER_JWT_SECRET}'
   VARS+='${BROWSER_BACKEND}${KERNEL_API_KEY}${BROWSER_USE_API_KEY}'
   VARS+='${SANDBOX_BACKEND}${DAYTONA_API_KEY}${DAYTONA_TARGET}${DAYTONA_PREVIEW}'
+  VARS+='${SANDBOX_MAX_PER_WORKSPACE}${SANDBOX_MAX_LIFETIME_SECONDS}'
   VARS+='${WEB_PUBLIC_URL}${FILES_PUBLIC_URL}${BROWSER_PUBLIC_URL}${SANDBOX_PUBLIC_URL}'
   VARS+='${SANDBOX_NODE_PORT}${SANDBOX_JWT_SECRET}${SANDBOX_SERVICE_KEY}${SANDBOX_DOMAIN}${OPENSANDBOX_URL}'
   VARS+='${SANDBOX_SERVICE_URL_RESOLVED}${BROWSER_SERVICE_URL_RESOLVED}'

@@ -8,7 +8,7 @@ import {
 import type { AppEnv } from '../lib/types'
 import { canAccessWorkspace } from '../lib/workspace-access'
 import { getWorkspace } from '../services/db/workspaces'
-import { workspaceSandboxes as sandboxesOf } from '../services/sandbox-provider'
+import { SandboxLimitError, workspaceSandboxes as sandboxesOf } from '../services/sandbox-provider'
 
 // Every route acts through the workspace's scoped provider: it tags what it
 // creates with the workspace, and reports any other sandbox as not found. With
@@ -151,6 +151,7 @@ workspaceSandboxes.openapi(createRouteDef, async (c) => {
     }
     return c.json(await sandboxes.create(opts), 201)
   } catch (e) {
+    if (e instanceof SandboxLimitError) return c.json({ error: e.message }, 400)
     const { body, status } = failure(e, 'create')
     return c.json(body, status)
   }
@@ -241,6 +242,7 @@ workspaceSandboxes.openapi(renewRoute, async (c) => {
     const result = await sandboxes.renew(sandboxId, body.extend_seconds ?? 3600)
     return c.json({ sandbox_id: sandboxId, expires_at: result.expiresAt }, 200)
   } catch (e) {
+    if (e instanceof SandboxLimitError) return c.json({ error: e.message }, 400)
     const { body, status } = failure(e, 'renew')
     return c.json(body, status)
   }
